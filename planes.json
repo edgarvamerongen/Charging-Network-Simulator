@@ -1,0 +1,34 @@
+[
+  {
+    "id": "pipistrel_velis",
+    "name": "Pipistrel Velis Electro",
+    "seats": 2,
+    "battery_kwh": 22,
+    "range_km": 100,
+    "speed_kmh": 150,
+    "image": "pipistrel.png",
+    "svg": "pepistrel.svg"
+  },
+  {
+    "id": "beta_plane",
+    "name": "Beta Plane",
+    "seats": 6,
+    "load_kg": 500,
+    "battery_kwh": 225,
+    "range_km": 500,
+    "speed_kmh": 250,
+    "image": "beta.png",
+    "svg": "beta.svg"
+  },
+  {
+    "id": "vaeridion",
+    "name": "Vaeridion",
+    "seats": 30,
+    "load_kg": 3000,
+    "battery_kwh": 500,
+    "range_km": 500,
+    "speed_kmh": 400,
+    "image": "vaeridion.png",
+    "svg": "vaeridion.svg"
+  }
+]

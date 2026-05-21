@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.log
+.claude/
+
+# Raw source data — only used by prepare_data.py to (re)generate european_airports.csv.
+# The app serves european_airports.csv at runtime; the 12 MB raw file isn't needed to deploy.
+airports.csv

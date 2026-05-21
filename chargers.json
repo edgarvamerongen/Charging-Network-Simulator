@@ -1,0 +1,32 @@
+[
+  {
+    "id": "aircraft_charger",
+    "name": "Aircraft Charger",
+    "power_kw": 172
+  },
+  {
+    "id": "gse_charger",
+    "name": "GSE Charger",
+    "power_kw": 180
+  },
+  {
+    "id": "mobile_aircraft",
+    "name": "Mobile Aircraft Charger (GB/T)",
+    "power_kw": 22
+  },
+  {
+    "id": "dc_mobile",
+    "name": "DC Mobile Charger",
+    "power_kw": 40
+  },
+  {
+    "id": "ccs",
+    "name": "CCS",
+    "power_kw": 400
+  },
+  {
+    "id": "mcs",
+    "name": "MCS",
+    "power_kw": 3750
+  }
+]

@@ -1,0 +1,45 @@
+NRG2FLY
+
+What we do:
+Electric aviation strategic planning
+GSE (ground support equipment) electrification
+Renewably energy integration 
+Energy Hubs
+Charging stations + solutions
+
+4 planes:
+- Pepistrel Velis Electro: 	2 seater, 22kWh, 100km range
+- Beta plane: 			4-6 seater (~500kg load), 225kWh, 500km range
+- Vearidion: 			9-30 seater (~3000kg load), 500kWh, +500km range
+
+
+Charging: 
+- Aircraft charger: 		250A 172kW
+- GSE charger:			180kW
+- Mobile Aircraft charger:	22kW GB/T
+- DC Mobile Charger:		40kW / 40kWh
+
+Charging Technologies:
+CCS: 				max. 400kW
+MCS:				3,75MW output
+
+
+goal: Charging network simulator
+We want to calculate power demand for a given trajectory and airplane + load. This is presented in a visualisation tool. Build datasets with the planes, charging options and charging technologies
+
+variables: 
+- distance from airport A to airport B
+- departures a day
+- plane of choice (we can build custom planes) (battery cap. and flight speed)
+
+calculate:
+- power needed to arrive at destination 
+- turnaround time (how long to recharge the battery to make it back to the original point of departure)
+- flight time
+
+What should the application do:
+- let the user pick two European airports
+- visualize the flight using OpenStreetMap
+- it calculates a crude prediction of the usage 
+- it can provide a simulation/mode
+- turnaround calculation (energy E [kWh]required per aircraft per flight / charing power P [kW])
