@@ -9,3 +9,7 @@ __pycache__/
 # Raw source data — only used by prepare_data.py to (re)generate european_airports.csv.
 # The app serves european_airports.csv at runtime; the 12 MB raw file isn't needed to deploy.
 airports.csv
+
+# Server-side custom planes & chargers (user-generated; created at runtime).
+# Excluded so deploys never overwrite what users have added on the server.
+data/

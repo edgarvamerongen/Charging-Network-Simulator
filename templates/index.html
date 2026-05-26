@@ -4,203 +4,471 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Charging Network Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css"/>
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css"/>
     <style>
-        #map { height: 600px; width: 100%; border-radius: 8px; }
-        #folderMap { height: 520px; width: 100%; border-radius: 8px; }
-        .popup-btn { font-size: 0.8rem; padding: 0.2rem 0.5rem; margin-top: 5px; width: 100%; }
+        /* =========================================================
+           CNS — design tokens
+           ========================================================= */
+        :root {
+            --bg:           #eef2f8;
+            --ink:          #0f1729;
+            --ink-soft:     #475569;
+            --muted:        #94a3b8;
+            --primary:      #2563eb;
+            --primary-2:    #1e40af;
+            --success:      #10b981;
+            --warn:         #f59e0b;
+            --danger:       #ef4444;
+            --panel:        rgba(255,255,255,0.82);
+            --panel-strong: rgba(255,255,255,0.94);
+            --panel-border: rgba(15,23,41,0.07);
+            --shadow-sm:    0 1px 2px rgba(15,23,41,.05), 0 1px 3px rgba(15,23,41,.06);
+            --shadow:       0 12px 32px rgba(15,23,41,.10), 0 2px 6px rgba(15,23,41,.06);
+            --shadow-lg:    0 28px 60px rgba(15,23,41,.18), 0 6px 12px rgba(15,23,41,.06);
+            --radius:       14px;
+            --radius-sm:    8px;
+        }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            color: var(--ink); background: var(--bg);
+            -webkit-font-smoothing: antialiased;
+        }
+        button { font-family: inherit; }
+        a { color: var(--primary); }
+
+        /* =========================================================
+           Map canvas
+           ========================================================= */
+        #map { position: fixed; inset: 0; z-index: 0; }
+        #folderMap { height: 520px; width: 100%; border-radius: var(--radius-sm); }
+        .leaflet-container { font-family: inherit; background: #e9eef7; }
+        .popup-btn { font-size: .78rem; padding: .25rem .5rem; margin-top: 5px; width: 100%; border-radius: 6px; }
+
+        /* =========================================================
+           Top bar
+           ========================================================= */
+        .topbar {
+            position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 30;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px;
+            background: linear-gradient(to bottom, rgba(255,255,255,.95), rgba(255,255,255,.78));
+            backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--panel-border);
+        }
+        .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem; color: var(--ink); text-decoration: none; }
+        .brand img { height: 26px; }
+        .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: .82rem; color: var(--ink-soft); user-select: none; }
+        .switch input { appearance: none; width: 34px; height: 20px; background: #cbd5e1; border-radius: 999px; position: relative; transition: background .2s; cursor: pointer; }
+        .switch input:checked { background: var(--primary); }
+        .switch input::before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+        .switch input:checked::before { left: 16px; }
+
+        /* =========================================================
+           Left rail (form + result)
+           ========================================================= */
+        .rail-left {
+            position: fixed; top: 72px; left: 16px; z-index: 10;
+            width: 360px; max-height: calc(100vh - 96px);
+            overflow-y: auto; padding-right: 6px;
+            display: flex; flex-direction: column; gap: 12px;
+            pointer-events: none;       /* let map drags through gaps */
+            scrollbar-width: thin;
+        }
+        .rail-left > * { pointer-events: auto; }
+        .rail-left::-webkit-scrollbar { width: 6px; }
+        .rail-left::-webkit-scrollbar-thumb { background: rgba(15,23,41,.15); border-radius: 999px; }
+
+        /* =========================================================
+           Glass panel
+           ========================================================= */
+        .panel {
+            background: var(--panel-strong);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 16px;
+        }
+        .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .panel-title { font-size: 1.02rem; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+        .est-pill { font-size: .62rem; text-transform: uppercase; color: var(--muted); border: 1px solid var(--panel-border); padding: 2px 8px; border-radius: 999px; cursor: help; font-weight: 600; letter-spacing: .04em; }
+
+        /* =========================================================
+           Form fields (override Bootstrap subtly)
+           ========================================================= */
+        .field { margin-bottom: 12px; position: relative; }
+        .field > label { display: block; font-size: .7rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 5px; letter-spacing: .04em; text-transform: uppercase; }
+        .field .form-control, .field .form-select, .input-group .form-control, .input-group .form-select {
+            border-radius: var(--radius-sm); border-color: #e2e8f0; font-size: .9rem; color: var(--ink);
+        }
+        .field .form-control:focus, .field .form-select:focus,
+        .input-group .form-control:focus, .input-group .form-select:focus {
+            border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.18);
+        }
+        .input-group-text { background: #f1f5f9; border-color: #e2e8f0; font-size: .82rem; color: var(--ink-soft); }
+
+        /* Primary actions */
+        .btn-cns, .btn-cns-success, .btn-cns-ghost {
+            width: 100%; padding: 10px 16px; border-radius: var(--radius-sm); font-weight: 600;
+            border: 1px solid transparent; cursor: pointer; font-size: .9rem; transition: transform .05s, box-shadow .15s, background .15s;
+        }
+        .btn-cns          { background: linear-gradient(180deg, #3b82f6, #2563eb); color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,.28); }
+        .btn-cns:hover    { box-shadow: 0 8px 18px rgba(37,99,235,.36); }
+        .btn-cns-success  { background: linear-gradient(180deg, #34d399, #10b981); color: #fff; box-shadow: 0 4px 12px rgba(16,185,129,.28); }
+        .btn-cns-success:hover { box-shadow: 0 8px 18px rgba(16,185,129,.36); }
+        .btn-cns-ghost    { background: transparent; border-color: #e2e8f0; color: var(--ink-soft); }
+        .btn-cns-ghost:hover { background: #f8fafc; color: var(--ink); }
+        .btn-cns:active, .btn-cns-success:active, .btn-cns-ghost:active { transform: translateY(1px); }
+
+        /* =========================================================
+           Trajectory pill + autocomplete
+           ========================================================= */
+        .trip-traj {
+            font-size: .82rem; padding: 8px 12px; margin-bottom: 12px;
+            background: rgba(37,99,235,.08); border-left: 3px solid var(--primary); border-radius: 8px; color: var(--ink);
+        }
+        .trip-traj.d-none { display: none; }
+
         .ac-wrap { position: relative; }
         .ac-list {
             position: absolute; z-index: 1000; top: 100%; left: 0; right: 0;
             max-height: 240px; overflow-y: auto; background: #fff;
-            border: 1px solid #ced4da; border-top: none;
-            border-radius: 0 0 .375rem .375rem; box-shadow: 0 4px 8px rgba(0,0,0,.08);
+            border: 1px solid #e2e8f0; border-top: none;
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            box-shadow: 0 10px 24px rgba(15,23,41,.12);
         }
         .ac-list.d-none { display: none; }
-        .ac-item { padding: .4rem .6rem; cursor: pointer; font-size: .9rem; }
-        .ac-item:hover, .ac-item.active { background: #e9f2ff; }
-        .ac-item small { color: #6c757d; }
-        .ac-input.ac-unset { border-color: #f0ad4e; }
-        .headline-box { background: #0d6efd; color: #fff; border-radius: 10px; padding: 1rem 1.25rem; }
-        .headline-box .big { font-size: 1.9rem; font-weight: 700; line-height: 1.1; }
-        .lbl { font-size: .8rem; text-transform: uppercase; opacity: .85; letter-spacing: .04em; }
-        .spec-table td { padding: .15rem .4rem; font-size: .9rem; }
-        .spec-table td:first-child { color: #6c757d; }
-        .section-tag {
-            display: inline-block; font-size: .7rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .05em; padding: .1rem .5rem; border-radius: 4px; margin-bottom: .4rem;
+        .ac-item { padding: .45rem .65rem; cursor: pointer; font-size: .85rem; }
+        .ac-item:hover, .ac-item.active { background: #eff6ff; }
+        .ac-item small { color: var(--muted); }
+        .ac-input.ac-unset { border-color: var(--warn); }
+
+        /* =========================================================
+           Result panel
+           ========================================================= */
+        .headline-box {
+            background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+            color: #fff; border-radius: var(--radius); padding: 14px 6px;
+            margin-bottom: 14px;
+            box-shadow: 0 8px 20px rgba(37,99,235,.28);
         }
-        .tag-aircraft { background: #e7f1ff; color: #0d6efd; }
-        .tag-trip { background: #e6f7ec; color: #198754; }
-        .tag-home { background: #fff3cd; color: #997404; }
-        .tag-dest { background: #e6f7ec; color: #198754; }
-        #calcPanel { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; white-space: pre-wrap; }
-        .map-toolbar { font-size: .9rem; }
-        .folder-trip { font-size: .88rem; }
+        .headline-box .big { font-size: 1.85rem; font-weight: 800; line-height: 1; margin: 2px 0; letter-spacing: -.02em; }
+        .lbl { font-size: .68rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
+
+        .section-tag {
+            display: inline-block; font-size: .62rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .05em; padding: 3px 8px; border-radius: 4px; margin-bottom: 8px;
+        }
+        .tag-aircraft { background: #dbeafe; color: #1d4ed8; }
+        .tag-trip     { background: #d1fae5; color: #065f46; }
+        .tag-home     { background: #fef3c7; color: #92400e; }
+        .tag-dest     { background: #d1fae5; color: #065f46; }
+
+        .spec-table { width: 100%; font-size: .82rem; }
+        .spec-table td { padding: 3px 4px; vertical-align: top; }
+        .spec-table td:first-child { color: var(--muted); width: 42%; font-weight: 500; }
+
+        .ac-photo {
+            width: 100%; height: 130px; object-fit: contain; background: #f8fafc;
+            border-radius: var(--radius-sm); margin-bottom: 8px; padding: 4px;
+            border: 1px solid var(--panel-border);
+        }
+
+        #calcPanel {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem;
+            white-space: pre-wrap; background: #f8fafc; border: 1px solid #e2e8f0;
+            padding: 10px; border-radius: var(--radius-sm); color: var(--ink-soft);
+        }
+
+        /* =========================================================
+           Right rail (result panel + error)
+           ========================================================= */
+        .rail-right {
+            position: fixed; top: 72px; right: 16px; z-index: 10;
+            width: 360px; max-height: calc(100vh - 96px);
+            overflow-y: auto; padding-left: 6px;
+            display: flex; flex-direction: column; gap: 12px;
+            pointer-events: none;
+            scrollbar-width: thin;
+        }
+        .rail-right > * { pointer-events: auto; }
+        .rail-right::-webkit-scrollbar { width: 6px; }
+        .rail-right::-webkit-scrollbar-thumb { background: rgba(15,23,41,.15); border-radius: 999px; }
+        .rail-right:empty, .rail-right .d-none + .d-none:last-child { display: none; }
+
+        /* =========================================================
+           Floating map controls (bottom-right, stacked)
+           ========================================================= */
+        .map-controls {
+            position: fixed; bottom: 16px; right: 16px; z-index: 10;
+            display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+        }
+        .segmented {
+            padding: 4px;
+        }
+        .seg-btn {
+            border: none; background: transparent; color: var(--ink-soft);
+            padding: 5px 12px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .78rem;
+            transition: background .15s, color .15s;
+        }
+        .seg-btn:hover { color: var(--ink); }
+        .seg-btn.active { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(37,99,235,.3); }
+        .control-pill {
+            display: inline-flex; align-items: center; gap: 10px;
+            background: var(--panel-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border: 1px solid var(--panel-border); box-shadow: var(--shadow);
+            border-radius: 999px; padding: 7px 14px;
+            font-size: .82rem; color: var(--ink); white-space: nowrap;
+        }
+        .control-pill .pill-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+        .control-pill label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 500; }
+        .control-pill input[type=checkbox] { accent-color: var(--primary); cursor: pointer; }
+        .btn-pill { cursor: pointer; }
+        .btn-pill:hover { background: #fff; }
+
+        /* =========================================================
+           Bottom drawer (Demand Calculator)
+           ========================================================= */
+        .drawer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; pointer-events: none; }
+        .drawer-handle, .drawer-body { pointer-events: auto; }
+        .drawer-handle {
+            position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+            display: inline-flex; align-items: center; gap: 10px;
+            background: var(--panel-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border: 1px solid var(--panel-border); box-shadow: var(--shadow);
+            border-radius: 999px; padding: 10px 22px;
+            font-size: .92rem; font-weight: 600; color: var(--ink); cursor: pointer;
+            white-space: nowrap; transition: background .15s, box-shadow .15s;
+        }
+        .drawer-handle:hover { background: #fff; box-shadow: var(--shadow-lg); }
+        .drawer-handle .chevron { display: inline-block; transition: transform .25s; font-size: .8em; }
+        .drawer.open .drawer-handle .chevron { transform: rotate(180deg); }
+        .drawer-handle .handle-sub { font-weight: 400; color: var(--muted); font-size: .82rem; }
+
+        .drawer-body {
+            position: absolute; left: 16px; right: 16px; bottom: 70px;
+            background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
+            border-radius: var(--radius);
+            max-height: calc(85vh - 80px); overflow-y: auto;
+            padding: 18px 20px;
+            transform: translateY(24px); opacity: 0; pointer-events: none;
+            transition: transform .28s ease, opacity .28s ease;
+        }
+        .drawer.open .drawer-body { transform: translateY(0); opacity: 1; pointer-events: auto; }
+
+        .drawer-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+        .drawer-title { font-size: 1.1rem; font-weight: 700; margin: 0; }
+        .drawer-tools { display: flex; gap: 12px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+        .inline-field { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--ink-soft); }
+        .inline-field select { font-size: .85rem; min-width: 160px; }
+
+        /* renderFolder cards inside the drawer feel native to the new design */
+        #folder [data-dest] {
+            background: rgba(255,255,255,.6) !important;
+            border: 1px solid var(--panel-border) !important;
+            border-radius: var(--radius-sm) !important;
+        }
+        .folder-trip { font-size: .85rem; }
         .agg-num { font-weight: 700; font-size: 1.1rem; }
-        .ac-photo { width: 100%; height: 150px; object-fit: contain; background: #f5f7fa; border-radius: 8px; margin-bottom: .6rem; padding: .4rem; }
-        .brand-logo { height: 40px; }
-        .est-note { font-size: .75rem; color: #6c757d; }
+
+        /* =========================================================
+           Misc utilities + small modal polish
+           ========================================================= */
+        .est-note { font-size: .72rem; color: var(--muted); }
+        .modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-lg); }
+
+        /* Custom-entry list inside the plane/charger modals */
+        .custom-list .cl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .custom-list .cl-title { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 700; margin: 0; }
+        .custom-list .cl-count { font-size: .72rem; color: var(--muted); font-weight: 600; }
+        .custom-list ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--panel-border); }
+        .custom-list li { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; border-bottom: 1px solid var(--panel-border); font-size: .85rem; }
+        .custom-list li small { color: var(--muted); }
+        .custom-list .cl-empty { color: var(--muted); font-size: .8rem; padding: 6px 2px; }
+        .custom-list .cl-rm { border: none; background: transparent; color: var(--danger); cursor: pointer; padding: 0 6px; border-radius: 4px; font-size: 1.1rem; line-height: 1; }
+        .custom-list .cl-rm:hover { background: rgba(239,68,68,.1); }
+
+        /* Narrow screens: rail spans full width */
+        @media (max-width: 720px) {
+            .rail-left { left: 8px; right: 8px; width: auto; max-height: 60vh; }
+            .map-controls { top: 64px; right: 8px; }
+            .control-pill .pill-label { display: none; }
+        }
     </style>
 </head>
-<body class="bg-light">
-    <div class="container my-5">
-        <div class="d-flex align-items-center gap-3 mb-4">
-            <img src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2FLY" class="brand-logo" onerror="this.style.display='none'">
-            <h2 class="mb-0">Charging Network Simulator</h2>
-            <div class="form-check form-switch ms-auto mb-0">
-                <input class="form-check-input" type="checkbox" id="unitToggle">
-                <label class="form-check-label" for="unitToggle">Nautical units (nm / kn)</label>
+<body>
+    <!-- map is the full-viewport canvas, behind everything else -->
+    <div id="map"></div>
+
+    <!-- top bar -->
+    <header class="topbar">
+        <a class="brand" href="/">
+            <img src="/pics/logos/NRG2fly_icon.png" alt="NRG2FLY" onerror="this.style.display='none'">
+            <span>Charging Network Simulator</span>
+        </a>
+        <label class="switch">
+            <input type="checkbox" id="unitToggle">
+            <span>Nautical (nm / kn)</span>
+        </label>
+    </header>
+
+    <!-- left rail: plan-a-flight form + result -->
+    <aside class="rail-left">
+        <section class="panel">
+            <div class="panel-head">
+                <h2 class="panel-title">Plan a flight</h2>
+                <span class="est-pill" title="All calculated figures are rough estimates, rounded up for planning headroom.">Estimates</span>
             </div>
+            <form id="simForm">
+                <div class="field ac-wrap">
+                    <label>Origin airport</label>
+                    <input type="text" id="origin" class="form-control ac-input" placeholder="Search e.g. Heathrow" autocomplete="off" required>
+                    <div id="originList" class="ac-list d-none"></div>
+                </div>
+                <div class="field ac-wrap">
+                    <label>Destination airport</label>
+                    <input type="text" id="destination" class="form-control ac-input" placeholder="Search e.g. Charles de Gaulle" autocomplete="off" required>
+                    <div id="destinationList" class="ac-list d-none"></div>
+                </div>
+                <div id="trajInfo" class="trip-traj d-none"></div>
+
+                <div class="field">
+                    <label>Trip type</label>
+                    <select id="tripType" class="form-select">
+                        <option value="one-way">One-Way</option>
+                        <option value="retour">Retour (Round Trip)</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Expected frequency</label>
+                    <div class="input-group">
+                        <input type="number" id="freqN" class="form-control" value="1" min="1" step="1">
+                        <span class="input-group-text">flights per</span>
+                        <select id="freqUnit" class="form-select">
+                            <option value="day">day</option>
+                            <option value="week">week</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Aircraft</label>
+                    <select id="plane" class="form-select">
+                        {% for p in planes %}
+                        <option value="{{ p.id }}">{{ p.name }} — {{ p.battery_kwh }} kWh</option>
+                        {% endfor %}
+                        <option value="__custom__">➕ Add custom plane…</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Charger</label>
+                    <select id="charger" class="form-select">
+                        {% for c in chargers %}
+                        <option value="{{ c.id }}">{{ c.name }} ({{ c.power_kw }} kW)</option>
+                        {% endfor %}
+                        <option value="__custom_charger__">➕ Add custom charger…</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-cns">Simulate</button>
+            </form>
+        </section>
+
+        <div id="error" class="alert alert-danger d-none mt-2 mb-0" style="border-radius:var(--radius-sm);font-size:.85rem;"></div>
+    </aside>
+
+    <!-- right rail: result panel -->
+    <aside class="rail-right">
+        <section id="result" class="panel d-none">
+            <div class="headline-box">
+                <div class="row text-center">
+                    <div class="col-6 border-end border-light">
+                        <div class="lbl">Recharge / flight</div>
+                        <div class="big"><span id="hlEnergy"></span></div>
+                        <div>kWh</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="lbl">Charge time / flight</div>
+                        <div class="big"><span id="hlTime"></span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <span class="section-tag tag-aircraft">Aircraft Used</span>
+                    <img id="acPhoto" class="ac-photo d-none" alt="">
+                    <table class="spec-table">
+                        <tr><td>Model</td><td id="acName"></td></tr>
+                        <tr><td>Seats</td><td id="acSeats"></td></tr>
+                        <tr><td>Max load</td><td id="acLoad"></td></tr>
+                        <tr><td>Battery</td><td id="acBattery"></td></tr>
+                        <tr><td>Range</td><td id="acRange"></td></tr>
+                        <tr><td>Cruise speed</td><td id="acSpeed"></td></tr>
+                        <tr><td>Avg usage</td><td id="acUsage"></td></tr>
+                    </table>
+                </div>
+                <div class="col-12">
+                    <span class="section-tag tag-trip">Trip Calculated</span>
+                    <table class="spec-table">
+                        <tr><td>Trip type</td><td id="trType"></td></tr>
+                        <tr><td>Leg distance</td><td id="trLeg"></td></tr>
+                        <tr><td>Total distance</td><td id="trTotal"></td></tr>
+                        <tr><td>Total flight time</td><td id="trFlight"></td></tr>
+                        <tr><td>Charger</td><td id="trCharger"></td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <button type="button" id="toggleCalc" class="btn-cns-ghost mt-3">Show calculation</button>
+            <div id="calcPanel" class="mt-2 d-none"></div>
+            <button type="button" id="addFolder" class="btn-cns-success mt-3">+ Add to demand calculator</button>
+        </section>
+    </aside>
+
+    <!-- floating map controls (bottom-right, stacked) -->
+    <div class="map-controls">
+        <div class="control-pill">
+            <span class="pill-label">Airports</span>
+            <label><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
+            <label><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
+            <label><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
         </div>
-        <p class="est-note mb-4">All calculated figures are rough estimates, rounded up for planning headroom.</p>
-
-        <div class="row">
-            <div class="col-md-4">
-                <div class="card p-3 shadow-sm">
-                    <form id="simForm">
-                        <div class="mb-3 ac-wrap">
-                            <label>Origin Airport</label>
-                            <input type="text" id="origin" class="form-control ac-input" placeholder="Search e.g. Heathrow" autocomplete="off" required>
-                            <div id="originList" class="ac-list d-none"></div>
-                        </div>
-                        <div class="mb-3 ac-wrap">
-                            <label>Destination Airport</label>
-                            <input type="text" id="destination" class="form-control ac-input" placeholder="Search e.g. Charles de Gaulle" autocomplete="off" required>
-                            <div id="destinationList" class="ac-list d-none"></div>
-                        </div>
-                        <div id="trajInfo" class="alert alert-light border py-2 d-none"></div>
-
-                        <div class="mb-3">
-                            <label>Trip Type</label>
-                            <select id="tripType" class="form-select">
-                                <option value="one-way">One-Way</option>
-                                <option value="retour">Retour (Round Trip)</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label>Expected Frequency</label>
-                            <div class="input-group">
-                                <input type="number" id="freqN" class="form-control" value="1" min="1" step="1">
-                                <span class="input-group-text">flights per</span>
-                                <select id="freqUnit" class="form-select">
-                                    <option value="day">day</option>
-                                    <option value="week">week</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label>Select Plane</label>
-                            <select id="plane" class="form-select">
-                                {% for p in planes %}
-                                <option value="{{ p.id }}">{{ p.name }} — {{ p.battery_kwh }} kWh</option>
-                                {% endfor %}
-                                <option value="__custom__">➕ Add custom plane…</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label>Select Charger</label>
-                            <select id="charger" class="form-select">
-                                {% for c in chargers %}
-                                <option value="{{ c.id }}">{{ c.name }} ({{ c.power_kw }} kW)</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">Simulate</button>
-                    </form>
-                </div>
-
-                <div id="result" class="mt-4 d-none">
-                    <div class="card shadow-sm p-3">
-                        <div class="headline-box mb-2">
-                            <div class="row text-center">
-                                <div class="col-6 border-end border-light">
-                                    <div class="lbl">Recharge / flight</div>
-                                    <div class="big"><span id="hlEnergy"></span></div>
-                                    <div>kWh</div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="lbl">Charge time / flight</div>
-                                    <div class="big"><span id="hlTime"></span></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-12 mb-3">
-                                <span class="section-tag tag-aircraft">Aircraft Used</span>
-                                <img id="acPhoto" class="ac-photo d-none" alt="">
-                                <table class="spec-table w-100">
-                                    <tr><td>Model</td><td id="acName"></td></tr>
-                                    <tr><td>Seats</td><td id="acSeats"></td></tr>
-                                    <tr><td>Max load</td><td id="acLoad"></td></tr>
-                                    <tr><td>Battery</td><td id="acBattery"></td></tr>
-                                    <tr><td>Range</td><td id="acRange"></td></tr>
-                                    <tr><td>Cruise speed</td><td id="acSpeed"></td></tr>
-                                    <tr><td>Avg usage</td><td id="acUsage"></td></tr>
-                                </table>
-                            </div>
-                            <div class="col-12">
-                                <span class="section-tag tag-trip">Trip Calculated</span>
-                                <table class="spec-table w-100">
-                                    <tr><td>Trip type</td><td id="trType"></td></tr>
-                                    <tr><td>Leg distance</td><td id="trLeg"></td></tr>
-                                    <tr><td>Total distance</td><td id="trTotal"></td></tr>
-                                    <tr><td>Total flight time</td><td id="trFlight"></td></tr>
-                                    <tr><td>Charger</td><td id="trCharger"></td></tr>
-                                </table>
-                            </div>
-                        </div>
-
-                        <button type="button" id="toggleCalc" class="btn btn-sm btn-outline-secondary mt-3">Show calculation</button>
-                        <div id="calcPanel" class="mt-2 p-2 bg-light border rounded d-none"></div>
-                        <button type="button" id="addFolder" class="btn btn-success w-100 mt-3">+ Add to demand calculator</button>
-                    </div>
-                </div>
-                <div id="error" class="mt-4 d-none alert alert-danger"></div>
-            </div>
-
-            <div class="col-md-8">
-                <div class="map-toolbar mb-2 d-flex align-items-center gap-3 flex-wrap">
-                    <strong>Show airports:</strong>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input airport-filter" type="checkbox" id="fSmall" value="small_airport">
-                        <label class="form-check-label" for="fSmall">Small</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked>
-                        <label class="form-check-label" for="fMedium">Medium</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input airport-filter" type="checkbox" id="fLarge" value="large_airport" checked>
-                        <label class="form-check-label" for="fLarge">Large</label>
-                    </div>
-                    <button id="resetMap" class="btn btn-sm btn-outline-secondary ms-auto">↻ Reset map</button>
-                </div>
-                <div id="map" class="shadow-sm"></div>
-            </div>
+        <div class="control-pill segmented" role="group" aria-label="Basemap">
+            <span class="pill-label">Map</span>
+            <button class="seg-btn active" type="button" data-basemap="satellite">Satellite</button>
+            <button class="seg-btn" type="button" data-basemap="voyager">Street</button>
         </div>
-
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card shadow-sm p-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h4 class="mb-0">Demand Calculator</h4>
-                        <button id="clearFolder" class="btn btn-sm btn-outline-danger">Clear all</button>
-                    </div>
-                    <p class="text-muted mb-3">Each flight contributes charging demand to <strong>both</strong> the airport it departs from and the one it arrives at, so every airport shows its own requirement. Airports are sorted by busiest first.</p>
-                    <div class="d-flex gap-2 align-items-center mb-3">
-                        <label class="mb-0">Show airport:</label>
-                        <select id="airportFilter" class="form-select form-select-sm" style="width:auto"></select>
-                    </div>
-                    <div id="folder"></div>
-                </div>
-            </div>
-        </div>
+        <button id="resetMap" class="control-pill btn-pill" type="button">↻ Reset</button>
     </div>
+
+    <!-- bottom drawer: Demand Calculator -->
+    <section class="drawer" id="demandDrawer">
+        <button class="drawer-handle" id="drawerToggle" type="button">
+            <span class="chevron">▴</span>
+            <span>Demand Calculator</span>
+            <span class="handle-sub" id="drawerSub">— add flights to project the charging load</span>
+        </button>
+        <div class="drawer-body">
+            <header class="drawer-head">
+                <h2 class="drawer-title">Demand Calculator</h2>
+                <div class="drawer-tools">
+                    <label class="inline-field">Show airport
+                        <select id="airportFilter" class="form-select form-select-sm"></select>
+                    </label>
+                    <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
+                </div>
+            </header>
+            <p class="text-muted small mb-3">Each flight contributes charging demand to <strong>both</strong> the airport it departs from and the one it arrives at. Airports are sorted by busiest first.</p>
+            <div id="folder"></div>
+        </div>
+    </section>
 
     <div class="modal fade" id="flightsMapModal" tabindex="-1">
         <div class="modal-dialog modal-xl modal-dialog-centered">
@@ -220,6 +488,34 @@
                         </div>
                     </div>
                     <div id="folderMap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="customChargerModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add custom charger</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">Name</label>
+                        <input id="ccName" class="form-control" placeholder="e.g. Site MCS-A">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Power <span class="text-muted">(kW)</span></label>
+                        <input id="ccPower" type="number" min="1" step="any" class="form-control" placeholder="kW">
+                    </div>
+                    <div id="ccError" class="text-danger small d-none"></div>
+                    <p class="est-note mb-0 mt-2">Saved on the server — visible to everyone who uses this site.</p>
+                    <div id="ccList" class="custom-list mt-3"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" id="ccSave" class="btn btn-primary">Add charger</button>
                 </div>
             </div>
         </div>
@@ -251,9 +547,10 @@
                     </div>
                     <div id="cpError" class="text-danger small d-none"></div>
                     <p class="est-note mb-0 mt-2">Enter metric values (kWh, km, km/h) regardless of the nm/kn display toggle.</p>
+                    <div id="cpList" class="custom-list mt-3"></div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="button" id="cpSave" class="btn btn-primary">Add aircraft</button>
                 </div>
             </div>
@@ -267,13 +564,14 @@
     <script src="/static/state.js"></script>
     <script src="/static/units.js"></script>
     <script src="/static/planes.js"></script>
+    <script src="/static/chargers.js"></script>
     <script src="/static/demand.js"></script>
     <!-- domain modules -->
     <script src="/static/charging.js"></script>
     <script src="/static/scheduler.js"></script>
     <script src="/static/animation.js"></script>
     <script>
-        const CHARGERS = {{ chargers|tojson }};
+        const CHARGERS = {{ chargers|tojson }};                  // mutated at runtime: custom chargers are pushed in
         const chargerById = Object.fromEntries(CHARGERS.map(c => [c.id, c]));
 
         // Display-only units + formatters now live in static/units.js (CNSUnits).
@@ -281,8 +579,22 @@
         const { r, num, isNautical, fmtDist, fmtSpeed, fmtUsage, fmtEnergy, fmtPower, fmtDuration, fmtClock } = CNSUnits;
 
         // ---------- map ----------
-        const map = L.map('map').setView([50.0, 10.0], 4);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+        const map = L.map('map', { zoomControl: true, attributionControl: true }).setView([50.0, 10.0], 5);
+
+        // Swappable basemaps. Satellite is the default; the segmented control toggles to Carto Voyager.
+        const BASEMAPS = {
+            satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', opts: { attribution: 'Tiles &copy; Esri', maxZoom: 19 } },
+            voyager:   { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',                       opts: { attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd', maxZoom: 19 } }
+        };
+        let activeBasemap = null;
+        function setBasemap(name) {
+            if (!BASEMAPS[name]) return;
+            if (activeBasemap) map.removeLayer(activeBasemap);
+            const b = BASEMAPS[name];
+            activeBasemap = L.tileLayer(b.url, b.opts).addTo(map);
+            document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.classList.toggle('active', btn.dataset.basemap === name));
+        }
+        setBasemap('satellite');
 
         let routeLayers = [], startMarker = null, endMarker = null;
         const clusters = {
@@ -396,6 +708,7 @@
         document.querySelectorAll('.airport-filter').forEach(cb => cb.addEventListener('change', () => {
             if (cb.checked) map.addLayer(clusters[cb.value]); else map.removeLayer(clusters[cb.value]);
         }));
+        document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.addEventListener('click', () => setBasemap(btn.dataset.basemap)));
 
         function arcPoints(p1, p2, bend, segments = 64) {
             const [lat1, lon1] = p1, [lat2, lon2] = p2;
@@ -506,12 +819,16 @@
             }
             const toCoord = ap => ({ name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg });
             const planeId = document.getElementById('plane').value;
+            const chargerId = document.getElementById('charger').value;
             const payload = {
                 origin: toCoord(selected.origin), destination: toCoord(selected.destination),
-                plane_id: planeId, charger_id: document.getElementById('charger').value,
+                plane_id: planeId, charger_id: chargerId,
                 trip_type: document.getElementById('tripType').value
             };
             if (customById[planeId]) payload.plane = customById[planeId];
+            // server-side custom chargers (id starts with "charger_") aren't in the static catalog —
+            // pass the object through so sim.py can size the charge time correctly.
+            if (window.CNSChargers && CNSChargers.get(chargerId)) payload.charger = CNSChargers.get(chargerId);
             const response = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const data = await response.json();
             if (data.error) {
@@ -720,7 +1037,7 @@
         document.getElementById('flightsMapModal').addEventListener('shown.bs.modal', () => {
             if (!folderMap) {
                 folderMap = L.map('folderMap').setView([50, 10], 4);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(folderMap);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(folderMap);
             }
             folderMap.invalidateSize();
             if (window.CNSAnimation) CNSAnimation.start(folderMap, pendingMapDest, {
@@ -752,12 +1069,14 @@
             renderFolder();
         });
 
-        // ---------- custom planes (data layer: CNSPlanes; UI wiring below) ----------
-        // Kept as an alias so existing submit-handler code can still do customById[planeId].
-        const customById = Object.fromEntries(CNSPlanes.list().map(p => [p.id, p]));
+        // ---------- custom planes & chargers (data layer: CNSPlanes / CNSChargers; UI wiring below) ----------
+        const customById = {};                                   // populated after CNSPlanes.load()
         const planeSelect = document.getElementById('plane');
-        const customModal = new bootstrap.Modal(document.getElementById('customPlaneModal'));
+        const chargerSelect = document.getElementById('charger');
+        const customPlaneModal = new bootstrap.Modal(document.getElementById('customPlaneModal'));
+        const customChargerModal = new bootstrap.Modal(document.getElementById('customChargerModal'));
         let prevPlaneValue = planeSelect.value;
+        let prevChargerValue = chargerSelect.value;
 
         function addPlaneOption(p) {
             const opt = document.createElement('option');
@@ -765,21 +1084,95 @@
             opt.textContent = `${p.name} — ${p.battery_kwh} kWh (custom)`;
             planeSelect.insertBefore(opt, planeSelect.querySelector('option[value="__custom__"]'));
         }
-        CNSPlanes.list().forEach(addPlaneOption);
+        function addChargerOption(c) {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = `${c.name} (${c.power_kw} kW) (custom)`;
+            chargerSelect.insertBefore(opt, chargerSelect.querySelector('option[value="__custom_charger__"]'));
+        }
 
+        // Open the right modal when the picker hits the "add custom" sentinel.
         planeSelect.addEventListener('change', () => {
             if (planeSelect.value === '__custom__') {
-                planeSelect.value = prevPlaneValue;  // don't leave the picker on the placeholder
+                planeSelect.value = prevPlaneValue;
                 ['cpName', 'cpBattery', 'cpRange', 'cpSpeed', 'cpSeats', 'cpLoad'].forEach(id => document.getElementById(id).value = '');
                 document.getElementById('cpError').classList.add('d-none');
-                customModal.show();
-            } else {
-                prevPlaneValue = planeSelect.value;
-            }
+                customPlaneModal.show();
+            } else { prevPlaneValue = planeSelect.value; }
+        });
+        chargerSelect.addEventListener('change', () => {
+            if (chargerSelect.value === '__custom_charger__') {
+                chargerSelect.value = prevChargerValue;
+                ['ccName', 'ccPower'].forEach(id => document.getElementById(id).value = '');
+                document.getElementById('ccError').classList.add('d-none');
+                customChargerModal.show();
+            } else { prevChargerValue = chargerSelect.value; }
         });
 
-        document.getElementById('cpSave').addEventListener('click', () => {
+        const MAX_CUSTOMS = 5;
+
+        function removePlaneFromUI(id) {
+            const opt = planeSelect.querySelector(`option[value="${CSS.escape(id)}"]`);
+            if (opt) opt.remove();
+            delete customById[id];
+            if (planeSelect.value === id) { planeSelect.value = planeSelect.options[0].value; prevPlaneValue = planeSelect.value; }
+        }
+        function removeChargerFromUI(id) {
+            const opt = chargerSelect.querySelector(`option[value="${CSS.escape(id)}"]`);
+            if (opt) opt.remove();
+            delete chargerById[id];
+            const i = CHARGERS.findIndex(c => c.id === id); if (i >= 0) CHARGERS.splice(i, 1);
+            if (chargerSelect.value === id) { chargerSelect.value = chargerSelect.options[0].value; prevChargerValue = chargerSelect.value; }
+        }
+
+        function renderPlanesList() {
+            const planes = CNSPlanes.list();
+            const el = document.getElementById('cpList');
+            const rows = planes.length
+                ? '<ul>' + planes.map(p =>
+                    `<li><span><strong>${p.name}</strong> <small>— ${p.battery_kwh} kWh · ${p.range_km} km · ${p.speed_kmh} km/h</small></span>` +
+                    `<button class="cl-rm" type="button" title="Remove" data-rm-plane="${p.id}">×</button></li>`).join('') + '</ul>'
+                : '<div class="cl-empty">No custom aircraft yet.</div>';
+            el.innerHTML =
+                `<div class="cl-head"><span class="cl-title">Your custom aircraft</span><span class="cl-count">${planes.length} / ${MAX_CUSTOMS}</span></div>` + rows;
+            el.querySelectorAll('[data-rm-plane]').forEach(btn => btn.addEventListener('click', async () => {
+                const id = btn.dataset.rmPlane;
+                await CNSPlanes.remove(id); removePlaneFromUI(id); renderPlanesList();
+            }));
+            // Reflect cap on the Add button
+            const atMax = planes.length >= MAX_CUSTOMS;
+            const save = document.getElementById('cpSave');
+            save.disabled = atMax;
+            save.textContent = atMax ? `Limit reached (${MAX_CUSTOMS})` : 'Add aircraft';
+        }
+
+        function renderChargersList() {
+            const chargers = CNSChargers.list();
+            const el = document.getElementById('ccList');
+            const rows = chargers.length
+                ? '<ul>' + chargers.map(c =>
+                    `<li><span><strong>${c.name}</strong> <small>— ${c.power_kw} kW</small></span>` +
+                    `<button class="cl-rm" type="button" title="Remove" data-rm-charger="${c.id}">×</button></li>`).join('') + '</ul>'
+                : '<div class="cl-empty">No custom chargers yet.</div>';
+            el.innerHTML =
+                `<div class="cl-head"><span class="cl-title">Your custom chargers</span><span class="cl-count">${chargers.length} / ${MAX_CUSTOMS}</span></div>` + rows;
+            el.querySelectorAll('[data-rm-charger]').forEach(btn => btn.addEventListener('click', async () => {
+                const id = btn.dataset.rmCharger;
+                await CNSChargers.remove(id); removeChargerFromUI(id); renderChargersList();
+            }));
+            const atMax = chargers.length >= MAX_CUSTOMS;
+            const save = document.getElementById('ccSave');
+            save.disabled = atMax;
+            save.textContent = atMax ? `Limit reached (${MAX_CUSTOMS})` : 'Add charger';
+        }
+
+        // Refresh the lists every time a modal opens
+        document.getElementById('customPlaneModal').addEventListener('show.bs.modal', renderPlanesList);
+        document.getElementById('customChargerModal').addEventListener('show.bs.modal', renderChargersList);
+
+        document.getElementById('cpSave').addEventListener('click', async () => {
             const err = document.getElementById('cpError');
+            err.classList.add('d-none');
             const name = document.getElementById('cpName').value.trim();
             const battery = parseFloat(document.getElementById('cpBattery').value);
             const range = parseFloat(document.getElementById('cpRange').value);
@@ -793,19 +1186,73 @@
             const draft = { name, battery_kwh: battery, range_km: range, speed_kmh: speed };
             if (!isNaN(seats)) draft.seats = seats;
             if (!isNaN(load)) draft.load_kg = load;
-            const p = CNSPlanes.add(draft);
-            customById[p.id] = p;
-            addPlaneOption(p);
-            planeSelect.value = p.id; prevPlaneValue = p.id;
-            customModal.hide();
+            try {
+                const p = await CNSPlanes.add(draft);
+                customById[p.id] = p;
+                addPlaneOption(p);
+                planeSelect.value = p.id; prevPlaneValue = p.id;
+                customPlaneModal.hide();
+            } catch (e) {
+                err.textContent = e.message || 'Could not add plane.';
+                err.classList.remove('d-none');
+                renderPlanesList();   // keep the count/disabled state in sync
+            }
         });
 
-        setupAutocomplete('origin');
-        setupAutocomplete('destination');
-        loadAirports();
-        if (window.CNSScheduler) CNSScheduler.init({ chargers: chargerById, onChange: renderFolder });
-        if (window.CNSAnimation) CNSAnimation.init();
-        renderFolder();
+        document.getElementById('ccSave').addEventListener('click', async () => {
+            const err = document.getElementById('ccError');
+            err.classList.add('d-none');
+            const name = document.getElementById('ccName').value.trim();
+            const power = parseFloat(document.getElementById('ccPower').value);
+            if (!name || !(power > 0)) {
+                err.textContent = 'Enter a name and positive power in kW.';
+                err.classList.remove('d-none'); return;
+            }
+            try {
+                const c = await CNSChargers.add({ name, power_kw: power });
+                CHARGERS.push(c); chargerById[c.id] = c;
+                addChargerOption(c);
+                chargerSelect.value = c.id; prevChargerValue = c.id;
+                customChargerModal.hide();
+            } catch (e) {
+                err.textContent = e.message || 'Could not add charger.';
+                err.classList.remove('d-none');
+                renderChargersList();
+            }
+        });
+
+        // Drawer (Demand Calculator) toggle + live subtitle
+        const demandDrawer = document.getElementById('demandDrawer');
+        document.getElementById('drawerToggle').addEventListener('click', () => demandDrawer.classList.toggle('open'));
+        function updateDrawerSub() {
+            const trips = CNSDemand.loadFolder();
+            const airports = Object.keys(CNSDemand.computeAirports()).length;
+            const el = document.getElementById('drawerSub');
+            el.textContent = trips.length
+                ? `— ${trips.length} flight${trips.length > 1 ? 's' : ''} across ${airports} airport${airports !== 1 ? 's' : ''}`
+                : '— add flights to project the charging load';
+        }
+        CNSState.subscribe(k => { if (k === CNSState.KEYS.folder) updateDrawerSub(); });
+
+        // Async startup: load server-side customs BEFORE wiring the scheduler so its
+        // charger catalog (chargerById) already knows about them.
+        (async () => {
+            if (window.CNSPlanes) {
+                await CNSPlanes.load();
+                CNSPlanes.list().forEach(p => { customById[p.id] = p; addPlaneOption(p); });
+            }
+            if (window.CNSChargers) {
+                await CNSChargers.load();
+                CNSChargers.list().forEach(c => { CHARGERS.push(c); chargerById[c.id] = c; addChargerOption(c); });
+            }
+            setupAutocomplete('origin');
+            setupAutocomplete('destination');
+            loadAirports();
+            if (window.CNSScheduler) CNSScheduler.init({ chargers: chargerById, onChange: renderFolder });
+            if (window.CNSAnimation) CNSAnimation.init();
+            renderFolder();
+            updateDrawerSub();
+        })();
     </script>
 </body>
 </html>

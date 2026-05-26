@@ -42,9 +42,9 @@ class Simulator:
             return None
         return matches.iloc[0]
 
-    def calculate_flight_by_distance(self, plane_id, distance_km, charger_id, trip_type="one-way", plane_obj=None):
+    def calculate_flight_by_distance(self, plane_id, distance_km, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None):
         plane = plane_obj if plane_obj else next((p for p in self.planes if p['id'] == plane_id), None)
-        charger = next((c for c in self.chargers if c['id'] == charger_id), None)
+        charger = charger_obj if charger_obj else next((c for c in self.chargers if c['id'] == charger_id), None)
 
         if not plane:
             return {"error": f"Plane {plane_id} not found"}
@@ -62,6 +62,14 @@ class Simulator:
                 return {"error": "Custom plane needs numeric battery, range and speed."}
             if not (plane["battery_kwh"] > 0 and plane["range_km"] > 0 and plane["speed_kmh"] > 0):
                 return {"error": "Custom plane battery, range and speed must be positive."}
+
+        if charger_obj:
+            try:
+                charger = {**charger, "power_kw": float(charger["power_kw"])}
+            except (KeyError, TypeError, ValueError):
+                return {"error": "Custom charger needs a numeric power."}
+            if not (charger["power_kw"] > 0):
+                return {"error": "Custom charger power must be positive."}
 
         if distance_km > plane['range_km']:
             return {"error": f"Leg distance {distance_km:.1f}km exceeds plane range {plane['range_km']}km"}
@@ -117,13 +125,13 @@ class Simulator:
             }
         }
 
-    def simulate_by_coords(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None):
+    def simulate_by_coords(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None):
         dist_km = haversine(
             origin['lat'], origin['lon'],
             destination['lat'], destination['lon']
         )
 
-        result = self.calculate_flight_by_distance(plane_id, dist_km, charger_id, trip_type, plane_obj)
+        result = self.calculate_flight_by_distance(plane_id, dist_km, charger_id, trip_type, plane_obj, charger_obj)
         if "error" in result:
             return result
 
@@ -133,7 +141,7 @@ class Simulator:
         })
         return result
 
-    def simulate(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None):
+    def simulate(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None):
         ap1 = self.get_airport(origin)
         ap2 = self.get_airport(destination)
 
@@ -147,7 +155,7 @@ class Simulator:
             ap2['latitude_deg'], ap2['longitude_deg']
         )
 
-        result = self.calculate_flight_by_distance(plane_id, dist_km, charger_id, trip_type, plane_obj)
+        result = self.calculate_flight_by_distance(plane_id, dist_km, charger_id, trip_type, plane_obj, charger_obj)
         if "error" in result:
             return result
 
