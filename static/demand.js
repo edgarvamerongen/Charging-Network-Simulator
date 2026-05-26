@@ -67,20 +67,26 @@ window.CNSDemand = (function () {
             // contribution at its airport. A retour stop visited outbound + return
             // is two distinct contributions at the same airport.
             if (t.multiLeg && Array.isArray(t.charges) && t.charges.length) {
-                // Keep `other` aligned with the legacy single-leg semantics so
-                // renderFolder's row builder reads cleanly. The "multi-leg" suffix
-                // in the Trip column already signals the multi-stop nature.
+                // For retour, charges after the destination are on the return leg —
+                // the stop label flips direction so it's clear the plane is heading
+                // back. (Energy can also differ between visits because the plane
+                // arrives with different remaining battery each time.)
+                const nStops = (t.stops || []).length;
+                const retourMidIdx = (t.tripType === 'retour') ? nStops + 1 : null;
                 t.charges.forEach((c, idx) => {
                     if (!c || !c.ident) return;
                     const a = ensure(c.ident, c.name, c.lat, c.lon);
+                    const isReturnVisit = (retourMidIdx !== null) && (Number(c.at_index) > retourMidIdx);
                     const other =
                         c.role === 'home' ? t.destName :
                         c.role === 'dest' ? t.originName :
-                                            `${t.originName} → ${t.destName}`;   // 'stop' row reads "on {route}"
+                        isReturnVisit     ? `${t.destName} → ${t.originName}`
+                                          : `${t.originName} → ${t.destName}`;
                     a.contribs.push({
                         t, role: c.role, other,
                         base: numOf(c, 'energy_kwh'),
-                        chargeIdx: idx
+                        chargeIdx: idx,
+                        direction: isReturnVisit ? 'back' : 'out'
                     });
                 });
                 return;

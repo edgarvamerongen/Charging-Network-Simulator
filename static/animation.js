@@ -62,13 +62,36 @@ window.CNSAnimation = (function () {
     }
 
     // ---------- build ----------
+    // Build the full waypoint chain for a trip (handles single-leg + multi-leg).
+    function _chain(t) {
+        const o = [+t.originLat, +t.originLon], d = [+t.destLat, +t.destLon];
+        if (!t.multiLeg) {
+            return t.tripType === 'retour' ? [o, d, o] : [o, d];
+        }
+        const stops = (t.stops || []).map(s => [+s.lat, +s.lon]);
+        const out = [o, ...stops, d];
+        return t.tripType === 'retour' ? out.concat(stops.slice().reverse(), [o]) : out;
+    }
+
     function drawContext(ident) {
         const trips = CNSScheduler.tripsAt(ident);
         const pts = [];
         trips.forEach(t => {
             const o = [+t.originLat, +t.originLon], d = [+t.destLat, +t.destLon];
-            if (t.tripType === 'retour') {
-                L.polyline(arcPoints(o, d, 0.12), { color: '#9ab', weight: 2, opacity: .6 }).addTo(layer);
+            if (t.multiLeg) {
+                // straight polyline through every waypoint; back-leg dashed for retour
+                const chainOut = [o, ...(t.stops || []).map(s => [+s.lat, +s.lon]), d];
+                L.polyline(chainOut, { color: '#9ab', weight: 2, opacity: .6 }).addTo(layer);
+                if (t.tripType === 'retour') {
+                    L.polyline(chainOut.slice().reverse(), { color: '#9ab', weight: 2, opacity: .5, dashArray: '6 5' }).addTo(layer);
+                }
+                (t.stops || []).forEach(s => {
+                    L.circleMarker([+s.lat, +s.lon], { radius: 5, color: '#000', weight: 1, fillColor: '#2563eb', fillOpacity: .9 })
+                        .bindTooltip(s.name).addTo(layer);
+                    pts.push([+s.lat, +s.lon]);
+                });
+            } else if (t.tripType === 'retour') {
+                L.polyline(arcPoints(o, d, 0.12),  { color: '#9ab', weight: 2, opacity: .6 }).addTo(layer);
                 L.polyline(arcPoints(o, d, -0.12), { color: '#9ab', weight: 2, opacity: .6, dashArray: '6 5' }).addTo(layer);
             } else {
                 L.polyline([o, d], { color: '#9ab', weight: 2, opacity: .6 }).addTo(layer);
@@ -85,12 +108,22 @@ window.CNSAnimation = (function () {
         CNSScheduler.tripsAt(ident).forEach(t => {
             const o = [+t.originLat, +t.originLon], d = [+t.destLat, +t.destLon];
             if (!isFinite(o[0]) || !isFinite(d[0])) return;
-            const out = t.tripType === 'retour' ? arcPoints(o, d, 0.12) : [o, d];
-            const back = t.tripType === 'retour' ? arcPoints(o, d, -0.12).slice().reverse() : null;
+            const chain = _chain(t);
+            // Per-leg path: single-leg retour uses arcs (visual continuity with the
+            // map); everything else is straight segments between adjacent waypoints.
+            let legPaths;
+            if (t.multiLeg) {
+                legPaths = [];
+                for (let i = 0; i < chain.length - 1; i++) legPaths.push([chain[i], chain[i + 1]]);
+            } else if (t.tripType === 'retour') {
+                legPaths = [arcPoints(o, d, 0.12), arcPoints(o, d, -0.12).slice().reverse()];
+            } else {
+                legPaths = [[o, d]];
+            }
             const { ph, total } = CNSScheduler.phasesAnim(t);
             CNSScheduler.instanceStarts(t).forEach(start => {
                 const marker = L.marker(o, { icon: planeIcon(t.planeSvg), interactive: false, opacity: 0, zIndexOffset: 1000 }).addTo(layer);
-                items.push({ trip: t, start, ph, total, o, d, out, back, marker });
+                items.push({ trip: t, start, ph, total, o, d, chain, legPaths, marker });
             });
         });
     }
@@ -104,10 +137,18 @@ window.CNSAnimation = (function () {
             let latlng, brng = 0, charging = false;
             if (p.kind === 'fly') {
                 const f = p.dur ? (lt - p.start) / p.dur : 1;
-                const path = p.leg === 'out' ? it.out : (it.back || [it.d, it.o]);
+                let path;
+                if (typeof p.leg === 'number') {                                   // multi-leg
+                    path = it.legPaths[p.leg] || [it.chain[p.leg], it.chain[p.leg + 1]];
+                } else {                                                            // single-leg ('out' / 'back')
+                    path = p.leg === 'out' ? it.legPaths[0] : (it.legPaths[1] || [it.d, it.o]);
+                }
                 const r = alongPath(path, f); latlng = r[0]; brng = r[1];
             } else {
-                latlng = p.at === 'dest' ? it.d : it.o; charging = true;
+                // charge phase — park the plane at the relevant waypoint
+                if (typeof p.atIdx === 'number') latlng = it.chain[p.atIdx];        // multi-leg
+                else latlng = p.at === 'dest' ? it.d : it.o;                        // single-leg
+                charging = true;
             }
             it.marker.setLatLng(latlng);
             const el = it.marker.getElement();

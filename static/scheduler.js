@@ -46,13 +46,10 @@ window.CNSScheduler = (function () {
     function roleAt(trip, ident) {
         if (trip.destIdent === ident) return 'dest';
         if (trip.originIdent === ident && trip.tripType === 'retour') return 'home';
+        if (trip.multiLeg && Array.isArray(trip.stops) && trip.stops.some(s => s && s.ident === ident)) return 'stop';
         return null;
     }
-    // Phase 1C: the rotation scheduler doesn't yet render multi-leg trips
-    // (their proper integration — multi-leg rotation timeline + animation — is
-    // Phase 2). They still appear in the demand calculator's table and energy
-    // aggregates via demand.js; they just don't show up here.
-    function tripsAt(ident) { return loadTrips().filter(t => !t.multiLeg && roleAt(t, ident)); }
+    function tripsAt(ident) { return loadTrips().filter(t => roleAt(t, ident)); }
 
     function energyAt(trip, ident, fullCharge) {
         const leg = num(trip, 'legEnergy'), batt = batteryOf(trip);
@@ -90,6 +87,7 @@ window.CNSScheduler = (function () {
 
     // ---------- rotation timeline (airport-driven charge times; viewIdent flags atX) ----------
     function tripPhases(trip, viewIdent) {
+        if (trip.multiLeg) return _multiLegPhases(trip, viewIdent);
         const legs = trip.tripType === 'retour' ? 2 : 1;
         const legMin = num(trip, 'flightTimeH') * 60 / legs;
         const leg = num(trip, 'legEnergy'), batt = batteryOf(trip);
@@ -111,6 +109,40 @@ window.CNSScheduler = (function () {
             const homeMin = homePower ? homeEnergy / homePower * 60 : 0;
             if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
         }
+        return { ph, total: off };
+    }
+
+    // Multi-leg trip: walk the backend-precomputed legs[] and charges[]. Each
+    // entry in charges[i] is the charge event AT chain[i+1] (= the end of legs[i]).
+    // Charge POWER is the per-airport assigned charger (so toggling the airport's
+    // fleet updates the rotation live), but the energy is what _simulate_multi
+    // computed when the trip was added.
+    function _multiLegPhases(trip, viewIdent) {
+        const ph = []; let off = 0;
+        const legs = Array.isArray(trip.legs) ? trip.legs : [];
+        const charges = Array.isArray(trip.charges) ? trip.charges : [];
+        legs.forEach((leg, i) => {
+            const legMin = (Number(leg.flight_time_h) || 0) * 60;
+            const toName = (leg.to && leg.to.name) || '';
+            ph.push({ kind: 'fly', leg: i, start: off, dur: legMin, label: 'Fly to ' + toName });
+            off += legMin;
+            const c = charges[i];
+            if (!c) return;
+            const ctx = getContext(c.ident);
+            const power = ctx.powers[trip.id] || 0;
+            const energy = Number(c.energy_kwh) || 0;
+            const dur = power ? energy / power * 60 : 0;
+            if (dur > 0) {
+                ph.push({
+                    kind: 'charge', at: c.role,
+                    atX: viewIdent === c.ident,
+                    atIdx: i + 1,                        // chain index — used by animation.js to position the plane
+                    start: off, dur, power, energy,
+                    label: 'Charge @ ' + c.name
+                });
+                off += dur;
+            }
+        });
         return { ph, total: off };
     }
     function phasesAnim(trip) { return tripPhases(trip, null); }
@@ -168,65 +200,82 @@ window.CNSScheduler = (function () {
         if (_resCache[ident]) return _resCache[ident];
 
         const N = fleetSizeAt(ident);
+        // A multi-leg trip can have MULTIPLE atX charges per rotation (a retour stop
+        // visited outbound + return = 2 charges at the same airport). Each lane
+        // therefore carries an array of atX charges; the queue and the cascade fan
+        // out over (instance k) × (charge ci).
         const lanes = tripsAt(ident).map(t => {
             const { ph, total } = tripPhases(t, ident);
-            const ch = ph.find(p => p.kind === 'charge' && p.atX);
-            return {
-                trip: t, ph, total,
-                offset: ch ? ch.start : total,
-                chargeDur: ch ? ch.dur : 0,
-                power: ch ? ch.power : 0,
-                cap: batteryOf(t),
-                desired: instanceStarts(t)
-            };
+            const atXCharges = [];
+            ph.forEach(p => {
+                if (p.kind === 'charge' && p.atX) atXCharges.push({ offset: p.start, dur: p.dur, power: p.power });
+            });
+            return { trip: t, ph, total, atXCharges, cap: batteryOf(t), desired: instanceStarts(t) };
         });
         const keyOf = (li, k) => li + ':' + k;
+        const evKey = (li, k, ci) => keyOf(li, k) + ':' + ci;
 
-        // Start from desired positions, then iterate: (a) charger queue → per-instance
-        // wait, (b) cascade each lane so the SAME aircraft never overlaps itself, using
-        // the full footprint (rotation + that instance's charger wait). Display-only
-        // (we never persist), and the cascade is idempotent, so there's no drift.
         const takeoffs = {};
         lanes.forEach((L, li) => L.desired.forEach((d, k) => { takeoffs[keyOf(li, k)] = d; }));
         let waits = {};
         for (let it = 0; it < 6; it++) {
+            // 1) charger queue — each atX charge in each instance is one event.
+            //    Its `ready` time accumulates the waits of prior charges in the same
+            //    rotation (since each wait pushes the rest of the chain right).
             const events = [];
             lanes.forEach((L, li) => {
-                if (L.chargeDur <= 0) return;
-                L.desired.forEach((d, k) => events.push({ key: keyOf(li, k), ready: takeoffs[keyOf(li, k)] + L.offset, dur: L.chargeDur, cap: L.cap }));
+                if (!L.atXCharges.length) return;
+                L.desired.forEach((d, k) => {
+                    let cumWait = 0;
+                    L.atXCharges.forEach((ch, ci) => {
+                        if (ch.dur <= 0) return;
+                        events.push({ key: evKey(li, k, ci), ready: takeoffs[keyOf(li, k)] + ch.offset + cumWait, dur: ch.dur, cap: L.cap });
+                        cumWait += (waits[evKey(li, k, ci)] || 0);
+                    });
+                });
             });
-            waits = simulateChargers(events, N);
+            const newWaits = simulateChargers(events, N);
+            // 2) cascade: a lane's rotation footprint = canonical total + ALL its waits.
             let moved = false;
             lanes.forEach((L, li) => {
                 const order = [...L.desired.keys()].sort((a, b) => L.desired[a] - L.desired[b]);
                 let prevEnd = -Infinity;
                 order.forEach(k => {
-                    const foot = L.total + (waits[keyOf(li, k)] || 0);
+                    const totalWait = L.atXCharges.reduce((s, _ch, ci) => s + (newWaits[evKey(li, k, ci)] || 0), 0);
+                    const foot = L.total + totalWait;
                     const st = Math.max(L.desired[k], prevEnd);
                     if (Math.abs((takeoffs[keyOf(li, k)] || 0) - st) > 0.01) moved = true;
                     takeoffs[keyOf(li, k)] = st; prevEnd = st + foot;
                 });
             });
+            waits = newWaits;
             if (!moved) break;
         }
 
-        const res = { lanes, takeoffs, waits, keyOf };
+        const res = { lanes, takeoffs, waits, keyOf, evKey };
         _resCache[ident] = res;
         return res;
     }
 
     function summary(ident) {
-        const { lanes, takeoffs, waits, keyOf } = resolveAirport(ident);
+        const { lanes, takeoffs, waits, keyOf, evKey } = resolveAirport(ident);
         const evs = [];
         let latest = DAY_START;
         lanes.forEach((L, li) => {
             L.desired.forEach((d, k) => {
-                const to = takeoffs[keyOf(li, k)], w = waits[keyOf(li, k)] || 0;
-                if (L.chargeDur > 0 && L.power) {
-                    const cs = to + L.offset + w;
-                    evs.push({ tm: cs, d: L.power }); evs.push({ tm: cs + L.chargeDur, d: -L.power });
-                }
-                const end = to + L.total + w;
+                const to = takeoffs[keyOf(li, k)];
+                // accumulate prior waits in this rotation so each charge sits at the right slot
+                let cumWait = 0;
+                L.atXCharges.forEach((ch, ci) => {
+                    const w = waits[evKey(li, k, ci)] || 0;
+                    if (ch.dur > 0 && ch.power) {
+                        const cs = to + ch.offset + cumWait + w;
+                        evs.push({ tm: cs, d: ch.power });
+                        evs.push({ tm: cs + ch.dur, d: -ch.power });
+                    }
+                    cumWait += w;
+                });
+                const end = to + L.total + cumWait;
                 if (end > latest) latest = end;
             });
         });
@@ -263,7 +312,8 @@ window.CNSScheduler = (function () {
         // extend the timeline if cascaded rotations spill past 23:00, so none get clipped
         let maxMin = DAY_END;
         res.lanes.forEach((L, li) => L.desired.forEach((d, k) => {
-            const end = res.takeoffs[res.keyOf(li, k)] + L.total + (res.waits[res.keyOf(li, k)] || 0);
+            const totalWait = L.atXCharges.reduce((s, _ch, ci) => s + (res.waits[res.evKey(li, k, ci)] || 0), 0);
+            const end = res.takeoffs[res.keyOf(li, k)] + L.total + totalWait;
             if (end > maxMin) maxMin = end;
         }));
         const lastHour = Math.min(30, Math.max(23, Math.ceil(maxMin / 60)));
@@ -296,7 +346,8 @@ window.CNSScheduler = (function () {
 
         res.lanes.forEach((L, li) => {
             const trip = L.trip;
-            const isHomeTrip = roleAt(trip, ident) === 'home';
+            const role = roleAt(trip, ident);
+            const roleLabel = role === 'home' ? 'home' : role === 'stop' ? 'stop' : 'arrival';
             const lane = document.createElement('div');
             lane.style.cssText = `position:absolute;left:0;right:0;top:${li * LANE_H}px;height:${LANE_H}px;border-top:${li ? '1px solid #f4f4f4' : 'none'}`;
 
@@ -304,23 +355,32 @@ window.CNSScheduler = (function () {
             label.title = `${trip.originName} → ${trip.destName} (${trip.planeName})`;
             label.style.cssText = `position:absolute;left:0;width:${LABEL_W}px;height:100%;padding:4px 8px;box-sizing:border-box;overflow:hidden;font-size:.74rem;line-height:1.15`;
             label.innerHTML = `<div style="font-weight:600">${shorten(trip.originName)} → ${shorten(trip.destName)}</div>` +
-                `<div class="text-muted" style="font-size:.68rem">${trip.planeName} · ${isHomeTrip ? 'home' : 'arrival'} · ${L.desired.length}/day</div>`;
+                `<div class="text-muted" style="font-size:.68rem">${trip.planeName} · ${roleLabel}${trip.multiLeg ? ' · multi-leg' : ''} · ${L.desired.length}/day</div>`;
             lane.appendChild(label);
 
             const track = document.createElement('div');
             track.style.cssText = `position:absolute;left:${LABEL_W}px;right:0;top:0;bottom:0`;
             L.desired.forEach((d, k) => {
                 const takeoff = res.takeoffs[res.keyOf(li, k)];
-                const wait = res.waits[res.keyOf(li, k)] || 0;
                 let iph = L.ph;
-                if (wait > 0) {
+                // For each atX charge in this rotation, insert a wait phase before it
+                // if the queue says so (multi-leg trips can have multiple atX charges).
+                const atXIdxs = [];
+                L.ph.forEach((p, i) => { if (p.kind === 'charge' && p.atX) atXIdxs.push(i); });
+                let anyWait = false;
+                for (let ci = 0; ci < atXIdxs.length; ci++) {
+                    if ((res.waits[res.evKey(li, k, ci)] || 0) > 0) { anyWait = true; break; }
+                }
+                if (anyWait) {
                     iph = L.ph.map(p => ({ ...p }));
-                    const ci = iph.findIndex(p => p.kind === 'charge' && p.atX);
-                    if (ci >= 0) {
-                        const cs = iph[ci].start;
-                        iph.forEach((p, i) => { if (i >= ci) p.start += wait; });
-                        iph.push({ kind: 'wait', start: cs, dur: wait, label: 'Waiting for free charger' });
-                    }
+                    const origLen = iph.length;
+                    atXIdxs.forEach((origChIdx, ci) => {
+                        const w = res.waits[res.evKey(li, k, ci)] || 0;
+                        if (w <= 0) return;
+                        const cs = iph[origChIdx].start;             // already shifted by any prior waits
+                        for (let i = origChIdx; i < origLen; i++) iph[i].start += w;
+                        iph.push({ kind: 'wait', start: cs, dur: w, label: 'Waiting for free charger' });
+                    });
                 }
                 track.appendChild(buildInstance(trip, k, takeoff, iph));
             });
