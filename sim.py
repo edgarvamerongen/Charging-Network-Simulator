@@ -125,7 +125,9 @@ class Simulator:
             }
         }
 
-    def simulate_by_coords(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None):
+    def simulate_by_coords(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None, stops=None):
+        if stops:
+            return self._simulate_multi(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj, stops)
         dist_km = haversine(
             origin['lat'], origin['lon'],
             destination['lat'], destination['lon']
@@ -140,6 +142,116 @@ class Simulator:
             "destination": {"name": destination['name'], "lat": destination['lat'], "lon": destination['lon']}
         })
         return result
+
+    # -----------------------------------------------------------------
+    # Multi-leg trip with intermediate charging stops.
+    # ─ Walk the waypoint chain, propagating battery state.
+    # ─ At each waypoint (except start), charge just enough for the next leg
+    #   (i.e. the deficit), unless it's the terminal waypoint where the plane
+    #   tops up to full (one-way dest, or retour home).
+    # ─ Retour mirrors the stops on the return leg (caller's choice).
+    # -----------------------------------------------------------------
+    def _simulate_multi(self, plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj, stops):
+        plane = plane_obj if plane_obj else next((p for p in self.planes if p['id'] == plane_id), None)
+        charger = charger_obj if charger_obj else next((c for c in self.chargers if c['id'] == charger_id), None)
+        if not plane:   return {"error": f"Plane {plane_id} not found"}
+        if not charger: return {"error": f"Charger {charger_id} not found"}
+
+        try:
+            batt  = float(plane['battery_kwh'])
+            rng   = float(plane['range_km'])
+            spd   = float(plane['speed_kmh'])
+            power = float(charger['power_kw'])
+        except (KeyError, TypeError, ValueError):
+            return {"error": "Plane/charger needs numeric battery, range, speed and power."}
+        if not (batt > 0 and rng > 0 and spd > 0 and power > 0):
+            return {"error": "Plane/charger values must be positive."}
+
+        # Build waypoint chain (caller passes stops in OUTBOUND order)
+        outbound = [origin] + list(stops) + [destination]
+        chain = outbound + list(reversed(stops)) + [origin] if trip_type == 'retour' else outbound
+
+        # Compute legs
+        legs = []
+        for i in range(len(chain) - 1):
+            a, b = chain[i], chain[i + 1]
+            d = haversine(a['lat'], a['lon'], b['lat'], b['lon'])
+            if d > rng:
+                return {"error": f"Leg {a['name']} → {b['name']} is {d:.0f} km, exceeds range {rng:.0f} km."}
+            legs.append({
+                "from": {"name": a['name'], "lat": a['lat'], "lon": a['lon']},
+                "to":   {"name": b['name'], "lat": b['lat'], "lon": b['lon']},
+                "distance_km": round(d, 2),
+                "flight_time_h": round(d / spd, 3),
+                "energy_kwh": round(batt / rng * d, 2)        # avg_usage × d
+            })
+
+        # Propagate battery state through the chain
+        arrivals = [batt]
+        cur = batt
+        for leg in legs:
+            cur = max(cur, leg['energy_kwh']) - leg['energy_kwh']
+            arrivals.append(round(cur, 4))
+
+        # Per-waypoint charge events (excluding origin)
+        n = len(chain)
+        dest_idx = (n - 1) // 2 if trip_type == 'retour' else n - 1
+        charges = []
+        for i in range(1, n):
+            arrival = arrivals[i]
+            is_terminal_final = (i == n - 1)
+            if is_terminal_final:
+                charge_e = batt - arrival                                # top to full
+            else:
+                charge_e = max(0.0, legs[i]['energy_kwh'] - arrival)     # enough for next leg
+            if trip_type == 'retour':
+                role = 'home' if is_terminal_final else ('dest' if i == dest_idx else 'stop')
+            else:
+                role = 'dest' if is_terminal_final else 'stop'
+            charges.append({
+                "at_index": i,
+                "name": chain[i]['name'],
+                "lat":  chain[i]['lat'],
+                "lon":  chain[i]['lon'],
+                "ident": chain[i].get('ident'),
+                "role": role,
+                "energy_kwh": round(charge_e, 2),
+                "charge_time_h": round(charge_e / power, 3),
+                "charge_time_min": round(charge_e / power * 60, 1),
+            })
+
+        total_distance  = sum(l['distance_km']    for l in legs)
+        total_flight_h  = sum(l['flight_time_h']  for l in legs)
+        total_charge_e  = sum(c['energy_kwh']     for c in charges)
+        total_charge_m  = sum(c['charge_time_min'] for c in charges)
+        avg_usage       = batt / rng * 100
+        leg_out_energy  = legs[0]['energy_kwh']                          # the original A→B leg, before stops collapse it
+
+        return {
+            "success": True,
+            "trip_type": trip_type,
+            "multi_leg": True,
+            "legs": legs,
+            "charges": charges,
+            "stops": [{"name": s['name'], "lat": s['lat'], "lon": s['lon'], "ident": s.get('ident'), "type": s.get('type')} for s in stops],
+            "total_distance_km": round(total_distance, 2),
+            "total_flight_time_h": round(total_flight_h, 2),
+            "total_charge_time_min": round(total_charge_m, 1),
+            "total_recharge_energy_kwh": round(total_charge_e, 2),
+            "avg_usage_kwh_per_100km": round(avg_usage, 2),
+            "leg_energy_kwh": round(leg_out_energy, 2),
+            "legs_count": len(legs),
+            "origin": {"name": origin['name'], "lat": origin['lat'], "lon": origin['lon']},
+            "destination": {"name": destination['name'], "lat": destination['lat'], "lon": destination['lon']},
+            "plane": {
+                "id": plane.get('id'), "name": plane.get('name'),
+                "seats": plane.get('seats'), "load_kg": plane.get('load_kg'),
+                "battery_kwh": plane['battery_kwh'], "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
+                "avg_usage_kwh_per_100km": round(avg_usage, 2),
+                "image": plane.get('image'), "svg": plane.get('svg')
+            },
+            "charger": {"id": charger.get('id'), "name": charger['name'], "power_kw": charger['power_kw']},
+        }
 
     def simulate(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None):
         ap1 = self.get_airport(origin)

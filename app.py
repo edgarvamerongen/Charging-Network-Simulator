@@ -197,12 +197,13 @@ def simulate_flight():
     trip_type = data.get('trip_type', 'one-way')
     plane_obj = data.get('plane')        # optional user-defined custom aircraft
     charger_obj = data.get('charger')    # optional user-defined custom charger
+    stops = data.get('stops') or None    # optional charging-stop waypoints (list of {name,lat,lon[,ident,type]})
 
     if not all([origin, destination]) or not (plane_id or plane_obj) or not (charger_id or charger_obj):
         return jsonify({"error": "Missing parameters"}), 400
 
     if isinstance(origin, dict) and isinstance(destination, dict):
-        result = simulator.simulate_by_coords(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj)
+        result = simulator.simulate_by_coords(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj, stops)
     else:
         result = simulator.simulate(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj)
     return jsonify(result)

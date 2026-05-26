@@ -285,6 +285,33 @@
         .est-note { font-size: .72rem; color: var(--muted); }
         .modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-lg); }
 
+        /* Charging-stops toggle + advanced section + suggested route list */
+        .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .stops-switch { font-size: .85rem; color: var(--ink); }
+        .stops-advanced { font-size: .78rem; color: var(--ink-soft); }
+        .stops-advanced summary { cursor: pointer; padding: 2px 6px; border-radius: 6px; user-select: none; }
+        .stops-advanced summary:hover { background: rgba(15,23,41,.04); }
+        .stops-advanced[open] summary { color: var(--primary); font-weight: 600; }
+        .adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; padding: 8px; background: rgba(15,23,41,.03); border-radius: 8px; }
+        .adv-field label { display: block; font-size: .65rem; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+        .adv-field input, .adv-field select { width: 100%; font-size: .8rem; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
+
+        .stops-section { margin-bottom: 12px; padding: 10px; background: rgba(37,99,235,.06); border-left: 3px solid var(--primary); border-radius: 8px; }
+        .stops-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+        .stops-title { font-size: .72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .04em; }
+        .stops-summary { font-size: .74rem; color: var(--ink-soft); }
+        .stops-list { list-style: none; margin: 0; padding: 0; }
+        .stops-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: .82rem; }
+        .stops-list li .step { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--primary); color: #fff; font-size: .65rem; font-weight: 700; }
+        .stops-list li.terminus .step { background: var(--ink-soft); }
+        .stops-list .type-tag { font-size: .62rem; padding: 1px 5px; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+        .stops-list .type-medium { background: #dbeafe; color: #1d4ed8; }
+        .stops-list .type-large { background: #d1fae5; color: #065f46; }
+        .stops-list .type-small { background: #fee2e2; color: #991b1b; }
+        .stops-list .leg-dist { font-size: .7rem; color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+        .stops-error { color: var(--danger); font-size: .82rem; }
+        .stops-error button { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
+
         /* Custom-entry list inside the plane/charger modals */
         .custom-list .cl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .custom-list .cl-title { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 700; margin: 0; }
@@ -347,6 +374,43 @@
                         <option value="retour">Retour (Round Trip)</option>
                     </select>
                 </div>
+
+                <!-- Charging stops: when on, an over-range route is auto-split into legs
+                     through intermediate airports (greedy max-reach, prefers medium > large > small). -->
+                <div class="field stops-toggle-row">
+                    <label class="switch stops-switch">
+                        <input type="checkbox" id="withStops">
+                        <span>Plan with charging stops</span>
+                    </label>
+                    <details id="stopsAdvanced" class="stops-advanced">
+                        <summary>Advanced</summary>
+                        <div class="adv-grid">
+                            <div class="adv-field">
+                                <label>Preference order</label>
+                                <select id="advBias">
+                                    <option value="medium-large-small" selected>Medium → Large → Small</option>
+                                    <option value="large-medium-small">Large → Medium → Small</option>
+                                    <option value="small-medium-large">Small → Medium → Large</option>
+                                    <option value="none">No preference (closest)</option>
+                                </select>
+                            </div>
+                            <div class="adv-field">
+                                <label>Reserve margin <span class="text-muted">(% of range)</span></label>
+                                <input type="number" id="advReserve" min="0" max="50" step="1" value="0">
+                            </div>
+                        </div>
+                        <p class="est-note mb-0 mt-1">Reserve 0 % means the plane is planned to fly until empty (range is taken as truth). Aviation reviewers may want ~20 %.</p>
+                    </details>
+                </div>
+                <div id="stopsSection" class="stops-section d-none">
+                    <div class="stops-head">
+                        <span class="stops-title">Suggested route</span>
+                        <span id="stopsSummary" class="stops-summary"></span>
+                    </div>
+                    <ol id="stopsList" class="stops-list"></ol>
+                    <div id="stopsHint" class="est-note"></div>
+                </div>
+
                 <div class="field">
                     <label>Expected frequency</label>
                     <div class="input-group">
@@ -566,6 +630,7 @@
     <script src="/static/planes.js"></script>
     <script src="/static/chargers.js"></script>
     <script src="/static/demand.js"></script>
+    <script src="/static/routing.js"></script>
     <!-- domain modules -->
     <script src="/static/charging.js"></script>
     <script src="/static/scheduler.js"></script>
@@ -573,6 +638,8 @@
     <script>
         const CHARGERS = {{ chargers|tojson }};                  // mutated at runtime: custom chargers are pushed in
         const chargerById = Object.fromEntries(CHARGERS.map(c => [c.id, c]));
+        const BUILTIN_PLANES = {{ planes|tojson }};              // client-side lookup for the routing planner
+        const BUILTIN_PLANES_BY_ID = Object.fromEntries(BUILTIN_PLANES.map(p => [p.id, p]));
 
         // Display-only units + formatters now live in static/units.js (CNSUnits).
         // Aliased here so the existing UI code keeps using fmtDist(...), fmtDuration(...), etc.
@@ -645,7 +712,99 @@
             } else {
                 box.classList.add('d-none');
             }
+            replanRoute();
         }
+
+        // ---------- charging-stops planner (Phase 1A: auto-suggest only) ----------
+        let plannedStops = [];           // [{ident,name,lat,lon,type,iata_code}, ...]
+        let plannedError = null;
+        function _allowedTypes() {
+            return [...document.querySelectorAll('.airport-filter')].filter(cb => cb.checked).map(cb => cb.value);
+        }
+        function _routingOptions() {
+            const bias = document.getElementById('advBias').value;
+            const reservePct = Math.max(0, Math.min(50, parseFloat(document.getElementById('advReserve').value || '0'))) / 100;
+            const ORDERS = {
+                'medium-large-small': { 'medium_airport': 0, 'large_airport': 50, 'small_airport': 150 },
+                'large-medium-small': { 'large_airport': 0, 'medium_airport': 50, 'small_airport': 150 },
+                'small-medium-large': { 'small_airport': 0, 'medium_airport': 50, 'large_airport': 150 },
+                'none':               { 'medium_airport': 0, 'large_airport': 0,  'small_airport': 0   }
+            };
+            return { reservePct, typePenalty: ORDERS[bias] || ORDERS['medium-large-small'] };
+        }
+        function _selectedPlane() {
+            const id = document.getElementById('plane').value;
+            if (customById[id]) return customById[id];
+            // built-in: look up in the rendered options for battery_kwh; but easier: pass plane_id and trust the server.
+            // For client-side route planning we only need range_km. Build from chargerById's static knowledge of planes.
+            // Easiest: keep a small map populated at startup. For now, parse from the <option>'s data via the global PLANES_JSON.
+            return BUILTIN_PLANES_BY_ID[id] || null;
+        }
+        function replanRoute() {
+            const section = document.getElementById('stopsSection');
+            const summaryEl = document.getElementById('stopsSummary');
+            const listEl = document.getElementById('stopsList');
+            const hintEl = document.getElementById('stopsHint');
+            plannedStops = []; plannedError = null;
+
+            const on = document.getElementById('withStops').checked;
+            if (!on || !selected.origin || !selected.destination) { section.classList.add('d-none'); return; }
+
+            const plane = _selectedPlane();
+            if (!plane) { section.classList.add('d-none'); return; }
+
+            const origin = { ident: selected.origin.ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg };
+            const dest   = { ident: selected.destination.ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
+
+            const res = CNSRouting.planRoute({
+                origin, destination: dest, plane,
+                allAirports, allowedTypes: _allowedTypes(),
+                options: _routingOptions()
+            });
+
+            if (res.error) {
+                plannedError = res.error;
+                section.classList.remove('d-none');
+                listEl.innerHTML = `<li class="stops-error">${res.error}<button type="button" id="enableAllTypesBtn">Enable all types</button></li>`;
+                summaryEl.textContent = '';
+                hintEl.textContent = '';
+                document.getElementById('enableAllTypesBtn').addEventListener('click', () => {
+                    document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } });
+                });
+                return;
+            }
+            plannedStops = res.stops;
+            const TYPE_TAG = { 'small_airport': ['SMALL','type-small'], 'medium_airport': ['MED','type-medium'], 'large_airport': ['LARGE','type-large'] };
+
+            if (!plannedStops.length) {
+                // Direct leg fits — nothing to show.
+                section.classList.add('d-none');
+                return;
+            }
+
+            // Render: origin → stop1 → ... → dest, with leg distances
+            const chain = [origin, ...plannedStops, dest];
+            const items = chain.map((wp, i) => {
+                const isTerm = (i === 0 || i === chain.length - 1);
+                const tag = wp.type && TYPE_TAG[wp.type];
+                const tagHtml = (i > 0 && i < chain.length - 1 && tag) ? `<span class="type-tag ${tag[1]}">${tag[0]}</span>` : '';
+                let legDist = '';
+                if (i < chain.length - 1) {
+                    const d = CNSRouting.haversineKm(wp, chain[i + 1]);
+                    legDist = `<span class="leg-dist">→ ${fmtDist(d)}</span>`;
+                }
+                return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span><strong>${wp.name}</strong>${tagHtml}${legDist}</li>`;
+            }).join('');
+            listEl.innerHTML = items;
+            summaryEl.textContent = `${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''} · ${fmtDist(res.totalDistanceKm)} total`;
+            hintEl.textContent = 'Stops chosen by greedy max-reach with your preference order. Manual editing is coming in the next iteration.';
+            section.classList.remove('d-none');
+        }
+        // Toggle + advanced fields + airport filter all trigger a replan
+        document.getElementById('withStops').addEventListener('change', replanRoute);
+        document.getElementById('advBias').addEventListener('change', replanRoute);
+        document.getElementById('advReserve').addEventListener('change', replanRoute);
+        document.getElementById('plane').addEventListener('change', replanRoute);
 
         function setupAutocomplete(field) {
             const input = document.getElementById(field);
@@ -707,6 +866,7 @@
 
         document.querySelectorAll('.airport-filter').forEach(cb => cb.addEventListener('change', () => {
             if (cb.checked) map.addLayer(clusters[cb.value]); else map.removeLayer(clusters[cb.value]);
+            if (typeof replanRoute === 'function') replanRoute();   // visible-type set changed → reroute
         }));
         document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.addEventListener('click', () => setBasemap(btn.dataset.basemap)));
 
@@ -735,20 +895,48 @@
         }
         function drawRoute(data) {
             clearRoute();
-            const p1 = [data.origin.lat, data.origin.lon], p2 = [data.destination.lat, data.destination.lon];
+            const p1 = [data.origin.lat, data.origin.lon];
+            const p2 = [data.destination.lat, data.destination.lon];
             startMarker = L.marker(p1, { title: 'Departure: ' + data.origin.name }).addTo(map);
             endMarker = L.marker(p2, { title: 'Arrival: ' + data.destination.name }).addTo(map);
-            routeLayers = flightLayers(p1, p2, data.trip_type);
-            routeLayers.forEach(l => l.addTo(map));
-            map.fitBounds(L.featureGroup(routeLayers).getBounds(), { padding: [50, 50] });
+
+            if (data.multi_leg && Array.isArray(data.stops) && data.stops.length) {
+                // Multi-leg: straight segments along origin → stop1 → stop2 → … → dest
+                // (and back on retour — both directions drawn in the same chain).
+                const chainOut = [p1, ...data.stops.map(s => [s.lat, s.lon]), p2];
+                const outLayer = L.polyline(chainOut, { color: '#0d6efd', weight: 3 });
+                routeLayers = [outLayer];
+                outLayer.addTo(map);
+                if (data.trip_type === 'retour') {
+                    const backLayer = L.polyline(chainOut.slice().reverse(), { color: '#198754', weight: 3, dashArray: '8 6' });
+                    backLayer.addTo(map);
+                    routeLayers.push(backLayer);
+                }
+                // stop markers
+                data.stops.forEach(s => {
+                    const m = L.circleMarker([s.lat, s.lon], { radius: 7, fillColor: '#2563eb', color: '#fff', weight: 2, fillOpacity: 1 })
+                        .bindTooltip(`<strong>${s.name}</strong>`, { sticky: true })
+                        .addTo(map);
+                    routeLayers.push(m);
+                });
+                map.fitBounds(L.featureGroup(routeLayers.concat([startMarker, endMarker])).getBounds(), { padding: [50, 50] });
+            } else {
+                routeLayers = flightLayers(p1, p2, data.trip_type);
+                routeLayers.forEach(l => l.addTo(map));
+                map.fitBounds(L.featureGroup(routeLayers).getBounds(), { padding: [50, 50] });
+            }
         }
         // Clear the drawn route but keep the user's current zoom/pan.
         document.getElementById('resetMap').addEventListener('click', () => clearRoute());
 
         function renderResult(data) {
             const p = data.plane;
-            document.getElementById('hlEnergy').textContent = num(data.recharge_energy_kwh);
-            document.getElementById('hlTime').textContent = fmtDuration(data.charge_time_min);
+            // Multi-leg result has totals in different fields; map them to a unified shape
+            const isMulti = !!data.multi_leg;
+            const headlineEnergy = isMulti ? data.total_recharge_energy_kwh : data.recharge_energy_kwh;
+            const headlineMin    = isMulti ? data.total_charge_time_min    : data.charge_time_min;
+            document.getElementById('hlEnergy').textContent = num(headlineEnergy);
+            document.getElementById('hlTime').textContent = fmtDuration(headlineMin);
 
             const photo = document.getElementById('acPhoto');
             if (p.image) { photo.src = '/pics/' + p.image; photo.alt = p.name; photo.classList.remove('d-none'); } else photo.classList.add('d-none');
@@ -761,19 +949,43 @@
             document.getElementById('acSpeed').textContent = fmtSpeed(p.speed_kmh);
             document.getElementById('acUsage').textContent = fmtUsage(p.avg_usage_kwh_per_100km);
 
-            document.getElementById('trType').textContent = data.trip_type === 'retour' ? 'Round Trip (Retour)' : 'One-Way';
-            document.getElementById('trLeg').textContent = fmtDist(data.leg_distance_km);
-            document.getElementById('trTotal').textContent = fmtDist(data.total_distance_km) + ` (${data.legs} leg${data.legs > 1 ? 's' : ''})`;
-            document.getElementById('trFlight').textContent = fmtDuration(data.flight_time_h * 60);
+            const legs = isMulti ? data.legs_count : data.legs;
+            document.getElementById('trType').textContent = (data.trip_type === 'retour' ? 'Round Trip (Retour)' : 'One-Way') + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
+            document.getElementById('trLeg').textContent = isMulti ? '—' : fmtDist(data.leg_distance_km);
+            document.getElementById('trTotal').textContent = fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
+            document.getElementById('trFlight').textContent = isMulti ? fmtDuration(data.total_flight_time_h * 60) : fmtDuration(data.flight_time_h * 60);
             document.getElementById('trCharger').textContent = data.charger.name + ' (' + data.charger.power_kw + ' kW)';
 
             const common = [
                 `avg usage      = battery / range × 100`,
                 `               = ${p.battery_kwh} kWh / ${p.range_km} km × 100 = ${p.avg_usage_kwh_per_100km} kWh/100km`, ``,
-                `energy / leg   = avg usage × leg distance / 100`,
-                `               = ${p.avg_usage_kwh_per_100km} × ${data.leg_distance_km} / 100 = ${data.leg_energy_kwh} kWh`, ``,
             ];
             let lines;
+            if (isMulti) {
+                lines = [
+                    `# Multi-leg trip with charging stops.`,
+                    `# At each stop the plane charges just enough for the next leg;`,
+                    `# at the terminal (one-way dest or retour home) it tops up to full.`, ``,
+                    ...common,
+                    `Legs:`,
+                    ...data.legs.map((l, i) => `  ${i + 1}. ${l.from.name} → ${l.to.name}: ${l.distance_km} km, ${l.energy_kwh} kWh, ${Math.round(l.flight_time_h * 60)} min`),
+                    ``,
+                    `Charges:`,
+                    ...data.charges.map(c => `  ${c.role.toUpperCase().padEnd(5)} @ ${c.name}: ${c.energy_kwh} kWh / ${c.charge_time_min} min`),
+                    ``,
+                    `Totals: ${data.total_distance_km} km · ${Math.round(data.total_flight_time_h * 60)} min flying · ${data.total_recharge_energy_kwh} kWh / ${data.total_charge_time_min} min charging`,
+                    ``,
+                    `(model computed in metric; figures above use your selected units, rounded up)`
+                ];
+                document.getElementById('calcPanel').textContent = lines.join('\n');
+                document.getElementById('result').classList.remove('d-none');
+                document.getElementById('error').classList.add('d-none');
+                return;
+            }
+            common.push(
+                `energy / leg   = avg usage × leg distance / 100`,
+                `               = ${p.avg_usage_kwh_per_100km} × ${data.leg_distance_km} / 100 = ${data.leg_energy_kwh} kWh`, ``
+            );
             if (data.trip_type === 'retour') {
                 const roundTrip = (data.leg_energy_kwh * 2).toFixed(2);
                 const relieved = data.recharge_energy_kwh === 0;
@@ -829,6 +1041,11 @@
             // server-side custom chargers (id starts with "charger_") aren't in the static catalog —
             // pass the object through so sim.py can size the charge time correctly.
             if (window.CNSChargers && CNSChargers.get(chargerId)) payload.charger = CNSChargers.get(chargerId);
+            // Multi-leg trip: include the planned stops if "Plan with charging stops" is on
+            if (document.getElementById('withStops').checked && plannedStops.length) {
+                if (plannedError) { errDiv.textContent = plannedError; errDiv.classList.remove('d-none'); return; }
+                payload.stops = plannedStops.map(s => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type }));
+            }
             const response = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const data = await response.json();
             if (data.error) {
