@@ -311,6 +311,16 @@
         .stops-list .leg-dist { font-size: .7rem; color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
         .stops-error { color: var(--danger); font-size: .82rem; }
         .stops-error button { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
+        .stops-error-inline { color: var(--danger); font-size: .78rem; }
+        .stops-list .stop-rm { margin-left: 4px; border: none; background: transparent; color: var(--danger); cursor: pointer; padding: 0 4px; border-radius: 4px; font-size: 1rem; line-height: 1; opacity: .65; }
+        .stops-list .stop-rm:hover { background: rgba(239,68,68,.12); opacity: 1; }
+        .stops-list .leg-dist.over-range { color: var(--danger); font-weight: 700; }
+        .stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
+        .stops-list .stops-add { padding: 6px 0 0 0; position: relative; }
+        .stops-list .stops-add input { width: 100%; padding: 5px 8px; font-size: .82rem; border: 1px solid #e2e8f0; border-radius: 6px; }
+        .stops-list .stops-add input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+        .stops-btn { font-size: .76rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--panel-border); background: rgba(255,255,255,.8); color: var(--ink-soft); cursor: pointer; font-weight: 600; }
+        .stops-btn:hover { background: #fff; color: var(--ink); border-color: #cbd5e1; }
 
         /* Custom-entry list inside the plane/charger modals */
         .custom-list .cl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
@@ -716,8 +726,12 @@
         }
 
         // ---------- charging-stops planner (Phase 1A: auto-suggest only) ----------
+        // Phase 1B: editable suggested stops + revalidation
         let plannedStops = [];           // [{ident,name,lat,lon,type,iata_code}, ...]
         let plannedError = null;
+        let plannedSource = 'auto';      // 'auto' (algorithm) or 'user' (after manual edit)
+        let plannedLegIssues = [];       // indices of legs that exceed plane range
+
         function _allowedTypes() {
             return [...document.querySelectorAll('.airport-filter')].filter(cb => cb.checked).map(cb => cb.value);
         }
@@ -734,77 +748,192 @@
         }
         function _selectedPlane() {
             const id = document.getElementById('plane').value;
-            if (customById[id]) return customById[id];
-            // built-in: look up in the rendered options for battery_kwh; but easier: pass plane_id and trust the server.
-            // For client-side route planning we only need range_km. Build from chargerById's static knowledge of planes.
-            // Easiest: keep a small map populated at startup. For now, parse from the <option>'s data via the global PLANES_JSON.
-            return BUILTIN_PLANES_BY_ID[id] || null;
+            return customById[id] || BUILTIN_PLANES_BY_ID[id] || null;
         }
-        function replanRoute() {
-            const section = document.getElementById('stopsSection');
+        function _terminus() {
+            if (!selected.origin || !selected.destination) return null;
+            return {
+                origin: { ident: selected.origin.ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg },
+                dest:   { ident: selected.destination.ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg }
+            };
+        }
+
+        // Validate the current chain against the plane's range.
+        function validateRoute() {
+            plannedLegIssues = []; plannedError = null;
+            const t = _terminus(); const plane = _selectedPlane();
+            if (!t || !plane) return;
+            const reservePct = _routingOptions().reservePct;
+            const maxLeg = plane.range_km * (1 - reservePct);
+            const chain = [t.origin, ...plannedStops, t.dest];
+            for (let i = 0; i < chain.length - 1; i++) {
+                const d = CNSRouting.haversineKm(chain[i], chain[i + 1]);
+                if (d > maxLeg) plannedLegIssues.push(i);
+            }
+            if (plannedLegIssues.length) {
+                const n = plannedLegIssues.length;
+                plannedError = `${n} leg${n > 1 ? 's' : ''} exceed${n > 1 ? '' : 's'} the aircraft's range — pick a different stop or re-suggest.`;
+            }
+        }
+
+        // Run the algorithm fresh, replacing manual edits.
+        function recomputeRoute() {
+            plannedStops = []; plannedError = null; plannedSource = 'auto'; plannedLegIssues = [];
+            const t = _terminus(); const plane = _selectedPlane();
+            if (!t || !plane) { renderStops(); return; }
+            const res = CNSRouting.planRoute({
+                origin: t.origin, destination: t.dest, plane,
+                allAirports, allowedTypes: _allowedTypes(), options: _routingOptions()
+            });
+            if (res.error) { plannedError = res.error; renderStops(); return; }
+            plannedStops = res.stops;
+            renderStops();
+        }
+        // Decide whether to re-run the algorithm or just re-validate after a soft change.
+        function smartReplan() {
+            if (plannedSource === 'user' && plannedStops.length) {
+                validateRoute(); renderStops();
+            } else {
+                recomputeRoute();
+            }
+        }
+        // Re-validate (no rerouting); call after manual edits.
+        function refreshAfterEdit() { plannedSource = 'user'; validateRoute(); renderStops(); }
+
+        // Find the best place to slot a new stop into the chain (smallest detour).
+        function bestInsertionIndex(newStop) {
+            const t = _terminus(); if (!t) return plannedStops.length;
+            const chain = [t.origin, ...plannedStops, t.dest];
+            let bestIdx = plannedStops.length, bestDelta = Infinity;
+            for (let i = 0; i < chain.length - 1; i++) {
+                const d0 = CNSRouting.haversineKm(chain[i], chain[i + 1]);
+                const d1 = CNSRouting.haversineKm(chain[i], newStop);
+                const d2 = CNSRouting.haversineKm(newStop, chain[i + 1]);
+                const delta = d1 + d2 - d0;
+                if (delta < bestDelta) { bestDelta = delta; bestIdx = i; }
+            }
+            return bestIdx;
+        }
+
+        const TYPE_TAG = { 'small_airport': ['SMALL','type-small'], 'medium_airport': ['MED','type-medium'], 'large_airport': ['LARGE','type-large'] };
+
+        function renderStops() {
+            const section  = document.getElementById('stopsSection');
             const summaryEl = document.getElementById('stopsSummary');
-            const listEl = document.getElementById('stopsList');
-            const hintEl = document.getElementById('stopsHint');
-            plannedStops = []; plannedError = null;
+            const listEl   = document.getElementById('stopsList');
+            const hintEl   = document.getElementById('stopsHint');
 
             const on = document.getElementById('withStops').checked;
-            if (!on || !selected.origin || !selected.destination) { section.classList.add('d-none'); return; }
+            const t  = _terminus();
+            if (!on || !t) { section.classList.add('d-none'); return; }
 
-            const plane = _selectedPlane();
-            if (!plane) { section.classList.add('d-none'); return; }
-
-            const origin = { ident: selected.origin.ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg };
-            const dest   = { ident: selected.destination.ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
-
-            const res = CNSRouting.planRoute({
-                origin, destination: dest, plane,
-                allAirports, allowedTypes: _allowedTypes(),
-                options: _routingOptions()
-            });
-
-            if (res.error) {
-                plannedError = res.error;
+            // Error path with no stops (algorithm couldn't route)
+            if (plannedError && !plannedStops.length) {
                 section.classList.remove('d-none');
-                listEl.innerHTML = `<li class="stops-error">${res.error}<button type="button" id="enableAllTypesBtn">Enable all types</button></li>`;
+                listEl.innerHTML = `<li class="stops-error">${plannedError}<button type="button" id="enableAllTypesBtn">Enable all types</button></li>`;
                 summaryEl.textContent = '';
-                hintEl.textContent = '';
-                document.getElementById('enableAllTypesBtn').addEventListener('click', () => {
-                    document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } });
-                });
+                hintEl.innerHTML = '';
+                document.getElementById('enableAllTypesBtn').addEventListener('click', () =>
+                    document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } })
+                );
                 return;
             }
-            plannedStops = res.stops;
-            const TYPE_TAG = { 'small_airport': ['SMALL','type-small'], 'medium_airport': ['MED','type-medium'], 'large_airport': ['LARGE','type-large'] };
+            // No stops needed — direct leg fits.
+            if (!plannedStops.length) { section.classList.add('d-none'); return; }
 
-            if (!plannedStops.length) {
-                // Direct leg fits — nothing to show.
-                section.classList.add('d-none');
-                return;
-            }
+            const chain = [t.origin, ...plannedStops, t.dest];
+            let totalDist = 0; for (let i = 0; i < chain.length - 1; i++) totalDist += CNSRouting.haversineKm(chain[i], chain[i + 1]);
 
-            // Render: origin → stop1 → ... → dest, with leg distances
-            const chain = [origin, ...plannedStops, dest];
-            const items = chain.map((wp, i) => {
+            const lis = chain.map((wp, i) => {
                 const isTerm = (i === 0 || i === chain.length - 1);
                 const tag = wp.type && TYPE_TAG[wp.type];
-                const tagHtml = (i > 0 && i < chain.length - 1 && tag) ? `<span class="type-tag ${tag[1]}">${tag[0]}</span>` : '';
+                const tagHtml = (!isTerm && tag) ? `<span class="type-tag ${tag[1]}">${tag[0]}</span>` : '';
                 let legDist = '';
                 if (i < chain.length - 1) {
                     const d = CNSRouting.haversineKm(wp, chain[i + 1]);
-                    legDist = `<span class="leg-dist">→ ${fmtDist(d)}</span>`;
+                    const bad = plannedLegIssues.includes(i);
+                    legDist = `<span class="leg-dist${bad ? ' over-range' : ''}">→ ${fmtDist(d)}${bad ? ' ⚠' : ''}</span>`;
                 }
-                return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span><strong>${wp.name}</strong>${tagHtml}${legDist}</li>`;
+                const rm = !isTerm ? `<button class="stop-rm" type="button" data-stop="${i - 1}" title="Remove this stop">×</button>` : '';
+                return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span><strong>${wp.name}</strong>${tagHtml}${rm}${legDist}</li>`;
             }).join('');
-            listEl.innerHTML = items;
-            summaryEl.textContent = `${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''} · ${fmtDist(res.totalDistanceKm)} total`;
-            hintEl.textContent = 'Stops chosen by greedy max-reach with your preference order. Manual editing is coming in the next iteration.';
+
+            const sourceLabel = plannedSource === 'user' ? 'Edited route' : 'Suggested route';
+            document.querySelector('.stops-title').textContent = sourceLabel;
+
+            listEl.innerHTML = lis +
+                `<li class="stops-actions">
+                    <button id="reSuggestBtn"  class="stops-btn"  type="button">↻ Re-suggest</button>
+                    <button id="addStopToggle" class="stops-btn"  type="button">+ Add stop</button>
+                </li>
+                <li id="addStopRow" class="stops-add d-none ac-wrap">
+                    <input id="addStopInput" type="text" placeholder="Search airport to add as a stop…" autocomplete="off">
+                    <div id="addStopList" class="ac-list d-none"></div>
+                </li>`;
+            summaryEl.textContent = `${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''} · ${fmtDist(totalDist)} total`;
+
+            // Hint / error line
+            if (plannedError) {
+                hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span>`;
+            } else {
+                hintEl.textContent = plannedSource === 'auto'
+                    ? 'Greedy max-reach with your preference order. Click × to remove a stop, + to add one, or ↻ to re-suggest.'
+                    : 'Custom route — legs are re-validated against the aircraft\'s range. ↻ to revert to the algorithm.';
+            }
             section.classList.remove('d-none');
+
+            // Wire row actions
+            listEl.querySelectorAll('.stop-rm').forEach(btn => btn.addEventListener('click', () => {
+                const idx = +btn.dataset.stop;
+                plannedStops.splice(idx, 1);
+                refreshAfterEdit();
+            }));
+            document.getElementById('reSuggestBtn').addEventListener('click', recomputeRoute);
+
+            // Inline autocomplete for adding a stop
+            const addToggle = document.getElementById('addStopToggle');
+            const addRow = document.getElementById('addStopRow');
+            const addInp = document.getElementById('addStopInput');
+            const addLst = document.getElementById('addStopList');
+
+            addToggle.addEventListener('click', () => {
+                addRow.classList.toggle('d-none');
+                if (!addRow.classList.contains('d-none')) { addInp.value = ''; addInp.focus(); }
+            });
+            let acCurrent = [];
+            addInp.addEventListener('input', () => {
+                const q = addInp.value.trim().toLowerCase();
+                if (q.length < 2) { addLst.classList.add('d-none'); return; }
+                acCurrent = allAirports.filter(ap =>
+                    (ap.name && ap.name.toLowerCase().includes(q)) ||
+                    (ap.municipality && ap.municipality.toLowerCase().includes(q)) ||
+                    (ap.iata_code && ap.iata_code.toLowerCase() === q)
+                ).slice(0, 30);
+                addLst.innerHTML = acCurrent.length
+                    ? acCurrent.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${ap.name}</strong> <small>${labelFor(ap)}</small></div>`).join('')
+                    : '<div class="ac-item text-muted">No matches.</div>';
+                addLst.classList.remove('d-none');
+            });
+            addLst.addEventListener('mousedown', e => {
+                const item = e.target.closest('.ac-item[data-i]'); if (!item) return;
+                const ap = acCurrent[+item.dataset.i];
+                const stop = { ident: ap.ident, name: ap.name, type: ap.type, lat: ap.latitude_deg, lon: ap.longitude_deg, iata_code: ap.iata_code || '' };
+                const idx = bestInsertionIndex(stop);
+                plannedStops.splice(idx, 0, stop);
+                addRow.classList.add('d-none');
+                refreshAfterEdit();
+            });
+            addInp.addEventListener('blur', () => setTimeout(() => addLst.classList.add('d-none'), 150));
         }
-        // Toggle + advanced fields + airport filter all trigger a replan
-        document.getElementById('withStops').addEventListener('change', replanRoute);
-        document.getElementById('advBias').addEventListener('change', replanRoute);
-        document.getElementById('advReserve').addEventListener('change', replanRoute);
-        document.getElementById('plane').addEventListener('change', replanRoute);
+
+        // Public entry point used by other code paths (origin/dest change, etc.)
+        function replanRoute() { recomputeRoute(); }
+
+        // Soft changes (advanced / plane / filter) keep user edits intact.
+        document.getElementById('withStops').addEventListener('change', recomputeRoute);
+        document.getElementById('advBias').addEventListener('change', smartReplan);
+        document.getElementById('advReserve').addEventListener('change', smartReplan);
+        document.getElementById('plane').addEventListener('change', smartReplan);
 
         function setupAutocomplete(field) {
             const input = document.getElementById(field);
@@ -866,7 +995,7 @@
 
         document.querySelectorAll('.airport-filter').forEach(cb => cb.addEventListener('change', () => {
             if (cb.checked) map.addLayer(clusters[cb.value]); else map.removeLayer(clusters[cb.value]);
-            if (typeof replanRoute === 'function') replanRoute();   // visible-type set changed → reroute
+            if (typeof smartReplan === 'function') smartReplan();   // visible-type set changed; keep manual edits if any
         }));
         document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.addEventListener('click', () => setBasemap(btn.dataset.basemap)));
 
