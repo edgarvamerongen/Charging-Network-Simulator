@@ -27,17 +27,26 @@ window.CNSDemand = (function () {
     // Role this trip plays at `ident`:
     //   'dest'  — the trip arrives here (one-way or retour destination)
     //   'home'  — the trip's home base (retour origin only)
+    //   'stop'  — an intermediate charging stop on a multi-leg trip
     //   null    — this airport isn't touched by the trip
     function roleAt(trip, ident) {
         if (trip.destIdent === ident) return 'dest';
         if (trip.originIdent === ident && trip.tripType === 'retour') return 'home';
+        if (trip.multiLeg && Array.isArray(trip.stops) && trip.stops.some(s => s && s.ident === ident)) return 'stop';
         return null;
     }
 
     function tripsAt(ident) { return loadFolder().filter(t => roleAt(t, ident)); }
 
     // Energy the airport must deliver per flight (per the relief / fullCharge model).
+    // For multi-leg trips, sum the backend-precomputed charges at this airport
+    // (a retour symmetric stop is visited twice, so its energy is the sum of both visits).
     function energyAt(trip, ident, fullCharge) {
+        if (trip.multiLeg && Array.isArray(trip.charges)) {
+            return trip.charges
+                .filter(c => c && c.ident === ident)
+                .reduce((sum, c) => sum + numOf(c, 'energy_kwh'), 0);
+        }
         const leg = numOf(trip, 'legEnergy'), batt = batteryOf(trip);
         const role = roleAt(trip, ident);
         if (role === 'home') return Math.min(2 * leg, batt);
@@ -54,6 +63,29 @@ window.CNSDemand = (function () {
             airports[ident] || (airports[ident] = { ident, name, lat, lon, contribs: [] });
 
         loadFolder().forEach(t => {
+            // Multi-leg trip: each backend-precomputed charge event becomes one
+            // contribution at its airport. A retour stop visited outbound + return
+            // is two distinct contributions at the same airport.
+            if (t.multiLeg && Array.isArray(t.charges) && t.charges.length) {
+                // Keep `other` aligned with the legacy single-leg semantics so
+                // renderFolder's row builder reads cleanly. The "multi-leg" suffix
+                // in the Trip column already signals the multi-stop nature.
+                t.charges.forEach((c, idx) => {
+                    if (!c || !c.ident) return;
+                    const a = ensure(c.ident, c.name, c.lat, c.lon);
+                    const other =
+                        c.role === 'home' ? t.destName :
+                        c.role === 'dest' ? t.originName :
+                                            `${t.originName} → ${t.destName}`;   // 'stop' row reads "on {route}"
+                    a.contribs.push({
+                        t, role: c.role, other,
+                        base: numOf(c, 'energy_kwh'),
+                        chargeIdx: idx
+                    });
+                });
+                return;
+            }
+            // Legacy single-leg path (unchanged behaviour)
             const battery = t.battery ?? t.legEnergy * 2;
             if (t.tripType === 'retour') {
                 ensure(t.originIdent, t.originName, t.originLat, t.originLon)

@@ -48,7 +48,11 @@ window.CNSScheduler = (function () {
         if (trip.originIdent === ident && trip.tripType === 'retour') return 'home';
         return null;
     }
-    function tripsAt(ident) { return loadTrips().filter(t => roleAt(t, ident)); }
+    // Phase 1C: the rotation scheduler doesn't yet render multi-leg trips
+    // (their proper integration — multi-leg rotation timeline + animation — is
+    // Phase 2). They still appear in the demand calculator's table and energy
+    // aggregates via demand.js; they just don't show up here.
+    function tripsAt(ident) { return loadTrips().filter(t => !t.multiLeg && roleAt(t, ident)); }
 
     function energyAt(trip, ident, fullCharge) {
         const leg = num(trip, 'legEnergy'), batt = batteryOf(trip);

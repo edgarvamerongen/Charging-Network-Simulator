@@ -170,6 +170,7 @@
         .tag-trip     { background: #d1fae5; color: #065f46; }
         .tag-home     { background: #fef3c7; color: #92400e; }
         .tag-dest     { background: #d1fae5; color: #065f46; }
+        .tag-stop     { background: #ede9fe; color: #6d28d9; }
 
         .spec-table { width: 100%; font-size: .82rem; }
         .spec-table td { padding: 3px 4px; vertical-align: top; }
@@ -1158,7 +1159,8 @@
                 errDiv.textContent = 'Please pick both airports from the suggestions list.';
                 errDiv.classList.remove('d-none'); syncUnset('origin'); syncUnset('destination'); return;
             }
-            const toCoord = ap => ({ name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg });
+            // ident is included so the backend's multi-leg charges[] can tag home/dest by airport
+            const toCoord = ap => ({ ident: ap.ident, name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg });
             const planeId = document.getElementById('plane').value;
             const chargerId = document.getElementById('charger').value;
             const payload = {
@@ -1246,13 +1248,18 @@
                     if (isFinite(chargeMin)) dailyHours += (chargeMin / 60) * flightsPerDay(t);
                     const roleTag = c.role === 'home'
                         ? `<span class="section-tag tag-home">HOME</span>`
+                        : c.role === 'stop'
+                        ? `<span class="section-tag tag-stop">STOP</span>`
                         : `<span class="section-tag tag-dest">${t.tripType === 'retour' ? 'DEST' : 'ARRIVAL'}</span>`;
-                    const dir = c.role === 'home' ? `→ ${c.other} & back` : `from ${c.other}`;
+                    const dir =
+                        c.role === 'home' ? `→ ${c.other} & back` :
+                        c.role === 'stop' ? `on ${c.other}` :
+                                            `from ${c.other}`;
                     const chargerName = asg.charger ? asg.charger.name : 'no charger';
                     return `<tr class="folder-trip">
                         <td>${roleTag} ${dir}</td>
                         <td>${t.planeName}</td>
-                        <td>${t.tripType === 'retour' ? 'Retour' : 'One-way'}</td>
+                        <td>${t.tripType === 'retour' ? 'Retour' : 'One-way'}${t.multiLeg ? ' · multi-leg' : ''}</td>
                         <td><div class="input-group input-group-sm" style="width:150px">
                             <input type="number" min="1" value="${t.freqN}" class="form-control trip-freq-n" data-id="${t.id}">
                             <select class="form-select trip-freq-unit" data-id="${t.id}">
@@ -1266,7 +1273,10 @@
                 }).join('');
 
                 const sInfo = (window.CNSScheduler ? CNSScheduler.summary(ident) : { peakKw: plan.peakPower, overflow: false, latestEnd: 0 });
-                const peakPower = sInfo.peakKw;
+                // The scheduler currently only sees single-leg trips (multi-leg integration = Phase 2).
+                // At airports that host only multi-leg traffic the scheduler peak is 0; fall back to the
+                // simple charger-fleet plan peak (a sensible upper-bound) so the card stays meaningful.
+                const peakPower = sInfo.peakKw || plan.peakPower;
                 const installed = fleet.reduce((s, c) => s + c.power_kw, 0);
                 const chargerOptsFor = (selId) => CHARGERS.map(c => `<option value="${c.id}" ${c.id === selId ? 'selected' : ''}>${c.name} (${c.power_kw} kW)</option>`).join('');
                 const fleetHtml = fleet.map((c, i) => `
@@ -1356,15 +1366,36 @@
         document.getElementById('addFolder').addEventListener('click', () => {
             if (!lastResult) return;
             const d = lastResult, trips = loadFolder();
-            trips.push({
+            const trip = {
                 id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
                 destIdent: d._dest.ident, destName: d._dest.name, destLat: d._dest.lat, destLon: d._dest.lon,
                 originIdent: d._origin.ident, originName: d._origin.name, originLat: d._origin.lat, originLon: d._origin.lon,
                 planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
                 chargerId: d._chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
-                rechargeEnergy: d.recharge_energy_kwh, legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh,
-                flightTimeH: d.flight_time_h, freqN: d._freqN, freqUnit: d._freqUnit
-            });
+                legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh,
+                freqN: d._freqN, freqUnit: d._freqUnit
+            };
+            if (d.multi_leg) {
+                // Multi-leg: save the full chain so computeAirports can attribute each charge event.
+                Object.assign(trip, {
+                    multiLeg: true,
+                    flightTimeH: d.total_flight_time_h,
+                    rechargeEnergy: d.total_recharge_energy_kwh,   // legacy field — used as a fallback by older code
+                    stops: d.stops,                                // [{ident,name,lat,lon,type}]
+                    charges: d.charges,                            // [{at_index,name,lat,lon,ident,role,energy_kwh,charge_time_min,...}]
+                    legs: d.legs,                                  // [{from,to,distance_km,flight_time_h,energy_kwh}]
+                    totalDistanceKm: d.total_distance_km,
+                    totalFlightTimeH: d.total_flight_time_h,
+                    totalChargeMin: d.total_charge_time_min,
+                    totalRechargeKwh: d.total_recharge_energy_kwh
+                });
+            } else {
+                Object.assign(trip, {
+                    rechargeEnergy: d.recharge_energy_kwh,
+                    flightTimeH: d.flight_time_h
+                });
+            }
+            trips.push(trip);
             saveFolder(trips); renderFolder();
             const btn = document.getElementById('addFolder');
             btn.textContent = '✓ Added'; setTimeout(() => { btn.textContent = '+ Add to demand calculator'; }, 1200);
