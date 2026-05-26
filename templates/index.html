@@ -263,33 +263,22 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <!-- shared data/logic modules (framework-agnostic; UI consumes them) -->
+    <script src="/static/state.js"></script>
+    <script src="/static/units.js"></script>
+    <script src="/static/planes.js"></script>
+    <script src="/static/demand.js"></script>
+    <!-- domain modules -->
     <script src="/static/charging.js"></script>
     <script src="/static/scheduler.js"></script>
     <script src="/static/animation.js"></script>
     <script>
         const CHARGERS = {{ chargers|tojson }};
         const chargerById = Object.fromEntries(CHARGERS.map(c => [c.id, c]));
-        const NM_PER_KM = 1 / 1.852;
 
-        // ---------- units + rounding (display only) ----------
-        const UNIT_KEY = 'cns_units';
-        let unitSystem = localStorage.getItem(UNIT_KEY) || 'metric';
-        const r = n => Math.ceil(n - 1e-9) || 0;                  // round up, ignore float dust, avoid -0
-        const num = n => r(n).toLocaleString('en-US');
-        const isNautical = () => unitSystem === 'nautical';
-        const fmtDist = (km) => num(isNautical() ? km * NM_PER_KM : km) + (isNautical() ? ' nm' : ' km');
-        const fmtSpeed = (kmh) => num(isNautical() ? kmh * NM_PER_KM : kmh) + (isNautical() ? ' kn' : ' km/h');
-        const fmtUsage = (per100km) => num(isNautical() ? per100km / NM_PER_KM : per100km) + (isNautical() ? ' kWh/100nm' : ' kWh/100km');
-        const fmtEnergy = (kwh) => num(kwh) + ' kWh';
-        const fmtPower = (kw) => num(kw) + ' kW';
-        // Charging durations switch to h:min once they exceed 60 minutes.
-        const fmtDuration = (minutes) => {
-            if (!isFinite(minutes)) return '—';
-            const m = r(minutes);
-            if (m <= 60) return m + ' min';
-            return (m % 60) ? `${Math.floor(m / 60)}h ${m % 60}min` : `${m / 60}h`;
-        };
-        const fmtClock = (min) => { const c = Math.max(0, Math.round(min)); return String(Math.floor(c / 60)).padStart(2, '0') + ':' + String(c % 60).padStart(2, '0'); };
+        // Display-only units + formatters now live in static/units.js (CNSUnits).
+        // Aliased here so the existing UI code keeps using fmtDist(...), fmtDuration(...), etc.
+        const { r, num, isNautical, fmtDist, fmtSpeed, fmtUsage, fmtEnergy, fmtPower, fmtDuration, fmtClock } = CNSUnits;
 
         // ---------- map ----------
         const map = L.map('map').setView([50.0, 10.0], 4);
@@ -538,38 +527,16 @@
         });
 
         // ---------- demand calculator ----------
-        const FOLDER_KEY = 'cns_folder', CFG_KEY = 'cns_airport_cfg';
-        const loadFolder = () => JSON.parse(localStorage.getItem(FOLDER_KEY) || '[]');
-        const saveFolder = (f) => localStorage.setItem(FOLDER_KEY, JSON.stringify(f));
-        const loadCfg = () => JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
-        const saveCfg = (c) => localStorage.setItem(CFG_KEY, JSON.stringify(c));
-        const flightsPerDay = t => t.freqUnit === 'week' ? t.freqN / 7 : t.freqN;
+        // Pure data + logic lives in static/demand.js (CNSDemand). The UI bits
+        // below (renderFolder, addFolder handler) stay here for now; aliases keep
+        // the existing code reading naturally.
+        const FOLDER_KEY = CNSState.KEYS.folder, CFG_KEY = CNSState.KEYS.cfg;
+        const { loadFolder, saveFolder, loadCfg, saveCfg, flightsPerDay, computeAirports } = CNSDemand;
         let calcFilter = 'all';
         const schedOpen = new Set();   // airport idents whose embedded scheduler is expanded
 
-        function updateTrip(id, patch) {
-            const trips = loadFolder(); const t = trips.find(x => x.id === id);
-            if (!t) return; Object.assign(t, patch); saveFolder(trips); renderFolder();
-        }
-
-        // Attribute each trip's demand to the airports it touches.
-        function computeAirports() {
-            const airports = {};
-            const ensure = (ident, name, lat, lon) => airports[ident] || (airports[ident] = { ident, name, lat, lon, contribs: [] });
-            loadFolder().forEach(t => {
-                const battery = t.battery ?? t.legEnergy * 2;
-                if (t.tripType === 'retour') {
-                    ensure(t.originIdent, t.originName, t.originLat, t.originLon)
-                        .contribs.push({ t, role: 'home', other: t.destName, base: Math.min(2 * t.legEnergy, battery) });
-                    ensure(t.destIdent, t.destName, t.destLat, t.destLon)
-                        .contribs.push({ t, role: 'dest', other: t.originName, base: Math.max(0, 2 * t.legEnergy - battery) });
-                } else {
-                    ensure(t.destIdent, t.destName, t.destLat, t.destLon)
-                        .contribs.push({ t, role: 'dest', other: t.originName, base: t.legEnergy });
-                }
-            });
-            return airports;
-        }
+        // UI wrapper: mutate via the data module, then re-render.
+        function updateTrip(id, patch) { CNSDemand.updateTrip(id, patch); renderFolder(); }
 
         function renderFolder() {
             const el = document.getElementById('folder');
@@ -771,32 +738,34 @@
         });
 
         // ---------- unit toggle ----------
+        // The unit system itself lives in CNSUnits; here we just wire the checkbox
+        // and re-render the UI whenever it changes (from anywhere).
         const unitToggle = document.getElementById('unitToggle');
         unitToggle.checked = isNautical();
         unitToggle.addEventListener('change', () => {
-            unitSystem = unitToggle.checked ? 'nautical' : 'metric';
-            localStorage.setItem(UNIT_KEY, unitSystem);
+            CNSUnits.set(unitToggle.checked ? 'nautical' : 'metric');
+        });
+        CNSUnits.onChange(() => {
+            unitToggle.checked = isNautical();
             updateTrajectory();
             if (lastResult) renderResult(lastResult);
             renderFolder();
         });
 
-        // ---------- custom planes ----------
-        const CUSTOM_KEY = 'cns_custom_planes';
-        let customPlanes = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]');
-        const customById = {};
+        // ---------- custom planes (data layer: CNSPlanes; UI wiring below) ----------
+        // Kept as an alias so existing submit-handler code can still do customById[planeId].
+        const customById = Object.fromEntries(CNSPlanes.list().map(p => [p.id, p]));
         const planeSelect = document.getElementById('plane');
         const customModal = new bootstrap.Modal(document.getElementById('customPlaneModal'));
         let prevPlaneValue = planeSelect.value;
 
         function addPlaneOption(p) {
-            customById[p.id] = p;
             const opt = document.createElement('option');
             opt.value = p.id;
             opt.textContent = `${p.name} — ${p.battery_kwh} kWh (custom)`;
             planeSelect.insertBefore(opt, planeSelect.querySelector('option[value="__custom__"]'));
         }
-        customPlanes.forEach(addPlaneOption);
+        CNSPlanes.list().forEach(addPlaneOption);
 
         planeSelect.addEventListener('change', () => {
             if (planeSelect.value === '__custom__') {
@@ -821,11 +790,11 @@
                 err.textContent = 'Enter a name and positive battery (kWh), range (km) and cruise speed (km/h).';
                 err.classList.remove('d-none'); return;
             }
-            const p = { id: 'custom_' + Date.now().toString(36), name, battery_kwh: battery, range_km: range, speed_kmh: speed };
-            if (!isNaN(seats)) p.seats = seats;
-            if (!isNaN(load)) p.load_kg = load;
-            customPlanes.push(p);
-            localStorage.setItem(CUSTOM_KEY, JSON.stringify(customPlanes));
+            const draft = { name, battery_kwh: battery, range_km: range, speed_kmh: speed };
+            if (!isNaN(seats)) draft.seats = seats;
+            if (!isNaN(load)) draft.load_kg = load;
+            const p = CNSPlanes.add(draft);
+            customById[p.id] = p;
             addPlaneOption(p);
             planeSelect.value = p.id; prevPlaneValue = p.id;
             customModal.hide();
