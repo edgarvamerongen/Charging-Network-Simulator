@@ -1177,7 +1177,7 @@
         // Soft changes (advanced / plane / filter) keep user edits intact.
         document.getElementById('withStops').addEventListener('change', recomputeRoute);
         document.getElementById('advBias').addEventListener('change', smartReplan);
-        document.getElementById('advReserve').addEventListener('change', smartReplan);
+        // (advReserve was removed when the global Realism settings took over reserve handling)
         document.getElementById('plane').addEventListener('change', smartReplan);
 
         function setupAutocomplete(field) {
