@@ -3,8 +3,9 @@ import os
 import time
 from datetime import datetime, timezone
 
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, Response
 from sim import Simulator
+from report import generate_pdf
 
 app = Flask(__name__)
 simulator = Simulator()
@@ -207,6 +208,31 @@ def simulate_flight():
     else:
         result = simulator.simulate(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj)
     return jsonify(result)
+
+
+@app.route('/api/report.pdf', methods=['POST'])
+def report_pdf():
+    """Browser POSTs a fully-computed plan; we typeset it and stream a PDF back.
+    See report.py for the payload shape. Returns 400 if payload is empty, 500
+    if the WeasyPrint pipeline blows up (with a JSON error message)."""
+    payload = request.get_json(silent=True) or {}
+    if not payload.get('airports'):
+        return jsonify({'error': 'Nothing to report — add at least one flight first.'}), 400
+    try:
+        css_url = url_for('static', filename='report.css')
+        pdf_bytes = generate_pdf(payload, css_url=css_url, request_root=request.url_root)
+    except RuntimeError as e:
+        # Missing dependency: surface the message verbatim so the operator sees it.
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': f'PDF generation failed: {e}'}), 500
+
+    filename = f'nrg2fly-charging-plan-{datetime.now().strftime("%Y-%m-%d")}.pdf'
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 
 if __name__ == '__main__':

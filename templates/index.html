@@ -537,6 +537,7 @@
                     <label class="inline-field">Show airport
                         <select id="airportFilter" class="form-select form-select-sm"></select>
                     </label>
+                    <button id="generateReport" class="btn btn-sm btn-primary" type="button" title="Generate a PDF report of the current plan">Generate PDF report</button>
                     <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
                 </div>
             </header>
@@ -646,11 +647,16 @@
     <script src="/static/charging.js"></script>
     <script src="/static/scheduler.js"></script>
     <script src="/static/animation.js"></script>
+    <script src="/static/report.js"></script>
     <script>
         const CHARGERS = {{ chargers|tojson }};                  // mutated at runtime: custom chargers are pushed in
         const chargerById = Object.fromEntries(CHARGERS.map(c => [c.id, c]));
         const BUILTIN_PLANES = {{ planes|tojson }};              // client-side lookup for the routing planner
         const BUILTIN_PLANES_BY_ID = Object.fromEntries(BUILTIN_PLANES.map(p => [p.id, p]));
+        // Expose the catalogs to other window-scoped modules (the PDF report
+        // builder reads them to enrich aircraft + charger rows).
+        window.CHARGERS_BY_ID = chargerById;
+        window.PLANES_BY_ID = BUILTIN_PLANES_BY_ID;
 
         // Display-only units + formatters now live in static/units.js (CNSUnits).
         // Aliased here so the existing UI code keeps using fmtDist(...), fmtDuration(...), etc.
@@ -1401,6 +1407,7 @@
             btn.textContent = '✓ Added'; setTimeout(() => { btn.textContent = '+ Add to demand calculator'; }, 1200);
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
+        document.getElementById('generateReport').addEventListener('click', (e) => CNSReport.generate(e.currentTarget));
 
         // ---------- flights map modal (airport-centric, animated) ----------
         let folderMap = null, pendingMapDest = null;

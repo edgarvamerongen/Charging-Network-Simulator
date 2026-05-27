@@ -457,5 +457,5 @@ window.CNSScheduler = (function () {
         _stamp = null; _ctx = {}; _resStamp = null; _resCache = {};
     }
 
-    return { init, renderInto, peakPowerKw, summary, tripsAt, phasesAnim, instanceStarts, roleAt, DAY_START, DAY_END, SPAN };
+    return { init, renderInto, peakPowerKw, summary, tripsAt, phasesAnim, instanceStarts, roleAt, resolveAirport, tripPhases, DAY_START, DAY_END, SPAN };
 })();

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>NRG2FLY Charging Network Plan</title>
+    <link rel="stylesheet" href="{{ css_url }}">
+</head>
+<body>
+
+<!-- =================== COVER =================== -->
+<section class="page cover">
+    <header class="cover-head">
+        <img class="cover-logo" src="{{ logo_data_uri }}" alt="NRG2FLY">
+    </header>
+    <div class="cover-body">
+        <h1 class="cover-title">Charging Network Plan</h1>
+        <p class="cover-sub">Strategic infrastructure sizing for electric aviation</p>
+        <div class="cover-stats">
+            <div class="cs"><div class="cs-n">{{ totals.airportCount }}</div><div class="cs-l">airports</div></div>
+            <div class="cs"><div class="cs-n">{{ totals.totalDailyKwh | round(0, 'common') | int }}</div><div class="cs-l">kWh / day</div></div>
+            <div class="cs"><div class="cs-n">{{ totals.peakKw | round(0, 'common') | int }}</div><div class="cs-l">peak kW</div></div>
+        </div>
+        <div class="cover-meta">
+            Generated {{ generated_at }} · {{ totals.flightCount }} flight schedules · {{ totals.planeCount }} aircraft types
+        </div>
+    </div>
+    <footer class="page-foot">NRG2FLY · Charging Network Simulator</footer>
+</section>
+
+<!-- =================== EXECUTIVE SUMMARY =================== -->
+<section class="page">
+    <h2>Executive summary</h2>
+    <p class="lede">
+        This plan covers <strong>{{ totals.flightCount }}</strong> recurring flight schedule{{ 's' if totals.flightCount != 1 else '' }}
+        across <strong>{{ totals.airportCount }}</strong> airport{{ 's' if totals.airportCount != 1 else '' }},
+        served by <strong>{{ totals.planeCount }}</strong> aircraft type{{ 's' if totals.planeCount != 1 else '' }}.
+        Combined the network draws <strong>{{ totals.totalDailyKwh | round(0, 'common') | int }} kWh / day</strong>
+        with a peak instantaneous demand of <strong>{{ totals.peakKw | round(0, 'common') | int }} kW</strong>.
+    </p>
+
+    <h3>Peak instantaneous demand per airport</h3>
+    {{ bar_chart_peak | safe }}
+
+    <h3>Daily energy throughput per airport</h3>
+    {{ bar_chart_energy | safe }}
+
+    <footer class="page-foot">NRG2FLY · Charging Network Plan</footer>
+</section>
+
+<!-- =================== NETWORK MAP =================== -->
+{% if map_data_uri %}
+<section class="page map-page">
+    <h2>Network overview</h2>
+    <p class="lede">All flight legs in the plan. Orange = origin / destination, blue = intermediate charging stop.</p>
+    <img class="net-map" src="{{ map_data_uri }}" alt="Network map">
+    <div class="map-legend">
+        <span class="lg-dot lg-orange"></span> Origin / destination
+        <span class="lg-dot lg-blue"></span> Charging stop
+        <span class="lg-line"></span> Flight leg
+    </div>
+    <footer class="page-foot">NRG2FLY · Charging Network Plan</footer>
+</section>
+{% endif %}
+
+<!-- =================== AIRCRAFT + CHARGERS USED =================== -->
+<section class="page">
+    <h2>Aircraft used</h2>
+    <table class="kit-table">
+        <thead><tr>
+            <th></th><th>Aircraft</th><th>Battery</th><th>Range</th><th>Speed</th><th>Seats</th><th>Payload</th>
+        </tr></thead>
+        <tbody>
+            {% for p in planes %}
+            <tr>
+                <td class="kit-img">{% if p.svg_data_uri %}<img src="{{ p.svg_data_uri }}" alt="">{% endif %}</td>
+                <td class="kit-name">{{ p.name }}</td>
+                <td>{{ p.battery_kwh | round(0, 'common') | int }} kWh</td>
+                <td>{{ p.range_km | round(0, 'common') | int }} km</td>
+                <td>{{ p.speed_kmh | round(0, 'common') | int }} km/h</td>
+                <td>{{ p.seats if p.seats else '—' }}</td>
+                <td>{{ p.load_kg | round(0, 'common') | int ~ ' kg' if p.load_kg else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 class="mt-4">Chargers used</h2>
+    <table class="kit-table">
+        <thead><tr><th>Charger</th><th>Power</th></tr></thead>
+        <tbody>
+            {% for c in chargers %}
+            <tr><td class="kit-name">{{ c.name }}</td><td>{{ c.power_kw | round(0, 'common') | int }} kW</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <footer class="page-foot">NRG2FLY · Charging Network Plan</footer>
+</section>
+
+<!-- =================== PER-AIRPORT PAGES =================== -->
+{% for a in airports %}
+<section class="page airport-page">
+    <header class="ap-header">
+        <div>
+            <h2 class="ap-name">{{ a.name }}</h2>
+            <div class="ap-meta">
+                <span class="ap-ident">{{ a.ident }}</span>
+                {% if a.type %}<span class="ap-type">{{ a.type }}</span>{% endif %}
+                <span class="ap-coords">{{ '%.4f'|format(a.lat) }}, {{ '%.4f'|format(a.lon) }}</span>
+            </div>
+        </div>
+        <div class="ap-headline">
+            <div class="ap-h"><div class="ap-hn">{{ a.dailyKwh | round(0, 'common') | int }}</div><div class="ap-hl">kWh / day</div></div>
+            <div class="ap-h"><div class="ap-hn">{{ a.peakKw | round(0, 'common') | int }}</div><div class="ap-hl">peak kW</div></div>
+        </div>
+    </header>
+
+    <h3>Installed charging</h3>
+    <table class="charger-table">
+        <thead><tr><th>Charger</th><th>Count</th><th>Power each</th><th>Total installed</th></tr></thead>
+        <tbody>
+            {% set total_installed = namespace(v=0) %}
+            {% for c in a.chargers %}
+                <tr>
+                    <td>{{ c.name }}</td>
+                    <td>{{ c.count }}</td>
+                    <td>{{ c.power_kw | round(0, 'common') | int }} kW</td>
+                    <td>{{ (c.count * c.power_kw) | round(0, 'common') | int }} kW</td>
+                </tr>
+                {% set total_installed.v = total_installed.v + c.count * c.power_kw %}
+            {% endfor %}
+            <tr class="total-row"><td colspan="3">Total installed power</td><td>{{ total_installed.v | round(0, 'common') | int }} kW</td></tr>
+        </tbody>
+    </table>
+    {% if a.fullCharge %}
+    <div class="note">Recharge-to-full enabled: every aircraft tops up to 100% at this airport (overrides the deficit model).</div>
+    {% endif %}
+
+    <h3>Contributing flights</h3>
+    <table class="contrib-table">
+        <thead><tr>
+            <th>Route</th><th>Aircraft</th><th>Trip</th><th>Freq</th><th>Per flight</th><th>Charge time</th><th>Daily total</th>
+        </tr></thead>
+        <tbody>
+            {% for c in a.contribs %}
+            <tr>
+                <td>
+                    <span class="role role-{{ c.role }}">{{ c.role | upper }}</span>
+                    {% if c.role == 'home' %}→ {{ c.other }} &amp; back
+                    {% elif c.role == 'stop' %}on {{ c.other }}
+                    {% else %}from {{ c.other }}
+                    {% endif %}
+                </td>
+                <td>{{ c.planeName }}</td>
+                <td>{{ 'Retour' if c.tripType == 'retour' else 'One-way' }}{% if c.multiLeg %} · multi-leg{% endif %}</td>
+                <td>{{ c.freqN }} / {{ c.freqUnit }}</td>
+                <td>{{ c.energyPerFlight | round(1) }} kWh</td>
+                <td>{{ c.chargeMin | round(0, 'common') | int }} min<br><small>on {{ c.chargerName }}</small></td>
+                <td>{{ (c.energyPerFlight * c.flightsPerDay) | round(0, 'common') | int }} kWh</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if a.gantt_svg %}
+    <h3>Rotation timeline</h3>
+    <div class="gantt-legend">
+        <span class="lg-box lg-fly"></span> Flying
+        <span class="lg-box lg-charge"></span> Charging here
+        <span class="lg-box lg-elsewhere"></span> Charging elsewhere
+        <span class="lg-box lg-wait"></span> Waiting for charger
+    </div>
+    {{ a.gantt_svg | safe }}
+    {% endif %}
+
+    <div class="verdict verdict-{{ 'warn' if a.overflow else 'ok' }}">
+        {% if a.overflow %}
+            With {{ a.chargerCount }} charger{{ 's' if a.chargerCount != 1 else '' }}
+            ({{ total_installed.v | round(0, 'common') | int }} kW) the rotations don't all fit before 23:00 —
+            the last finishes {{ a.latestEndClock }}. Add chargers or reduce flights.
+        {% else %}
+            {{ a.chargerCount }} charger{{ 's' if a.chargerCount != 1 else '' }}
+            ({{ total_installed.v | round(0, 'common') | int }} kW) handle the day —
+            peak draw {{ a.peakKw | round(0, 'common') | int }} kW, last rotation ends {{ a.latestEndClock }}.
+        {% endif %}
+    </div>
+    <footer class="page-foot">NRG2FLY · {{ a.name }}</footer>
+</section>
+{% endfor %}
+
+<!-- =================== METHODOLOGY =================== -->
+<section class="page methodology">
+    <h2>Methodology &amp; assumptions</h2>
+
+    <h3>Battery model</h3>
+    <p>Per-leg energy is computed from the aircraft's stated <strong>battery (kWh)</strong> and <strong>range (km)</strong>:
+    <code>leg_energy = battery × distance / range</code>. For a return trip the airport at the home end recharges
+    only the deficit that remains after the round trip (<code>max(0, 2 × leg_energy − battery)</code>) unless
+    <em>Recharge to full</em> is enabled, in which case both ends top the aircraft up to 100% of capacity.</p>
+
+    <h3>Multi-leg routing</h3>
+    <p>When a single battery can't reach the destination the planner inserts charging stops along the way using
+    a <strong>greedy max-reach</strong> algorithm with a bias toward <strong>medium-size airports</strong>
+    (small/large fields are penalised). At each stop the aircraft charges just enough for the next leg; the
+    terminal airport (one-way destination, or retour home) tops it to 100%. Users can override any stop or replan.</p>
+
+    <h3>Rotation scheduler</h3>
+    <p>A <em>rotation</em> is one aircraft cycle: depart → charge at destination → return → recharge at home.
+    The same aircraft can't fly two rotations at once, and each charger serves one aircraft at a time. When
+    multiple flights compete for the same charger, the scheduler queues them and propagates the resulting
+    wait through the rest of that aircraft's day.</p>
+
+    <h3>Time horizon</h3>
+    <p>The day runs <strong>07:00 → 23:00</strong> (16 hours of operation). The schedule loops nightly; any
+    rotation that doesn't complete before 23:00 is flagged.</p>
+
+    <h3>Disclaimer</h3>
+    <p>This report is <em>indicative</em>: the figures reflect the flight schedule and charger config the user
+    entered in the Charging Network Simulator. Real-world energy use varies with payload, weather, wind, taxi
+    time, reserves, charger efficiency, and grid losses — none of which are modelled here. Treat the numbers as
+    a strategic sizing aid, not a procurement specification.</p>
+
+    <footer class="page-foot">NRG2FLY · Charging Network Plan</footer>
+</section>
+
+</body>
+</html>
