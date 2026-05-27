@@ -115,6 +115,7 @@ class Simulator:
                 "range_km": plane['range_km'],
                 "speed_kmh": plane['speed_kmh'],
                 "avg_usage_kwh_per_100km": round(avg_usage, 2),
+                "min_landing_soc": plane.get('min_landing_soc'),     # used by CNSSettings.usableFraction (per-aircraft override)
                 "image": plane.get('image'),
                 "svg": plane.get('svg')
             },
@@ -248,6 +249,7 @@ class Simulator:
                 "seats": plane.get('seats'), "load_kg": plane.get('load_kg'),
                 "battery_kwh": plane['battery_kwh'], "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
                 "avg_usage_kwh_per_100km": round(avg_usage, 2),
+                "min_landing_soc": plane.get('min_landing_soc'),     # for CNSSettings per-aircraft override
                 "image": plane.get('image'), "svg": plane.get('svg')
             },
             "charger": {"id": charger.get('id'), "name": charger['name'], "power_kw": charger['power_kw']},

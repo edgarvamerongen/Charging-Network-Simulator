@@ -103,9 +103,10 @@ window.CNSSettings = (function () {
      *  When on: full power up to `threshold` SoC, then linearly down to
      *  `taperPower × powerKw` at 100%. We don't know absolute start-SoC at
      *  this layer, so we treat the charge as occupying the "top slice" of
-     *  the battery — i.e. if energyKwh would push the SoC above the taper
-     *  threshold, the over-threshold portion charges at the average tapered
-     *  rate. Conservative and easy to reason about. */
+     *  the battery — i.e. if the delivered energy is larger than the top-
+     *  slice capacity `batt × (1 - thr)` (which is everything above the
+     *  taper threshold), the EXCESS sits below the threshold and charges
+     *  at full power; the top slice itself charges at the tapered average. */
     function chargeTimeMin(energyKwh, powerKw, batteryKwh) {
         const e = Math.max(0, +energyKwh || 0);
         const p = Math.max(1e-9, +powerKw || 0);
@@ -115,10 +116,11 @@ window.CNSSettings = (function () {
         const thr = Math.max(0.5, Math.min(0.99, +s.threshold || 0.80));
         const tp  = Math.max(0.1, Math.min(0.95, +s.taperPower || 0.40));
         const batt = Math.max(1e-9, +batteryKwh);
-        const overThresholdKwh = Math.max(0, e - batt * (1 - thr));
-        const fastKwh = e - overThresholdKwh;
-        const avgTaperPower = p * (1 + tp) / 2;     // linear taper → average
-        return 60 * (fastKwh / p + overThresholdKwh / avgTaperPower);
+        const topSliceCap = batt * (1 - thr);       // capacity above the taper threshold
+        const taperKwh = Math.min(e, topSliceCap);  // top slice (if filled) — tapered
+        const fastKwh  = e - taperKwh;              // bottom portion — full power
+        const avgTaperPower = p * (1 + tp) / 2;     // linear taper → average power
+        return 60 * (fastKwh / p + taperKwh / avgTaperPower);
     }
 
     /** Convenience: state-of-the-world flags for UI badges / explanations. */

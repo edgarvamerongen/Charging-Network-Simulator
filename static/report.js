@@ -29,11 +29,14 @@ window.CNSReport = (function () {
         const cfg = (CNSDemand.loadCfg()[ident]) || {};
         const fullCharge = !!cfg.fullCharge;
         const defaultTrip = a.contribs[0].t;
-        const fleetIds = (cfg.chargers && cfg.chargers.length) ? cfg.chargers : [defaultTrip.chargerId];
-        const fleet = fleetIds.map((id, i) => {
-            // Use the per-trip name/power as a fallback when the catalog doesn't
-            // know this id (e.g. a built-in charger when only customs are loaded).
-            return _chargerById(id, i === 0 ? defaultTrip.chargerName : null, i === 0 ? defaultTrip.chargerPower : null);
+        const fleetIds = (cfg.chargers && cfg.chargers.length)
+            ? cfg.chargers
+            : CNSDemand.defaultChargerFleet(a.contribs);
+        const fleet = fleetIds.map((id) => {
+            // Find the contribution-trip that uses this charger so we can fall
+            // back to its per-trip name/power when the catalog doesn't know id.
+            const carrierTrip = (a.contribs.find(c => c.t.chargerId === id) || {}).t || defaultTrip;
+            return _chargerById(id, carrierTrip.chargerName, carrierTrip.chargerPower);
         }).filter(Boolean);
 
         // Aggregate fleet into { name, power_kw, count } rows.

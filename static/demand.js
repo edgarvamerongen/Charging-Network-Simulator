@@ -114,9 +114,26 @@ window.CNSDemand = (function () {
         saveFolder(trips);
     }
 
+    // Default charger fleet for an airport, *unless* the user has configured one
+    // explicitly. Returns the UNION of every distinct charger used by trips
+    // touching this airport — that way a hub serving Pipistrels AND Betas gets
+    // BOTH chargers by default, instead of inheriting only the first one
+    // (which is what happened pre-fix and caused Beta planes to home-charge on
+    // a Pipistrel-grade 40 kW unit).
+    function defaultChargerFleet(airportContribs) {
+        if (!Array.isArray(airportContribs) || !airportContribs.length) return [];
+        const seen = [];
+        airportContribs.forEach(c => {
+            const id = c && c.t && c.t.chargerId;
+            if (id && !seen.includes(id)) seen.push(id);
+        });
+        return seen;
+    }
+
     return {
         loadFolder, saveFolder, loadCfg, saveCfg,
         flightsPerDay, batteryOf, roleAt, tripsAt, energyAt,
-        computeAirports, updateTrip
+        computeAirports, updateTrip,
+        defaultChargerFleet,
     };
 })();

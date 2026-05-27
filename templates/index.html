@@ -1521,7 +1521,7 @@
             el.innerHTML = list.map(a => {
                 const ident = a.ident;
                 const cfg = cfgs[ident] || {};
-                const fleetIds = (cfg.chargers && cfg.chargers.length) ? cfg.chargers : [a.contribs[0].t.chargerId];
+                const fleetIds = (cfg.chargers && cfg.chargers.length) ? cfg.chargers : CNSDemand.defaultChargerFleet(a.contribs);
                 const fleet = fleetIds.map(id => chargerById[id]).filter(Boolean);
                 const fullCharge = !!cfg.fullCharge;
 
@@ -1654,7 +1654,7 @@
                 const ident = card.dataset.dest;
                 const curFleet = () => {
                     const c = loadCfg()[ident];
-                    return (c && c.chargers && c.chargers.length) ? [...c.chargers] : [airports[ident].contribs[0].t.chargerId];
+                    return (c && c.chargers && c.chargers.length) ? [...c.chargers] : CNSDemand.defaultChargerFleet(airports[ident].contribs);
                 };
                 const update = (patch) => {
                     const cfgs = loadCfg();

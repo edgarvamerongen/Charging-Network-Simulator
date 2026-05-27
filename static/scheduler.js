@@ -76,7 +76,14 @@ window.CNSScheduler = (function () {
         const cfg = loadCfg()[ident] || {};
         const fullCharge = !!cfg.fullCharge;
         const trips = tripsAt(ident);
-        const fleetIds = (cfg.chargers && cfg.chargers.length) ? cfg.chargers : (trips[0] ? [trips[0].chargerId] : []);
+        // Default fleet = union of every distinct charger used by trips touching
+        // this airport (so a hub with mixed aircraft doesn't get bottlenecked by
+        // the first trip's single charger). User-customised cfg wins.
+        const fleetIds = (cfg.chargers && cfg.chargers.length)
+            ? cfg.chargers
+            : (window.CNSDemand && CNSDemand.defaultChargerFleet
+                ? CNSDemand.defaultChargerFleet(trips.map(t => ({ t })))
+                : (trips[0] ? [trips[0].chargerId] : []));
         const fleet = fleetIds.map(id => catalog[id]).filter(Boolean);
         const aircraft = trips.map((t, i) => ({ _i: i, energy: energyAt(t, ident, fullCharge), size: batteryOf(t) }));
         const powers = {};
