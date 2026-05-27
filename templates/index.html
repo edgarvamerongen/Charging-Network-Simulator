@@ -71,6 +71,47 @@
         .switch input:checked::before { left: 16px; }
 
         /* =========================================================
+           Topbar tools + Options dropdown
+           ========================================================= */
+        .topbar-tools { display: flex; align-items: center; gap: 18px; }
+        .options-wrap { position: relative; }
+        .options-btn {
+            display: inline-flex; align-items: center; gap: 7px;
+            background: #fff; border: 1px solid var(--panel-border); color: var(--ink);
+            font-size: .82rem; font-weight: 600;
+            padding: 6px 12px; border-radius: 999px; cursor: pointer;
+            transition: background .15s, box-shadow .15s, border-color .15s;
+        }
+        .options-btn .gear { font-size: 1rem; line-height: 1; transition: transform .25s; }
+        .options-btn:hover { background: #f8fafc; box-shadow: var(--shadow-sm); border-color: var(--border-strong, #cbd5e1); }
+        .options-btn[aria-expanded="true"] { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,.28); }
+        .options-btn[aria-expanded="true"] .gear { transform: rotate(45deg); }
+        .options-menu {
+            position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+            min-width: 220px;
+            background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
+            border-radius: var(--radius);
+            padding: 10px;
+            opacity: 0; transform: translateY(-6px); pointer-events: none;
+            transition: opacity .18s, transform .18s;
+        }
+        .options-menu.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+        .opt-group { padding: 8px 6px; }
+        .opt-group + .opt-group { border-top: 1px solid var(--panel-border); }
+        .opt-label { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+        .opt-check { display: flex; align-items: center; gap: 8px; padding: 4px 4px; font-size: .85rem; cursor: pointer; border-radius: 6px; color: var(--ink); }
+        .opt-check:hover { background: #f1f5f9; }
+        .opt-check input[type=checkbox] { accent-color: var(--primary); cursor: pointer; }
+        .seg-row { display: inline-flex; background: #f1f5f9; padding: 3px; border-radius: 999px; }
+        .opt-action {
+            width: 100%; text-align: left;
+            background: transparent; border: none; color: var(--ink); cursor: pointer;
+            padding: 8px 6px; font-size: .85rem; font-weight: 500; border-radius: 6px;
+        }
+        .opt-action:hover { background: #f1f5f9; }
+
+        /* =========================================================
            Left rail (form + result)
            ========================================================= */
         .rail-left {
@@ -94,10 +135,22 @@
             border: 1px solid var(--panel-border);
             border-radius: var(--radius);
             box-shadow: var(--shadow);
-            padding: 16px;
+            padding: 18px;
         }
-        .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-        .panel-title { font-size: 1.02rem; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+        .panel-head {
+            display: flex; align-items: center; justify-content: space-between;
+            margin: -2px 0 14px 0; padding-bottom: 12px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+        .panel-title {
+            font-size: 1.02rem; margin: 0; font-weight: 700; letter-spacing: -.01em;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        .panel-title::before {
+            content: ''; display: inline-block; width: 3px; height: 16px;
+            background: linear-gradient(180deg, var(--primary), var(--primary-2));
+            border-radius: 2px;
+        }
         .est-pill { font-size: .62rem; text-transform: uppercase; color: var(--muted); border: 1px solid var(--panel-border); padding: 2px 8px; border-radius: 999px; cursor: help; font-weight: 600; letter-spacing: .04em; }
 
         /* =========================================================
@@ -155,26 +208,37 @@
            ========================================================= */
         .headline-box {
             background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-            color: #fff; border-radius: var(--radius); padding: 14px 6px;
+            color: #fff; border-radius: var(--radius); padding: 14px 4px;
             margin-bottom: 14px;
             box-shadow: 0 8px 20px rgba(37,99,235,.28);
         }
-        .headline-box .big { font-size: 1.85rem; font-weight: 800; line-height: 1; margin: 2px 0; letter-spacing: -.02em; }
-        .lbl { font-size: .68rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
+        .headline-box .big { font-size: 1.55rem; font-weight: 800; line-height: 1.1; margin: 3px 0; letter-spacing: -.02em; }
+        .headline-box .unit { font-size: .65rem; opacity: .7; letter-spacing: .04em; }
+        .headline-box .col-4 { padding: 0 4px; }
+        .lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
 
         .section-tag {
-            display: inline-block; font-size: .62rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .05em; padding: 3px 8px; border-radius: 4px; margin-bottom: 8px;
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: .6rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .07em; padding: 3px 9px 3px 7px;
+            border-radius: 999px; margin-bottom: 10px;
+            border: 1px solid transparent;
         }
-        .tag-aircraft { background: #dbeafe; color: #1d4ed8; }
-        .tag-trip     { background: #d1fae5; color: #065f46; }
-        .tag-home     { background: #fef3c7; color: #92400e; }
-        .tag-dest     { background: #d1fae5; color: #065f46; }
-        .tag-stop     { background: #ede9fe; color: #6d28d9; }
+        .section-tag::before {
+            content: ''; display: inline-block; width: 5px; height: 5px;
+            border-radius: 50%; background: currentColor;
+        }
+        .tag-aircraft { background: #eff6ff; color: #1d4ed8; border-color: #c7dbff; }
+        .tag-trip     { background: #ecfdf5; color: #065f46; border-color: #b7e9d4; }
+        .tag-home     { background: #fef3c7; color: #92400e; border-color: #f7d98a; }
+        .tag-dest     { background: #ecfdf5; color: #065f46; border-color: #b7e9d4; }
+        .tag-stop     { background: #f5f3ff; color: #6d28d9; border-color: #d6cbff; }
 
-        .spec-table { width: 100%; font-size: .82rem; }
-        .spec-table td { padding: 3px 4px; vertical-align: top; }
-        .spec-table td:first-child { color: var(--muted); width: 42%; font-weight: 500; }
+        .spec-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
+        .spec-table td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+        .spec-table tr:last-child td { border-bottom: none; }
+        .spec-table td:first-child { color: var(--muted); width: 42%; font-weight: 500; font-size: .78rem; }
+        .spec-table td:last-child { color: var(--ink); font-weight: 500; }
 
         .ac-photo {
             width: 100%; height: 130px; object-fit: contain; background: #f8fafc;
@@ -273,12 +337,50 @@
 
         /* renderFolder cards inside the drawer feel native to the new design */
         #folder [data-dest] {
-            background: rgba(255,255,255,.6) !important;
+            background: rgba(255,255,255,.7) !important;
             border: 1px solid var(--panel-border) !important;
-            border-radius: var(--radius-sm) !important;
+            border-radius: var(--radius) !important;
+            padding: 18px !important;
+            box-shadow: var(--shadow-sm);
+            transition: box-shadow .15s, border-color .15s;
+        }
+        #folder [data-dest]:hover { box-shadow: var(--shadow); border-color: var(--border-strong, #cbd5e1) !important; }
+        #folder [data-dest] h5 {
+            font-size: 1rem; font-weight: 700; letter-spacing: -.01em;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        #folder [data-dest] h5::before {
+            content: ''; display: inline-block; width: 3px; height: 14px;
+            background: linear-gradient(180deg, var(--primary), var(--primary-2));
+            border-radius: 2px;
         }
         .folder-trip { font-size: .85rem; }
-        .agg-num { font-weight: 700; font-size: 1.1rem; }
+        .folder-trip td { padding: 8px 6px !important; vertical-align: middle; }
+        #folder .table-sm thead th {
+            font-size: .65rem !important; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .06em; color: var(--muted) !important;
+            border-bottom: 1px solid var(--panel-border);
+            padding: 8px 6px !important;
+        }
+        /* Aggregates row: replace plain bg-primary with the brand gradient */
+        #folder .bg-primary {
+            background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%) !important;
+            border-radius: var(--radius-sm) !important;
+            box-shadow: 0 6px 16px rgba(37,99,235,.22);
+        }
+        .agg-num { font-weight: 800; font-size: 1.15rem; letter-spacing: -.02em; }
+        #folder .alert {
+            border-radius: var(--radius-sm); border: none; font-size: .85rem;
+            padding: 10px 14px !important;
+        }
+        #folder .alert-success {
+            background: #ecfdf5; color: #065f46;
+            border-left: 3px solid var(--success);
+        }
+        #folder .alert-warning {
+            background: #fffbeb; color: #92400e;
+            border-left: 3px solid var(--warn);
+        }
 
         /* =========================================================
            Misc utilities + small modal polish
@@ -352,10 +454,35 @@
             <img src="/pics/logos/NRG2fly_icon.png" alt="NRG2FLY" onerror="this.style.display='none'">
             <span>Charging Network Simulator</span>
         </a>
-        <label class="switch">
-            <input type="checkbox" id="unitToggle">
-            <span>Nautical (nm / kn)</span>
-        </label>
+        <div class="topbar-tools">
+            <div class="options-wrap">
+                <button id="optionsBtn" class="options-btn" type="button" aria-haspopup="true" aria-expanded="false">
+                    <span class="gear">⚙</span> <span>Options</span>
+                </button>
+                <div id="optionsMenu" class="options-menu" role="menu">
+                    <div class="opt-group">
+                        <div class="opt-label">Airports shown on map</div>
+                        <label class="opt-check"><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
+                        <label class="opt-check"><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
+                        <label class="opt-check"><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
+                    </div>
+                    <div class="opt-group">
+                        <div class="opt-label">Basemap</div>
+                        <div class="seg-row" role="group" aria-label="Basemap">
+                            <button class="seg-btn active" type="button" data-basemap="satellite">Satellite</button>
+                            <button class="seg-btn" type="button" data-basemap="voyager">Street</button>
+                        </div>
+                    </div>
+                    <div class="opt-group">
+                        <button id="resetMap" type="button" class="opt-action">↻ Reset map view</button>
+                    </div>
+                </div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="unitToggle">
+                <span>Nautical (nm / kn)</span>
+            </label>
+        </div>
     </header>
 
     <!-- left rail: plan-a-flight form + result -->
@@ -462,15 +589,20 @@
     <aside class="rail-right">
         <section id="result" class="panel d-none">
             <div class="headline-box">
-                <div class="row text-center">
-                    <div class="col-6 border-end border-light">
-                        <div class="lbl">Recharge / flight</div>
-                        <div class="big"><span id="hlEnergy"></span></div>
-                        <div>kWh</div>
+                <div class="row text-center g-0">
+                    <div class="col-4 border-end border-light">
+                        <div class="lbl" id="hlUsedLabel">Energy used</div>
+                        <div class="big"><span id="hlUsed"></span></div>
+                        <div class="unit">kWh</div>
                     </div>
-                    <div class="col-6">
-                        <div class="lbl">Charge time / flight</div>
+                    <div class="col-4 border-end border-light">
+                        <div class="lbl" id="hlFlightLabel">Flight time</div>
+                        <div class="big"><span id="hlFlight"></span></div>
+                    </div>
+                    <div class="col-4">
+                        <div class="lbl">Charge time</div>
                         <div class="big"><span id="hlTime"></span></div>
+                        <div class="unit" id="hlTimeSub">at destination</div>
                     </div>
                 </div>
             </div>
@@ -507,21 +639,8 @@
         </section>
     </aside>
 
-    <!-- floating map controls (bottom-right, stacked) -->
-    <div class="map-controls">
-        <div class="control-pill">
-            <span class="pill-label">Airports</span>
-            <label><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
-            <label><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
-            <label><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
-        </div>
-        <div class="control-pill segmented" role="group" aria-label="Basemap">
-            <span class="pill-label">Map</span>
-            <button class="seg-btn active" type="button" data-basemap="satellite">Satellite</button>
-            <button class="seg-btn" type="button" data-basemap="voyager">Street</button>
-        </div>
-        <button id="resetMap" class="control-pill btn-pill" type="button">↻ Reset</button>
-    </div>
+    <!-- floating map controls moved into the header Options menu -->
+
 
     <!-- bottom drawer: Demand Calculator -->
     <section class="drawer" id="demandDrawer">
@@ -663,7 +782,8 @@
         const { r, num, isNautical, fmtDist, fmtSpeed, fmtUsage, fmtEnergy, fmtPower, fmtDuration, fmtClock } = CNSUnits;
 
         // ---------- map ----------
-        const map = L.map('map', { zoomControl: true, attributionControl: true }).setView([50.0, 10.0], 5);
+        // Built-in +/- zoom buttons are hidden — pan with drag, zoom with scroll/pinch.
+        const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([50.0, 10.0], 5);
 
         // Swappable basemaps. Satellite is the default; the segmented control toggles to Carto Voyager.
         const BASEMAPS = {
@@ -1006,6 +1126,23 @@
         }));
         document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.addEventListener('click', () => setBasemap(btn.dataset.basemap)));
 
+        // ---- header Options dropdown -------------------------------------
+        (function () {
+            const btn = document.getElementById('optionsBtn');
+            const menu = document.getElementById('optionsMenu');
+            if (!btn || !menu) return;
+            const setOpen = (open) => {
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                menu.classList.toggle('open', open);
+            };
+            btn.addEventListener('click', (e) => { e.stopPropagation(); setOpen(menu.classList.contains('open') ? false : true); });
+            // Clicks inside the menu shouldn't close it (esp. the airport/basemap toggles).
+            menu.addEventListener('click', (e) => e.stopPropagation());
+            // Click anywhere else, or press Escape, to close.
+            document.addEventListener('click', () => setOpen(false));
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
+        })();
+
         function arcPoints(p1, p2, bend, segments = 64) {
             const [lat1, lon1] = p1, [lat2, lon2] = p2;
             const mlat = (lat1 + lat2) / 2, mlon = (lon1 + lon2) / 2;
@@ -1069,10 +1206,30 @@
             const p = data.plane;
             // Multi-leg result has totals in different fields; map them to a unified shape
             const isMulti = !!data.multi_leg;
-            const headlineEnergy = isMulti ? data.total_recharge_energy_kwh : data.recharge_energy_kwh;
-            const headlineMin    = isMulti ? data.total_charge_time_min    : data.charge_time_min;
-            document.getElementById('hlEnergy').textContent = num(headlineEnergy);
-            document.getElementById('hlTime').textContent = fmtDuration(headlineMin);
+            // Headline: ALWAYS show three informative numbers — what the plane uses,
+            // how long it flies, and what the destination has to charge (0 is fine
+            // and means the battery covers the round trip).
+            const isRetour = data.trip_type === 'retour';
+            // For multi-leg the total charging delivered across all stops equals the
+            // total energy consumed across legs (each stop re-tops what the previous
+            // leg drew). For a single-leg trip it's leg×2 for retour, leg×1 one-way.
+            const usedKwh = isMulti
+                ? data.total_recharge_energy_kwh
+                : (isRetour ? data.leg_energy_kwh * 2 : data.leg_energy_kwh);
+            const flightMin = isMulti
+                ? data.total_flight_time_h * 60
+                : (isRetour ? data.flight_time_h * 60 * 2 : data.flight_time_h * 60);
+            const chargeMin = isMulti ? data.total_charge_time_min : data.charge_time_min;
+
+            document.getElementById('hlUsed').textContent = num(usedKwh);
+            document.getElementById('hlFlight').textContent = fmtDuration(flightMin);
+            document.getElementById('hlTime').textContent = fmtDuration(chargeMin);
+            // Sub-labels adapt to the trip context.
+            document.getElementById('hlUsedLabel').textContent = isRetour ? 'Energy used (round trip)' : 'Energy used';
+            document.getElementById('hlFlightLabel').textContent = isRetour ? 'Flight time (round trip)' : 'Flight time';
+            document.getElementById('hlTimeSub').textContent = isMulti
+                ? 'all stops combined'
+                : (isRetour && chargeMin === 0 ? 'battery covers it' : 'at destination');
 
             const photo = document.getElementById('acPhoto');
             if (p.image) { photo.src = '/pics/' + p.image; photo.alt = p.name; photo.classList.remove('d-none'); } else photo.classList.add('d-none');
@@ -1089,7 +1246,12 @@
             document.getElementById('trType').textContent = (data.trip_type === 'retour' ? 'Round Trip (Retour)' : 'One-Way') + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
             document.getElementById('trLeg').textContent = isMulti ? '—' : fmtDist(data.leg_distance_km);
             document.getElementById('trTotal').textContent = fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
-            document.getElementById('trFlight').textContent = isMulti ? fmtDuration(data.total_flight_time_h * 60) : fmtDuration(data.flight_time_h * 60);
+            // "Total flight time" should reflect the WHOLE trip — for retour
+            // single-leg trips that means 2× the per-leg time, not the per-leg
+            // figure (matches what the headline shows).
+            document.getElementById('trFlight').textContent = isMulti
+                ? fmtDuration(data.total_flight_time_h * 60)
+                : fmtDuration(data.flight_time_h * 60 * (isRetour ? 2 : 1));
             document.getElementById('trCharger').textContent = data.charger.name + ' (' + data.charger.power_kw + ' kW)';
 
             const common = [
