@@ -130,10 +130,70 @@ window.CNSDemand = (function () {
         return seen;
     }
 
+    // Per-airport "departure SoC target" used by the new slider control. Returns
+    // a number in [0,1] when the operator has set a target, or `null` for the
+    // default deficit behaviour. Old cfgs with the legacy `fullCharge: true`
+    // toggle migrate transparently to `targetDepartureSoc: 1.0`.
+    function targetSocFromCfg(cfg) {
+        if (!cfg) return null;
+        if (cfg.targetDepartureSoc != null && isFinite(+cfg.targetDepartureSoc)) {
+            return Math.max(0, Math.min(1, +cfg.targetDepartureSoc));
+        }
+        if (cfg.fullCharge) return 1.0;
+        return null;
+    }
+
+    // Energy that THIS airport's chargers deliver per flight, considering the
+    // operator-set departure-SoC target at BOTH ends of a retour trip. Energy
+    // conservation: for a retour, the sum DEST_kWh + HOME_kWh always equals
+    // 2 × leg, no matter where the user shifts the SoC target.
+    //
+    // Inputs:
+    //   trip          — the saved trip (uses tripType, multiLeg, etc.)
+    //   role          — 'home' | 'dest' | 'stop'
+    //   legKwh        — per-leg energy consumed (already padded for routing if applicable)
+    //   batteryKwh    — nameplate battery
+    //   usableKwh     — battery × usableFraction (battery × (1 − reserve))
+    //   targetCurrent — null or 0..1, target at THIS airport
+    //   targetOther   — null or 0..1, target at the OTHER airport (for HOME, the dest's target)
+    function deliveredEnergy(trip, role, legKwh, batteryKwh, usableKwh, targetCurrent, targetOther) {
+        const leg = Math.max(0, +legKwh || 0);
+        const batt = Math.max(0, +batteryKwh || 0);
+        const usable = Math.min(batt, Math.max(0, +usableKwh || batt));
+        const reserve = batt - usable;          // unusable buffer at the bottom of the pack
+
+        // One-way arrival: airport tops the plane up to the target (default 100%).
+        if (trip.tripType !== 'retour') {
+            const arrival = Math.max(0, batt - leg);
+            const target = (targetCurrent != null ? targetCurrent : 1.0) * batt;
+            return Math.max(0, target - arrival);
+        }
+        // Retour: DEST charges to a target; HOME refills whatever is left to
+        // its own target. Energy conservation depends on picking the DEST's
+        // target from the right parameter slot: when role='dest' it's
+        // `targetCurrent`; when role='home' it's `targetOther` (the other
+        // airport from HOME's perspective IS the DEST).
+        const arrivalDest = Math.max(0, batt - leg);
+        const minDepForReturn = leg + reserve;  // need leg kWh to fly back + keep reserve at landing
+        const destTarget = role === 'dest' ? targetCurrent : targetOther;
+        const destDeparture = destTarget != null
+            ? Math.max(destTarget * batt, minDepForReturn)    // explicit target, clamped to safe minimum
+            : Math.max(arrivalDest, minDepForReturn);          // deficit: charge only if arrival isn't enough
+        if (role === 'dest') {
+            return Math.max(0, destDeparture - arrivalDest);
+        }
+        if (role === 'home') {
+            const arrivalHome = Math.max(0, destDeparture - leg);
+            const homeTarget = (targetCurrent != null ? targetCurrent : 1.0) * batt;
+            return Math.max(0, homeTarget - arrivalHome);
+        }
+        return leg;   // fallback (multi-leg stops use precomputed energies, not this path)
+    }
+
     return {
         loadFolder, saveFolder, loadCfg, saveCfg,
         flightsPerDay, batteryOf, roleAt, tripsAt, energyAt,
         computeAirports, updateTrip,
-        defaultChargerFleet,
+        defaultChargerFleet, targetSocFromCfg, deliveredEnergy,
     };
 })();

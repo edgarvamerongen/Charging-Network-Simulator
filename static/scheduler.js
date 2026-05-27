@@ -74,7 +74,8 @@ window.CNSScheduler = (function () {
     }
     function buildContext(ident) {
         const cfg = loadCfg()[ident] || {};
-        const fullCharge = !!cfg.fullCharge;
+        const targetSoc = (window.CNSDemand && CNSDemand.targetSocFromCfg)
+            ? CNSDemand.targetSocFromCfg(cfg) : (cfg.fullCharge ? 1.0 : null);
         const trips = tripsAt(ident);
         // Default fleet = union of every distinct charger used by trips touching
         // this airport (so a hub with mixed aircraft doesn't get bottlenecked by
@@ -85,7 +86,25 @@ window.CNSScheduler = (function () {
                 ? CNSDemand.defaultChargerFleet(trips.map(t => ({ t })))
                 : (trips[0] ? [trips[0].chargerId] : []));
         const fleet = fleetIds.map(id => catalog[id]).filter(Boolean);
-        const aircraft = trips.map((t, i) => ({ _i: i, energy: energyAt(t, ident, fullCharge), size: batteryOf(t) }));
+        // Aircraft list: use the cross-airport-aware energy helper so the
+        // charger plan reflects the operator's target-SoC choices on both ends.
+        const aircraft = trips.map((t, i) => {
+            const plane = (window.PLANES_BY_ID || {})[t.planeId] || t;
+            const usable = _usableB({ ...t, planeId: t.planeId }) || batteryOf(t);
+            const batt = batteryOf(t);
+            const leg = num(t, 'legEnergy') * _route();
+            const role = roleAt(t, ident);
+            const otherIdent = role === 'home' ? t.destIdent
+                             : role === 'dest' ? t.originIdent
+                             : null;
+            const otherCfg = otherIdent ? (loadCfg()[otherIdent] || null) : null;
+            const targetOther = (window.CNSDemand && CNSDemand.targetSocFromCfg)
+                ? CNSDemand.targetSocFromCfg(otherCfg) : (otherCfg && otherCfg.fullCharge ? 1.0 : null);
+            const energy = (window.CNSDemand && CNSDemand.deliveredEnergy && !t.multiLeg)
+                ? CNSDemand.deliveredEnergy(t, role, leg, batt, usable, targetSoc, targetOther)
+                : energyAt(t, ident, targetSoc === 1.0);
+            return { _i: i, energy, size: batt };
+        });
         const powers = {};
         if (window.CNSCharging && fleet.length) {
             const plan = CNSCharging.planCharging(fleet, aircraft);
@@ -93,7 +112,7 @@ window.CNSScheduler = (function () {
         } else {
             trips.forEach(t => { powers[t.id] = fleet[0] ? fleet[0].power_kw : 0; });
         }
-        return { fullCharge, powers, fleetSize: Math.max(1, fleet.length) };
+        return { targetSoc, fullCharge: targetSoc === 1.0, powers, fleetSize: Math.max(1, fleet.length) };
     }
     function fleetSizeAt(ident) { return getContext(ident).fleetSize; }
 
@@ -123,16 +142,22 @@ window.CNSScheduler = (function () {
         const ph = []; let off = 0;
         ph.push({ kind: 'fly', leg: 'out', start: off, dur: legMin, label: 'Fly to ' + trip.destName }); off += legMin;
 
+        // Energy at each end uses CNSDemand.deliveredEnergy so the cross-airport
+        // SoC targets stay consistent with the demand drawer + PDF.
         const dctx = getContext(trip.destIdent);
-        const destEnergy = trip.tripType === 'retour' ? (dctx.fullCharge ? leg : Math.max(0, 2 * leg - usableBatt)) : leg;
+        const hctx = trip.tripType === 'retour' ? getContext(trip.originIdent) : null;
+        const destEnergy = window.CNSDemand && CNSDemand.deliveredEnergy
+            ? CNSDemand.deliveredEnergy(trip, 'dest', leg, batt, usableBatt, dctx.targetSoc, hctx ? hctx.targetSoc : null)
+            : (trip.tripType === 'retour' ? (dctx.fullCharge ? leg : Math.max(0, 2 * leg - usableBatt)) : leg);
         const destPower = dctx.powers[trip.id] || 0;
         const destMin = _chargeMin(destEnergy, destPower, batt);
         if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, label: 'Charge @ ' + trip.destName }); off += destMin; }
 
         if (trip.tripType === 'retour') {
             ph.push({ kind: 'fly', leg: 'back', start: off, dur: legMin, label: 'Fly back to ' + trip.originName }); off += legMin;
-            const hctx = getContext(trip.originIdent);
-            const homeEnergy = Math.min(2 * leg, usableBatt);
+            const homeEnergy = window.CNSDemand && CNSDemand.deliveredEnergy
+                ? CNSDemand.deliveredEnergy(trip, 'home', leg, batt, usableBatt, hctx.targetSoc, dctx.targetSoc)
+                : Math.min(2 * leg, usableBatt);
             const homePower = hctx.powers[trip.id] || 0;
             const homeMin = _chargeMin(homeEnergy, homePower, batt);
             if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, label: 'Recharge @ ' + trip.originName }); off += homeMin; }

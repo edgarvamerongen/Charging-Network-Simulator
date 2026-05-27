@@ -407,6 +407,22 @@
             padding: 1px 6px; border-radius: 999px; margin-left: 4px; line-height: 1.4;
         }
 
+        /* Per-airport "Charge target" control: button reveals slider panel. */
+        .soc-toggle .chev { display: inline-block; margin-left: 2px; transition: transform .15s; font-size: .8em; opacity: .6; }
+        .soc-toggle.active .chev,
+        .soc-toggle:has(+ .soc-panel:not(.d-none)) .chev { transform: rotate(180deg); }
+        .soc-panel {
+            margin-top: 10px; padding: 12px 14px;
+            background: #f8fafc; border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+        }
+        .soc-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+        .soc-row .form-range { flex: 1; min-width: 140px; max-width: 280px; }
+        .soc-row .soc-val { color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
+        .soc-row .opt-check { padding: 0; gap: 6px; font-size: .85rem; cursor: pointer; }
+        .soc-row .opt-check input[type=radio] { accent-color: var(--primary); cursor: pointer; }
+        .soc-row .opt-check input[type=radio]:checked + span { color: var(--ink); font-weight: 600; }
+        .soc-panel .rs-help { margin-top: 6px; font-size: .76rem; }
+
         /* Charging-stops toggle + advanced section + suggested route list */
         .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
         .stops-switch { font-size: .85rem; color: var(--ink); }
@@ -1523,7 +1539,9 @@
                 const cfg = cfgs[ident] || {};
                 const fleetIds = (cfg.chargers && cfg.chargers.length) ? cfg.chargers : CNSDemand.defaultChargerFleet(a.contribs);
                 const fleet = fleetIds.map(id => chargerById[id]).filter(Boolean);
-                const fullCharge = !!cfg.fullCharge;
+                const targetSoc = CNSDemand.targetSocFromCfg(cfg);
+                const targetSocLabel = targetSoc == null ? 'auto' : Math.round(targetSoc * 100) + '%';
+                const fullCharge = !!cfg.fullCharge;     // legacy: still readable by the old code paths we haven't migrated
 
                 // Apply realism factors to each contribution before feeding the
                 // charging algorithm. Factors default to no-op (1.0) when their
@@ -1535,22 +1553,20 @@
                     const usable = CNSSettings.usableFraction(plane);
                     const battery = c.t.battery ?? c.t.legEnergy * 2;
                     const usableBattery = battery * usable;
-                    // Recompute the role-specific energy with reserves + routing
-                    // padding. The original formulas (computeAirports) used raw
-                    // battery + great-circle leg; we substitute usable battery
-                    // and padded leg, otherwise behaviour is identical.
                     const legPadded = (c.t.legEnergy || 0) * route;
+                    // Cross-airport SoC targets: HOME's energy depends on DEST's
+                    // target (and vice-versa for DEST role looking at HOME).
+                    // CNSDemand.deliveredEnergy enforces 2×leg conservation.
+                    const targetThis = CNSDemand.targetSocFromCfg(cfgs[ident]);
+                    const otherIdent = c.role === 'home' ? c.t.destIdent
+                                     : c.role === 'dest' ? c.t.originIdent
+                                     : null;
+                    const targetOther = otherIdent ? CNSDemand.targetSocFromCfg(cfgs[otherIdent]) : null;
                     let energy;
                     if (c.t.multiLeg) {
-                        energy = c.base * route;            // scale precomputed stop energy
-                    } else if (fullCharge && c.role === 'dest') {
-                        energy = legPadded;                  // user forced full top-up
-                    } else if (c.role === 'home') {
-                        energy = Math.min(2 * legPadded, usableBattery);
-                    } else if (c.role === 'dest' && c.t.tripType === 'retour') {
-                        energy = Math.max(0, 2 * legPadded - usableBattery);
+                        energy = c.base * route;            // multi-leg stops use precomputed energies
                     } else {
-                        energy = legPadded;                  // one-way arrival
+                        energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
                     }
                     return { _i: i, name: c.t.planeName, energy, size: battery };
                 });
@@ -1618,10 +1634,21 @@
                         <div class="d-flex flex-wrap gap-2 align-items-center">
                             ${fleetHtml}
                             <button class="btn btn-sm btn-outline-success fleet-add" title="Add charger">+</button>
-                            <div class="form-check ms-3 mb-0" title="Top every plane back to 100% here, overriding the deficit model.">
-                                <input class="form-check-input cfg-full" type="checkbox" id="full-${ident}" ${fullCharge ? 'checked' : ''}>
-                                <label class="form-check-label" for="full-${ident}">Recharge to full capacity</label>
+                            <button class="btn btn-sm btn-outline-secondary soc-toggle ms-3" type="button" data-ident="${ident}" title="Set the departure state-of-charge target — useful for avoiding the slow taper region above 80%">
+                                Charge target:&nbsp;<strong>${targetSocLabel}</strong>
+                                <span class="chev">▾</span>
+                            </button>
+                        </div>
+                        <div class="soc-panel ${targetSoc != null ? '' : 'd-none'}" data-soc-ident="${ident}">
+                            <div class="soc-row">
+                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="auto" ${targetSoc == null ? 'checked' : ''}><span>Auto — charge only the deficit needed to safely return</span></label>
                             </div>
+                            <div class="soc-row">
+                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="target" ${targetSoc != null ? 'checked' : ''}><span>Charge to at least</span></label>
+                                <input type="range" min="20" max="100" step="5" value="${targetSoc != null ? Math.round(targetSoc * 100) : 80}" class="form-range soc-slider" data-ident="${ident}" ${targetSoc != null ? '' : 'disabled'}>
+                                <span class="soc-val" data-soc-val="${ident}">${targetSoc != null ? Math.round(targetSoc * 100) : 80}%</span>
+                            </div>
+                            <p class="rs-help">A higher target gives the plane more range, but charging above ~80% enters the slow taper region. The model never charges below the minimum needed to safely return.</p>
                         </div>
                     </div>
                     <table class="table table-sm align-middle mb-3">
@@ -1669,7 +1696,25 @@
                 card.querySelector('.fleet-add').addEventListener('click', () => {
                     const f = curFleet(); f.push(f[f.length - 1] || CHARGERS[0].id); update({ chargers: f });
                 });
-                card.querySelector('.cfg-full').addEventListener('change', e => update({ fullCharge: e.target.checked }));
+                // Target-SoC button toggles the panel; radio + slider drive the value.
+                const socBtn = card.querySelector('.soc-toggle');
+                const socPanel = card.querySelector('.soc-panel');
+                if (socBtn && socPanel) {
+                    socBtn.addEventListener('click', () => socPanel.classList.toggle('d-none'));
+                }
+                card.querySelectorAll(`input[name="soc-${ident}"]`).forEach(r => r.addEventListener('change', () => {
+                    if (r.value === 'auto' && r.checked) {
+                        // Auto = no target. Clear both the new field AND the legacy one so the migration helper isn't sticky.
+                        const c = loadCfg(); c[ident] = { ...(c[ident] || {}) }; delete c[ident].targetDepartureSoc; delete c[ident].fullCharge; saveCfg(c); renderFolder();
+                    } else if (r.value === 'target' && r.checked) {
+                        const slider = card.querySelector('.soc-slider'); slider.disabled = false;
+                        update({ targetDepartureSoc: (+slider.value) / 100, fullCharge: undefined });
+                    }
+                }));
+                card.querySelectorAll('.soc-slider').forEach(sl => {
+                    sl.addEventListener('input', e => { const v = card.querySelector(`[data-soc-val="${ident}"]`); if (v) v.textContent = e.target.value + '%'; });
+                    sl.addEventListener('change', e => update({ targetDepartureSoc: (+e.target.value) / 100, fullCharge: undefined }));
+                });
             });
             el.querySelectorAll('[data-map]').forEach(btn => btn.addEventListener('click', () => openFlightsMap(btn.dataset.map)));
 
