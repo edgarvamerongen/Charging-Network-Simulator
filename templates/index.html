@@ -567,12 +567,8 @@
                                     <option value="none">No preference (closest)</option>
                                 </select>
                             </div>
-                            <div class="adv-field">
-                                <label>Reserve margin <span class="text-muted">(% of range)</span></label>
-                                <input type="number" id="advReserve" min="0" max="50" step="1" value="0">
-                            </div>
                         </div>
-                        <p class="est-note mb-0 mt-1">Reserve 0 % means the plane is planned to fly until empty (range is taken as truth). Aviation reviewers may want ~20 %.</p>
+                        <p class="est-note mb-0 mt-1">Landing reserve is now controlled globally under <strong>Demand Calculator → Realism settings</strong> (per-aircraft minimum SoC). Routing reach is adjusted automatically when reserves are on.</p>
                     </details>
                 </div>
                 <div id="stopsSection" class="stops-section d-none">
@@ -979,15 +975,18 @@
             return [...document.querySelectorAll('.airport-filter')].filter(cb => cb.checked).map(cb => cb.value);
         }
         function _routingOptions() {
+            // Reserve margin is now exclusively handled by the Realism settings
+            // (landing-reserve toggle, with per-aircraft min_landing_soc). The
+            // routing planner reads CNSSettings.usableFraction directly, so we
+            // no longer pass reservePct here.
             const bias = document.getElementById('advBias').value;
-            const reservePct = Math.max(0, Math.min(50, parseFloat(document.getElementById('advReserve').value || '0'))) / 100;
             const ORDERS = {
                 'medium-large-small': { 'medium_airport': 0, 'large_airport': 50, 'small_airport': 150 },
                 'large-medium-small': { 'large_airport': 0, 'medium_airport': 50, 'small_airport': 150 },
                 'small-medium-large': { 'small_airport': 0, 'medium_airport': 50, 'large_airport': 150 },
                 'none':               { 'medium_airport': 0, 'large_airport': 0,  'small_airport': 0   }
             };
-            return { reservePct, typePenalty: ORDERS[bias] || ORDERS['medium-large-small'] };
+            return { typePenalty: ORDERS[bias] || ORDERS['medium-large-small'] };
         }
         function _selectedPlane() {
             const id = document.getElementById('plane').value;
@@ -1006,8 +1005,11 @@
             plannedLegIssues = []; plannedError = null;
             const t = _terminus(); const plane = _selectedPlane();
             if (!t || !plane) return;
-            const reservePct = _routingOptions().reservePct;
-            const maxLeg = plane.range_km * (1 - reservePct);
+            // Effective reach honours the realism landing-reserve setting
+            // when on; otherwise it's nameplate range (no advanced override).
+            const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
+            const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+            const maxLeg = plane.range_km * usable / route;
             const chain = [t.origin, ...plannedStops, t.dest];
             for (let i = 0; i < chain.length - 1; i++) {
                 const d = CNSRouting.haversineKm(chain[i], chain[i + 1]);
@@ -1548,24 +1550,31 @@
                 // toggle is off, so this matches the original behaviour exactly.
                 const route   = CNSSettings.routingFactor();
                 const gridMul = CNSSettings.gridDemandFactor();
+                const getTargetSoc = (id) => CNSDemand.targetSocFromCfg(cfgs[id]);
+                // Per-trip cache so each multi-leg trip recomputes its charges
+                // exactly once per render (cheap, but no point doing it once per contrib).
+                const multiCache = {};
                 const aircraftList = a.contribs.map((c, i) => {
                     const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
                     const usable = CNSSettings.usableFraction(plane);
                     const battery = c.t.battery ?? c.t.legEnergy * 2;
                     const usableBattery = battery * usable;
                     const legPadded = (c.t.legEnergy || 0) * route;
-                    // Cross-airport SoC targets: HOME's energy depends on DEST's
-                    // target (and vice-versa for DEST role looking at HOME).
-                    // CNSDemand.deliveredEnergy enforces 2×leg conservation.
-                    const targetThis = CNSDemand.targetSocFromCfg(cfgs[ident]);
-                    const otherIdent = c.role === 'home' ? c.t.destIdent
-                                     : c.role === 'dest' ? c.t.originIdent
-                                     : null;
-                    const targetOther = otherIdent ? CNSDemand.targetSocFromCfg(cfgs[otherIdent]) : null;
                     let energy;
                     if (c.t.multiLeg) {
-                        energy = c.base * route;            // multi-leg stops use precomputed energies
+                        // Recompute the whole chain so per-stop targets cascade.
+                        const recomputed = multiCache[c.t.id]
+                            || (multiCache[c.t.id] = CNSDemand.recomputeMultiLegCharges(c.t, getTargetSoc, usableBattery));
+                        // This contribution is one specific charge event — find it by chargeIdx.
+                        const newC = (c.chargeIdx != null && recomputed[c.chargeIdx]) ? recomputed[c.chargeIdx] : null;
+                        energy = newC ? newC.energy_kwh : c.base * route;
                     } else {
+                        // Single-leg path: cross-airport SoC targets via deliveredEnergy.
+                        const targetThis = getTargetSoc(ident);
+                        const otherIdent = c.role === 'home' ? c.t.destIdent
+                                         : c.role === 'dest' ? c.t.originIdent
+                                         : null;
+                        const targetOther = otherIdent ? getTargetSoc(otherIdent) : null;
                         energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
                     }
                     return { _i: i, name: c.t.planeName, energy, size: battery };

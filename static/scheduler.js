@@ -176,16 +176,25 @@ window.CNSScheduler = (function () {
         const charges = Array.isArray(trip.charges) ? trip.charges : [];
         const route = _route();
         const batt = batteryOf(trip);
+        const usableBatt = _usableB(trip);
+        // Recompute per-stop charge energies using the per-airport SoC targets
+        // (cascades through every downstream stop in one forward walk).
+        const liveCharges = (window.CNSDemand && CNSDemand.recomputeMultiLegCharges)
+            ? CNSDemand.recomputeMultiLegCharges(trip, (id) => {
+                const c = loadCfg()[id];
+                return (window.CNSDemand.targetSocFromCfg ? CNSDemand.targetSocFromCfg(c) : (c && c.fullCharge ? 1.0 : null));
+              }, usableBatt)
+            : charges;
         legs.forEach((leg, i) => {
             const legMin = (Number(leg.flight_time_h) || 0) * 60 * route;
             const toName = (leg.to && leg.to.name) || '';
             ph.push({ kind: 'fly', leg: i, start: off, dur: legMin, label: 'Fly to ' + toName });
             off += legMin;
-            const c = charges[i];
+            const c = liveCharges[i] || charges[i];
             if (!c) return;
             const ctx = getContext(c.ident);
             const power = ctx.powers[trip.id] || 0;
-            const energy = (Number(c.energy_kwh) || 0) * route;     // padding scales per-stop charge
+            const energy = Number(c.energy_kwh) || 0;     // already recomputed with route + targets
             const dur = _chargeMin(energy, power, batt);
             if (dur > 0) {
                 ph.push({

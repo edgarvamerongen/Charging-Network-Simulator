@@ -190,10 +190,65 @@ window.CNSDemand = (function () {
         return leg;   // fallback (multi-leg stops use precomputed energies, not this path)
     }
 
+    // Walk a multi-leg trip's chain forward, applying per-airport SoC targets
+    // and routing padding live, and return a NEW charges[] array with updated
+    // energy_kwh values. The original trip data is left untouched. Used by
+    // every multi-leg consumer (demand drawer, scheduler, PDF) so a slider
+    // change at one stop propagates correctly through every downstream stop.
+    //
+    // The forward walk:
+    //   • depart origin at full SoC (or origin's target SoC if set)
+    //   • for each leg: consume leg energy, arrive at next waypoint
+    //   • at each intermediate stop: charge to max(target * batt, next_leg + reserve)
+    //   • at the terminal: charge to (target * batt) or full if no target set
+    //   • soc_after_charge becomes the departure SoC for the next leg
+    //
+    // getTargetSoc(ident) → number 0..1 or null  (the caller provides the lookup).
+    // usableBattKwh = battery × usableFraction (or just battery if reserves are off).
+    function recomputeMultiLegCharges(trip, getTargetSoc, usableBattKwh) {
+        if (!trip || !trip.multiLeg) return trip ? trip.charges : null;
+        const legs = Array.isArray(trip.legs) ? trip.legs : [];
+        const baseCharges = Array.isArray(trip.charges) ? trip.charges : [];
+        if (!legs.length || !baseCharges.length) return baseCharges.slice();
+        const batt = trip.battery || (trip.legEnergy * 2) || 0;
+        if (batt <= 0) return baseCharges.slice();
+        const usable = Math.min(batt, Math.max(0, +usableBattKwh || batt));
+        const reserve = batt - usable;
+        const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+
+        // Depart origin at the originating airport's target SoC (default = full).
+        const originTarget = getTargetSoc(trip.originIdent);
+        let socKwh = (originTarget != null ? originTarget : 1.0) * batt;
+
+        const out = baseCharges.map((c, i) => {
+            const legE = ((legs[i] && legs[i].energy_kwh) || 0) * route;
+            const arrival = Math.max(0, socKwh - legE);
+            const isLast = (i === legs.length - 1);
+            const stopTarget = getTargetSoc(c.ident);
+
+            let departure;
+            if (isLast) {
+                departure = (stopTarget != null ? stopTarget : 1.0) * batt;
+            } else {
+                const nextLegE = ((legs[i + 1] && legs[i + 1].energy_kwh) || 0) * route;
+                const minDeparture = nextLegE + reserve;
+                departure = (stopTarget != null ? Math.max(stopTarget * batt, minDeparture) : minDeparture);
+            }
+            // Plane can't depart with more than full battery.
+            departure = Math.min(departure, batt);
+            const chargeE = Math.max(0, departure - arrival);
+            socKwh = arrival + chargeE;     // next leg's departure SoC
+
+            return { ...c, energy_kwh: +chargeE.toFixed(2) };
+        });
+        return out;
+    }
+
     return {
         loadFolder, saveFolder, loadCfg, saveCfg,
         flightsPerDay, batteryOf, roleAt, tripsAt, energyAt,
         computeAirports, updateTrip,
         defaultChargerFleet, targetSocFromCfg, deliveredEnergy,
+        recomputeMultiLegCharges,
     };
 })();
