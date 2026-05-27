@@ -56,6 +56,17 @@
             color: var(--ink); background: var(--bg);
             -webkit-font-smoothing: antialiased;
         }
+        /* Silky paper texture — subtle SVG turbulence on the cream background.
+           Visible only where the map doesn't cover (topbar, gaps around panels)
+           and through the cream-tinted glass blur. Very low contrast so it
+           feels like fibre, not pattern. */
+        body::before {
+            content: '';
+            position: fixed; inset: 0; pointer-events: none; z-index: 1;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.17  0 0 0 0 0.18  0 0 0 0 0.35  0 0 0 0.10 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.65'/></svg>");
+            mix-blend-mode: multiply;
+            opacity: .35;
+        }
         button { font-family: inherit; }
         a { color: var(--primary); }
 
@@ -286,12 +297,18 @@
             content: ''; display: inline-block; width: 5px; height: 5px;
             border-radius: 50%; background: currentColor;
         }
-        .tag-aircraft { background: #eff6ff; color: #1d4ed8; border-color: #c7dbff; }
-        .tag-trip     { background: #ecfdf5; color: #065f46; border-color: #b7e9d4; }
-        .tag-home     { background: #fef3c7; color: #92400e; border-color: #f7d98a; }
-        .tag-dest     { background: #ecfdf5; color: #065f46; border-color: #b7e9d4; }
-        .tag-stop     { background: #f5f3ff; color: #6d28d9; border-color: #d6cbff; }
-        .tag-training { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }   /* red — matches the map circle */
+        /* Role tag chips — aligned to the NRG2fly palette.
+           HOME = warm orange (home base, brand colour).
+           DEST = gold (the destination is the "prize" of the trip).
+           STOP = navy-tinted (a structural intermediate point).
+           TRAINING = red (kept distinctive — semantic warning + matches map circle).
+           AIRCRAFT / TRIP = result-panel section labels; stay neutral navy/gold. */
+        .tag-aircraft { background: #e9ebf3; color: var(--brand-ink); border-color: #d2d6e3; }
+        .tag-trip     { background: #faf0d6; color: #6b541a;        border-color: #ecdba8; }
+        .tag-home     { background: #fde5d4; color: #a44a23;        border-color: #f6cdb0; }
+        .tag-dest     { background: #faecbe; color: #6b541a;        border-color: #ead993; }
+        .tag-stop     { background: #e3e6f1; color: var(--brand-ink); border-color: #c9cee0; }
+        .tag-training { background: #fde0e0; color: #a31818;        border-color: #f6c0c0; }
 
         .spec-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
         .spec-table td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
@@ -429,6 +446,34 @@
         }
         .agg-num { font-weight: 800; font-size: 1.15rem; letter-spacing: -.02em; }
 
+        /* Rotation-scheduler feature card. Replaces the old plain outline
+           button — surfaces the key summary numbers inline so users can scan
+           them without clicking, and reads as a feature rather than a control. */
+        .sched-card {
+            display: flex; align-items: center; gap: 14px;
+            width: 100%; margin-top: 12px;
+            background: rgba(43,47,90,.04);
+            border: 1px solid rgba(43,47,90,.10);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            color: var(--ink); text-align: left; font: inherit;
+            cursor: pointer; transition: background .15s, border-color .15s, box-shadow .15s;
+        }
+        .sched-card:hover {
+            background: rgba(229,120,80,.06);
+            border-color: rgba(229,120,80,.25);
+            box-shadow: 0 4px 12px rgba(43,47,90,.08);
+        }
+        .sched-card-icon {
+            font-size: 1.4rem; line-height: 1;
+            color: var(--brand-orange-3); flex-shrink: 0;
+        }
+        .sched-card-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+        .sched-card-title { font-weight: 700; font-size: .9rem; color: var(--ink); }
+        .sched-card-summary { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+        .sched-card-chev { font-size: .9rem; color: var(--muted); opacity: .8; }
+        .sched-card:hover .sched-card-chev { color: var(--brand-orange-3); opacity: 1; }
+
         /* ---- Per-airport stats summary: 2 hero + 3 small ---- */
         .agg-block {
             background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
@@ -506,7 +551,28 @@
         }
 
         /* Per-airport "Charge target" control: button reveals slider panel. */
-        .soc-toggle .chev { display: inline-block; margin-left: 2px; transition: transform .15s; font-size: .8em; opacity: .6; }
+        /* Inline label-chip pattern for the charge target picker.
+           Reads as: "Charge target  [auto ▾]" — the static label sets context,
+           the chip is the only interactive thing. Less button-noise than the
+           outline-button it replaced. */
+        .soc-inline {
+            display: inline-flex; align-items: center; gap: 8px;
+            font-size: .82rem; color: var(--ink-soft);
+        }
+        .soc-label {
+            font-size: .68rem; text-transform: uppercase; letter-spacing: .06em;
+            font-weight: 600; color: var(--muted);
+        }
+        .soc-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            background: rgba(43,47,90,.06); border: 1px solid rgba(43,47,90,.10);
+            color: var(--ink); font-weight: 600; font-size: .82rem;
+            padding: 3px 10px; border-radius: 999px;
+            cursor: pointer; transition: background .15s, border-color .15s;
+        }
+        .soc-chip:hover { background: rgba(229,120,80,.10); border-color: rgba(229,120,80,.25); }
+        .soc-chip strong { font-weight: 700; color: var(--brand-orange-3); }
+        .soc-chip .chev { display: inline-block; transition: transform .15s; font-size: .8em; opacity: .6; }
         .soc-toggle.active .chev,
         .soc-toggle:has(+ .soc-panel:not(.d-none)) .chev { transform: rotate(180deg); }
         .soc-panel {
@@ -1800,10 +1866,13 @@
                         <div class="d-flex flex-wrap gap-2 align-items-center">
                             ${fleetHtml}
                             <button class="btn btn-sm btn-outline-success fleet-add" title="Add charger">+</button>
-                            <button class="btn btn-sm btn-outline-secondary soc-toggle ms-3" type="button" data-ident="${ident}" title="Set the departure state-of-charge target — useful for avoiding the slow taper region above 80%">
-                                Charge target:&nbsp;<strong>${targetSocLabel}</strong>
-                                <span class="chev">▾</span>
-                            </button>
+                            <div class="soc-inline ms-3">
+                                <span class="soc-label">Charge target</span>
+                                <button class="soc-chip soc-toggle" type="button" data-ident="${ident}" title="Set the departure state-of-charge target — useful for avoiding the slow taper region above 80%">
+                                    <strong>${targetSocLabel}</strong>
+                                    <span class="chev">▾</span>
+                                </button>
+                            </div>
                         </div>
                         <div class="soc-panel ${targetSoc != null ? '' : 'd-none'}" data-soc-ident="${ident}">
                             <div class="soc-row">
@@ -1847,10 +1916,15 @@
                     ${sInfo.overflow
                         ? `<div class="alert alert-warning py-2 mt-2 mb-0">With ${fleet.length} charger${fleet.length > 1 ? 's' : ''} (${fmtPower(installed)}) the rotations don't all fit before 23:00 — the last finishes ${fmtClock(sInfo.latestEnd)}. Add chargers or reduce flights.</div>`
                         : `<div class="alert alert-success py-2 mt-2 mb-0">${fleet.length} charger${fleet.length > 1 ? 's' : ''} (${fmtPower(installed)}) handle the day — peak draw ${fmtPower(peakPower)}, last rotation ends ${fmtClock(sInfo.latestEnd)}.</div>`}
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-secondary sched-toggle" data-ident="${ident}">${schedOpen.has(ident) ? 'Close' : 'Open'} rotation scheduler</button>
-                        <div class="sched-box mt-2 ${schedOpen.has(ident) ? '' : 'd-none'}" data-schedbox="${ident}"></div>
-                    </div>
+                    <button class="sched-card sched-toggle" data-ident="${ident}" type="button" title="Open the per-charger Gantt-style scheduler for this airport">
+                        <span class="sched-card-icon" aria-hidden="true">⏱</span>
+                        <span class="sched-card-body">
+                            <span class="sched-card-title">Rotation scheduler ${schedOpen.has(ident) ? '(open)' : ''}</span>
+                            <span class="sched-card-summary">${fpd} rotation${Math.round(fpd) === 1 ? '' : 's'}/day · peak ${fmtPower(peakPower * gridMul)} · last ends ${fmtClock(sInfo.latestEnd)}</span>
+                        </span>
+                        <span class="sched-card-chev" aria-hidden="true">${schedOpen.has(ident) ? '▴' : '▾'}</span>
+                    </button>
+                    <div class="sched-box mt-2 ${schedOpen.has(ident) ? '' : 'd-none'}" data-schedbox="${ident}"></div>
                 </div>`;
             }).join('');
 
