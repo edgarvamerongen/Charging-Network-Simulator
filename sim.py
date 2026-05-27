@@ -71,6 +71,52 @@ class Simulator:
             if not (charger["power_kw"] > 0):
                 return {"error": "Custom charger power must be positive."}
 
+        # Training flights are a closed loop around the origin — they don't have
+        # a destination, just a "training_range_km" published per aircraft (e.g.
+        # Pipistrel Velis Electro: 112.5 km ≈ 45 min at 150 km/h cruise).
+        # Energy delivered is capped at the usable battery (operator-modelled
+        # min_landing_soc), since you can't physically extract more than that
+        # in a single session.
+        if trip_type == "training":
+            training_range = plane.get('training_range_km')
+            if not training_range or float(training_range) <= 0:
+                return {"error": f"{plane.get('name', 'This aircraft')} doesn't have a published training_range_km — training mode unavailable for it."}
+            training_range = float(training_range)
+            avg_usage = plane['battery_kwh'] / plane['range_km'] * 100
+            raw_energy = avg_usage * training_range / 100               # what the pattern would cost at cruise
+            min_landing_soc = float(plane.get('min_landing_soc') or 0)
+            usable = plane['battery_kwh'] * (1.0 - min_landing_soc)     # the most the plane can use in one session
+            recharge_energy = min(raw_energy, usable)
+            flight_time_h = training_range / plane['speed_kmh']
+            charge_time_h = recharge_energy / charger['power_kw']
+            return {
+                "success": True,
+                "trip_type": "training",
+                "legs": 1,
+                "leg_distance_km": round(training_range, 2),
+                "total_distance_km": round(training_range, 2),
+                "training_range_km": round(training_range, 2),
+                "avg_usage_kwh_per_100km": round(avg_usage, 2),
+                "leg_energy_kwh": round(recharge_energy, 2),
+                "recharge_energy_kwh": round(recharge_energy, 2),
+                "raw_pattern_energy_kwh": round(raw_energy, 2),         # uncapped, for transparency
+                "flight_time_h": round(flight_time_h, 2),
+                "charge_time_h": round(charge_time_h, 3),
+                "charge_time_min": round(charge_time_h * 60, 1),
+                "plane": {
+                    "id": plane['id'], "name": plane['name'],
+                    "seats": plane.get('seats'), "load_kg": plane.get('load_kg'),
+                    "battery_kwh": plane['battery_kwh'], "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
+                    "avg_usage_kwh_per_100km": round(avg_usage, 2),
+                    "min_landing_soc": plane.get('min_landing_soc'),
+                    "training_range_km": training_range,
+                    "image": plane.get('image'), "svg": plane.get('svg'),
+                },
+                "charger": {
+                    "id": charger['id'], "name": charger['name'], "power_kw": charger['power_kw'],
+                }
+            }
+
         if distance_km > plane['range_km']:
             return {"error": f"Leg distance {distance_km:.1f}km exceeds plane range {plane['range_km']}km"}
 

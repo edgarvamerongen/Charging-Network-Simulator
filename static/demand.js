@@ -25,11 +25,15 @@ window.CNSDemand = (function () {
     const batteryOf = (t) => t.battery != null ? numOf(t, 'battery') : 2 * numOf(t, 'legEnergy');
 
     // Role this trip plays at `ident`:
-    //   'dest'  — the trip arrives here (one-way or retour destination)
-    //   'home'  — the trip's home base (retour origin only)
-    //   'stop'  — an intermediate charging stop on a multi-leg trip
-    //   null    — this airport isn't touched by the trip
+    //   'training' — training pattern based at this airport (origin = destination)
+    //   'dest'     — the trip arrives here (one-way or retour destination)
+    //   'home'     — the trip's home base (retour origin only)
+    //   'stop'     — an intermediate charging stop on a multi-leg trip
+    //   null       — this airport isn't touched by the trip
     function roleAt(trip, ident) {
+        if (trip.tripType === 'training') {
+            return trip.originIdent === ident ? 'training' : null;
+        }
         if (trip.destIdent === ident) return 'dest';
         if (trip.originIdent === ident && trip.tripType === 'retour') return 'home';
         if (trip.multiLeg && Array.isArray(trip.stops) && trip.stops.some(s => s && s.ident === ident)) return 'stop';
@@ -89,6 +93,14 @@ window.CNSDemand = (function () {
                         direction: isReturnVisit ? 'back' : 'out'
                     });
                 });
+                return;
+            }
+            // Training path: a single contribution at the home base. The base
+            // value is the per-flight recharge already capped at usable battery
+            // by sim.py; the role tag drives the demand-drawer label.
+            if (t.tripType === 'training') {
+                ensure(t.originIdent, t.originName, t.originLat, t.originLon)
+                    .contribs.push({ t, role: 'training', other: t.originName, base: numOf(t, 'legEnergy') });
                 return;
             }
             // Legacy single-leg path (unchanged behaviour)
@@ -167,6 +179,11 @@ window.CNSDemand = (function () {
         const usable = Math.min(batt, Math.max(0, +usableKwh || batt));
         const reserve = batt - usable;
 
+        // Training: pattern loop, energy capped at usable battery (the most you
+        // can extract in a single session). Origin charges that back.
+        if (trip.tripType === 'training') {
+            return Math.min(leg, usable);
+        }
         // One-way arrival: airport tops the plane up to the target (default 100%).
         if (trip.tripType !== 'retour') {
             const arrival = Math.max(0, batt - leg);

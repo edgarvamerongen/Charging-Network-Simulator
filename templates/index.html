@@ -233,6 +233,7 @@
         .tag-home     { background: #fef3c7; color: #92400e; border-color: #f7d98a; }
         .tag-dest     { background: #ecfdf5; color: #065f46; border-color: #b7e9d4; }
         .tag-stop     { background: #f5f3ff; color: #6d28d9; border-color: #d6cbff; }
+        .tag-training { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }   /* red — matches the map circle */
 
         .spec-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
         .spec-table td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
@@ -533,7 +534,7 @@
                     <input type="text" id="origin" class="form-control ac-input" placeholder="Search e.g. Heathrow" autocomplete="off" required>
                     <div id="originList" class="ac-list d-none"></div>
                 </div>
-                <div class="field ac-wrap">
+                <div id="destinationField" class="field ac-wrap">
                     <label>Destination airport</label>
                     <input type="text" id="destination" class="form-control ac-input" placeholder="Search e.g. Charles de Gaulle" autocomplete="off" required>
                     <div id="destinationList" class="ac-list d-none"></div>
@@ -545,7 +546,9 @@
                     <select id="tripType" class="form-select">
                         <option value="one-way">One-Way</option>
                         <option value="retour">Retour (Round Trip)</option>
+                        <option value="training">Training (circular pattern A→A)</option>
                     </select>
+                    <p id="trainingHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a pattern around the origin for a fixed duration (per its <code>training_range_km</code>). Energy per flight is capped at the usable battery.</p>
                 </div>
 
                 <!-- Charging stops: when on, an over-range route is auto-split into legs
@@ -746,7 +749,7 @@
                                 <label>Minimum landing SoC <span class="rs-val" id="rsMinSocVal">30%</span></label>
                                 <input type="range" id="rsMinSoc" min="5" max="50" step="5" value="30" class="form-range">
                             </div>
-                            <p class="rs-help">Each aircraft must land with at least this state of charge. Reduces usable battery per leg; per-aircraft overrides in the catalog (e.g. Pipistrel Velis Electro POH = 30%) take precedence.</p>
+                            <p class="rs-help">Each aircraft must land with at least this state of charge. Applied uniformly across the whole fleet — per-aircraft <code>min_landing_soc</code> values in the catalog (Pipistrel POH 30%, Beta 20%, Vaeridion 20%) are kept as published-spec documentation but this slider overrides them while the toggle is on.</p>
                         </div>
                     </div>
 
@@ -1289,6 +1292,22 @@
             const p1 = [data.origin.lat, data.origin.lon];
             const p2 = [data.destination.lat, data.destination.lon];
             startMarker = L.marker(p1, { title: 'Departure: ' + data.origin.name }).addTo(map);
+
+            if (data.trip_type === 'training') {
+                // Training: red circle around the origin. Radius = half the published
+                // training_range_km (a typical pattern reach: fly out, circle, return).
+                const radiusM = ((data.training_range_km || 0) / 2) * 1000;
+                const circle = L.circle(p1, {
+                    radius: radiusM, color: '#dc2626', weight: 2.5, fillColor: '#fca5a5', fillOpacity: 0.18,
+                    dashArray: '8 6'
+                });
+                circle.bindTooltip(`Training pattern · ${Math.round((data.flight_time_h || 0) * 60)} min`, { sticky: true });
+                circle.addTo(map);
+                routeLayers = [circle];
+                map.fitBounds(circle.getBounds(), { padding: [50, 50] });
+                return;
+            }
+
             endMarker = L.marker(p2, { title: 'Arrival: ' + data.destination.name }).addTo(map);
 
             if (data.multi_leg && Array.isArray(data.stops) && data.stops.length) {
@@ -1325,38 +1344,39 @@
             // Multi-leg result has totals in different fields; map them to a unified shape
             const isMulti = !!data.multi_leg;
             const isRetour = data.trip_type === 'retour';
+            const isTraining = data.trip_type === 'training';
             // ---- Realism factors (cascade through everything below) -----------
             // When all toggles are off these reduce to 1.0 and the original
             // numbers come through unchanged.
-            const route   = CNSSettings.routingFactor();              // 1.0 or e.g. 1.05
+            const route   = isTraining ? 1.0 : CNSSettings.routingFactor();   // training has no routing pad
             const usable  = CNSSettings.usableFraction(p);            // 1.0 or e.g. 0.70
             const gridMul = CNSSettings.gridDemandFactor();           // 1.0 or e.g. 1/0.88
             const usableBatteryKwh = (p.battery_kwh || 0) * usable;
 
-            // Per-leg energy with SID/STAR padding applied.
+            // Per-leg energy with SID/STAR padding applied (training: no pad).
             const legEnergy = (data.leg_energy_kwh || 0) * route;
             // Energy actually consumed by the aircraft on the trip — informative
             // value for the headline (what comes out of the battery).
-            const usedKwh = isMulti
-                ? data.total_recharge_energy_kwh * route   // multi-leg total charging ≈ total consumed
-                : (isRetour ? legEnergy * 2 : legEnergy);
-            // Charging required at the destination/home airport (the airport
-            // demand). For retour single-leg this is the round-trip deficit
-            // against USABLE battery, not nameplate.
-            let rechargeKwh;
-            if (isMulti) {
-                rechargeKwh = data.total_recharge_energy_kwh * route;
+            let usedKwh, rechargeKwh, flightMin;
+            if (isTraining) {
+                // Training: energy used per flight is capped at usable battery.
+                usedKwh = Math.min(legEnergy, usableBatteryKwh);
+                rechargeKwh = usedKwh;                       // origin refills exactly what was used
+                flightMin = data.flight_time_h * 60;
+            } else if (isMulti) {
+                usedKwh = data.total_recharge_energy_kwh * route;
+                rechargeKwh = usedKwh;
+                flightMin = data.total_flight_time_h * 60 * route;
             } else if (isRetour) {
+                usedKwh = legEnergy * 2;
                 rechargeKwh = Math.max(0, 2 * legEnergy - usableBatteryKwh);
+                flightMin = data.flight_time_h * 60 * 2 * route;
             } else {
-                rechargeKwh = legEnergy;                    // one-way: tops the leg back to full
+                usedKwh = legEnergy;
+                rechargeKwh = legEnergy;
+                flightMin = data.flight_time_h * 60 * route;
             }
-            const flightMin = (isMulti
-                ? data.total_flight_time_h * 60
-                : (isRetour ? data.flight_time_h * 60 * 2 : data.flight_time_h * 60)) * route;
-            // Charge time uses the (optional) two-regime taper model.
             const chargeMin = CNSSettings.chargeTimeMin(rechargeKwh, data.charger.power_kw, p.battery_kwh);
-            // Grid kWh = aircraft kWh / charger efficiency (informational).
             const gridKwh = rechargeKwh * gridMul;
 
             document.getElementById('hlUsed').textContent = num(usedKwh);
@@ -1364,10 +1384,18 @@
             document.getElementById('hlTime').textContent = fmtDuration(chargeMin);
             // Sub-labels adapt to the trip context AND active realism flags.
             const flags = CNSSettings.activeFlags();
-            document.getElementById('hlUsedLabel').textContent = isRetour ? 'Energy used (round trip)' : 'Energy used';
-            document.getElementById('hlFlightLabel').textContent = isRetour ? 'Flight time (round trip)' : 'Flight time';
+            document.getElementById('hlUsedLabel').textContent =
+                isTraining ? 'Energy used (per session)'
+                : isRetour ? 'Energy used (round trip)'
+                : 'Energy used';
+            document.getElementById('hlFlightLabel').textContent =
+                isTraining ? 'Pattern duration'
+                : isRetour ? 'Flight time (round trip)'
+                : 'Flight time';
             let tSub;
-            if (chargeMin === 0 && isRetour) {
+            if (isTraining) {
+                tSub = 'at origin' + (flags.chargerEfficiency ? ` · ${Math.round(gridKwh)} kWh grid` : '');
+            } else if (chargeMin === 0 && isRetour) {
                 tSub = flags.landingReserve ? 'battery + reserve cover it' : 'battery covers it';
             } else if (isMulti) {
                 tSub = 'all stops combined';
@@ -1390,9 +1418,14 @@
             document.getElementById('acUsage').textContent = fmtUsage(p.avg_usage_kwh_per_100km);
 
             const legs = isMulti ? data.legs_count : data.legs;
-            document.getElementById('trType').textContent = (data.trip_type === 'retour' ? 'Round Trip (Retour)' : 'One-Way') + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
-            document.getElementById('trLeg').textContent = isMulti ? '—' : fmtDist(data.leg_distance_km);
-            document.getElementById('trTotal').textContent = fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
+            document.getElementById('trType').textContent =
+                isTraining ? `Training pattern (${Math.round(flightMin)} min)`
+                : (data.trip_type === 'retour' ? 'Round Trip (Retour)' : 'One-Way')
+                  + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
+            document.getElementById('trLeg').textContent = isTraining ? '—' : (isMulti ? '—' : fmtDist(data.leg_distance_km));
+            document.getElementById('trTotal').textContent = isTraining
+                ? fmtDist(data.training_range_km) + ' loop'
+                : fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
             // "Total flight time" matches the headline (whole trip, padded if
             // routingPadding is on).
             document.getElementById('trFlight').textContent = fmtDuration(flightMin);
@@ -1466,26 +1499,34 @@
         document.getElementById('simForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const errDiv = document.getElementById('error');
-            if (!selected.origin || !selected.destination) {
+            const tripType = document.getElementById('tripType').value;
+            const isTraining = tripType === 'training';
+            if (!selected.origin || (!isTraining && !selected.destination)) {
                 document.getElementById('result').classList.add('d-none');
-                errDiv.textContent = 'Please pick both airports from the suggestions list.';
-                errDiv.classList.remove('d-none'); syncUnset('origin'); syncUnset('destination'); return;
+                errDiv.textContent = isTraining
+                    ? 'Pick an origin airport — training flights loop around it.'
+                    : 'Please pick both airports from the suggestions list.';
+                errDiv.classList.remove('d-none'); syncUnset('origin'); if (!isTraining) syncUnset('destination'); return;
             }
             // ident is included so the backend's multi-leg charges[] can tag home/dest by airport
             const toCoord = ap => ({ ident: ap.ident, name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg });
             const planeId = document.getElementById('plane').value;
             const chargerId = document.getElementById('charger').value;
+            const originCoord = toCoord(selected.origin);
             const payload = {
-                origin: toCoord(selected.origin), destination: toCoord(selected.destination),
+                origin: originCoord,
+                // Training: destination = origin so backend can treat it uniformly.
+                destination: isTraining ? originCoord : toCoord(selected.destination),
                 plane_id: planeId, charger_id: chargerId,
-                trip_type: document.getElementById('tripType').value
+                trip_type: tripType,
             };
             if (customById[planeId]) payload.plane = customById[planeId];
             // server-side custom chargers (id starts with "charger_") aren't in the static catalog —
             // pass the object through so sim.py can size the charge time correctly.
             if (window.CNSChargers && CNSChargers.get(chargerId)) payload.charger = CNSChargers.get(chargerId);
             // Multi-leg trip: include the planned stops if "Plan with charging stops" is on
-            if (document.getElementById('withStops').checked && plannedStops.length) {
+            // (not applicable to training mode — patterns don't take stops).
+            if (!isTraining && document.getElementById('withStops').checked && plannedStops.length) {
                 if (plannedError) { errDiv.textContent = plannedError; errDiv.classList.remove('d-none'); return; }
                 payload.stops = plannedStops.map(s => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type }));
             }
@@ -1496,11 +1537,25 @@
                 errDiv.textContent = data.error; errDiv.classList.remove('d-none'); return;
             }
             data._origin = { ident: selected.origin.ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg };
-            data._dest = { ident: selected.destination.ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
+            data._dest = isTraining ? data._origin : { ident: selected.destination.ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
             data._chargerId = document.getElementById('charger').value;
             data._freqN = Math.max(1, parseInt(document.getElementById('freqN').value || '1', 10));
             data._freqUnit = document.getElementById('freqUnit').value;
             lastResult = data; renderResult(data); drawRoute(data);
+        });
+
+        // Trip-type select: hide destination field + help text when "Training".
+        document.getElementById('tripType').addEventListener('change', (e) => {
+            const isTraining = e.target.value === 'training';
+            const destField = document.getElementById('destinationField');
+            const stopsRow  = document.getElementById('withStops')?.closest('.field');
+            const help      = document.getElementById('trainingHelp');
+            const destInput = document.getElementById('destination');
+            destField.classList.toggle('d-none', isTraining);
+            if (stopsRow) stopsRow.classList.toggle('d-none', isTraining);
+            help.classList.toggle('d-none', !isTraining);
+            destInput.required = !isTraining;
+            if (isTraining) { selected.destination = null; document.getElementById('trajInfo').classList.add('d-none'); clearRoute(); }
         });
 
         // ---------- demand calculator ----------
@@ -1593,20 +1648,26 @@
                     const chargeMin = power ? CNSSettings.chargeTimeMin(energy, power, battery) : Infinity;
                     dailyEnergy += energy * flightsPerDay(t);
                     if (isFinite(chargeMin)) dailyHours += (chargeMin / 60) * flightsPerDay(t);
-                    const roleTag = c.role === 'home'
+                    const roleTag = c.role === 'training'
+                        ? `<span class="section-tag tag-training">TRAINING</span>`
+                        : c.role === 'home'
                         ? `<span class="section-tag tag-home">HOME</span>`
                         : c.role === 'stop'
                         ? `<span class="section-tag tag-stop">STOP</span>`
                         : `<span class="section-tag tag-dest">${t.tripType === 'retour' ? 'DEST' : 'ARRIVAL'}</span>`;
                     const dir =
-                        c.role === 'home' ? `→ ${c.other} & back` :
-                        c.role === 'stop' ? `on ${c.other}` :
-                                            `from ${c.other}`;
+                        c.role === 'training' ? `${t.originName}` :
+                        c.role === 'home'     ? `→ ${c.other} & back` :
+                        c.role === 'stop'     ? `on ${c.other}` :
+                                                `from ${c.other}`;
                     const chargerName = asg.charger ? asg.charger.name : 'no charger';
+                    const tripLabel =
+                        t.tripType === 'training' ? `Training · ${Math.round((+t.flightTimeH || 0) * 60)} min`
+                        : (t.tripType === 'retour' ? 'Retour' : 'One-way') + (t.multiLeg ? ' · multi-leg' : '');
                     return `<tr class="folder-trip">
                         <td>${roleTag} ${dir}</td>
                         <td>${t.planeName}</td>
-                        <td>${t.tripType === 'retour' ? 'Retour' : 'One-way'}${t.multiLeg ? ' · multi-leg' : ''}</td>
+                        <td>${tripLabel}</td>
                         <td><div class="input-group input-group-sm" style="width:150px">
                             <input type="number" min="1" value="${t.freqN}" class="form-control trip-freq-n" data-id="${t.id}">
                             <select class="form-select trip-freq-unit" data-id="${t.id}">
@@ -1764,6 +1825,14 @@
                     totalFlightTimeH: d.total_flight_time_h,
                     totalChargeMin: d.total_charge_time_min,
                     totalRechargeKwh: d.total_recharge_energy_kwh
+                });
+            } else if (d.trip_type === 'training') {
+                // Training: snapshot the published training_range and the capped energy.
+                Object.assign(trip, {
+                    rechargeEnergy: d.recharge_energy_kwh,
+                    flightTimeH: d.flight_time_h,
+                    trainingRangeKm: d.training_range_km,
+                    rawPatternEnergyKwh: d.raw_pattern_energy_kwh,
                 });
             } else {
                 Object.assign(trip, {

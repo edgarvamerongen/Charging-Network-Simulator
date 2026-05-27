@@ -72,13 +72,18 @@ window.CNSSettings = (function () {
 
     /** Fraction of nameplate battery available per leg. 1.0 when the reserve
      *  toggle is off. When on: (max takeoff SoC = 1.0) − (min landing SoC).
-     *  Plane catalog can override the global floor via `plane.min_landing_soc`. */
-    function usableFraction(plane) {
+     *
+     *  Precedence (per user decision): the GLOBAL slider value applies to all
+     *  aircraft when the toggle is on, overriding per-aircraft min_landing_soc
+     *  values in the catalog. Use this for fleet-wide what-if analysis. The
+     *  catalog values stay in the JSON as documentation of published per-
+     *  aircraft POH limits but no longer change the math.
+     *  (Plane argument retained for forward-compat if we re-introduce a
+     *  per-aircraft override path later.) */
+    function usableFraction(_plane) {
         const s = loadAll().landingReserve;
         if (!s.enabled) return 1.0;
-        const perAircraft = plane && plane.min_landing_soc;
-        const floor = (perAircraft != null && isFinite(+perAircraft)) ? +perAircraft : s.minLandingSoc;
-        return Math.max(0.05, Math.min(1.0, 1.0 - floor));   // clamp to a sane window
+        return Math.max(0.05, Math.min(1.0, 1.0 - s.minLandingSoc));
     }
 
     /** Multiplier from aircraft-side kWh to grid kWh. 1.0 when efficiency

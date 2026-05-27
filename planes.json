@@ -7,6 +7,7 @@
     "range_km": 100,
     "speed_kmh": 150,
     "min_landing_soc": 0.30,
+    "training_range_km": 70,
     "image": "pipistrel.png",
     "svg": "pepistrel.svg"
   },
