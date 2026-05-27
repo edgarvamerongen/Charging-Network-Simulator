@@ -13,24 +13,40 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css"/>
     <style>
         /* =========================================================
-           CNS — design tokens
+           CNS — design tokens (NRG2fly palette)
+           ----
+           Warm brand identity matching nrg2fly.com: orange gradient
+           for primary actions, gold accent for highlights, deep navy
+           ink for typography, cream background for the (uncovered)
+           page area. Cool slate tones are kept only as semantic
+           greys (`--ink-soft`, `--muted`) for legibility on cream.
            ========================================================= */
         :root {
-            --bg:           #eef2f8;
-            --ink:          #0f1729;
-            --ink-soft:     #475569;
-            --muted:        #94a3b8;
-            --primary:      #2563eb;
-            --primary-2:    #1e40af;
+            /* NRG2fly brand */
+            --brand-orange-1:  #f5b074;      /* lightest peach in the logo gradient */
+            --brand-orange-2:  #ed8d6f;      /* mid coral */
+            --brand-orange-3:  #e57850;      /* deepest warm orange */
+            --brand-gold:      #e6c149;      /* CTA / highlight */
+            --brand-ink:       #2b2f5a;      /* deep navy wordmark colour */
+            --brand-cream:     #f6efde;      /* silky page background */
+            --brand-cream-2:   #ebe0c4;      /* slightly darker cream for borders */
+
+            /* Semantic aliases (everything else in the stylesheet uses these) */
+            --bg:           var(--brand-cream);
+            --ink:          var(--brand-ink);
+            --ink-soft:     #4a4f76;
+            --muted:        #64748b;          /* bumped from #94a3b8 — passes AA on cream */
+            --primary:      var(--brand-orange-3);
+            --primary-2:    #c75e36;          /* deeper press-state orange */
             --success:      #10b981;
-            --warn:         #f59e0b;
-            --danger:       #ef4444;
-            --panel:        rgba(255,255,255,0.82);
-            --panel-strong: rgba(255,255,255,0.94);
-            --panel-border: rgba(15,23,41,0.07);
-            --shadow-sm:    0 1px 2px rgba(15,23,41,.05), 0 1px 3px rgba(15,23,41,.06);
-            --shadow:       0 12px 32px rgba(15,23,41,.10), 0 2px 6px rgba(15,23,41,.06);
-            --shadow-lg:    0 28px 60px rgba(15,23,41,.18), 0 6px 12px rgba(15,23,41,.06);
+            --warn:         var(--brand-gold);
+            --danger:       #c33d3d;
+            --panel:        rgba(255,250,242,0.88);
+            --panel-strong: rgba(255,251,244,0.96);
+            --panel-border: rgba(43,47,90,0.10);
+            --shadow-sm:    0 1px 2px rgba(43,47,90,.05), 0 1px 3px rgba(43,47,90,.06);
+            --shadow:       0 12px 32px rgba(43,47,90,.10), 0 2px 6px rgba(43,47,90,.06);
+            --shadow-lg:    0 28px 60px rgba(43,47,90,.18), 0 6px 12px rgba(43,47,90,.06);
             --radius:       14px;
             --radius-sm:    8px;
         }
@@ -58,12 +74,21 @@
             position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 30;
             display: flex; align-items: center; justify-content: space-between;
             padding: 0 20px;
-            background: linear-gradient(to bottom, rgba(255,255,255,.95), rgba(255,255,255,.78));
+            /* Subtle cream-tinted blur over the map so the brand reads cleanly */
+            background: linear-gradient(to bottom, rgba(246,239,222,.95), rgba(246,239,222,.78));
             backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
             border-bottom: 1px solid var(--panel-border);
         }
-        .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem; color: var(--ink); text-decoration: none; }
-        .brand img { height: 26px; }
+        .brand {
+            display: flex; align-items: center; gap: 12px;
+            color: var(--ink); text-decoration: none; line-height: 1;
+        }
+        .brand-wide { height: 34px; display: block; }
+        .brand-tagline {
+            font-weight: 600; font-size: .82rem; color: var(--ink-soft);
+            padding-left: 12px; border-left: 1px solid var(--panel-border);
+            letter-spacing: .01em;
+        }
         .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: .82rem; color: var(--ink-soft); user-select: none; }
         .switch input { appearance: none; width: 34px; height: 20px; background: #cbd5e1; border-radius: 999px; position: relative; transition: background .2s; cursor: pointer; }
         .switch input:checked { background: var(--primary); }
@@ -84,7 +109,7 @@
         }
         .options-btn .gear { font-size: 1rem; line-height: 1; transition: transform .25s; }
         .options-btn:hover { background: #f8fafc; box-shadow: var(--shadow-sm); border-color: var(--border-strong, #cbd5e1); }
-        .options-btn[aria-expanded="true"] { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,.28); }
+        .options-btn[aria-expanded="true"] { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(229,120,80,.28); }
         .options-btn[aria-expanded="true"] .gear { transform: rotate(45deg); }
         .options-menu {
             position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
@@ -124,7 +149,20 @@
         }
         .rail-left > * { pointer-events: auto; }
         .rail-left::-webkit-scrollbar { width: 6px; }
-        .rail-left::-webkit-scrollbar-thumb { background: rgba(15,23,41,.15); border-radius: 999px; }
+        .rail-left::-webkit-scrollbar-thumb { background: rgba(43,47,90,.18); border-radius: 999px; }
+        /* Soft cream halo behind the rail — suppresses the busy satellite
+           texture under the panels without blocking map drags (the gradient
+           fades to fully transparent at the edge). */
+        .rail-left::before, .rail-right::before {
+            content: ''; position: fixed; top: 56px; bottom: 0;
+            width: 420px; pointer-events: none; z-index: -1;
+            background: radial-gradient(ellipse at center,
+                rgba(246,239,222,.55) 0%,
+                rgba(246,239,222,.30) 40%,
+                rgba(246,239,222,0) 80%);
+        }
+        .rail-left::before  { left: -30px; }
+        .rail-right::before { right: -30px; }
 
         /* =========================================================
            Glass panel
@@ -163,7 +201,7 @@
         }
         .field .form-control:focus, .field .form-select:focus,
         .input-group .form-control:focus, .input-group .form-select:focus {
-            border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.18);
+            border-color: var(--primary); box-shadow: 0 0 0 3px rgba(229,120,80,.22);
         }
         .input-group-text { background: #f1f5f9; border-color: #e2e8f0; font-size: .82rem; color: var(--ink-soft); }
 
@@ -172,20 +210,40 @@
             width: 100%; padding: 10px 16px; border-radius: var(--radius-sm); font-weight: 600;
             border: 1px solid transparent; cursor: pointer; font-size: .9rem; transition: transform .05s, box-shadow .15s, background .15s;
         }
-        .btn-cns          { background: linear-gradient(180deg, #3b82f6, #2563eb); color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,.28); }
-        .btn-cns:hover    { box-shadow: 0 8px 18px rgba(37,99,235,.36); }
+        .btn-cns          { background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3)); color: #fff; box-shadow: 0 4px 12px rgba(229,120,80,.28); }
+        .btn-cns:hover    { box-shadow: 0 8px 18px rgba(229,120,80,.36); }
         .btn-cns-success  { background: linear-gradient(180deg, #34d399, #10b981); color: #fff; box-shadow: 0 4px 12px rgba(16,185,129,.28); }
         .btn-cns-success:hover { box-shadow: 0 8px 18px rgba(16,185,129,.36); }
         .btn-cns-ghost    { background: transparent; border-color: #e2e8f0; color: var(--ink-soft); }
         .btn-cns-ghost:hover { background: #f8fafc; color: var(--ink); }
         .btn-cns:active, .btn-cns-success:active, .btn-cns-ghost:active { transform: translateY(1px); }
 
+        /* Compact variant of the primary button (drawer header CTA) */
+        .btn-sm-cns {
+            width: auto; padding: 6px 14px; font-size: .85rem;
+            border-radius: var(--radius-sm);
+        }
+
+        /* Ghost utility button for low-emphasis tool actions (Model settings).
+           Renders as plain text + icon with a tinted hover state — visually
+           recedes vs the orange primary CTA so the value-delivery action wins. */
+        .btn-ghost-tool {
+            display: inline-flex; align-items: center; gap: 6px;
+            border: none; background: transparent; cursor: pointer;
+            color: var(--ink-soft); font-weight: 600; font-size: .85rem;
+            padding: 6px 10px; border-radius: var(--radius-sm);
+            transition: background .15s, color .15s;
+        }
+        .btn-ghost-tool:hover { background: rgba(43,47,90,.05); color: var(--ink); }
+        .btn-ghost-tool .gear { font-size: 1em; opacity: .75; }
+        .btn-ghost-tool:hover .gear { opacity: 1; }
+
         /* =========================================================
            Trajectory pill + autocomplete
            ========================================================= */
         .trip-traj {
             font-size: .82rem; padding: 8px 12px; margin-bottom: 12px;
-            background: rgba(37,99,235,.08); border-left: 3px solid var(--primary); border-radius: 8px; color: var(--ink);
+            background: rgba(229,120,80,.10); border-left: 3px solid var(--primary); border-radius: 8px; color: var(--ink);
         }
         .trip-traj.d-none { display: none; }
 
@@ -207,12 +265,12 @@
            Result panel
            ========================================================= */
         .headline-box {
-            background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+            background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
             color: #fff; border-radius: var(--radius); padding: 14px 4px;
             margin-bottom: 14px;
-            box-shadow: 0 8px 20px rgba(37,99,235,.28);
+            box-shadow: 0 8px 20px rgba(229,120,80,.28);
         }
-        .headline-box .big { font-size: 1.55rem; font-weight: 800; line-height: 1.1; margin: 3px 0; letter-spacing: -.02em; }
+        .headline-box .big { font-size: 1.55rem; font-weight: 800; line-height: 1.1; margin: 3px 0; letter-spacing: -.02em; color: var(--brand-gold); }
         .headline-box .unit { font-size: .65rem; opacity: .7; letter-spacing: .04em; }
         .headline-box .col-4 { padding: 0 4px; }
         .lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
@@ -285,7 +343,7 @@
             transition: background .15s, color .15s;
         }
         .seg-btn:hover { color: var(--ink); }
-        .seg-btn.active { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(37,99,235,.3); }
+        .seg-btn.active { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(229,120,80,.30); }
         .control-pill {
             display: inline-flex; align-items: center; gap: 10px;
             background: var(--panel-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -363,13 +421,52 @@
             border-bottom: 1px solid var(--panel-border);
             padding: 8px 6px !important;
         }
-        /* Aggregates row: replace plain bg-primary with the brand gradient */
+        /* Aggregates row (legacy bg-primary class kept for any other consumers) */
         #folder .bg-primary {
-            background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%) !important;
+            background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%) !important;
             border-radius: var(--radius-sm) !important;
-            box-shadow: 0 6px 16px rgba(37,99,235,.22);
+            box-shadow: 0 6px 16px rgba(43,47,90,.22);
         }
         .agg-num { font-weight: 800; font-size: 1.15rem; letter-spacing: -.02em; }
+
+        /* ---- Per-airport stats summary: 2 hero + 3 small ---- */
+        .agg-block {
+            background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+            color: #fff; border-radius: var(--radius-sm);
+            padding: 16px 20px; box-shadow: 0 6px 16px rgba(43,47,90,.22);
+        }
+        .agg-hero-row {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+            padding-bottom: 14px; margin-bottom: 14px;
+            border-bottom: 1px solid rgba(255,255,255,.18);
+        }
+        .agg-hero {
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .agg-hero-lbl {
+            font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
+            font-weight: 600; opacity: .8;
+        }
+        .agg-hero-num {
+            font-size: 2.05rem; font-weight: 800; line-height: 1;
+            letter-spacing: -.02em; color: var(--brand-gold);
+        }
+        .agg-hero-sub {
+            font-size: .72rem; opacity: .65; letter-spacing: .02em;
+        }
+        .agg-small-row {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+        }
+        .agg-small {
+            display: flex; flex-direction: column; gap: 2px;
+        }
+        .agg-small-lbl {
+            font-size: .68rem; text-transform: uppercase; letter-spacing: .06em;
+            font-weight: 600; opacity: .7;
+        }
+        .agg-small-num {
+            font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em;
+        }
         #folder .alert {
             border-radius: var(--radius-sm); border: none; font-size: .85rem;
             padding: 10px 14px !important;
@@ -435,7 +532,7 @@
         .adv-field label { display: block; font-size: .65rem; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
         .adv-field input, .adv-field select { width: 100%; font-size: .8rem; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
 
-        .stops-section { margin-bottom: 12px; padding: 10px; background: rgba(37,99,235,.06); border-left: 3px solid var(--primary); border-radius: 8px; }
+        .stops-section { margin-bottom: 12px; padding: 10px; background: rgba(229,120,80,.07); border-left: 3px solid var(--primary); border-radius: 8px; }
         .stops-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
         .stops-title { font-size: .72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .04em; }
         .stops-summary { font-size: .74rem; color: var(--ink-soft); }
@@ -457,7 +554,7 @@
         .stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
         .stops-list .stops-add { padding: 6px 0 0 0; position: relative; }
         .stops-list .stops-add input { width: 100%; padding: 5px 8px; font-size: .82rem; border: 1px solid #e2e8f0; border-radius: 6px; }
-        .stops-list .stops-add input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+        .stops-list .stops-add input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(229,120,80,.18); }
         .stops-btn { font-size: .76rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--panel-border); background: rgba(255,255,255,.8); color: var(--ink-soft); cursor: pointer; font-weight: 600; }
         .stops-btn:hover { background: #fff; color: var(--ink); border-color: #cbd5e1; }
 
@@ -487,8 +584,8 @@
     <!-- top bar -->
     <header class="topbar">
         <a class="brand" href="/">
-            <img src="/pics/logos/NRG2fly_icon.png" alt="NRG2FLY" onerror="this.style.display='none'">
-            <span>Charging Network Simulator</span>
+            <img class="brand-wide" src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2FLY" onerror="this.style.display='none'">
+            <span class="brand-tagline">Charging Network Simulator</span>
         </a>
         <div class="topbar-tools">
             <div class="options-wrap">
@@ -690,8 +787,8 @@
                     <label class="inline-field">Show airport
                         <select id="airportFilter" class="form-select form-select-sm"></select>
                     </label>
-                    <button id="realismSettingsBtn" class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#realismSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span aria-hidden="true">⚙</span> Model settings <span id="realismBadge" class="realism-badge d-none">0</span></button>
-                    <button id="generateReport" class="btn btn-sm btn-primary" type="button" title="Generate a PDF report of the current plan">Generate PDF report</button>
+                    <button id="realismSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#realismSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true">⚙</span> Model settings <span id="realismBadge" class="realism-badge d-none">0</span></button>
+                    <button id="generateReport" class="btn-cns btn-sm-cns" type="button" title="Generate a PDF report of the current plan">Generate PDF report</button>
                     <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
                 </div>
             </header>
@@ -1725,13 +1822,27 @@
                             <th>Role / route</th><th>Aircraft</th><th>Trip</th><th>Freq</th><th>Recharge</th><th></th>
                         </tr></thead><tbody>${rows}</tbody>
                     </table>
-                    <div class="row text-center bg-primary text-white rounded py-3 mx-0">
-                        <div class="col"><div class="lbl small">Daily energy${gridMul > 1 ? ' (aircraft)' : ''}</div><div class="agg-num">${fmtEnergy(dailyEnergy)}</div></div>
-                        ${gridMul > 1 ? `<div class="col border-start border-light"><div class="lbl small">Daily energy (grid)</div><div class="agg-num">${fmtEnergy(dailyEnergy * gridMul)}</div></div>` : ''}
-                        <div class="col border-start border-light"><div class="lbl small">Monthly energy</div><div class="agg-num">${fmtEnergy(dailyEnergy * 30.44 * gridMul)}</div></div>
-                        <div class="col border-start border-light"><div class="lbl small">Yearly energy</div><div class="agg-num">${fmtEnergy(dailyEnergy * 365 * gridMul)}</div></div>
-                        <div class="col border-start border-light"><div class="lbl small">Charging time / day</div><div class="agg-num">${fmtDuration(dailyHours * 60)}</div></div>
-                        <div class="col border-start border-light"><div class="lbl small">Peak power${gridMul > 1 ? ' (grid)' : ''}</div><div class="agg-num">${fmtPower(peakPower * gridMul)}</div></div>
+                    <!-- Stats summary: two HERO metrics (peak power + daily energy)
+                         that map directly to infrastructure-sizing decisions, plus
+                         three secondary derived metrics on a smaller row. -->
+                    <div class="agg-block">
+                        <div class="agg-hero-row">
+                            <div class="agg-hero">
+                                <div class="agg-hero-lbl">Peak power${gridMul > 1 ? ' (grid)' : ''}</div>
+                                <div class="agg-hero-num">${fmtPower(peakPower * gridMul)}</div>
+                                <div class="agg-hero-sub">instantaneous draw during the day</div>
+                            </div>
+                            <div class="agg-hero">
+                                <div class="agg-hero-lbl">Daily energy${gridMul > 1 ? ' (grid)' : ''}</div>
+                                <div class="agg-hero-num">${fmtEnergy(dailyEnergy * gridMul)}</div>
+                                <div class="agg-hero-sub">${gridMul > 1 ? `aircraft side ${fmtEnergy(dailyEnergy)}` : 'across all flights to/from here'}</div>
+                            </div>
+                        </div>
+                        <div class="agg-small-row">
+                            <div class="agg-small"><div class="agg-small-lbl">Monthly</div><div class="agg-small-num">${fmtEnergy(dailyEnergy * 30.44 * gridMul)}</div></div>
+                            <div class="agg-small"><div class="agg-small-lbl">Yearly</div><div class="agg-small-num">${fmtEnergy(dailyEnergy * 365 * gridMul)}</div></div>
+                            <div class="agg-small"><div class="agg-small-lbl">Charging time / day</div><div class="agg-small-num">${fmtDuration(dailyHours * 60)}</div></div>
+                        </div>
                     </div>
                     ${sInfo.overflow
                         ? `<div class="alert alert-warning py-2 mt-2 mb-0">With ${fleet.length} charger${fleet.length > 1 ? 's' : ''} (${fmtPower(installed)}) the rotations don't all fit before 23:00 — the last finishes ${fmtClock(sInfo.latestEnd)}. Add chargers or reduce flights.</div>`
