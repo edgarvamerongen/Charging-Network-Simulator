@@ -144,9 +144,7 @@ window.CNSDemand = (function () {
     }
 
     // Energy that THIS airport's chargers deliver per flight, considering the
-    // operator-set departure-SoC target at BOTH ends of a retour trip. Energy
-    // conservation: for a retour, the sum DEST_kWh + HOME_kWh always equals
-    // 2 × leg, no matter where the user shifts the SoC target.
+    // operator-set departure-SoC target at BOTH ends of a retour trip.
     //
     // Inputs:
     //   trip          — the saved trip (uses tripType, multiLeg, etc.)
@@ -156,11 +154,18 @@ window.CNSDemand = (function () {
     //   usableKwh     — battery × usableFraction (battery × (1 − reserve))
     //   targetCurrent — null or 0..1, target at THIS airport
     //   targetOther   — null or 0..1, target at the OTHER airport (for HOME, the dest's target)
+    //
+    // The retour helper does a full forward-walk of the cycle with BOTH ends'
+    // targets clamped to the minimum feasible (dep ≥ leg + reserve). That way
+    // arrival SoCs follow physically from the clamped departure SoCs, energy
+    // conservation holds (DEST_kWh + HOME_kWh = 2×leg always), AND the slider
+    // can't produce an infeasible scenario where the plane departs with less
+    // SoC than the next leg requires.
     function deliveredEnergy(trip, role, legKwh, batteryKwh, usableKwh, targetCurrent, targetOther) {
         const leg = Math.max(0, +legKwh || 0);
         const batt = Math.max(0, +batteryKwh || 0);
         const usable = Math.min(batt, Math.max(0, +usableKwh || batt));
-        const reserve = batt - usable;          // unusable buffer at the bottom of the pack
+        const reserve = batt - usable;
 
         // One-way arrival: airport tops the plane up to the target (default 100%).
         if (trip.tripType !== 'retour') {
@@ -168,26 +173,28 @@ window.CNSDemand = (function () {
             const target = (targetCurrent != null ? targetCurrent : 1.0) * batt;
             return Math.max(0, target - arrival);
         }
-        // Retour: DEST charges to a target; HOME refills whatever is left to
-        // its own target. Energy conservation depends on picking the DEST's
-        // target from the right parameter slot: when role='dest' it's
-        // `targetCurrent`; when role='home' it's `targetOther` (the other
-        // airport from HOME's perspective IS the DEST).
-        const arrivalDest = Math.max(0, batt - leg);
-        const minDepForReturn = leg + reserve;  // need leg kWh to fly back + keep reserve at landing
-        const destTarget = role === 'dest' ? targetCurrent : targetOther;
-        const destDeparture = destTarget != null
-            ? Math.max(destTarget * batt, minDepForReturn)    // explicit target, clamped to safe minimum
-            : Math.max(arrivalDest, minDepForReturn);          // deficit: charge only if arrival isn't enough
-        if (role === 'dest') {
-            return Math.max(0, destDeparture - arrivalDest);
-        }
-        if (role === 'home') {
-            const arrivalHome = Math.max(0, destDeparture - leg);
-            const homeTarget = (targetCurrent != null ? targetCurrent : 1.0) * batt;
-            return Math.max(0, homeTarget - arrivalHome);
-        }
-        return leg;   // fallback (multi-leg stops use precomputed energies, not this path)
+        // Retour: full forward-walk with clamped targets at BOTH ends.
+        const homeTargetRaw = role === 'home' ? targetCurrent : targetOther;
+        const destTargetRaw = role === 'dest' ? targetCurrent : targetOther;
+        const minDep = leg + reserve;                      // minimum departure SoC at either airport
+
+        // HOME's effective departure SoC. If the operator didn't set a target,
+        // default to a full charge. Either way, never below the minimum needed
+        // to safely fly the outbound leg.
+        const depHome = Math.max((homeTargetRaw != null ? homeTargetRaw : 1.0) * batt, minDep);
+        // Arrival at DEST is whatever's left after the outbound leg.
+        const arrivalDest = Math.max(0, depHome - leg);
+        // DEST's effective departure SoC. If no target, charge ONLY if arrival
+        // isn't enough for the return leg + reserve (deficit mode). With a target
+        // set, depart at that SoC (still clamped to safe minimum).
+        const depDest = destTargetRaw != null
+            ? Math.max(destTargetRaw * batt, minDep)
+            : Math.max(arrivalDest, minDep);
+        const arrivalHome = Math.max(0, depDest - leg);
+
+        if (role === 'dest') return Math.max(0, depDest - arrivalDest);
+        if (role === 'home') return Math.max(0, depHome - arrivalHome);
+        return leg;
     }
 
     // Walk a multi-leg trip's chain forward, applying per-airport SoC targets

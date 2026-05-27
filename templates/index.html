@@ -568,7 +568,7 @@
                                 </select>
                             </div>
                         </div>
-                        <p class="est-note mb-0 mt-1">Landing reserve is now controlled globally under <strong>Demand Calculator → Realism settings</strong> (per-aircraft minimum SoC). Routing reach is adjusted automatically when reserves are on.</p>
+                        <p class="est-note mb-0 mt-1">Landing reserve is now controlled globally under <strong>Demand Calculator → Model settings</strong> (per-aircraft minimum SoC). Routing reach is adjusted automatically when reserves are on.</p>
                     </details>
                 </div>
                 <div id="stopsSection" class="stops-section d-none">
@@ -687,7 +687,7 @@
                     <label class="inline-field">Show airport
                         <select id="airportFilter" class="form-select form-select-sm"></select>
                     </label>
-                    <button id="realismSettingsBtn" class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#realismSettingsModal" title="Toggle realism factors (reserves, charging losses, taper, routing padding)"><span aria-hidden="true">⚙</span> Realism settings <span id="realismBadge" class="realism-badge d-none">0</span></button>
+                    <button id="realismSettingsBtn" class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#realismSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span aria-hidden="true">⚙</span> Model settings <span id="realismBadge" class="realism-badge d-none">0</span></button>
                     <button id="generateReport" class="btn btn-sm btn-primary" type="button" title="Generate a PDF report of the current plan">Generate PDF report</button>
                     <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
                 </div>
@@ -725,12 +725,12 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Realism settings</h5>
+                    <h5 class="modal-title">Model settings</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <p class="est-note mb-3">
-                        Each toggle layers an operational realism factor on top of the simple physical model.
+                        Each toggle layers an operational model factor on top of the simple physical model.
                         When off, the model behaves exactly as before. When on, the factor cascades through
                         the result panel, demand calculator, scheduler and PDF report.
                     </p>
@@ -1613,8 +1613,7 @@
                                 <option value="day" ${t.freqUnit === 'day' ? 'selected' : ''}>/day</option>
                                 <option value="week" ${t.freqUnit === 'week' ? 'selected' : ''}>/week</option>
                             </select></div></td>
-                        <td>${fmtEnergy(energy)}</td>
-                        <td>${fmtDuration(chargeMin)} <small class="text-muted">on ${chargerName}</small></td>
+                        <td>${fmtEnergy(energy)} <small class="text-muted">on ${chargerName}</small></td>
                         <td><button class="btn btn-sm btn-outline-danger py-0" data-rm="${t.id}">×</button></td>
                     </tr>`;
                 }).join('');
@@ -1662,7 +1661,7 @@
                     </div>
                     <table class="table table-sm align-middle mb-3">
                         <thead><tr class="text-muted" style="font-size:.8rem">
-                            <th>Role / route</th><th>Aircraft</th><th>Trip</th><th>Freq</th><th>Recharge</th><th>Charge time</th><th></th>
+                            <th>Role / route</th><th>Aircraft</th><th>Trip</th><th>Freq</th><th>Recharge</th><th></th>
                         </tr></thead><tbody>${rows}</tbody>
                     </table>
                     <div class="row text-center bg-primary text-white rounded py-3 mx-0">
@@ -1834,7 +1833,7 @@
             });
 
             document.getElementById('rsResetBtn').addEventListener('click', () => {
-                if (confirm('Reset all realism settings to defaults (all factors off)?')) {
+                if (confirm('Reset all model settings to defaults (all factors off)?')) {
                     CNSSettings.reset();
                     syncFromState();
                 }
