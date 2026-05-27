@@ -388,6 +388,25 @@
         .est-note { font-size: .72rem; color: var(--muted); }
         .modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-lg); }
 
+        /* Realism-settings modal: one row per opt-in factor. */
+        .rs-row { padding: 12px 0; border-bottom: 1px solid var(--panel-border); }
+        .rs-row:last-child { border-bottom: none; }
+        .rs-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; font-size: .9rem; color: var(--ink); }
+        .rs-toggle input[type=checkbox] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
+        .rs-detail { margin-top: 8px; padding-left: 26px; opacity: .5; transition: opacity .2s; }
+        .rs-row.on .rs-detail { opacity: 1; }
+        .rs-slider-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+        .rs-slider-row label { font-size: .8rem; color: var(--ink-soft); display: flex; justify-content: space-between; align-items: center; }
+        .rs-val { color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+        .rs-help { font-size: .78rem; color: var(--muted); margin: 4px 0 0 0; line-height: 1.4; }
+
+        /* Badge on the trigger button — shows the count of active factors. */
+        .realism-badge {
+            display: inline-block; min-width: 18px; text-align: center;
+            background: var(--primary); color: #fff; font-size: .7rem; font-weight: 700;
+            padding: 1px 6px; border-radius: 999px; margin-left: 4px; line-height: 1.4;
+        }
+
         /* Charging-stops toggle + advanced section + suggested route list */
         .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
         .stops-switch { font-size: .85rem; color: var(--ink); }
@@ -656,6 +675,7 @@
                     <label class="inline-field">Show airport
                         <select id="airportFilter" class="form-select form-select-sm"></select>
                     </label>
+                    <button id="realismSettingsBtn" class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#realismSettingsModal" title="Toggle realism factors (reserves, charging losses, taper, routing padding)"><span aria-hidden="true">⚙</span> Realism settings <span id="realismBadge" class="realism-badge d-none">0</span></button>
                     <button id="generateReport" class="btn btn-sm btn-primary" type="button" title="Generate a PDF report of the current plan">Generate PDF report</button>
                     <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
                 </div>
@@ -683,6 +703,85 @@
                         </div>
                     </div>
                     <div id="folderMap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Realism settings: opt-in factors that cascade through every calculation. -->
+    <div class="modal fade" id="realismSettingsModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Realism settings</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="est-note mb-3">
+                        Each toggle layers an operational realism factor on top of the simple physical model.
+                        When off, the model behaves exactly as before. When on, the factor cascades through
+                        the result panel, demand calculator, scheduler and PDF report.
+                    </p>
+
+                    <!-- 1. Landing reserve -->
+                    <div class="rs-row">
+                        <label class="rs-toggle">
+                            <input type="checkbox" id="rsLandingReserve">
+                            <span>Account for landing reserve (minimum SoC)</span>
+                        </label>
+                        <div class="rs-detail">
+                            <div class="rs-slider-row">
+                                <label>Minimum landing SoC <span class="rs-val" id="rsMinSocVal">30%</span></label>
+                                <input type="range" id="rsMinSoc" min="5" max="50" step="5" value="30" class="form-range">
+                            </div>
+                            <p class="rs-help">Each aircraft must land with at least this state of charge. Reduces usable battery per leg; per-aircraft overrides in the catalog (e.g. Pipistrel Velis Electro POH = 30%) take precedence.</p>
+                        </div>
+                    </div>
+
+                    <!-- 2. Charger efficiency -->
+                    <div class="rs-row">
+                        <label class="rs-toggle">
+                            <input type="checkbox" id="rsChargerEff">
+                            <span>Apply charger efficiency (grid → cell losses)</span>
+                        </label>
+                        <div class="rs-detail">
+                            <div class="rs-slider-row">
+                                <label>Grid-to-cell efficiency <span class="rs-val" id="rsChargerEffVal">88%</span></label>
+                                <input type="range" id="rsChargerEffSl" min="50" max="100" step="1" value="88" class="form-range">
+                            </div>
+                            <p class="rs-help">AC→DC conversion + battery losses. Reported grid kWh = aircraft kWh / efficiency. Typical direct DC fast charging: ~88%; with a buffering BESS: ~80%.</p>
+                        </div>
+                    </div>
+
+                    <!-- 3. Charging curve taper -->
+                    <div class="rs-row">
+                        <label class="rs-toggle">
+                            <input type="checkbox" id="rsTaper">
+                            <span>Apply charging-curve taper (slower above 80% SoC)</span>
+                        </label>
+                        <div class="rs-detail">
+                            <p class="rs-help">Lithium-ion chargers run constant-power up to ~80% SoC then taper. Stretches charge time when topping up to near-full, and lowers average grid draw in the taper region.</p>
+                        </div>
+                    </div>
+
+                    <!-- 4. Routing padding (SID/STAR + airways) -->
+                    <div class="rs-row">
+                        <label class="rs-toggle">
+                            <input type="checkbox" id="rsRouting">
+                            <span>Apply routing padding (SID/STAR + airways)</span>
+                        </label>
+                        <div class="rs-detail">
+                            <div class="rs-slider-row">
+                                <label>Distance multiplier <span class="rs-val" id="rsRoutingVal">×1.05</span></label>
+                                <input type="range" id="rsRoutingSl" min="100" max="125" step="1" value="105" class="form-range">
+                            </div>
+                            <p class="rs-help">Multiplier on great-circle distance to approximate standardised departure/arrival procedures and airway constraints. EUROCONTROL average is ~3–8% over GC.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="rsResetBtn" class="btn btn-outline-secondary me-auto">Reset defaults</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -758,6 +857,7 @@
     <!-- shared data/logic modules (framework-agnostic; UI consumes them) -->
     <script src="/static/state.js"></script>
     <script src="/static/units.js"></script>
+    <script src="/static/settings.js"></script>
     <script src="/static/planes.js"></script>
     <script src="/static/chargers.js"></script>
     <script src="/static/demand.js"></script>
@@ -1206,30 +1306,59 @@
             const p = data.plane;
             // Multi-leg result has totals in different fields; map them to a unified shape
             const isMulti = !!data.multi_leg;
-            // Headline: ALWAYS show three informative numbers — what the plane uses,
-            // how long it flies, and what the destination has to charge (0 is fine
-            // and means the battery covers the round trip).
             const isRetour = data.trip_type === 'retour';
-            // For multi-leg the total charging delivered across all stops equals the
-            // total energy consumed across legs (each stop re-tops what the previous
-            // leg drew). For a single-leg trip it's leg×2 for retour, leg×1 one-way.
+            // ---- Realism factors (cascade through everything below) -----------
+            // When all toggles are off these reduce to 1.0 and the original
+            // numbers come through unchanged.
+            const route   = CNSSettings.routingFactor();              // 1.0 or e.g. 1.05
+            const usable  = CNSSettings.usableFraction(p);            // 1.0 or e.g. 0.70
+            const gridMul = CNSSettings.gridDemandFactor();           // 1.0 or e.g. 1/0.88
+            const usableBatteryKwh = (p.battery_kwh || 0) * usable;
+
+            // Per-leg energy with SID/STAR padding applied.
+            const legEnergy = (data.leg_energy_kwh || 0) * route;
+            // Energy actually consumed by the aircraft on the trip — informative
+            // value for the headline (what comes out of the battery).
             const usedKwh = isMulti
-                ? data.total_recharge_energy_kwh
-                : (isRetour ? data.leg_energy_kwh * 2 : data.leg_energy_kwh);
-            const flightMin = isMulti
+                ? data.total_recharge_energy_kwh * route   // multi-leg total charging ≈ total consumed
+                : (isRetour ? legEnergy * 2 : legEnergy);
+            // Charging required at the destination/home airport (the airport
+            // demand). For retour single-leg this is the round-trip deficit
+            // against USABLE battery, not nameplate.
+            let rechargeKwh;
+            if (isMulti) {
+                rechargeKwh = data.total_recharge_energy_kwh * route;
+            } else if (isRetour) {
+                rechargeKwh = Math.max(0, 2 * legEnergy - usableBatteryKwh);
+            } else {
+                rechargeKwh = legEnergy;                    // one-way: tops the leg back to full
+            }
+            const flightMin = (isMulti
                 ? data.total_flight_time_h * 60
-                : (isRetour ? data.flight_time_h * 60 * 2 : data.flight_time_h * 60);
-            const chargeMin = isMulti ? data.total_charge_time_min : data.charge_time_min;
+                : (isRetour ? data.flight_time_h * 60 * 2 : data.flight_time_h * 60)) * route;
+            // Charge time uses the (optional) two-regime taper model.
+            const chargeMin = CNSSettings.chargeTimeMin(rechargeKwh, data.charger.power_kw, p.battery_kwh);
+            // Grid kWh = aircraft kWh / charger efficiency (informational).
+            const gridKwh = rechargeKwh * gridMul;
 
             document.getElementById('hlUsed').textContent = num(usedKwh);
             document.getElementById('hlFlight').textContent = fmtDuration(flightMin);
             document.getElementById('hlTime').textContent = fmtDuration(chargeMin);
-            // Sub-labels adapt to the trip context.
+            // Sub-labels adapt to the trip context AND active realism flags.
+            const flags = CNSSettings.activeFlags();
             document.getElementById('hlUsedLabel').textContent = isRetour ? 'Energy used (round trip)' : 'Energy used';
             document.getElementById('hlFlightLabel').textContent = isRetour ? 'Flight time (round trip)' : 'Flight time';
-            document.getElementById('hlTimeSub').textContent = isMulti
-                ? 'all stops combined'
-                : (isRetour && chargeMin === 0 ? 'battery covers it' : 'at destination');
+            let tSub;
+            if (chargeMin === 0 && isRetour) {
+                tSub = flags.landingReserve ? 'battery + reserve cover it' : 'battery covers it';
+            } else if (isMulti) {
+                tSub = 'all stops combined';
+            } else if (flags.chargerEfficiency) {
+                tSub = `at destination · ${Math.round(gridKwh)} kWh grid`;
+            } else {
+                tSub = 'at destination';
+            }
+            document.getElementById('hlTimeSub').textContent = tSub;
 
             const photo = document.getElementById('acPhoto');
             if (p.image) { photo.src = '/pics/' + p.image; photo.alt = p.name; photo.classList.remove('d-none'); } else photo.classList.add('d-none');
@@ -1246,12 +1375,9 @@
             document.getElementById('trType').textContent = (data.trip_type === 'retour' ? 'Round Trip (Retour)' : 'One-Way') + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
             document.getElementById('trLeg').textContent = isMulti ? '—' : fmtDist(data.leg_distance_km);
             document.getElementById('trTotal').textContent = fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
-            // "Total flight time" should reflect the WHOLE trip — for retour
-            // single-leg trips that means 2× the per-leg time, not the per-leg
-            // figure (matches what the headline shows).
-            document.getElementById('trFlight').textContent = isMulti
-                ? fmtDuration(data.total_flight_time_h * 60)
-                : fmtDuration(data.flight_time_h * 60 * (isRetour ? 2 : 1));
+            // "Total flight time" matches the headline (whole trip, padded if
+            // routingPadding is on).
+            document.getElementById('trFlight').textContent = fmtDuration(flightMin);
             document.getElementById('trCharger').textContent = data.charger.name + ' (' + data.charger.power_kw + ' kW)';
 
             const common = [
@@ -1399,10 +1525,34 @@
                 const fleet = fleetIds.map(id => chargerById[id]).filter(Boolean);
                 const fullCharge = !!cfg.fullCharge;
 
-                // One aircraft per flight contribution feeds the charging algorithm (see static/charging.js).
+                // Apply realism factors to each contribution before feeding the
+                // charging algorithm. Factors default to no-op (1.0) when their
+                // toggle is off, so this matches the original behaviour exactly.
+                const route   = CNSSettings.routingFactor();
+                const gridMul = CNSSettings.gridDemandFactor();
                 const aircraftList = a.contribs.map((c, i) => {
-                    const energy = (fullCharge && c.role === 'dest') ? c.t.legEnergy : c.base;
-                    return { _i: i, name: c.t.planeName, energy, size: c.t.battery ?? c.t.legEnergy * 2 };
+                    const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
+                    const usable = CNSSettings.usableFraction(plane);
+                    const battery = c.t.battery ?? c.t.legEnergy * 2;
+                    const usableBattery = battery * usable;
+                    // Recompute the role-specific energy with reserves + routing
+                    // padding. The original formulas (computeAirports) used raw
+                    // battery + great-circle leg; we substitute usable battery
+                    // and padded leg, otherwise behaviour is identical.
+                    const legPadded = (c.t.legEnergy || 0) * route;
+                    let energy;
+                    if (c.t.multiLeg) {
+                        energy = c.base * route;            // scale precomputed stop energy
+                    } else if (fullCharge && c.role === 'dest') {
+                        energy = legPadded;                  // user forced full top-up
+                    } else if (c.role === 'home') {
+                        energy = Math.min(2 * legPadded, usableBattery);
+                    } else if (c.role === 'dest' && c.t.tripType === 'retour') {
+                        energy = Math.max(0, 2 * legPadded - usableBattery);
+                    } else {
+                        energy = legPadded;                  // one-way arrival
+                    }
+                    return { _i: i, name: c.t.planeName, energy, size: battery };
                 });
                 const plan = CNSCharging.planCharging(fleet, aircraftList);
 
@@ -1411,7 +1561,11 @@
                     const t = c.t;
                     const asg = plan.assignments[i];
                     const energy = asg.aircraft.energy;
-                    const chargeMin = asg.chargeTimeMin;
+                    // Override charging.js's linear time with the optional taper
+                    // model. Identity (linear) when the taper toggle is off.
+                    const power = asg.charger ? asg.charger.power_kw : 0;
+                    const battery = t.battery ?? t.legEnergy * 2;
+                    const chargeMin = power ? CNSSettings.chargeTimeMin(energy, power, battery) : Infinity;
                     dailyEnergy += energy * flightsPerDay(t);
                     if (isFinite(chargeMin)) dailyHours += (chargeMin / 60) * flightsPerDay(t);
                     const roleTag = c.role === 'home'
@@ -1476,11 +1630,12 @@
                         </tr></thead><tbody>${rows}</tbody>
                     </table>
                     <div class="row text-center bg-primary text-white rounded py-3 mx-0">
-                        <div class="col"><div class="lbl small">Daily energy</div><div class="agg-num">${fmtEnergy(dailyEnergy)}</div></div>
-                        <div class="col border-start border-light"><div class="lbl small">Monthly energy</div><div class="agg-num">${fmtEnergy(dailyEnergy * 30.44)}</div></div>
-                        <div class="col border-start border-light"><div class="lbl small">Yearly energy</div><div class="agg-num">${fmtEnergy(dailyEnergy * 365)}</div></div>
+                        <div class="col"><div class="lbl small">Daily energy${gridMul > 1 ? ' (aircraft)' : ''}</div><div class="agg-num">${fmtEnergy(dailyEnergy)}</div></div>
+                        ${gridMul > 1 ? `<div class="col border-start border-light"><div class="lbl small">Daily energy (grid)</div><div class="agg-num">${fmtEnergy(dailyEnergy * gridMul)}</div></div>` : ''}
+                        <div class="col border-start border-light"><div class="lbl small">Monthly energy</div><div class="agg-num">${fmtEnergy(dailyEnergy * 30.44 * gridMul)}</div></div>
+                        <div class="col border-start border-light"><div class="lbl small">Yearly energy</div><div class="agg-num">${fmtEnergy(dailyEnergy * 365 * gridMul)}</div></div>
                         <div class="col border-start border-light"><div class="lbl small">Charging time / day</div><div class="agg-num">${fmtDuration(dailyHours * 60)}</div></div>
-                        <div class="col border-start border-light"><div class="lbl small">Peak power</div><div class="agg-num">${fmtPower(peakPower)}</div></div>
+                        <div class="col border-start border-light"><div class="lbl small">Peak power${gridMul > 1 ? ' (grid)' : ''}</div><div class="agg-num">${fmtPower(peakPower * gridMul)}</div></div>
                     </div>
                     ${sInfo.overflow
                         ? `<div class="alert alert-warning py-2 mt-2 mb-0">With ${fleet.length} charger${fleet.length > 1 ? 's' : ''} (${fmtPower(installed)}) the rotations don't all fit before 23:00 — the last finishes ${fmtClock(sInfo.latestEnd)}. Add chargers or reduce flights.</div>`
@@ -1570,6 +1725,76 @@
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
         document.getElementById('generateReport').addEventListener('click', (e) => CNSReport.generate(e.currentTarget));
+
+        // ---- Realism settings modal -------------------------------------------
+        (function () {
+            const map = {
+                landingReserve:    { check: 'rsLandingReserve', extras: { minLandingSoc: { input: 'rsMinSoc',     valEl: 'rsMinSocVal',     fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
+                chargerEfficiency: { check: 'rsChargerEff',    extras: { value:         { input: 'rsChargerEffSl', valEl: 'rsChargerEffVal', fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
+                chargeTaper:       { check: 'rsTaper',         extras: {} },
+                routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
+            };
+
+            function syncFromState() {
+                const s = CNSSettings.loadAll();
+                Object.entries(map).forEach(([key, m]) => {
+                    const cb = document.getElementById(m.check);
+                    const row = cb && cb.closest('.rs-row');
+                    if (cb) cb.checked = !!s[key].enabled;
+                    if (row) row.classList.toggle('on', !!s[key].enabled);
+                    Object.entries(m.extras).forEach(([field, ex]) => {
+                        const slider = document.getElementById(ex.input);
+                        const lbl = document.getElementById(ex.valEl);
+                        if (slider) slider.value = ex.from(s[key][field]);
+                        if (lbl) lbl.textContent = ex.fmt(ex.from(s[key][field]));
+                    });
+                });
+                updateBadge();
+            }
+            function commit(key, patch) {
+                CNSSettings.save({ [key]: patch });
+                syncFromState();
+            }
+            function updateBadge() {
+                // Count only the per-factor flags (exclude the `anyOn` summary).
+                const flags = CNSSettings.activeFlags();
+                const n = Object.keys(flags).filter(k => k !== 'anyOn' && flags[k] === true).length;
+                const badge = document.getElementById('realismBadge');
+                if (!badge) return;
+                badge.textContent = n;
+                badge.classList.toggle('d-none', n === 0);
+            }
+
+            // Two-way wiring: checkbox toggles enabled flag, sliders update values live.
+            Object.entries(map).forEach(([key, m]) => {
+                const cb = document.getElementById(m.check);
+                if (cb) cb.addEventListener('change', () => commit(key, { enabled: cb.checked }));
+                Object.entries(m.extras).forEach(([field, ex]) => {
+                    const slider = document.getElementById(ex.input);
+                    const lbl = document.getElementById(ex.valEl);
+                    if (slider) {
+                        slider.addEventListener('input', () => { if (lbl) lbl.textContent = ex.fmt(+slider.value); });
+                        slider.addEventListener('change', () => commit(key, { [field]: ex.to(+slider.value) }));
+                    }
+                });
+            });
+
+            document.getElementById('rsResetBtn').addEventListener('click', () => {
+                if (confirm('Reset all realism settings to defaults (all factors off)?')) {
+                    CNSSettings.reset();
+                    syncFromState();
+                }
+            });
+
+            // Re-render the world whenever settings change (anyone — even programmatic).
+            CNSSettings.subscribe(() => {
+                updateBadge();
+                if (typeof renderFolder === 'function') renderFolder();
+                if (typeof lastResult !== 'undefined' && lastResult) renderResult(lastResult);
+            });
+
+            syncFromState();
+        })();
 
         // ---------- flights map modal (airport-centric, animated) ----------
         let folderMap = null, pendingMapDest = null;

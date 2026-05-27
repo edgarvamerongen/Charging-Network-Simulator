@@ -6,6 +6,7 @@
     "battery_kwh": 22,
     "range_km": 100,
     "speed_kmh": 150,
+    "min_landing_soc": 0.30,
     "image": "pipistrel.png",
     "svg": "pepistrel.svg"
   },
@@ -17,6 +18,7 @@
     "battery_kwh": 225,
     "range_km": 500,
     "speed_kmh": 250,
+    "min_landing_soc": 0.20,
     "image": "beta.png",
     "svg": "beta.svg"
   },
@@ -28,6 +30,7 @@
     "battery_kwh": 500,
     "range_km": 500,
     "speed_kmh": 400,
+    "min_landing_soc": 0.20,
     "image": "vaeridion.png",
     "svg": "vaeridion.svg"
   }

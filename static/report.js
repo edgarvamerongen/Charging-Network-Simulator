@@ -44,10 +44,28 @@ window.CNSReport = (function () {
         });
         const chargers = Object.values(fleetAgg);
 
-        // One aircraft per contribution feeds CNSCharging.
+        // One aircraft per contribution feeds CNSCharging — same realism logic
+        // as renderFolder (settings cascade through here too).
+        const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
         const aircraftList = a.contribs.map((c, i) => {
-            const energy = (fullCharge && c.role === 'dest') ? c.t.legEnergy : c.base;
-            return { _i: i, name: c.t.planeName, energy, size: c.t.battery ?? c.t.legEnergy * 2 };
+            const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
+            const usable = window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0;
+            const battery = c.t.battery ?? c.t.legEnergy * 2;
+            const usableBattery = battery * usable;
+            const legPadded = (c.t.legEnergy || 0) * route;
+            let energy;
+            if (c.t.multiLeg) {
+                energy = c.base * route;
+            } else if (fullCharge && c.role === 'dest') {
+                energy = legPadded;
+            } else if (c.role === 'home') {
+                energy = Math.min(2 * legPadded, usableBattery);
+            } else if (c.role === 'dest' && c.t.tripType === 'retour') {
+                energy = Math.max(0, 2 * legPadded - usableBattery);
+            } else {
+                energy = legPadded;
+            }
+            return { _i: i, name: c.t.planeName, energy, size: battery };
         });
         const plan = CNSCharging.planCharging(fleet, aircraftList);
 
@@ -56,7 +74,11 @@ window.CNSReport = (function () {
             const t = c.t;
             const asg = plan.assignments[i];
             const energy = asg.aircraft.energy;
-            const chargeMin = asg.chargeTimeMin;
+            const power = asg.charger ? asg.charger.power_kw : 0;
+            const battery = t.battery ?? t.legEnergy * 2;
+            const chargeMin = window.CNSSettings && power
+                ? CNSSettings.chargeTimeMin(energy, power, battery)
+                : asg.chargeTimeMin;
             const fpd = _flightsPerDay(t);
             dailyKwh += energy * fpd;
             if (isFinite(chargeMin)) dailyChargingHours += (chargeMin / 60) * fpd;

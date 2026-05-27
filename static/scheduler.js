@@ -59,10 +59,15 @@ window.CNSScheduler = (function () {
         return fullCharge ? leg : Math.max(0, 2 * leg - batt);
     }
 
-    // ---------- per-airport charger context (memoised on folder + cfg) ----------
+    // ---------- per-airport charger context (memoised on folder + cfg + realism settings) ----------
     let _stamp = null, _ctx = {};
+    function _settingsStamp() {
+        // Settings affect every computed phase, so changing them must bust the
+        // cache. CNSSettings stores everything under a single key; we hash that.
+        return window.CNSSettings ? (localStorage.getItem(CNSSettings.KEY) || '') : '';
+    }
     function getContext(ident) {
-        const s = (localStorage.getItem(FOLDER_KEY) || '') + '¦' + (localStorage.getItem(CFG_KEY) || '');
+        const s = (localStorage.getItem(FOLDER_KEY) || '') + '¦' + (localStorage.getItem(CFG_KEY) || '') + '¦' + _settingsStamp();
         if (s !== _stamp) { _stamp = s; _ctx = {}; }
         if (!_ctx[ident]) _ctx[ident] = buildContext(ident);
         return _ctx[ident];
@@ -85,28 +90,44 @@ window.CNSScheduler = (function () {
     }
     function fleetSizeAt(ident) { return getContext(ident).fleetSize; }
 
+    // ---------- realism factors (cascade if CNSSettings is loaded) ----------
+    const _rs = () => (window.CNSSettings || null);
+    const _route   = () => _rs() ? CNSSettings.routingFactor() : 1.0;
+    const _usableB = (trip) => {
+        if (!_rs()) return batteryOf(trip);
+        const plane = (window.PLANES_BY_ID || {})[trip.planeId] || trip;
+        return batteryOf(trip) * CNSSettings.usableFraction(plane);
+    };
+    const _chargeMin = (energy, power, batt) => {
+        if (!_rs() || !power) return power ? energy / power * 60 : 0;
+        return CNSSettings.chargeTimeMin(energy, power, batt);
+    };
+
     // ---------- rotation timeline (airport-driven charge times; viewIdent flags atX) ----------
     function tripPhases(trip, viewIdent) {
         if (trip.multiLeg) return _multiLegPhases(trip, viewIdent);
         const legs = trip.tripType === 'retour' ? 2 : 1;
-        const legMin = num(trip, 'flightTimeH') * 60 / legs;
-        const leg = num(trip, 'legEnergy'), batt = batteryOf(trip);
+        const route = _route();
+        const legMin = num(trip, 'flightTimeH') * 60 / legs * route;
+        const leg = num(trip, 'legEnergy') * route;
+        const batt = batteryOf(trip);
+        const usableBatt = _usableB(trip);
 
         const ph = []; let off = 0;
         ph.push({ kind: 'fly', leg: 'out', start: off, dur: legMin, label: 'Fly to ' + trip.destName }); off += legMin;
 
         const dctx = getContext(trip.destIdent);
-        const destEnergy = trip.tripType === 'retour' ? (dctx.fullCharge ? leg : Math.max(0, 2 * leg - batt)) : leg;
+        const destEnergy = trip.tripType === 'retour' ? (dctx.fullCharge ? leg : Math.max(0, 2 * leg - usableBatt)) : leg;
         const destPower = dctx.powers[trip.id] || 0;
-        const destMin = destPower ? destEnergy / destPower * 60 : 0;
+        const destMin = _chargeMin(destEnergy, destPower, batt);
         if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, label: 'Charge @ ' + trip.destName }); off += destMin; }
 
         if (trip.tripType === 'retour') {
             ph.push({ kind: 'fly', leg: 'back', start: off, dur: legMin, label: 'Fly back to ' + trip.originName }); off += legMin;
             const hctx = getContext(trip.originIdent);
-            const homeEnergy = Math.min(2 * leg, batt);
+            const homeEnergy = Math.min(2 * leg, usableBatt);
             const homePower = hctx.powers[trip.id] || 0;
-            const homeMin = homePower ? homeEnergy / homePower * 60 : 0;
+            const homeMin = _chargeMin(homeEnergy, homePower, batt);
             if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
         }
         return { ph, total: off };
@@ -121,8 +142,10 @@ window.CNSScheduler = (function () {
         const ph = []; let off = 0;
         const legs = Array.isArray(trip.legs) ? trip.legs : [];
         const charges = Array.isArray(trip.charges) ? trip.charges : [];
+        const route = _route();
+        const batt = batteryOf(trip);
         legs.forEach((leg, i) => {
-            const legMin = (Number(leg.flight_time_h) || 0) * 60;
+            const legMin = (Number(leg.flight_time_h) || 0) * 60 * route;
             const toName = (leg.to && leg.to.name) || '';
             ph.push({ kind: 'fly', leg: i, start: off, dur: legMin, label: 'Fly to ' + toName });
             off += legMin;
@@ -130,8 +153,8 @@ window.CNSScheduler = (function () {
             if (!c) return;
             const ctx = getContext(c.ident);
             const power = ctx.powers[trip.id] || 0;
-            const energy = Number(c.energy_kwh) || 0;
-            const dur = power ? energy / power * 60 : 0;
+            const energy = (Number(c.energy_kwh) || 0) * route;     // padding scales per-stop charge
+            const dur = _chargeMin(energy, power, batt);
             if (dur > 0) {
                 ph.push({
                     kind: 'charge', at: c.role,
@@ -195,7 +218,7 @@ window.CNSScheduler = (function () {
     // same-aircraft sequencing and charger occupancy (fixed-point iteration).
     let _resStamp = null, _resCache = {};
     function resolveAirport(ident) {
-        const stamp = (localStorage.getItem(FOLDER_KEY) || '') + '¦' + (localStorage.getItem(CFG_KEY) || '') + '¦' + (localStorage.getItem(SCHED_KEY) || '');
+        const stamp = (localStorage.getItem(FOLDER_KEY) || '') + '¦' + (localStorage.getItem(CFG_KEY) || '') + '¦' + (localStorage.getItem(SCHED_KEY) || '') + '¦' + _settingsStamp();
         if (stamp !== _resStamp) { _resStamp = stamp; _resCache = {}; }
         if (_resCache[ident]) return _resCache[ident];
 

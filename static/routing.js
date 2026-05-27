@@ -56,7 +56,11 @@ window.CNSRouting = (function () {
         }
         const rng = Number(plane.range_km) || 0;
         if (rng <= 0) return { stops: [], totalDistanceKm: 0, legCount: 0, error: 'Aircraft has no range.' };
-        const maxLeg = rng * (1 - options.reservePct);
+        // Apply realism factors when available: reserves cap usable range,
+        // routing padding shrinks effective reach (since real distance > GC).
+        const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
+        const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+        const maxLeg = rng * usable * (1 - options.reservePct) / route;
 
         const totalDirect = haversineKm(origin, destination);
         if (totalDirect <= maxLeg) {
