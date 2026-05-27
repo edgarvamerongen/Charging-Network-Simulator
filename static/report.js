@@ -52,28 +52,20 @@ window.CNSReport = (function () {
         // with what the operator sees on screen.
         const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
         const cfgs = CNSDemand.loadCfg();
-        const getTargetSoc = (id) => CNSDemand.targetSocFromCfg(cfgs[id]);
-        const multiCache = {};
         const aircraftList = a.contribs.map((c, i) => {
             const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
             const usable = window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0;
             const battery = c.t.battery ?? c.t.legEnergy * 2;
             const usableBattery = battery * usable;
             const legPadded = (c.t.legEnergy || 0) * route;
-            let energy;
-            if (c.t.multiLeg) {
-                const recomputed = multiCache[c.t.id]
-                    || (multiCache[c.t.id] = CNSDemand.recomputeMultiLegCharges(c.t, getTargetSoc, usableBattery));
-                const newC = (c.chargeIdx != null && recomputed[c.chargeIdx]) ? recomputed[c.chargeIdx] : null;
-                energy = newC ? newC.energy_kwh : c.base * route;
-            } else {
-                const targetThis = getTargetSoc(a.ident);
-                const otherIdent = c.role === 'home' ? c.t.destIdent
-                                 : c.role === 'dest' ? c.t.originIdent
-                                 : null;
-                const targetOther = otherIdent ? getTargetSoc(otherIdent) : null;
-                energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
-            }
+            const targetThis = CNSDemand.targetSocFromCfg(cfgs[a.ident]);
+            const otherIdent = c.role === 'home' ? c.t.destIdent
+                             : c.role === 'dest' ? c.t.originIdent
+                             : null;
+            const targetOther = otherIdent ? CNSDemand.targetSocFromCfg(cfgs[otherIdent]) : null;
+            const energy = c.t.multiLeg
+                ? c.base * route
+                : CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
             return { _i: i, name: c.t.planeName, energy, size: battery };
         });
         const plan = CNSCharging.planCharging(fleet, aircraftList);
