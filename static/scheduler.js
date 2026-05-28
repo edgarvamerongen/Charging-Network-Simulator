@@ -432,7 +432,7 @@ window.CNSScheduler = (function () {
         res.lanes.forEach((L, li) => {
             const trip = L.trip;
             const role = roleAt(trip, ident);
-            const roleLabel = role === 'home' ? 'home' : role === 'stop' ? 'stop' : 'arrival';
+            const roleLabel = role === 'home' ? 'departure' : role === 'stop' ? 'stop' : 'destination';
             const lane = document.createElement('div');
             lane.style.cssText = `position:absolute;left:0;right:0;top:${li * LANE_H}px;height:${LANE_H}px;border-top:${li ? '1px solid #f4f4f4' : 'none'}`;
 

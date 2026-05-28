@@ -695,7 +695,7 @@
             </div>
             <form id="simForm">
                 <div class="field ac-wrap">
-                    <label>Origin airport</label>
+                    <label>Departure airport</label>
                     <input type="text" id="origin" class="form-control ac-input" placeholder="Search e.g. Heathrow" autocomplete="off" required>
                     <div id="originList" class="ac-list d-none"></div>
                 </div>
@@ -1397,8 +1397,8 @@
                     m.on('mouseover', function (e) {
                         L.popup().setLatLng(e.latlng).setContent(`
                             <strong>${ap.name}</strong><br>
-                            <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as A (Departure)</button>
-                            <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as B (Arrival)</button>`).openOn(map);
+                            <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as Departure</button>
+                            <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>`).openOn(map);
                     });
                     buckets[ap.type].push(m);
                 });
@@ -1669,7 +1669,7 @@
             if (!selected.origin || (!isTraining && !selected.destination)) {
                 document.getElementById('result').classList.add('d-none');
                 errDiv.textContent = isTraining
-                    ? 'Pick an origin airport — training flights loop around it.'
+                    ? 'Pick a departure airport — training flights loop around it.'
                     : 'Please pick both airports from the suggestions list.';
                 errDiv.classList.remove('d-none'); syncUnset('origin'); if (!isTraining) syncUnset('destination'); return;
             }
@@ -1813,13 +1813,18 @@
                     const chargeMin = power ? CNSSettings.chargeTimeMin(energy, power, battery) : Infinity;
                     dailyEnergy += energy * flightsPerDay(t);
                     if (isFinite(chargeMin)) dailyHours += (chargeMin / 60) * flightsPerDay(t);
+                    // Role labels use consistent aviation terminology:
+                    // DEPARTURE — where the trip starts (and ends for retour)
+                    // DESTINATION — the terminal/turn-around point of the trip
+                    // STOP — intermediate charging waypoint
+                    // TRAINING — A→A loop pattern
                     const roleTag = c.role === 'training'
                         ? `<span class="section-tag tag-training">TRAINING</span>`
                         : c.role === 'home'
-                        ? `<span class="section-tag tag-home">HOME</span>`
+                        ? `<span class="section-tag tag-home">DEPARTURE</span>`
                         : c.role === 'stop'
                         ? `<span class="section-tag tag-stop">STOP</span>`
-                        : `<span class="section-tag tag-dest">${t.tripType === 'retour' ? 'DEST' : 'ARRIVAL'}</span>`;
+                        : `<span class="section-tag tag-dest">DESTINATION</span>`;
                     const dir =
                         c.role === 'training' ? `${t.originName}` :
                         c.role === 'home'     ? `→ ${c.other} & back` :
