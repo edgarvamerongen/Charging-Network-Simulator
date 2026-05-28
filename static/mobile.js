@@ -168,43 +168,55 @@
             sheet.classList.remove('snap-half', 'snap-full');
             if (snaps[idx]) sheet.classList.add(snaps[idx]);
         }
-        // Tap handle to cycle (mobile-friendly fallback when drag is finicky)
-        handle.addEventListener('click', () => go((snap + 1) % 3));
-        // Drag — track touchstart→touchend deltaY
-        let startY = 0, startSnap = 0;
-        const onStart = (e) => {
-            startY = (e.touches ? e.touches[0].clientY : e.clientY);
-            startSnap = snap;
-            sheet.style.transition = 'none';
-        };
+        // Drag — bind start on the whole sheet header (grabber + summary row),
+        // then track move/end on document so the touch can leave the trigger
+        // element mid-drag without losing the gesture. Previously only the
+        // 19px-tall grabber was a drag target and touchmove was bound to it,
+        // so the moment your finger moved off the pill the drag died.
+        const summary = sheet.querySelector('.m-sheet-summary');
+        const dragZones = [handle, summary].filter(Boolean);
+        let startY = 0, startSnap = 0, moved = false;
         const onMove = (e) => {
             const y = (e.touches ? e.touches[0].clientY : e.clientY);
             const dy = y - startY;
-            // Visual feedback while dragging — translate by dy on top of current snap
+            if (Math.abs(dy) > 6) moved = true;
             const heights = [80, window.innerHeight * 0.48, window.innerHeight * 0.88];
             const base = window.innerHeight - heights[startSnap];
             const next = Math.max(window.innerHeight * 0.12, Math.min(window.innerHeight - 80, base + dy));
             sheet.style.transform = `translateY(${next}px)`;
         };
         const onEnd = (e) => {
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('touchend',  onEnd);
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup',   onEnd);
             sheet.style.transition = '';
             sheet.style.transform = '';
             const y = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY);
             const dy = y - startY;
-            // Threshold: 60px = step one snap state
-            if (Math.abs(dy) < 30) return;       // ignore taps
+            if (Math.abs(dy) < 30) return;
             go(dy < 0 ? startSnap + 1 : startSnap - 1);
         };
-        handle.addEventListener('touchstart', onStart, { passive: true });
-        handle.addEventListener('touchmove',  onMove,  { passive: true });
-        handle.addEventListener('touchend',   onEnd);
-        handle.addEventListener('mousedown', e => {
-            e.preventDefault(); onStart(e);
-            const mm = (ev) => onMove(ev);
-            const mu = (ev) => { onEnd(ev); document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
-            document.addEventListener('mousemove', mm);
-            document.addEventListener('mouseup',   mu);
+        const onStart = (e) => {
+            startY = (e.touches ? e.touches[0].clientY : e.clientY);
+            startSnap = snap;
+            moved = false;
+            sheet.style.transition = 'none';
+            if (e.touches) {
+                document.addEventListener('touchmove', onMove, { passive: true });
+                document.addEventListener('touchend',  onEnd);
+            } else {
+                e.preventDefault();
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup',   onEnd);
+            }
+        };
+        dragZones.forEach(z => {
+            z.addEventListener('touchstart', onStart, { passive: true });
+            z.addEventListener('mousedown',  onStart);
         });
+        // Tap (not drag) the grabber to cycle snap states.
+        handle.addEventListener('click', () => { if (!moved) go((snap + 1) % 3); });
         // The search-stub at the top also nudges the sheet open.
         document.getElementById('mSearchStub').addEventListener('click', () => go(1));
         return { go, snap: () => snap };

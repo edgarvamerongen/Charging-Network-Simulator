@@ -1,15 +1,21 @@
 import json
 import math
 import os
+import re
 import time
 from datetime import datetime, timezone
 
-from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, Response
+from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, Response, redirect, make_response
 from sim import Simulator
 from report import generate_pdf
 
 app = Flask(__name__)
 simulator = Simulator()
+
+# MDN-recommended UA test: presence of "Mobi" covers iPhone Safari, Chrome/
+# Firefox on Android, etc., without false-positiving Android tablets. Users
+# misidentified either way can override with /?desktop=1 or /?mobile=1 (sticky).
+_MOBILE_UA_RE = re.compile(r'Mobi', re.I)
 
 # ---- server-side persistence for user-defined planes & chargers ----------
 # Lives in ./data so it's separate from the built-in JSON in the repo. .gitignore
@@ -99,7 +105,18 @@ def _new_id(prefix):
 
 @app.route('/')
 def index():
-    return render_template('index.html', planes=simulator.planes, chargers=simulator.chargers)
+    override = request.args.get('desktop') == '1' or request.cookies.get('cns_force_desktop') == '1'
+    clear    = request.args.get('mobile') == '1'
+    if clear:
+        override = False
+    if not override and _MOBILE_UA_RE.search(request.headers.get('User-Agent', '')):
+        return redirect('/m/')
+    resp = make_response(render_template('index.html', planes=simulator.planes, chargers=simulator.chargers))
+    if request.args.get('desktop') == '1':
+        resp.set_cookie('cns_force_desktop', '1', max_age=60*60*24*365, samesite='Lax')
+    elif clear:
+        resp.set_cookie('cns_force_desktop', '', max_age=0, samesite='Lax')
+    return resp
 
 
 @app.route('/m/')
