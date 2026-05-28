@@ -110,45 +110,27 @@ window.CNSReport = (function () {
         const sInfo = CNSScheduler.summary(ident);
         const peakKw = sInfo.peakKw || plan.peakPower || 0;
 
-        // Rotations — replicate the lane structure the on-screen scheduler renders,
-        // including the per-charge wait injections so the Gantt matches the screen.
-        const res = CNSScheduler.resolveAirport(ident);
-        const rotations = res.lanes.map((L, li) => {
-            const t = L.trip;
+        // Rotations — read straight from the global simulation's per-airport
+        // view (CNSScheduler.rotationsAt). The phases are already actual-timed
+        // (queue waits + upstream delays baked in), so the PDF Gantt matches
+        // the on-screen scheduler exactly and is cross-airport consistent.
+        const rows = (window.CNSScheduler && CNSScheduler.rotationsAt) ? CNSScheduler.rotationsAt(ident) : [];
+        const rotations = rows.map(row => {
+            const t = row.trip;
             const role = (t.destIdent === ident) ? 'dest'
                        : (t.originIdent === ident && t.tripType === 'retour') ? 'home'
                        : 'stop';
-            const instances = L.desired.map((d, k) => {
-                const takeoff = res.takeoffs[res.keyOf(li, k)];
-                const atXIdxs = [];
-                L.ph.forEach((p, i) => { if (p.kind === 'charge' && p.atX) atXIdxs.push(i); });
-                const phases = L.ph.map(p => ({
-                    // Mark off-airport charges as a distinct kind so the renderer
-                    // tints them lighter (the Gantt for THIS airport only cares
-                    // about local charges; the others fade into the background).
+            const instances = row.rotations.map(rot => ({
+                start: rot.takeoff,
+                phases: rot.phases.map(p => ({
+                    // Off-airport charges → 'elsewhere' so the report tints them
+                    // lighter; local charges stay 'charge'; fly/wait pass through.
                     kind: p.kind === 'charge' ? (p.atX ? 'charge' : 'elsewhere') : p.kind,
                     start: p.start,
                     dur: p.dur,
                     label: p.label || '',
-                }));
-                // Insert wait phases ahead of any queued charges and push the rest right.
-                let anyWait = false;
-                for (let ci = 0; ci < atXIdxs.length; ci++) {
-                    if ((res.waits[res.evKey(li, k, ci)] || 0) > 0) { anyWait = true; break; }
-                }
-                if (anyWait) {
-                    const origLen = phases.length;
-                    atXIdxs.forEach((origChIdx, ci) => {
-                        const w = res.waits[res.evKey(li, k, ci)] || 0;
-                        if (w <= 0) return;
-                        const cs = phases[origChIdx].start;
-                        for (let i = origChIdx; i < origLen; i++) phases[i].start += w;
-                        phases.push({ kind: 'wait', start: cs, dur: w, label: 'Waiting for free charger' });
-                    });
-                }
-                phases.sort((a, b) => a.start - b.start);
-                return { start: takeoff, phases };
-            });
+                })),
+            }));
             return {
                 route: `${_short(t.originName)} → ${_short(t.destName)}`,
                 planeName: t.planeName,
