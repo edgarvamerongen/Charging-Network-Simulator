@@ -233,7 +233,7 @@ window.CNSTour = (function () {
             // 6. Trip type
             {
                 element: '#tripType',
-                popover: { title: 'Trip type', description: 'One-way, Retour (round trip), or Training (A→A loop with a fixed pattern radius). Switching to Training hides the destination + stops UI automatically.', side: 'right' },
+                popover: { title: 'Trip type', description: 'One-way, Retour (round trip), or Training (A→A loop with a fixed pattern radius).', side: 'right' },
             },
             // 7. Plan with charging stops
             {

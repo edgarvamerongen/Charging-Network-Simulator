@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="theme-color" content="#f6efde">
+    <title>NRG2FLY — Charging Network Simulator</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="icon" href="/pics/logos/fav.ico" type="image/x-icon">
+
+    <style>
+        /* =========================================================
+           Mobile design tokens — inherits NRG2fly brand colours.
+           ========================================================= */
+        :root {
+            --brand-orange-1:  #f5b074;
+            --brand-orange-2:  #ed8d6f;
+            --brand-orange-3:  #e57850;
+            --brand-gold:      #e6c149;
+            --brand-ink:       #2b2f5a;
+            --brand-cream:     #f6efde;
+            --ink:             var(--brand-ink);
+            --ink-soft:        #4a4f76;
+            --muted:           #64748b;
+            --primary:         var(--brand-orange-3);
+            --primary-2:       #c75e36;
+            --success:         #10b981;
+            --danger:          #c33d3d;
+            --panel:           rgba(255,250,242,0.92);
+            --panel-strong:    #fffbf4;
+            --panel-border:    rgba(43,47,90,0.10);
+            --shadow-sm:       0 1px 2px rgba(43,47,90,.05);
+            --shadow:          0 -8px 24px rgba(43,47,90,.18);
+            --radius:          16px;
+            --radius-sm:       10px;
+            /* Vertical reserves */
+            --topbar-h:        56px;
+            --sheet-collapsed: 80px;
+            --sheet-half:      48vh;
+            --sheet-full:      88vh;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            margin: 0; padding: 0; height: 100%;
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            color: var(--ink); background: var(--brand-cream);
+            overflow: hidden;            /* sheet handles scroll internally */
+            -webkit-font-smoothing: antialiased;
+            overscroll-behavior: none;
+        }
+        button { font-family: inherit; }
+
+        /* =========================================================
+           Top bar — liquid-glass (frosted + saturated backdrop)
+           ========================================================= */
+        .m-topbar {
+            position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h);
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 10px; z-index: 50;
+            background: rgba(255, 250, 242, 0.72);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border-bottom: 1px solid rgba(43, 47, 90, 0.08);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset,
+                        0 4px 24px rgba(43, 47, 90, 0.08);
+        }
+        .m-topbar .m-brand { display: flex; align-items: center; gap: 6px; padding: 4px 8px; }
+        .m-topbar .m-brand img { height: 28px; filter: drop-shadow(0 1px 2px rgba(43,47,90,.12)); }
+        .m-iconbtn {
+            background: transparent; border: none; padding: 8px; border-radius: 12px;
+            color: var(--ink); font-size: 1.2rem; line-height: 1; cursor: pointer;
+            min-width: 42px; min-height: 42px;
+            transition: background .15s, transform .1s;
+        }
+        .m-iconbtn:hover { background: rgba(43,47,90,.05); }
+        .m-iconbtn:active { background: rgba(43,47,90,.10); transform: scale(.94); }
+        .m-search-stub {
+            flex: 1; height: 42px;
+            display: flex; align-items: center;
+            padding: 0 16px;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(43, 47, 90, 0.08);
+            border-radius: 999px;
+            color: var(--muted); font-size: .9rem; font-weight: 500;
+            cursor: pointer; min-width: 0;
+            box-shadow: 0 1px 2px rgba(43, 47, 90, 0.04),
+                        0 1px 0 rgba(255, 255, 255, 0.9) inset;
+            transition: background .15s, box-shadow .15s;
+        }
+        .m-search-stub:active { background: rgba(255, 255, 255, 0.85); }
+        .m-search-stub .icon { margin-right: 10px; opacity: .55; }
+        .m-search-stub span:last-child { color: var(--ink); }
+
+        /* =========================================================
+           Map — full screen behind everything else
+           ========================================================= */
+        #map { position: fixed; inset: 0; z-index: 0; background: #e9eef7; }
+
+        /* =========================================================
+           Bottom sheet — liquid-glass, 3 snap states
+           ========================================================= */
+        .m-sheet {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+            background: rgba(255, 251, 244, 0.78);
+            backdrop-filter: blur(28px) saturate(190%);
+            -webkit-backdrop-filter: blur(28px) saturate(190%);
+            border-radius: 24px 24px 0 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.9) inset,
+                        0 -12px 40px rgba(43, 47, 90, 0.18),
+                        0 -2px 8px rgba(43, 47, 90, 0.06);
+            transform: translateY(calc(100% - var(--sheet-collapsed)));
+            transition: transform .32s cubic-bezier(.2, .9, .25, 1);
+            height: var(--sheet-full);
+            display: flex; flex-direction: column;
+            touch-action: none;
+            will-change: transform;
+        }
+        .m-sheet.snap-half { transform: translateY(calc(100% - var(--sheet-half))); }
+        .m-sheet.snap-full { transform: translateY(calc(100% - var(--sheet-full))); }
+
+        .m-sheet-handle {
+            display: flex; flex-direction: column; align-items: center;
+            padding: 10px 0 4px 0; cursor: grab;
+        }
+        .m-sheet-grabber {
+            width: 48px; height: 5px;
+            background: rgba(43, 47, 90, 0.18);
+            border-radius: 999px;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+        }
+        .m-sheet-summary {
+            padding: 4px 16px 12px 16px;
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        }
+        .m-sheet-summary .m-sheet-title {
+            font-weight: 700; font-size: 1rem; color: var(--ink); margin: 0;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .m-sheet-summary .m-sheet-sub {
+            font-size: .78rem; color: var(--muted); margin-top: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .m-sheet-body {
+            flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 0 16px 80px 16px;
+            touch-action: pan-y;
+        }
+
+        /* =========================================================
+           Form fields in the sheet
+           ========================================================= */
+        .m-field { margin-bottom: 12px; position: relative; }
+        .m-field > label {
+            display: block; font-size: .68rem; font-weight: 600; color: var(--muted);
+            letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px;
+        }
+        .m-field input[type="text"], .m-field select {
+            width: 100%; padding: 12px 14px; font-size: .95rem;
+            border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+            background: #fff; color: var(--ink);
+        }
+        .m-field input[type="text"]:focus, .m-field select:focus {
+            outline: none; border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(229,120,80,.18);
+        }
+        .m-field .m-clear {
+            position: absolute; right: 10px; top: 50%; transform: translateY(2px);
+            background: transparent; border: none; color: var(--muted); cursor: pointer;
+            padding: 4px 8px; font-size: 1rem;
+        }
+        .m-row { display: flex; gap: 8px; }
+        .m-row > * { flex: 1; }
+
+        /* Autocomplete list (mobile-tuned: taller rows) */
+        .m-ac-wrap { position: relative; }
+        .m-ac-list {
+            position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+            max-height: 50vh; overflow-y: auto;
+            background: #fff; border: 1px solid var(--panel-border); border-top: none;
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            box-shadow: 0 8px 24px rgba(43,47,90,.18);
+        }
+        .m-ac-list.d-none { display: none; }
+        .m-ac-item { padding: 12px 14px; font-size: .9rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+        .m-ac-item:last-child { border-bottom: none; }
+        .m-ac-item:active, .m-ac-item.active { background: rgba(229,120,80,.10); }
+        .m-ac-item small { color: var(--muted); display: block; margin-top: 2px; }
+
+        /* =========================================================
+           Buttons
+           ========================================================= */
+        .m-btn-primary {
+            width: 100%; padding: 14px;
+            background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3));
+            color: #fff; font-weight: 700; font-size: 1rem;
+            border: none; border-radius: var(--radius-sm);
+            box-shadow: 0 4px 12px rgba(229,120,80,.28);
+            cursor: pointer; transition: box-shadow .15s, transform .05s;
+            margin-top: 8px;
+        }
+        .m-btn-primary:active { transform: translateY(1px); }
+        .m-btn-primary[disabled] { opacity: .55; cursor: not-allowed; }
+        .m-btn-secondary {
+            width: 100%; padding: 12px;
+            background: transparent; color: var(--ink-soft);
+            border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+            font-weight: 600; font-size: .9rem; cursor: pointer; margin-top: 8px;
+        }
+
+        /* =========================================================
+           Result panel pieces
+           ========================================================= */
+        .m-result-head {
+            background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+            color: #fff; border-radius: var(--radius); padding: 14px;
+            margin: 4px 0 12px 0;
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+            text-align: center;
+        }
+        .m-result-cell .lbl { font-size: .62rem; opacity: .8; text-transform: uppercase; letter-spacing: .06em; }
+        .m-result-cell .num { font-size: 1.4rem; font-weight: 800; color: var(--brand-gold); line-height: 1.1; margin-top: 4px; }
+        .m-result-cell .sub { font-size: .68rem; opacity: .7; margin-top: 2px; }
+
+        .m-spec-list { width: 100%; margin: 0; }
+        .m-spec-list .m-spec {
+            display: flex; justify-content: space-between; padding: 8px 0;
+            border-bottom: 1px solid var(--panel-border); font-size: .88rem;
+        }
+        .m-spec-list .m-spec:last-child { border-bottom: none; }
+        .m-spec-list .m-spec .lbl { color: var(--muted); }
+        .m-spec-list .m-spec .val { color: var(--ink); font-weight: 600; }
+
+        /* =========================================================
+           Map markers — leaflet popover content
+           ========================================================= */
+        .m-mappop { display: flex; flex-direction: column; gap: 6px; font-family: inherit; }
+        .m-mappop .name { font-weight: 700; }
+        .m-mappop .m-mappop-btns { display: flex; gap: 6px; }
+        .m-mappop button {
+            flex: 1; padding: 8px 10px; font-size: .8rem;
+            background: var(--primary); color: #fff; border: none; border-radius: 6px;
+            font-weight: 600; cursor: pointer;
+        }
+        .m-mappop button.dest { background: #6b541a; }
+
+        /* =========================================================
+           Full-screen overlay (DC + Model settings) — sits BELOW the
+           topbar (top: var(--topbar-h)) so the topbar stays visible and
+           the user can dismiss without losing brand/nav.
+           ========================================================= */
+        .m-overlay {
+            position: fixed; left: 0; right: 0; bottom: 0;
+            top: var(--topbar-h);
+            z-index: 40;
+            background: rgba(246, 239, 222, 0.92);
+            backdrop-filter: blur(20px) saturate(170%);
+            -webkit-backdrop-filter: blur(20px) saturate(170%);
+            display: flex; flex-direction: column;
+            animation: m-overlay-in .28s cubic-bezier(.2, .9, .25, 1);
+            box-shadow: 0 -8px 32px rgba(43, 47, 90, 0.12);
+        }
+        @keyframes m-overlay-in { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .m-overlay-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(43, 47, 90, 0.08);
+            background: rgba(255, 251, 244, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .m-overlay-head h2 { margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--ink); }
+        .m-overlay-body {
+            flex: 1; overflow-y: auto; padding: 12px 16px 24px 16px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .m-dc-empty {
+            text-align: center; color: var(--muted); padding: 32px 16px; font-size: .9rem;
+        }
+        .m-dc-card {
+            background: #fff; border: 1px solid var(--panel-border);
+            border-radius: var(--radius-sm); margin-bottom: 10px;
+            box-shadow: var(--shadow-sm); overflow: hidden;
+        }
+        .m-dc-card-head {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 14px; cursor: pointer;
+        }
+        .m-dc-name { font-weight: 700; font-size: .95rem; color: var(--ink); }
+        .m-dc-sub  { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+        .m-dc-stat {
+            background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+            color: #fff;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+            padding: 10px 14px;
+            text-align: center;
+        }
+        .m-dc-stat .lbl { font-size: .58rem; opacity: .8; text-transform: uppercase; letter-spacing: .06em; }
+        .m-dc-stat .num { font-size: 1.1rem; font-weight: 800; color: var(--brand-gold); }
+        .m-dc-flights {
+            border-top: 1px solid var(--panel-border);
+            padding: 8px 14px; font-size: .82rem;
+        }
+        .m-dc-flight {
+            display: flex; justify-content: space-between; padding: 6px 0;
+            border-bottom: 1px dashed var(--panel-border);
+        }
+        .m-dc-flight:last-child { border-bottom: none; }
+        .m-dc-flight .lbl { color: var(--muted); }
+        .m-dc-flight .val { color: var(--ink); font-weight: 600; }
+        .m-dc-rm {
+            display: inline-block; padding: 2px 8px; background: transparent;
+            color: var(--danger); border: 1px solid var(--danger); border-radius: 4px;
+            font-size: .7rem; font-weight: 600; cursor: pointer;
+        }
+
+        /* =========================================================
+           Model Settings overlay rows (mobile)
+           ========================================================= */
+        .m-settings-help {
+            font-size: .82rem; color: var(--ink-soft); margin: 4px 4px 16px 4px;
+            line-height: 1.4;
+        }
+        .m-set-row {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(43, 47, 90, 0.08);
+            border-radius: var(--radius-sm);
+            margin-bottom: 12px;
+            padding: 12px 14px;
+            box-shadow: 0 1px 2px rgba(43, 47, 90, 0.04);
+        }
+        .m-set-toggle {
+            display: flex; align-items: center; gap: 10px;
+            font-weight: 600; font-size: .95rem; color: var(--ink); cursor: pointer;
+        }
+        .m-set-toggle input[type=checkbox] {
+            width: 20px; height: 20px; accent-color: var(--primary); cursor: pointer;
+        }
+        .m-set-extra { margin-top: 8px; padding-left: 30px; opacity: .55; transition: opacity .2s; }
+        .m-set-row.on .m-set-extra { opacity: 1; }
+        .m-set-slider-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+        .m-set-slider-row label {
+            font-size: .8rem; color: var(--ink-soft); display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .m-set-val { color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+        .m-set-slider-row input[type=range] {
+            width: 100%; accent-color: var(--primary);
+        }
+        .m-set-help {
+            font-size: .76rem; color: var(--muted); margin: 6px 0 0 0; line-height: 1.4;
+        }
+
+        /* Settings overlay footer — simplified-version note + a discreet
+           desktop-version link (intentionally tucked behind ⚙ so casual
+           mobile visitors don't get bounced to a layout that doesn't fit
+           their device). */
+        .m-settings-foot {
+            margin-top: 24px; padding-top: 16px;
+            border-top: 1px solid rgba(43, 47, 90, 0.08);
+            text-align: center;
+        }
+        .m-foot-note {
+            font-size: .76rem; color: var(--muted); line-height: 1.5;
+            margin: 0 0 10px 0;
+        }
+        .m-foot-link {
+            display: inline-block; font-size: .85rem; color: var(--primary);
+            text-decoration: none; font-weight: 600;
+            padding: 8px 16px; border-radius: 999px;
+            border: 1px solid rgba(229, 120, 80, 0.25);
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .m-foot-link:active { background: rgba(229, 120, 80, 0.1); }
+
+        /* Helpers */
+        .d-none { display: none !important; }
+        .text-muted { color: var(--muted); }
+    </style>
+</head>
+<body>
+
+<!-- Slim top bar: brand + search-style picker + menu -->
+<header class="m-topbar">
+    <a class="m-brand" href="/m/" aria-label="NRG2FLY home">
+        <img src="/pics/logos/NRG2fly_icon.png" alt="NRG2FLY">
+    </a>
+    <button id="mSearchStub" class="m-search-stub" type="button">
+        <span class="icon">🔍</span>
+        <span id="mSearchLabel">Plan a flight</span>
+    </button>
+    <button id="mDCBtn" class="m-iconbtn" aria-label="Demand Calculator" title="Demand Calculator">
+        <span style="font-size:1rem">📊</span>
+    </button>
+    <button id="mSettingsBtn" class="m-iconbtn" aria-label="Model settings" title="Model settings">⚙</button>
+</header>
+
+<!-- Simplified Demand Calculator overlay — slides up under the topbar (the
+     topbar stays visible so the user can close, switch settings, etc.). -->
+<section id="mDCOverlay" class="m-overlay d-none">
+    <header class="m-overlay-head">
+        <h2>Demand Calculator</h2>
+        <button id="mDCClose" class="m-iconbtn" aria-label="Close">✕</button>
+    </header>
+    <div class="m-overlay-body">
+        <p id="mDCEmpty" class="m-dc-empty">No flights saved yet. Plan a flight and tap <strong>+ Add to demand calculator</strong> to track it.</p>
+        <div id="mDCList"></div>
+    </div>
+</section>
+
+<!-- Model Settings overlay — opened via the ⋮ button in the top bar.
+     Simplified mobile-friendly version of the desktop modal: same 4 factors
+     (landing reserve, charger efficiency, charging-curve taper, SID/STAR
+     routing padding), one large toggle row per factor. Changes save to
+     CNSSettings on the fly and propagate to every downstream view. -->
+<section id="mSettingsOverlay" class="m-overlay d-none">
+    <header class="m-overlay-head">
+        <h2>Model settings</h2>
+        <button id="mSettingsClose" class="m-iconbtn" aria-label="Close">✕</button>
+    </header>
+    <div class="m-overlay-body">
+        <p class="m-settings-help">Each toggle layers an operational realism factor on top of the simple physical model. When off, the model behaves as it always did. When on, the factor propagates through every calculation.</p>
+
+        <div class="m-set-row">
+            <label class="m-set-toggle"><input type="checkbox" id="mSetLandingReserve"><span class="m-set-name">Landing reserve</span></label>
+            <div class="m-set-extra">
+                <div class="m-set-slider-row">
+                    <label>Min landing SoC <span class="m-set-val" id="mSetLandingVal">30%</span></label>
+                    <input type="range" id="mSetLandingSl" min="5" max="50" step="5" value="30">
+                </div>
+                <p class="m-set-help">Each aircraft must land with at least this state of charge. Reduces usable battery per leg.</p>
+            </div>
+        </div>
+
+        <div class="m-set-row">
+            <label class="m-set-toggle"><input type="checkbox" id="mSetEfficiency"><span class="m-set-name">Charger efficiency</span></label>
+            <div class="m-set-extra">
+                <div class="m-set-slider-row">
+                    <label>Grid → cell efficiency <span class="m-set-val" id="mSetEffVal">88%</span></label>
+                    <input type="range" id="mSetEffSl" min="50" max="100" step="1" value="88">
+                </div>
+                <p class="m-set-help">AC→DC conversion + battery losses. Reported grid kWh = aircraft kWh ÷ efficiency.</p>
+            </div>
+        </div>
+
+        <div class="m-set-row">
+            <label class="m-set-toggle"><input type="checkbox" id="mSetTaper"><span class="m-set-name">Charging curve taper</span></label>
+            <div class="m-set-extra">
+                <p class="m-set-help">Lithium-ion chargers run constant-power up to ~80% SoC then taper. Stretches charge time when topping up to near-full.</p>
+            </div>
+        </div>
+
+        <div class="m-set-row">
+            <label class="m-set-toggle"><input type="checkbox" id="mSetRouting"><span class="m-set-name">Routing padding (SID/STAR)</span></label>
+            <div class="m-set-extra">
+                <div class="m-set-slider-row">
+                    <label>Distance multiplier <span class="m-set-val" id="mSetRoutVal">×1.05</span></label>
+                    <input type="range" id="mSetRoutSl" min="100" max="125" step="1" value="105">
+                </div>
+                <p class="m-set-help">Approximates standardised departure/arrival procedures and airway constraints.</p>
+            </div>
+        </div>
+
+        <button id="mSetReset" class="m-btn-secondary">Reset defaults</button>
+
+        <div class="m-settings-foot">
+            <p class="m-foot-note">This mobile app is a simplified version of the full Charging Network Simulator. It covers the everyday planner + per-airport demand view. For the rotation scheduler, flight animation, PDF reports, custom planes/chargers and the full guided tour, use the desktop version.</p>
+            <a href="/" class="m-foot-link">Open desktop version →</a>
+        </div>
+    </div>
+</section>
+
+<!-- Full-screen map -->
+<div id="map"></div>
+
+<!-- Bottom sheet -->
+<section id="mSheet" class="m-sheet">
+    <div id="mSheetHandle" class="m-sheet-handle">
+        <span class="m-sheet-grabber"></span>
+    </div>
+    <div class="m-sheet-summary">
+        <div>
+            <h2 id="mSheetTitle" class="m-sheet-title">Plan a flight</h2>
+            <div id="mSheetSub" class="m-sheet-sub">Tap to set Departure</div>
+        </div>
+    </div>
+    <div id="mSheetBody" class="m-sheet-body">
+
+        <!-- ===== PLANNER (default view) ===== -->
+        <div id="mPlanner">
+            <div class="m-field m-ac-wrap">
+                <label>Departure airport</label>
+                <input id="mOrigin" type="text" placeholder="Search e.g. Heathrow" autocomplete="off">
+                <button class="m-clear d-none" data-clear="mOrigin">×</button>
+                <div id="mOriginList" class="m-ac-list d-none"></div>
+            </div>
+            <div class="m-field m-ac-wrap" id="mDestField">
+                <label>Destination airport</label>
+                <input id="mDestination" type="text" placeholder="Search e.g. Charles de Gaulle" autocomplete="off">
+                <button class="m-clear d-none" data-clear="mDestination">×</button>
+                <div id="mDestinationList" class="m-ac-list d-none"></div>
+            </div>
+            <div class="m-row">
+                <div class="m-field">
+                    <label>Trip type</label>
+                    <select id="mTripType">
+                        <option value="one-way">One-way</option>
+                        <option value="retour" selected>Round trip</option>
+                    </select>
+                </div>
+                <div class="m-field">
+                    <label>Frequency</label>
+                    <select id="mFreqUnit">
+                        <option value="day" selected>per day</option>
+                        <option value="week">per week</option>
+                    </select>
+                </div>
+            </div>
+            <div class="m-field">
+                <label>Aircraft</label>
+                <select id="mPlane">
+                    {% for p in planes %}<option value="{{ p.id }}">{{ p.name }} — {{ p.battery_kwh|round|int }} kWh</option>{% endfor %}
+                </select>
+            </div>
+            <div class="m-field">
+                <label>Charger</label>
+                <select id="mCharger">
+                    {% for c in chargers %}<option value="{{ c.id }}">{{ c.name }} ({{ c.power_kw|round|int }} kW)</option>{% endfor %}
+                </select>
+            </div>
+            <button id="mSimulateBtn" class="m-btn-primary" disabled>Simulate</button>
+            <button id="mResetBtn" class="m-btn-secondary">↺ Reset</button>
+        </div>
+
+        <!-- ===== RESULT (after Simulate) ===== -->
+        <div id="mResult" class="d-none">
+            <div class="m-result-head">
+                <div class="m-result-cell">
+                    <div class="lbl">Energy used</div>
+                    <div class="num"><span id="mResEnergy">—</span></div>
+                    <div class="sub">kWh</div>
+                </div>
+                <div class="m-result-cell">
+                    <div class="lbl">Flight time</div>
+                    <div class="num" id="mResFlight">—</div>
+                </div>
+                <div class="m-result-cell">
+                    <div class="lbl">Charge time</div>
+                    <div class="num" id="mResCharge">—</div>
+                </div>
+            </div>
+            <div class="m-spec-list">
+                <div class="m-spec"><span class="lbl">Trip</span><span class="val" id="mResTrip">—</span></div>
+                <div class="m-spec"><span class="lbl">Leg distance</span><span class="val" id="mResLeg">—</span></div>
+                <div class="m-spec"><span class="lbl">Total distance</span><span class="val" id="mResTotal">—</span></div>
+                <div class="m-spec"><span class="lbl">Aircraft</span><span class="val" id="mResPlane">—</span></div>
+                <div class="m-spec"><span class="lbl">Charger</span><span class="val" id="mResCharger">—</span></div>
+            </div>
+            <button id="mAddFolderBtn" class="m-btn-primary">+ Add to demand calculator</button>
+            <button id="mBackToPlannerBtn" class="m-btn-secondary">← Back</button>
+        </div>
+
+        <!-- Error message slot -->
+        <div id="mError" class="d-none" style="margin-top:12px; padding:10px 12px; background:#fee2e2; border-left:3px solid var(--danger); color:#7f1d1d; border-radius:6px; font-size:.85rem;"></div>
+    </div>
+</section>
+
+<!-- Leaflet + module bundles (same set as desktop, framework-agnostic) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/state.js"></script>
+<script src="/static/units.js"></script>
+<script src="/static/settings.js"></script>
+<script src="/static/planes.js"></script>
+<script src="/static/chargers.js"></script>
+<script src="/static/demand.js"></script>
+<script src="/static/routing.js"></script>
+<script src="/static/charging.js"></script>
+<script src="/static/scheduler.js"></script>
+<script>
+    // Hand the catalog to mobile.js (same pattern as the desktop template).
+    const BUILTIN_PLANES = {{ planes|tojson }};
+    const BUILTIN_PLANES_BY_ID = Object.fromEntries(BUILTIN_PLANES.map(p => [p.id, p]));
+    const CHARGERS = {{ chargers|tojson }};
+    const CHARGERS_BY_ID = Object.fromEntries(CHARGERS.map(c => [c.id, c]));
+    window.PLANES_BY_ID = BUILTIN_PLANES_BY_ID;
+    window.CHARGERS_BY_ID = CHARGERS_BY_ID;
+</script>
+<script src="/static/mobile.js"></script>
+
+</body>
+</html>

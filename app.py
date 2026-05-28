@@ -102,6 +102,15 @@ def index():
     return render_template('index.html', planes=simulator.planes, chargers=simulator.chargers)
 
 
+@app.route('/m/')
+def index_mobile():
+    """Mobile-first variant: full-screen map + Google-Maps-style bottom
+    sheet + slim top bar. Reuses every static/*.js module from the
+    desktop build — only the layout + bottom-sheet glue (static/mobile.js)
+    is mobile-specific. Desktop template is unchanged."""
+    return render_template('index_mobile.html', planes=simulator.planes, chargers=simulator.chargers)
+
+
 @app.route('/pics/<path:filename>')
 def pics(filename):
     return send_from_directory('pics', filename)
