@@ -1986,7 +1986,12 @@
 
         document.querySelectorAll('.airport-filter').forEach(cb => cb.addEventListener('change', () => {
             if (cb.checked) map.addLayer(clusters[cb.value]); else map.removeLayer(clusters[cb.value]);
-            if (typeof smartReplan === 'function') smartReplan();   // visible-type set changed; keep manual edits if any
+            // Re-plan AND redraw the live polyline. The planner refresh
+            // alone wasn't enough — the map stayed on the previous red
+            // over-range polyline until the user toggled "Plan with
+            // charging stops" off/on (which DID call drawLiveRoute).
+            if (typeof smartReplan === 'function')    smartReplan();
+            if (typeof drawLiveRoute === 'function')  drawLiveRoute();
         }));
         document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.addEventListener('click', () => setBasemap(btn.dataset.basemap)));
 
