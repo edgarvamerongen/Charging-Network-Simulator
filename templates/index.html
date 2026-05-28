@@ -70,6 +70,21 @@
         button { font-family: inherit; }
         a { color: var(--primary); }
 
+        /* Global slim scrollbar styling — replaces the chunky platform default
+           with something that reads as part of the design system. Firefox uses
+           the standard `scrollbar-*` properties; WebKit gets the pseudo-element
+           treatment. Both transparent track + cream-tinted thumb that pops on
+           hover. */
+        * { scrollbar-width: thin; scrollbar-color: rgba(43,47,90,.22) transparent; }
+        *::-webkit-scrollbar { width: 8px; height: 8px; }
+        *::-webkit-scrollbar-track { background: transparent; }
+        *::-webkit-scrollbar-thumb {
+            background: rgba(43,47,90,.18); border-radius: 999px;
+            border: 2px solid transparent; background-clip: padding-box;
+        }
+        *::-webkit-scrollbar-thumb:hover { background: rgba(43,47,90,.35); background-clip: padding-box; }
+        *::-webkit-scrollbar-corner { background: transparent; }
+
         /* =========================================================
            Map canvas
            ========================================================= */
@@ -259,6 +274,11 @@
             background: rgba(229,120,80,.10); border-left: 3px solid var(--primary); border-radius: 8px; color: var(--ink);
         }
         .trip-traj.d-none { display: none; }
+        /* Over-range warning inside the trajectory pill — flips the pill to a
+           red treatment so the user can't miss that the current Model settings
+           make the chosen route infeasible. */
+        .trip-traj.traj-error { background: rgba(195,61,61,.10); border-left-color: var(--danger); }
+        .trip-traj .traj-warn { color: var(--danger); font-weight: 700; }
 
         .ac-wrap { position: relative; }
         .ac-list {
@@ -592,6 +612,86 @@
         /* Charging-stops toggle + advanced section + suggested route list */
         .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
         .stops-switch { font-size: .85rem; color: var(--ink); }
+        /* "+ Add stop" link between Departure and Destination inputs. Small,
+           ghost-style affordance — doesn't compete with the primary form. */
+        /* Right-aligned so Departure / Destination read as a single unit
+           with the link as a discrete affordance on the side. */
+        .addstop-link-row { margin: -2px 0 4px 0; text-align: right; }
+        .addstop-link {
+            background: none; border: none; padding: 2px 8px;
+            font-size: .76rem; color: var(--brand-orange-3); font-weight: 600;
+            cursor: pointer; border-radius: 6px;
+        }
+        .addstop-link:hover { background: rgba(229,120,80,.10); color: var(--primary-2); }
+
+        /* Manual stop fields — same look-and-feel as Departure / Destination
+           with an inline × delete control in the label row. */
+        .stop-field { margin-bottom: 8px; }
+        .stop-field-label {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .stop-field-label .stop-num {
+            font-size: .7rem; font-weight: 600; color: var(--ink-soft);
+            text-transform: uppercase; letter-spacing: .04em;
+        }
+        .stop-remove {
+            background: none; border: none; cursor: pointer;
+            color: var(--muted); font-size: 1rem; line-height: 1;
+            padding: 0 6px; border-radius: 4px;
+        }
+        .stop-remove:hover { color: var(--danger); background: rgba(195,61,61,.10); }
+        /* Drag-reorder affordance — small grip glyph that becomes the cursor
+           when hovered. The whole stop-field is draggable; the glyph just
+           signals it. */
+        .stop-drag {
+            cursor: grab; color: var(--muted); font-weight: 700;
+            padding: 0 4px; user-select: none; font-size: .9rem;
+        }
+        .stop-field-label { gap: 6px; }
+        .stop-field-label .stop-num { flex: 1; }
+        .stop-field.dragging { opacity: .5; }
+        .stop-field { transition: transform .12s; }
+
+        /* Simulate + Reset row. Reset is a square icon-button next to the
+           primary action — small enough to stay inside the panel, prominent
+           enough to find when you need to clear the form quickly. */
+        .sim-row { display: flex; gap: 8px; align-items: stretch; }
+        .sim-btn { flex: 1; min-width: 0; }
+        .sim-reset {
+            flex: 0 0 auto; width: 42px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 1.15rem; font-weight: 600;
+            background: rgba(195,61,61,.08); color: var(--danger);
+            border: 1px solid rgba(195,61,61,.25); border-radius: var(--radius-sm);
+            cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+        }
+        .sim-reset:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+        /* Compact "Model settings" trigger in the Plan a flight panel.
+           Opens the same modal as the Demand Calculator's button. Sits
+           where the old > Advanced details used to live. */
+        .modelset-btn {
+            background: none; border: 1px solid var(--panel-border);
+            border-radius: 999px; padding: 3px 10px;
+            font-size: .74rem; font-weight: 600; color: var(--ink-soft);
+            cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+            display: inline-flex; align-items: center; gap: 4px;
+        }
+        .modelset-btn:hover { background: rgba(229,120,80,.10); border-color: rgba(229,120,80,.25); color: var(--ink); }
+        .modelset-btn .realism-badge { margin-left: 2px; }
+
+        /* Preference order — inline in the Suggested route section. */
+        .stops-pref {
+            display: flex; align-items: center; gap: 8px;
+            font-size: .76rem; color: var(--muted);
+            margin: 4px 0 8px 0;
+        }
+        .stops-pref label { font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+        .stops-pref select {
+            background: #fff; border: 1px solid var(--panel-border); border-radius: 6px;
+            padding: 2px 8px; font-size: .78rem; color: var(--ink); cursor: pointer;
+        }
         .stops-advanced { font-size: .78rem; color: var(--ink-soft); }
         .stops-advanced summary { cursor: pointer; padding: 2px 6px; border-radius: 6px; user-select: none; }
         .stops-advanced summary:hover { background: rgba(15,23,41,.04); }
@@ -674,9 +774,6 @@
                             <button class="seg-btn" type="button" data-basemap="voyager">Street</button>
                         </div>
                     </div>
-                    <div class="opt-group">
-                        <button id="resetMap" type="button" class="opt-action">↻ Reset map view</button>
-                    </div>
                 </div>
             </div>
             <label class="switch">
@@ -699,6 +796,16 @@
                     <input type="text" id="origin" class="form-control ac-input" placeholder="Search e.g. Heathrow" autocomplete="off" required>
                     <div id="originList" class="ac-list d-none"></div>
                 </div>
+                <!-- Manual-stop fields go here. Each stop is a first-class form
+                     field (autocomplete + × delete) — same UX as Departure /
+                     Destination. JS owns the lifecycle: + Add stop appends a
+                     blank field; × removes it; map "Set as Stop" fills/appends. -->
+                <div id="stopsContainer"></div>
+                <!-- + Add stop affordance — right-aligned so Departure and
+                     Destination remain visually adjacent. -->
+                <div class="addstop-link-row">
+                    <button type="button" id="addStopLink" class="addstop-link" title="Insert a manual stop between Departure and Destination">+ Add stop</button>
+                </div>
                 <div id="destinationField" class="field ac-wrap">
                     <label>Destination airport</label>
                     <input type="text" id="destination" class="form-control ac-input" placeholder="Search e.g. Charles de Gaulle" autocomplete="off" required>
@@ -713,36 +820,40 @@
                         <option value="retour">Retour (Round Trip)</option>
                         <option value="training">Training (circular pattern A→A)</option>
                     </select>
-                    <p id="trainingHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a pattern around the origin for a fixed duration (per its <code>training_range_km</code>). Energy per flight is capped at the usable battery.</p>
+                    <p id="trainingHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a pattern around the origin for a fixed duration (matched to the aircraft's training range). Energy per flight is capped at the usable battery.</p>
                 </div>
 
                 <!-- Charging stops: when on, an over-range route is auto-split into legs
-                     through intermediate airports (greedy max-reach, prefers medium > large > small). -->
+                     through intermediate airports (greedy max-reach with preference bias). -->
                 <div class="field stops-toggle-row">
                     <label class="switch stops-switch">
                         <input type="checkbox" id="withStops">
                         <span>Plan with charging stops</span>
                     </label>
-                    <details id="stopsAdvanced" class="stops-advanced">
-                        <summary>Advanced</summary>
-                        <div class="adv-grid">
-                            <div class="adv-field">
-                                <label>Preference order</label>
-                                <select id="advBias">
-                                    <option value="medium-large-small" selected>Medium → Large → Small</option>
-                                    <option value="large-medium-small">Large → Medium → Small</option>
-                                    <option value="small-medium-large">Small → Medium → Large</option>
-                                    <option value="none">No preference (closest)</option>
-                                </select>
-                            </div>
-                        </div>
-                        <p class="est-note mb-0 mt-1">Landing reserve is now controlled globally under <strong>Demand Calculator → Model settings</strong> (per-aircraft minimum SoC). Routing reach is adjusted automatically when reserves are on.</p>
-                    </details>
+                    <!-- Replaces the old > Advanced details. One click opens the
+                         same Model settings modal used by the Demand Calculator —
+                         operators can tweak realism factors while planning. -->
+                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#realismSettingsModal" title="Open Model settings — realism factors cascade through the planner and result panel">
+                        <span aria-hidden="true">⚙</span> Model settings
+                        <span id="planModelBadge" class="realism-badge d-none">0</span>
+                    </button>
                 </div>
                 <div id="stopsSection" class="stops-section d-none">
                     <div class="stops-head">
                         <span class="stops-title">Suggested route</span>
                         <span id="stopsSummary" class="stops-summary"></span>
+                    </div>
+                    <!-- Preference order moved out of Advanced. Inline at the
+                         top of the Suggested route section because it directly
+                         shapes what stops the planner picks. -->
+                    <div class="stops-pref">
+                        <label for="advBias">Prefer:</label>
+                        <select id="advBias">
+                            <option value="medium-large-small" selected>Medium → Large → Small</option>
+                            <option value="large-medium-small">Large → Medium → Small</option>
+                            <option value="small-medium-large">Small → Medium → Large</option>
+                            <option value="none">No preference (closest)</option>
+                        </select>
                     </div>
                     <ol id="stopsList" class="stops-list"></ol>
                     <div id="stopsHint" class="est-note"></div>
@@ -777,7 +888,10 @@
                         <option value="__custom_charger__">➕ Add custom charger…</option>
                     </select>
                 </div>
-                <button type="submit" class="btn-cns">Simulate</button>
+                <div class="sim-row">
+                    <button type="submit" class="btn-cns sim-btn">Simulate</button>
+                    <button type="button" id="planReset" class="sim-reset" title="Clear Departure, Destination, all stops + map route" aria-label="Reset">↺</button>
+                </div>
             </form>
         </section>
 
@@ -962,6 +1076,7 @@
                 <div class="modal-footer">
                     <button type="button" id="rsResetBtn" class="btn btn-outline-secondary me-auto">Reset defaults</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" id="rsApplyBtn" class="btn btn-primary" data-bs-dismiss="modal" title="Re-fire subscribers so every dependent calculation refreshes now">Apply settings</button>
                 </div>
             </div>
         </div>
@@ -1114,9 +1229,46 @@
             input.classList.remove('ac-unset');
             document.getElementById(field + 'List').classList.add('d-none');
             updateTrajectory();
+            // When Departure or Destination changes, the suggested-route chain
+            // (which already may contain manual stops) needs to refresh against
+            // the new endpoint. smartReplan preserves user-edited stops and
+            // re-validates leg distances; for an auto-only chain it just re-
+            // runs the planner against the new endpoints.
+            if (typeof smartReplan === 'function') smartReplan();
+            // Live route preview — fire whenever a location changes so the
+            // operator sees the chain on the map without clicking Simulate.
+            if (typeof drawLiveRoute === 'function') drawLiveRoute();
         }
         window.setOrigin = function(ident) { pickAirport('origin', airportByIdent[ident]); map.closePopup(); };
         window.setDest = function(ident) { pickAirport('destination', airportByIdent[ident]); map.closePopup(); };
+        // Set an airport as a manual stop. Creates a new stop field in the
+        // form (or fills the first empty stop field if one exists), so the
+        // map and the form stay in sync. plannedStops is updated via the
+        // _syncManualStops call inside _addStopField.
+        window.setStop = function(ident) {
+            const ap = airportByIdent[ident]; if (!ap) return;
+            const toggle = document.getElementById('withStops');
+            if (!toggle.checked) { toggle.checked = true; toggle.dispatchEvent(new Event('change')); }
+            // Prefer filling an existing empty field over adding a new one
+            // (matches the user's mental model of "the next empty slot").
+            const emptyInput = Array.from(document.querySelectorAll('#stopsContainer .stop-input'))
+                .find(inp => !inp.dataset.ident);
+            if (emptyInput) {
+                emptyInput.value = ap.name;
+                emptyInput.dataset.ident = ap.ident;
+                _syncManualStops(); refreshAfterEdit(); drawLiveRoute();
+            } else {
+                _addStopField({ name: ap.name, ident: ap.ident });
+            }
+            map.closePopup();
+            if (!selected.destination) {
+                const traj = document.getElementById('trajInfo');
+                if (traj) {
+                    traj.classList.remove('d-none');
+                    traj.innerHTML = `Stop <strong>${ap.name}</strong> added — pick a <strong>destination airport</strong> to plan the route.`;
+                }
+            }
+        };
 
         function updateTrajectory() {
             const box = document.getElementById('trajInfo');
@@ -1124,12 +1276,33 @@
                 const km = haversineKm(
                     [selected.origin.latitude_deg, selected.origin.longitude_deg],
                     [selected.destination.latitude_deg, selected.destination.longitude_deg]);
-                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${selected.origin.name} → ${selected.destination.name})</span>`;
+                // Direct-flight range check against current Model settings —
+                // surfaces the over-range condition in the always-visible pill
+                // ONLY when "Plan with charging stops" is off. When the toggle
+                // is on, the Suggested route panel already shows over-range
+                // legs in red; doubling the warning here is noise.
+                const plane = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
+                const stopsOn = document.getElementById('withStops')?.checked;
+                let warn = '';
+                if (!stopsOn && plane && plane.range_km) {
+                    const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
+                    const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+                    const maxLeg = plane.range_km * usable / route;
+                    if (km > maxLeg) {
+                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km - maxLeg)} over effective range (${fmtDist(maxLeg)})</span>`;
+                    }
+                }
+                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${selected.origin.name} → ${selected.destination.name})</span>${warn}`;
+                box.classList.toggle('traj-error', !!warn);
                 box.classList.remove('d-none');
             } else {
                 box.classList.add('d-none');
+                box.classList.remove('traj-error');
             }
-            replanRoute();
+            // Replanning is the caller's responsibility (pickAirport calls
+            // smartReplan, which preserves user-edited stops). We no longer
+            // call replanRoute() here — that always reset to auto and lost
+            // any manual stops the user had added.
         }
 
         // ---------- charging-stops planner (Phase 1A: auto-suggest only) ----------
@@ -1185,33 +1358,75 @@
             }
             if (plannedLegIssues.length) {
                 const n = plannedLegIssues.length;
-                plannedError = `${n} leg${n > 1 ? 's' : ''} exceed${n > 1 ? '' : 's'} the aircraft's range — pick a different stop or re-suggest.`;
+                plannedError = `${n} leg${n > 1 ? 's' : ''} exceed${n > 1 ? '' : 's'} the aircraft's range — add or change a stop.`;
             }
         }
 
-        // Run the algorithm fresh, replacing manual edits.
+        // Run the planner end-to-end. Reads manual stops from the form
+        // fields and fills any over-range gap between them with auto-stops
+        // (runs CNSRouting.planRoute once per segment, n−1 times for n
+        // waypoints). When the toggle is off it's a direct flight; we still
+        // validate so plannedLegIssues reflects current Model settings.
         function recomputeRoute() {
-            plannedStops = []; plannedError = null; plannedSource = 'auto'; plannedLegIssues = [];
+            plannedStops = []; plannedError = null; plannedLegIssues = [];
+            plannedSource = 'auto';
+            if (!document.getElementById('withStops').checked) {
+                validateRoute();      // direct-flight case still needs range check
+                renderStops();
+                return;
+            }
             const t = _terminus(); const plane = _selectedPlane();
             if (!t || !plane) { renderStops(); return; }
-            const res = CNSRouting.planRoute({
-                origin: t.origin, destination: t.dest, plane,
-                allAirports, allowedTypes: _allowedTypes(), options: _routingOptions()
+
+            // Manual stops from form fields, in the order the user arranged them.
+            const manual = [];
+            document.querySelectorAll('#stopsContainer .stop-field .stop-input').forEach(inp => {
+                const ident = inp.dataset.ident; if (!ident) return;
+                const ap = airportByIdent[ident]; if (!ap) return;
+                manual.push({ ident: ap.ident, name: ap.name, type: ap.type, lat: ap.latitude_deg, lon: ap.longitude_deg, iata_code: ap.iata_code || '', _manual: true });
             });
-            if (res.error) { plannedError = res.error; renderStops(); return; }
-            plannedStops = res.stops;
+            plannedSource = manual.length ? 'user' : 'auto';
+
+            // Build chain endpoints; auto-fill each gap.
+            const chain = [t.origin, ...manual, t.dest];
+            const result = [];
+            const usedIdents = new Set(chain.map(p => p.ident).filter(Boolean));
+            for (let i = 0; i < chain.length - 1; i++) {
+                // Don't let the auto-planner re-pick an airport already in the
+                // chain (would create A → X → X → B nonsense).
+                const filteredAirports = allAirports.filter(a => !usedIdents.has(a.ident));
+                const segRes = CNSRouting.planRoute({
+                    origin: chain[i], destination: chain[i + 1], plane,
+                    allAirports: filteredAirports,
+                    allowedTypes: _allowedTypes(),
+                    options: _routingOptions(),
+                });
+                if (segRes.error && manual.length === 0) {
+                    // Pure auto path with no manual stops to anchor on: bubble up.
+                    plannedError = segRes.error; renderStops(); return;
+                }
+                // Append any auto-stops the planner inserted for this segment.
+                (segRes.stops || []).forEach(s => {
+                    result.push({ ...s, _auto: true });
+                    if (s.ident) usedIdents.add(s.ident);
+                });
+                // Append the manual stop that anchors the end of this segment
+                // (last segment ends at the destination — don't push that).
+                if (i < chain.length - 2) result.push(chain[i + 1]);
+            }
+            plannedStops = result;
+            validateRoute();
             renderStops();
         }
-        // Decide whether to re-run the algorithm or just re-validate after a soft change.
-        function smartReplan() {
-            if (plannedSource === 'user' && plannedStops.length) {
-                validateRoute(); renderStops();
-            } else {
-                recomputeRoute();
-            }
-        }
+        // smartReplan now always reruns recomputeRoute. The earlier "just
+        // validate when plannedSource='user'" shortcut prevented the planner
+        // from filling auto-stops between manual ones after a setting change.
+        function smartReplan() { recomputeRoute(); }
         // Re-validate (no rerouting); call after manual edits.
-        function refreshAfterEdit() { plannedSource = 'user'; validateRoute(); renderStops(); }
+        // After any manual edit (× on chain row, autocomplete pick, drag-
+        // reorder, etc.), re-run the planner. recomputeRoute reads form
+        // fields, auto-fills gaps between manual stops, validates and renders.
+        function refreshAfterEdit() { smartReplan(); }
 
         // Find the best place to slot a new stop into the chain (smallest detour).
         function bestInsertionIndex(newStop) {
@@ -1251,8 +1466,20 @@
                 );
                 return;
             }
-            // No stops needed — direct leg fits.
-            if (!plannedStops.length) { section.classList.add('d-none'); return; }
+            // No auto-stops needed — direct leg fits. We still render the
+            // section so the operator has access to + Add stop / Re-suggest
+            // and sees the direct chain. Empty-state with the action row only.
+            if (!plannedStops.length) {
+                section.classList.remove('d-none');
+                document.querySelector('.stops-title').textContent = 'Suggested route';
+                summaryEl.textContent = `Direct flight · ${fmtDist(CNSRouting.haversineKm(t.origin, t.dest))}`;
+                listEl.innerHTML = `
+                    <li class="terminus"><span class="step">0</span><strong>${t.origin.name}</strong><span class="leg-dist">→ ${fmtDist(CNSRouting.haversineKm(t.origin, t.dest))}</span></li>
+                    <li class="terminus"><span class="step">1</span><strong>${t.dest.name}</strong></li>`;
+                hintEl.innerHTML = `Direct leg fits the aircraft's range — no stops needed. Use <strong>+ Add stop</strong> in the form above to insert one manually.`;
+                _wireStopRowActions(t);
+                return;
+            }
 
             const chain = [t.origin, ...plannedStops, t.dest];
             let totalDist = 0; for (let i = 0; i < chain.length - 1; i++) totalDist += CNSRouting.haversineKm(chain[i], chain[i + 1]);
@@ -1274,15 +1501,11 @@
             const sourceLabel = plannedSource === 'user' ? 'Edited route' : 'Suggested route';
             document.querySelector('.stops-title').textContent = sourceLabel;
 
-            listEl.innerHTML = lis +
-                `<li class="stops-actions">
-                    <button id="reSuggestBtn"  class="stops-btn"  type="button">↻ Re-suggest</button>
-                    <button id="addStopToggle" class="stops-btn"  type="button">+ Add stop</button>
-                </li>
-                <li id="addStopRow" class="stops-add d-none ac-wrap">
-                    <input id="addStopInput" type="text" placeholder="Search airport to add as a stop…" autocomplete="off">
-                    <div id="addStopList" class="ac-list d-none"></div>
-                </li>`;
+            // The Suggested route panel is now a pure visualisation.
+            // + Add stop and Re-suggest were removed: manual stops are
+            // managed by the form fields above, and the planner re-runs
+            // automatically when those fields change.
+            listEl.innerHTML = lis;
             summaryEl.textContent = `${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''} · ${fmtDist(totalDist)} total`;
 
             // Hint / error line
@@ -1290,24 +1513,49 @@
                 hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span>`;
             } else {
                 hintEl.textContent = plannedSource === 'auto'
-                    ? 'Greedy max-reach with your preference order. Click × to remove a stop, + to add one, or ↻ to re-suggest.'
+                    ? 'Greedy max-reach with your preference order. Click × to remove a stop, or + Add stop above to insert one manually.'
                     : 'Custom route — legs are re-validated against the aircraft\'s range. ↻ to revert to the algorithm.';
             }
             section.classList.remove('d-none');
+            // Row action wiring (Re-suggest / Add stop + × on chain rows)
+            // lives in _wireStopRowActions for consistency between the empty
+            // and non-empty branches. The previous duplicate × handler above
+            // was a leftover from before _wireStopRowActions existed.
+            _wireStopRowActions(t);
+        }
 
-            // Wire row actions
+        // Row-action wiring extracted so both the "has stops" and the empty
+        // "direct flight fits" states share the same Re-suggest / Add stop
+        // affordances. Buttons may not be present in every render — guard.
+        function _wireStopRowActions(t) {
+            const listEl = document.getElementById('stopsList');
+
+            // × on a chain row: if the stop was MANUAL (matches an ident in
+            // the form fields), remove the form field — the planner will
+            // rebuild the chain on the next smartReplan. Auto stops in the
+            // chain can't be removed individually; pick a different
+            // preference, add a manual stop, or change the aircraft instead.
             listEl.querySelectorAll('.stop-rm').forEach(btn => btn.addEventListener('click', () => {
                 const idx = +btn.dataset.stop;
-                plannedStops.splice(idx, 1);
-                refreshAfterEdit();
+                const removed = plannedStops[idx];
+                if (removed && removed.ident) {
+                    document.querySelectorAll('#stopsContainer .stop-input').forEach(inp => {
+                        if (inp.dataset.ident === removed.ident) inp.closest('.stop-field').remove();
+                    });
+                    _renumberStops();
+                }
+                smartReplan();
+                drawLiveRoute();
             }));
-            document.getElementById('reSuggestBtn').addEventListener('click', recomputeRoute);
 
-            // Inline autocomplete for adding a stop
+            const resug = document.getElementById('reSuggestBtn');
+            if (resug) resug.addEventListener('click', recomputeRoute);
+
             const addToggle = document.getElementById('addStopToggle');
             const addRow = document.getElementById('addStopRow');
             const addInp = document.getElementById('addStopInput');
             const addLst = document.getElementById('addStopList');
+            if (!addToggle || !addRow || !addInp || !addLst) return;
 
             addToggle.addEventListener('click', () => {
                 addRow.classList.toggle('d-none');
@@ -1343,8 +1591,190 @@
         function replanRoute() { recomputeRoute(); }
 
         // Soft changes (advanced / plane / filter) keep user edits intact.
-        document.getElementById('withStops').addEventListener('change', recomputeRoute);
+        // Toggle: ON ⇒ apply any populated form-field stops + recompute (if
+        // none yet, planner auto-suggests). OFF ⇒ clear plannedStops, render
+        // the chain as a direct flight. Form fields persist either way so
+        // the user can flip back without losing what they typed.
+        document.getElementById('withStops').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                _syncManualStops();
+                if (plannedStops.length) refreshAfterEdit();
+                else                     recomputeRoute();
+            } else {
+                plannedStops = []; plannedSource = 'auto'; plannedError = null; plannedLegIssues = [];
+                renderStops();
+            }
+            drawLiveRoute();
+        });
         document.getElementById('advBias').addEventListener('change', smartReplan);
+
+        // ============================================================
+        // Manual stop fields — first-class form inputs between Departure
+        // and Destination. Each `+ Add stop` appends a new autocomplete
+        // field; each × removes one. The field's selected airport feeds
+        // into plannedStops, the same array the planner already uses.
+        // ============================================================
+        let _stopUid = 0;
+        function _addStopField(prefilled) {
+            const container = document.getElementById('stopsContainer');
+            const idx = ++_stopUid;
+            const wrap = document.createElement('div');
+            wrap.className = 'field ac-wrap stop-field';
+            wrap.dataset.stopId = idx;
+            // draggable wrapper so the user can re-order stops by grabbing
+            // the field. The drag handle is in the label row (≡).
+            wrap.draggable = true;
+            wrap.innerHTML = `
+                <label class="stop-field-label">
+                    <span class="stop-drag" title="Drag to reorder">≡</span>
+                    <span class="stop-num">Stop</span>
+                    <button type="button" class="stop-remove" title="Remove this stop">×</button>
+                </label>
+                <input type="text" id="stop_${idx}" class="form-control ac-input stop-input" placeholder="Search airport (or click on the map)…" autocomplete="off">
+                <div id="stop_${idx}List" class="ac-list d-none"></div>`;
+            container.appendChild(wrap);
+            // Drag-and-drop reorder. dragover finds the nearest sibling and
+            // inserts the dragged field before/after; drop syncs back to
+            // plannedStops via _syncManualStops + refreshAfterEdit.
+            wrap.addEventListener('dragstart', (e) => {
+                wrap.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', String(idx)); } catch (err) {}
+            });
+            wrap.addEventListener('dragend', () => {
+                wrap.classList.remove('dragging');
+                _syncManualStops(); refreshAfterEdit(); drawLiveRoute();
+            });
+
+            // Pre-fill if requested (map "Set as Stop" path)
+            if (prefilled) {
+                const inp = wrap.querySelector('input');
+                inp.value = prefilled.name;
+                inp.dataset.ident = prefilled.ident;
+                _syncManualStops();
+                refreshAfterEdit();
+                drawLiveRoute();
+            }
+
+            // Wire the autocomplete just like origin/destination
+            _setupStopAutocomplete(idx, wrap);
+
+            // × removal
+            wrap.querySelector('.stop-remove').addEventListener('click', () => {
+                wrap.remove();
+                _renumberStops();
+                _syncManualStops();
+                refreshAfterEdit();
+                drawLiveRoute();
+            });
+            _renumberStops();
+            return wrap;
+        }
+        function _renumberStops() {
+            document.querySelectorAll('#stopsContainer .stop-field').forEach((el, i) => {
+                el.querySelector('.stop-num').textContent = `Stop ${i + 1}`;
+            });
+        }
+        // Compatibility shim: callers used to push form-field state into
+        // plannedStops here, then call refreshAfterEdit. The new recomputeRoute
+        // reads form fields itself AND auto-fills intermediate stops between
+        // manual ones, so the right behaviour everywhere is just smartReplan.
+        function _syncManualStops() { smartReplan(); }
+        // Per-stop-field autocomplete — copy of setupAutocomplete tailored
+        // for dynamically-created elements (the original works only for the
+        // fixed origin/destination inputs).
+        function _setupStopAutocomplete(uid, wrap) {
+            const input = wrap.querySelector('input');
+            const list = wrap.querySelector(`#stop_${uid}List`);
+            let activeIdx = -1, current = [];
+            function render(matches) {
+                current = matches; activeIdx = -1;
+                if (!matches.length) { list.classList.add('d-none'); return; }
+                list.innerHTML = matches.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${ap.name}</strong> <small>${labelFor(ap)}</small></div>`).join('');
+                list.classList.remove('d-none');
+            }
+            input.addEventListener('input', () => {
+                input.dataset.ident = '';
+                _syncManualStops(); refreshAfterEdit(); drawLiveRoute();
+                const q = input.value.trim().toLowerCase();
+                if (q.length < 2) { list.classList.add('d-none'); return; }
+                render(allAirports.filter(ap =>
+                    (ap.name && ap.name.toLowerCase().includes(q)) ||
+                    (ap.municipality && ap.municipality.toLowerCase().includes(q)) ||
+                    (ap.iata_code && ap.iata_code.toLowerCase() === q)).slice(0, 50));
+            });
+            list.addEventListener('mousedown', (e) => {
+                const item = e.target.closest('.ac-item');
+                if (!item) return;
+                const ap = current[+item.dataset.i];
+                input.value = ap.name;
+                input.dataset.ident = ap.ident;
+                list.classList.add('d-none');
+                _syncManualStops();
+                refreshAfterEdit();
+                drawLiveRoute();
+            });
+            input.addEventListener('keydown', (e) => {
+                const items = list.querySelectorAll('.ac-item');
+                if (list.classList.contains('d-none') || !items.length) return;
+                if      (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, items.length - 1); }
+                else if (e.key === 'ArrowUp')   { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); }
+                else if (e.key === 'Enter')     { e.preventDefault(); if (activeIdx >= 0) { items[activeIdx].dispatchEvent(new MouseEvent('mousedown')); } return; }
+                else if (e.key === 'Escape')    { list.classList.add('d-none'); return; }
+                else return;
+                items.forEach((it, i) => it.classList.toggle('active', i === activeIdx));
+                if (activeIdx >= 0) items[activeIdx].scrollIntoView({ block: 'nearest' });
+            });
+            input.addEventListener('blur', () => setTimeout(() => list.classList.add('d-none'), 150));
+        }
+
+        // Container-level dragover: figures out which sibling to insert before
+        // based on cursor Y position, then moves the dragging element. The
+        // dragend handler on the individual field re-syncs plannedStops.
+        (function () {
+            const container = document.getElementById('stopsContainer');
+            if (!container) return;
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const dragging = container.querySelector('.stop-field.dragging');
+                if (!dragging) return;
+                const siblings = Array.from(container.querySelectorAll('.stop-field:not(.dragging)'));
+                let before = null;
+                for (const s of siblings) {
+                    const r = s.getBoundingClientRect();
+                    if (e.clientY < r.top + r.height / 2) { before = s; break; }
+                }
+                container.insertBefore(dragging, before);
+                _renumberStops();
+            });
+        })();
+
+        // Click the + Add stop link → append a fresh field, focus it,
+        // and make sure the suggested-route section becomes visible.
+        document.getElementById('addStopLink').addEventListener('click', () => {
+            const toggle = document.getElementById('withStops');
+            if (!toggle.checked) { toggle.checked = true; toggle.dispatchEvent(new Event('change')); }
+            const wrap = _addStopField();
+            wrap.querySelector('input').focus();
+        });
+
+        // Reset button next to Simulate — clears Departure / Destination /
+        // every stop field, the live map route, the planned-stop chain, and
+        // the trajectory pill. The aircraft/charger/frequency selections
+        // intentionally stay (operators usually reset only the locations).
+        document.getElementById('planReset').addEventListener('click', () => {
+            selected.origin = null; selected.destination = null;
+            const o = document.getElementById('origin');      o.value = ''; o.classList.remove('ac-unset');
+            const d = document.getElementById('destination'); d.value = ''; d.classList.remove('ac-unset');
+            document.getElementById('stopsContainer').innerHTML = '';
+            plannedStops = []; plannedSource = 'auto'; plannedError = null; plannedLegIssues = [];
+            document.getElementById('trajInfo').classList.add('d-none');
+            document.getElementById('error').classList.add('d-none');
+            document.getElementById('result').classList.add('d-none');
+            lastResult = null;
+            renderStops();
+            clearRoute();
+        });
         // (advReserve was removed when the global Realism settings took over reserve handling)
         document.getElementById('plane').addEventListener('change', smartReplan);
 
@@ -1398,7 +1828,8 @@
                         L.popup().setLatLng(e.latlng).setContent(`
                             <strong>${ap.name}</strong><br>
                             <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as Departure</button>
-                            <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>`).openOn(map);
+                            <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>
+                            <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${ap.ident}')">Set as Stop</button>`).openOn(map);
                     });
                     buckets[ap.type].push(m);
                 });
@@ -1469,20 +1900,38 @@
                 circle.bindTooltip(`Training pattern · ${Math.round((data.flight_time_h || 0) * 60)} min`, { sticky: true });
                 circle.addTo(map);
                 routeLayers = [circle];
-                map.fitBounds(circle.getBounds(), { padding: [50, 50] });
+                if (data.fitBounds !== false) map.fitBounds(circle.getBounds(), _fitPadding());
                 return;
             }
 
             endMarker = L.marker(p2, { title: 'Arrival: ' + data.destination.name }).addTo(map);
 
+            // Per-leg colouring: legs flagged in data.legIssues (live preview)
+            // get a red dashed segment so the operator sees at a glance which
+            // hop exceeds the aircraft's range. Default blue otherwise.
+            const issueSet = new Set(Array.isArray(data.legIssues) ? data.legIssues : []);
+            const legStyle = (i) => issueSet.has(i)
+                ? { color: '#dc2626', weight: 3.5, dashArray: '6 4', opacity: .95 }
+                : { color: '#0d6efd', weight: 3 };
+            // Auto-zoom is OFF for live preview (data.fitBounds === false). It
+            // was distracting during planning — the map would jump on every
+            // location change. Only the Simulate flow asks for fitBounds.
+            const shouldFit = data.fitBounds !== false;
+
             if (data.multi_leg && Array.isArray(data.stops) && data.stops.length) {
-                // Multi-leg: straight segments along origin → stop1 → stop2 → … → dest
-                // (and back on retour — both directions drawn in the same chain).
+                // Multi-leg: one polyline per leg so each can be coloured
+                // independently (red when over-range).
                 const chainOut = [p1, ...data.stops.map(s => [s.lat, s.lon]), p2];
-                const outLayer = L.polyline(chainOut, { color: '#0d6efd', weight: 3 });
-                routeLayers = [outLayer];
-                outLayer.addTo(map);
+                routeLayers = [];
+                for (let i = 0; i < chainOut.length - 1; i++) {
+                    const seg = L.polyline([chainOut[i], chainOut[i + 1]], legStyle(i));
+                    seg.addTo(map);
+                    routeLayers.push(seg);
+                }
                 if (data.trip_type === 'retour') {
+                    // Return chain (same legs in reverse) — green dashed
+                    // overlay; doesn't repeat over-range colouring because the
+                    // return uses the same leg distances anyway.
                     const backLayer = L.polyline(chainOut.slice().reverse(), { color: '#198754', weight: 3, dashArray: '8 6' });
                     backLayer.addTo(map);
                     routeLayers.push(backLayer);
@@ -1494,15 +1943,91 @@
                         .addTo(map);
                     routeLayers.push(m);
                 });
-                map.fitBounds(L.featureGroup(routeLayers.concat([startMarker, endMarker])).getBounds(), { padding: [50, 50] });
+                if (shouldFit) map.fitBounds(L.featureGroup(routeLayers.concat([startMarker, endMarker])).getBounds(), _fitPadding());
             } else {
-                routeLayers = flightLayers(p1, p2, data.trip_type);
+                // Single-leg: if the direct hop is over-range, draw a red
+                // dashed line instead of the blue/arc layer.
+                if (issueSet.has(0)) {
+                    routeLayers = [L.polyline([p1, p2], legStyle(0))];
+                } else {
+                    routeLayers = flightLayers(p1, p2, data.trip_type);
+                }
                 routeLayers.forEach(l => l.addTo(map));
-                map.fitBounds(L.featureGroup(routeLayers).getBounds(), { padding: [50, 50] });
+                if (shouldFit) map.fitBounds(L.featureGroup(routeLayers).getBounds(), _fitPadding());
             }
         }
-        // Clear the drawn route but keep the user's current zoom/pan.
-        document.getElementById('resetMap').addEventListener('click', () => clearRoute());
+        // Fit-bounds padding aware of the side rails (planner left, result
+        // right). Measures rail widths at render-time so it adapts to the
+        // mobile breakpoint without hard-coding pixels.
+        function _fitPadding() {
+            const left = document.querySelector('.rail-left');
+            const right = document.querySelector('.rail-right');
+            const railW = (el) => el && el.offsetWidth ? el.offsetWidth + 24 : 60;
+            const leftPad = (left && getComputedStyle(left).position === 'fixed') ? railW(left) : 60;
+            // Only count right rail when it actually holds a visible panel
+            // (rail-right starts empty; otherwise the route gets pushed off-centre).
+            const rightHasContent = right && right.querySelector(':scope > :not(.d-none)');
+            const rightPad = rightHasContent ? railW(right) : 60;
+            return { paddingTopLeft: [leftPad, 80], paddingBottomRight: [rightPad, 80] };
+        }
+        // Live preview while the user picks locations — draws the chain
+        // (origin → manual stops → destination) without needing a Simulate
+        // click. Uses the same drawRoute() pipeline so the look matches the
+        // post-Simulate render. No /api/simulate roundtrip, no recharge
+        // numbers — purely geometric. Once the user actually clicks Simulate,
+        // drawRoute(data) replaces the preview with the full result.
+        function drawLiveRoute() {
+            if (!selected.origin) { clearRoute(); return; }
+            const tripType = document.getElementById('tripType').value;
+            // Training: just the origin + a circle. Destination is irrelevant.
+            if (tripType === 'training') {
+                const plane = _selectedPlane();
+                drawRoute({
+                    trip_type: 'training',
+                    origin: { lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg, name: selected.origin.name },
+                    destination: { lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg, name: selected.origin.name },
+                    training_range_km: (plane && plane.training_range_km) || 0,
+                    flight_time_h: 0,
+                    fitBounds: false,    // never auto-zoom during planning
+                });
+                return;
+            }
+            if (!selected.destination) { clearRoute(); return; }
+            // Any manual stops queued? Render as multi-leg chain.
+            const stops = (plannedStops || []).map(s => ({ ident: s.ident, name: s.name, lat: s.lat, lon: s.lon }));
+            // Compute which legs are over-range so drawRoute can colour them
+            // red on the map (matches the over-range ⚠ in the Suggested route
+            // chain). When validateRoute has already populated plannedLegIssues
+            // we reuse it; otherwise compute on the fly for direct-flight cases.
+            let legIssues = Array.isArray(plannedLegIssues) ? plannedLegIssues.slice() : [];
+            if (!legIssues.length) {
+                const plane = _selectedPlane();
+                if (plane && plane.range_km) {
+                    const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
+                    const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+                    const maxLeg = plane.range_km * usable / route;
+                    const chain = [
+                        { lat: selected.origin.latitude_deg,      lon: selected.origin.longitude_deg },
+                        ...stops,
+                        { lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg },
+                    ];
+                    for (let i = 0; i < chain.length - 1; i++) {
+                        if (CNSRouting.haversineKm(chain[i], chain[i + 1]) > maxLeg) legIssues.push(i);
+                    }
+                }
+            }
+            drawRoute({
+                trip_type: tripType,
+                multi_leg: stops.length > 0,
+                origin:      { lat: selected.origin.latitude_deg,      lon: selected.origin.longitude_deg,      name: selected.origin.name },
+                destination: { lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg, name: selected.destination.name },
+                stops,
+                legIssues,
+                fitBounds: false,    // never auto-zoom during planning — distracting
+            });
+        }
+        // (The map-options Reset was removed — Plan-a-flight's Reset button
+        // now handles clearing the drawn route alongside the form fields.)
 
         function renderResult(data) {
             const p = data.plane;
@@ -1673,6 +2198,19 @@
                     : 'Please pick both airports from the suggestions list.';
                 errDiv.classList.remove('d-none'); syncUnset('origin'); if (!isTraining) syncUnset('destination'); return;
             }
+            // Re-validate against the current model settings + chain BEFORE
+            // calling the backend. The backend doesn't know about Model
+            // settings (reserve / padding etc.) so we block here to keep the
+            // calculated result consistent with what the planner is showing.
+            if (!isTraining) {
+                validateRoute();
+                if (plannedLegIssues.length) {
+                    document.getElementById('result').classList.add('d-none');
+                    errDiv.innerHTML = `<strong>Cannot simulate:</strong> ${plannedError || 'one or more legs exceed the aircraft\'s effective range.'} Adjust the route, change aircraft, or relax Model settings.`;
+                    errDiv.classList.remove('d-none');
+                    return;
+                }
+            }
             // ident is included so the backend's multi-leg charges[] can tag home/dest by airport
             const toCoord = ap => ({ ident: ap.ident, name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg });
             const planeId = document.getElementById('plane').value;
@@ -1716,11 +2254,32 @@
             const stopsRow  = document.getElementById('withStops')?.closest('.field');
             const help      = document.getElementById('trainingHelp');
             const destInput = document.getElementById('destination');
+            // Hide ALL stops-related affordances in training mode — a training
+            // flight loops around a single airport, so the destination, the
+            // + Add stop link, the stops container, the suggested route panel
+            // and the model-settings toggle row are all irrelevant. Stop
+            // FIELDS aren't destroyed (just hidden) so switching back to
+            // one-way/retour restores the user's draft.
             destField.classList.toggle('d-none', isTraining);
             if (stopsRow) stopsRow.classList.toggle('d-none', isTraining);
+            document.querySelector('.addstop-link-row')?.classList.toggle('d-none', isTraining);
+            document.getElementById('stopsContainer')?.classList.toggle('d-none', isTraining);
+            document.getElementById('stopsSection')?.classList.toggle('d-none', isTraining);
             help.classList.toggle('d-none', !isTraining);
             destInput.required = !isTraining;
-            if (isTraining) { selected.destination = null; document.getElementById('trajInfo').classList.add('d-none'); clearRoute(); }
+            if (isTraining) {
+                selected.destination = null;
+                document.getElementById('trajInfo').classList.add('d-none');
+                clearRoute();
+                // Wipe planner state too — hiding via d-none isn't enough,
+                // because a later renderStops() would re-show the section with
+                // these stale values (e.g. an "exceeds range" warning that no
+                // longer applies in training mode).
+                plannedStops = []; plannedError = null; plannedSource = 'auto'; plannedLegIssues = [];
+            }
+            // Trip type change also reshapes the live preview (training =
+            // circle vs. one-way/retour = polyline).
+            if (typeof drawLiveRoute === 'function') drawLiveRoute();
         });
 
         // ---------- demand calculator ----------
@@ -2073,10 +2632,13 @@
                 // Count only the per-factor flags (exclude the `anyOn` summary).
                 const flags = CNSSettings.activeFlags();
                 const n = Object.keys(flags).filter(k => k !== 'anyOn' && flags[k] === true).length;
-                const badge = document.getElementById('realismBadge');
-                if (!badge) return;
-                badge.textContent = n;
-                badge.classList.toggle('d-none', n === 0);
+                // Both trigger buttons (demand-drawer + planner) show the same badge.
+                ['realismBadge', 'planModelBadge'].forEach(id => {
+                    const badge = document.getElementById(id);
+                    if (!badge) return;
+                    badge.textContent = n;
+                    badge.classList.toggle('d-none', n === 0);
+                });
             }
 
             // Two-way wiring: checkbox toggles enabled flag, sliders update values live.
@@ -2093,6 +2655,17 @@
                 });
             });
 
+            // Apply settings — explicitly fan out the current state through
+            // every subscriber, even if the user didn't change any control
+            // (e.g. they want to force a recompute). save() with the current
+            // state fires the subscribe broadcast and triggers re-renders of
+            // result panel, demand drawer, scheduler and route preview.
+            const applyBtn = document.getElementById('rsApplyBtn');
+            if (applyBtn) applyBtn.addEventListener('click', () => {
+                CNSSettings.save(CNSSettings.loadAll());
+                if (typeof drawLiveRoute === 'function') drawLiveRoute();
+            });
+
             document.getElementById('rsResetBtn').addEventListener('click', () => {
                 if (confirm('Reset all model settings to defaults (all factors off)?')) {
                     CNSSettings.reset();
@@ -2100,9 +2673,15 @@
                 }
             });
 
-            // Re-render the world whenever settings change (anyone — even programmatic).
+            // Re-render the world whenever settings change (anyone — even
+            // programmatic). Order matters: smartReplan updates plannedLegIssues
+            // BEFORE updateTrajectory reads it for the warning pill, and
+            // drawLiveRoute reads it for the red polyline.
             CNSSettings.subscribe(() => {
                 updateBadge();
+                if (typeof smartReplan === 'function') smartReplan();
+                if (typeof updateTrajectory === 'function') updateTrajectory();
+                if (typeof drawLiveRoute === 'function') drawLiveRoute();
                 if (typeof renderFolder === 'function') renderFolder();
                 if (typeof lastResult !== 'undefined' && lastResult) renderResult(lastResult);
             });

@@ -41,7 +41,7 @@ window.CNSRouting = (function () {
             'large_airport':  50,                                       // a large beats a medium only if it's >50 km farther
             'small_airport':  150                                       // small avoided unless no choice
         },
-        maxStops: 6                                                     // safety: refuse routes that need more than this
+        maxStops: 10                                                    // safety: refuse routes that need more than this
     };
 
     function _ap(a) { return { lat: a.latitude_deg, lon: a.longitude_deg }; }

@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import time
 from datetime import datetime, timezone
@@ -53,13 +54,35 @@ def _log(kind, action, **fields):
         pass
 
 
+def _is_finite_num(x):
+    """True iff x is a real, finite number (rejects None, str, inf, NaN)."""
+    try:
+        return math.isfinite(float(x))
+    except (TypeError, ValueError):
+        return False
+
+
 def _read_list(path):
     if not os.path.exists(path):
         return []
     try:
         with open(path) as f:
             data = json.load(f)
-            return data if isinstance(data, list) else []
+            if not isinstance(data, list):
+                return []
+            # Drop entries that violate numeric invariants (inf/NaN from older
+            # versions that didn't bound-check). Keeping them risks 500s deep
+            # in the simulator math. We silently filter — operators can spot
+            # gaps via the audit log.
+            cleaned = []
+            for entry in data:
+                if not isinstance(entry, dict):
+                    continue
+                # Numeric fields that downstream math relies on; checked per file kind.
+                num_keys = ('battery_kwh', 'range_km', 'speed_kmh') if 'battery_kwh' in entry else ('power_kw',)
+                if all(_is_finite_num(entry.get(k)) for k in num_keys):
+                    cleaned.append(entry)
+            return cleaned
     except (OSError, ValueError):
         return []
 
@@ -108,6 +131,16 @@ def add_custom_plane():
     if not p.get('name') or not (battery > 0 and rng > 0 and spd > 0):
         _log('planes', 'REJECT', reason='missing or non-positive fields', name=p.get('name', ''))
         return jsonify({'error': 'name + positive battery/range/speed required'}), 400
+    # Reject inf/NaN and absurd-but-finite values that would later overflow
+    # the simulator's energy/time math (see sim.calculate_flight_by_distance).
+    # Ceilings are deliberately generous: ~10× the largest realistic electric
+    # airframe but small enough that distance × kWh/km stays inside float64.
+    if not all(math.isfinite(v) for v in (battery, rng, spd)):
+        _log('planes', 'REJECT', reason='non-finite battery/range/speed', name=p.get('name', ''))
+        return jsonify({'error': 'battery/range/speed must be finite numbers'}), 400
+    if not (battery <= 100_000 and rng <= 50_000 and spd <= 5_000):
+        _log('planes', 'REJECT', reason='value out of range', name=p.get('name', ''))
+        return jsonify({'error': 'battery_kwh ≤ 100000, range_km ≤ 50000, speed_kmh ≤ 5000'}), 400
 
     data = _read_list(CUSTOM_FILES['planes'])
     if len(data) >= MAX_CUSTOMS:
@@ -159,6 +192,12 @@ def add_custom_charger():
     if not c.get('name') or not (power > 0):
         _log('chargers', 'REJECT', reason='missing or non-positive fields', name=c.get('name', ''))
         return jsonify({'error': 'name + positive power_kw required'}), 400
+    if not math.isfinite(power):
+        _log('chargers', 'REJECT', reason='non-finite power_kw', name=c.get('name', ''))
+        return jsonify({'error': 'power_kw must be a finite number'}), 400
+    if not (power <= 100_000):
+        _log('chargers', 'REJECT', reason='value out of range', name=c.get('name', ''))
+        return jsonify({'error': 'power_kw ≤ 100000'}), 400
 
     data = _read_list(CUSTOM_FILES['chargers'])
     if len(data) >= MAX_CUSTOMS:
@@ -203,10 +242,30 @@ def simulate_flight():
     if not all([origin, destination]) or not (plane_id or plane_obj) or not (charger_id or charger_obj):
         return jsonify({"error": "Missing parameters"}), 400
 
-    if isinstance(origin, dict) and isinstance(destination, dict):
-        result = simulator.simulate_by_coords(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj, stops)
-    else:
-        result = simulator.simulate(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj)
+    # Origin == destination is only meaningful for training (circular pattern).
+    # For one-way / retour it produces success:true with all-zero numbers, which
+    # is misleading. Reject early with a clear message.
+    if trip_type != 'training':
+        same = False
+        if isinstance(origin, dict) and isinstance(destination, dict):
+            same = (origin.get('lat') == destination.get('lat')
+                    and origin.get('lon') == destination.get('lon'))
+        elif isinstance(origin, str) and isinstance(destination, str):
+            same = origin.strip().lower() == destination.strip().lower()
+        if same:
+            return jsonify({"error": "Origin and destination must differ "
+                                     "(use trip_type='training' for circuit flights)."}), 400
+
+    # Any uncaught exception below would otherwise render Flask's HTML 500 page,
+    # which breaks the browser's JSON parser and surfaces as an opaque failure.
+    # Keep the response shape consistent so the UI can show a real error.
+    try:
+        if isinstance(origin, dict) and isinstance(destination, dict):
+            result = simulator.simulate_by_coords(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj, stops)
+        else:
+            result = simulator.simulate(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj)
+    except (OverflowError, ValueError, ZeroDivisionError) as e:
+        return jsonify({"error": f"Simulation failed: {e}"}), 500
     return jsonify(result)
 
 

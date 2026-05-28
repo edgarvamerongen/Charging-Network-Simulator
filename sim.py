@@ -1,8 +1,15 @@
 import math
 import json
+import re
 import pandas as pd
 import argparse
 import os
+
+# ICAO codes are 4 alphanumerics (e.g. EHAM, LFPG); IATA codes are 3 letters
+# (e.g. CDG, AMS). When the user types one we want an exact ident match, not
+# a substring search against airport names — otherwise "EHAM" matches
+# "MariEHAMn Airport" before it matches Schiphol.
+_AIRPORT_CODE_RE = re.compile(r'^[A-Za-z0-9]{3,4}$')
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0  # Earth radius in kilometers
@@ -34,9 +41,25 @@ class Simulator:
         return df.to_dict('records')
 
     def get_airport(self, code_or_name):
+        q = (code_or_name or "").strip()
+        if not q:
+            return None
+        # If the query looks like an ICAO/IATA code, try an exact ident match
+        # first (then iata_code). Falling back to substring would otherwise
+        # land on whichever airport happens to contain those letters in its
+        # name — see _AIRPORT_CODE_RE doc.
+        if _AIRPORT_CODE_RE.match(q):
+            q_upper = q.upper()
+            exact = self.airports_df[self.airports_df['ident'].str.upper() == q_upper]
+            if not exact.empty:
+                return exact.iloc[0]
+            iata = self.airports_df[self.airports_df['iata_code'].str.upper() == q_upper]
+            if not iata.empty:
+                return iata.iloc[0]
+        # Fall back to the original name / municipality substring search.
         matches = self.airports_df[
-            self.airports_df['name'].str.contains(code_or_name, case=False, na=False) |
-            self.airports_df['municipality'].str.contains(code_or_name, case=False, na=False)
+            self.airports_df['name'].str.contains(q, case=False, na=False) |
+            self.airports_df['municipality'].str.contains(q, case=False, na=False)
         ]
         if matches.empty:
             return None
@@ -62,6 +85,13 @@ class Simulator:
                 return {"error": "Custom plane needs numeric battery, range and speed."}
             if not (plane["battery_kwh"] > 0 and plane["range_km"] > 0 and plane["speed_kmh"] > 0):
                 return {"error": "Custom plane battery, range and speed must be positive."}
+            # Defense in depth: app.py's add_custom_plane rejects non-finite
+            # and out-of-range values, but a stale data/custom_planes.json from
+            # before that check could still reach us. Bail out cleanly rather
+            # than overflow downstream (recharge_energy = max(0, 2*leg-batt)
+            # blows up for inf and OverflowError leaks to the route).
+            if not all(math.isfinite(plane[k]) for k in ("battery_kwh", "range_km", "speed_kmh")):
+                return {"error": "Custom plane values must be finite."}
 
         if charger_obj:
             try:
@@ -213,6 +243,10 @@ class Simulator:
             return {"error": "Plane/charger needs numeric battery, range, speed and power."}
         if not (batt > 0 and rng > 0 and spd > 0 and power > 0):
             return {"error": "Plane/charger values must be positive."}
+        # Same defense-in-depth as calculate_flight_by_distance: stop inf/NaN
+        # before it reaches the leg-accumulation math below.
+        if not all(math.isfinite(v) for v in (batt, rng, spd, power)):
+            return {"error": "Plane/charger values must be finite."}
 
         # Build waypoint chain (caller passes stops in OUTBOUND order)
         outbound = [origin] + list(stops) + [destination]
