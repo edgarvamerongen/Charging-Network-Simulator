@@ -268,13 +268,34 @@ window.CNSScheduler = (function () {
         // visited outbound + return = 2 charges at the same airport). Each lane
         // therefore carries an array of atX charges; the queue and the cascade fan
         // out over (instance k) × (charge ci).
-        const lanes = tripsAt(ident).map(t => {
+        //
+        // SEMANTIC SPLIT: a lane represents one AIRCRAFT. For retour and training
+        // trips the same aircraft can do multiple rotations in a day (it returns
+        // home each time). For one-way trips the plane lands at the destination
+        // and stays — each flight in a freq>1 one-way schedule therefore needs a
+        // separate aircraft, i.e. its own lane. We split here.
+        const lanes = [];
+        tripsAt(ident).forEach(t => {
             const { ph, total } = tripPhases(t, ident);
             const atXCharges = [];
             ph.forEach(p => {
                 if (p.kind === 'charge' && p.atX) atXCharges.push({ offset: p.start, dur: p.dur, power: p.power });
             });
-            return { trip: t, ph, total, atXCharges, cap: batteryOf(t), desired: instanceStarts(t) };
+            const starts = instanceStarts(t);
+            const isOneWay = t.tripType === 'one-way';
+            if (isOneWay && starts.length > 1) {
+                // One lane per flight (= per aircraft). Carry the plane index so
+                // the renderer can label it "plane 1 of N".
+                starts.forEach((d, k) => {
+                    lanes.push({
+                        trip: t, ph, total, atXCharges,
+                        cap: batteryOf(t), desired: [d],
+                        planeIdx: k + 1, planeTotal: starts.length, schedSlot: k,
+                    });
+                });
+            } else {
+                lanes.push({ trip: t, ph, total, atXCharges, cap: batteryOf(t), desired: starts });
+            }
         });
         const keyOf = (li, k) => li + ':' + k;
         const evKey = (li, k, ci) => keyOf(li, k) + ':' + ci;
@@ -418,8 +439,14 @@ window.CNSScheduler = (function () {
             const label = document.createElement('div');
             label.title = `${trip.originName} → ${trip.destName} (${trip.planeName})`;
             label.style.cssText = `position:absolute;left:0;width:${LABEL_W}px;height:100%;padding:4px 8px;box-sizing:border-box;overflow:hidden;font-size:.74rem;line-height:1.15`;
+            // For split one-way lanes (one aircraft per flight) the sub-label
+            // shows "aircraft k of N" instead of "N/day" — clearer that each
+            // bar represents a distinct plane, not a repeated rotation.
+            const subRight = L.planeIdx
+                ? `aircraft ${L.planeIdx} of ${L.planeTotal}`
+                : `${L.desired.length}/day`;
             label.innerHTML = `<div style="font-weight:600">${shorten(trip.originName)} → ${shorten(trip.destName)}</div>` +
-                `<div class="text-muted" style="font-size:.68rem">${trip.planeName} · ${roleLabel}${trip.multiLeg ? ' · multi-leg' : ''} · ${L.desired.length}/day</div>`;
+                `<div class="text-muted" style="font-size:.68rem">${trip.planeName} · ${roleLabel}${trip.multiLeg ? ' · multi-leg' : ''} · ${subRight}</div>`;
             lane.appendChild(label);
 
             const track = document.createElement('div');
@@ -446,7 +473,11 @@ window.CNSScheduler = (function () {
                         iph.push({ kind: 'wait', start: cs, dur: w, label: 'Waiting for free charger' });
                     });
                 }
-                track.appendChild(buildInstance(trip, k, takeoff, iph));
+                // For split one-way lanes (planeIdx set), the original schedule
+                // slot is in L.schedSlot — passing `k` (always 0 for split lanes)
+                // would clobber slot 0 every time the user drags any of the planes.
+                const schedSlot = (L.schedSlot != null) ? L.schedSlot : k;
+                track.appendChild(buildInstance(trip, schedSlot, takeoff, iph));
             });
             lane.appendChild(track);
             chart.appendChild(lane);
