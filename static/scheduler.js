@@ -51,6 +51,20 @@ window.CNSScheduler = (function () {
     }
     function tripsAt(ident) { return loadTrips().filter(t => roleAt(t, ident)); }
 
+    // Does a freq>1 trip mean SEPARATE aircraft (a fleet, flying in parallel)
+    // or ONE aircraft doing sequential rotations?
+    //   • one-way  → always separate (the plane lands at the dest and stays).
+    //   • retour   → user's choice via trip.fleetMode; defaults to 'separate'
+    //                (an operator adding "3/day" usually means 3 tails).
+    //   • training → defaults to 'shared' (a school plane flies N sessions),
+    //                unless the user picked 'separate'.
+    function fleetSeparate(trip) {
+        if (trip.tripType === 'one-way') return true;
+        if (trip.fleetMode === 'separate') return true;
+        if (trip.fleetMode === 'shared') return false;
+        return trip.tripType === 'retour';   // unset default
+    }
+
     function energyAt(trip, ident, fullCharge) {
         const leg = num(trip, 'legEnergy'), batt = batteryOf(trip);
         const role = roleAt(trip, ident);
@@ -235,7 +249,7 @@ window.CNSScheduler = (function () {
             //   • retour/training → one aircraft flying sequential rotations,
             //     so lay them back-to-back (it can't start the next until the
             //     previous one lands).
-            const parallel = trip.tripType === 'one-way' && n > 1;
+            const parallel = fleetSeparate(trip) && n > 1;
             arr = [];
             for (let k = 0; k < n; k++) arr.push(parallel ? DAY_START : Math.min(DAY_END, DAY_START + k * dur));
             sched[trip.id] = arr; saveSched(sched);
@@ -287,9 +301,11 @@ window.CNSScheduler = (function () {
             const { ph, total } = tripPhases(t, null);     // charges carry .ident
             const starts = instanceStarts(t);
             const base = { trip: t, ph, total, cap: batteryOf(t) };
-            if (t.tripType === 'one-way' && starts.length > 1) {
+            if (fleetSeparate(t) && starts.length > 1) {
+                // Separate aircraft (fleet) → one lane each, can fly in parallel.
                 starts.forEach((d, k) => lanes.push({ ...base, desired: [d], planeIdx: k + 1, planeTotal: starts.length, schedSlot: k }));
             } else {
+                // One aircraft doing sequential rotations → a single lane.
                 lanes.push({ ...base, desired: starts });
             }
         });

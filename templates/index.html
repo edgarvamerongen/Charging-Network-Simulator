@@ -373,6 +373,25 @@
         /* =========================================================
            Trajectory pill + autocomplete
            ========================================================= */
+        /* Fleet-mode segmented selector under the frequency field. */
+        .fleet-mode {
+            display: flex; gap: 6px; margin-top: 8px;
+            background: rgba(43,47,90,.04); border: 1px solid var(--panel-border);
+            border-radius: var(--radius-sm); padding: 4px;
+        }
+        .fleet-mode .fleet-opt {
+            flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 6px 8px; border-radius: 6px; cursor: pointer; margin: 0;
+            font-size: .76rem; color: var(--ink-soft); text-align: center;
+            transition: background .12s, color .12s;
+        }
+        .fleet-mode .fleet-opt input { accent-color: var(--primary); margin: 0; }
+        .fleet-mode .fleet-opt:has(input:checked) {
+            background: var(--panel-strong); color: var(--ink); font-weight: 600;
+            box-shadow: var(--shadow-sm);
+        }
+        .fleet-mode .fleet-opt strong { color: var(--primary); }
+
         .trip-traj {
             font-size: .82rem; padding: 8px 12px; margin-bottom: 12px;
             background: rgba(229,120,80,.10); border-left: 3px solid var(--primary); border-radius: 8px; color: var(--ink);
@@ -992,6 +1011,14 @@
                             <option value="day">day</option>
                             <option value="week">week</option>
                         </select>
+                    </div>
+                    <!-- Fleet-mode selector: only meaningful for retour / training
+                         when freq>1 (one-way is always separate aircraft). It
+                         disambiguates "one plane cycling" vs "a fleet of planes".
+                         Shown/hidden by updateFleetMode(); value read at save. -->
+                    <div id="fleetModeRow" class="fleet-mode d-none">
+                        <label class="fleet-opt"><input type="radio" name="fleetMode" value="shared"><span>One aircraft · <strong class="fm-n">2</strong> rotations</span></label>
+                        <label class="fleet-opt"><input type="radio" name="fleetMode" value="separate" checked><span>Separate aircraft · <strong class="fm-n">2</strong> planes</span></label>
                     </div>
                 </div>
                 <div class="field">
@@ -2458,7 +2485,25 @@
             // Trip type change also reshapes the live preview (training =
             // circle vs. one-way/retour = polyline).
             if (typeof drawLiveRoute === 'function') drawLiveRoute();
+            updateFleetMode();
         });
+
+        // Fleet-mode selector visibility + live counts. Shown only for
+        // retour/training when freq>1 (one-way is always separate aircraft,
+        // so the choice is moot and the row stays hidden). The <strong> count
+        // spans echo the current frequency so the labels read "3 rotations" /
+        // "3 planes" as the user types.
+        function updateFleetMode() {
+            const row = document.getElementById('fleetModeRow');
+            if (!row) return;
+            const tripType = document.getElementById('tripType').value;
+            const n = Math.max(1, parseInt(document.getElementById('freqN').value || '1', 10));
+            const show = (tripType === 'retour' || tripType === 'training') && n > 1;
+            row.classList.toggle('d-none', !show);
+            row.querySelectorAll('.fm-n').forEach(el => { el.textContent = n; });
+        }
+        document.getElementById('freqN').addEventListener('input', updateFleetMode);
+        updateFleetMode();   // initial state
 
         // ---------- demand calculator ----------
         // Pure data + logic lives in static/demand.js (CNSDemand). The UI bits
@@ -2739,7 +2784,11 @@
                 planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
                 chargerId: d._chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
                 legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh,
-                freqN: d._freqN, freqUnit: d._freqUnit
+                freqN: d._freqN, freqUnit: d._freqUnit,
+                // 'shared' = one aircraft cycles N rotations; 'separate' = N
+                // distinct planes (a fleet). Only meaningful for retour/training
+                // freq>1 — one-way is always separate. Read from the selector.
+                fleetMode: (document.querySelector('input[name="fleetMode"]:checked') || {}).value || 'separate',
             };
             if (d.multi_leg) {
                 // Multi-leg: save the full chain so computeAirports can attribute each charge event.
