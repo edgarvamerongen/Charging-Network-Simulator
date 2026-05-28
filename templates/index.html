@@ -162,9 +162,11 @@
         .rail-left::-webkit-scrollbar { width: 6px; }
         .rail-left::-webkit-scrollbar-thumb { background: rgba(43,47,90,.18); border-radius: 999px; }
         /* Soft cream halo behind the rail — suppresses the busy satellite
-           texture under the panels without blocking map drags (the gradient
-           fades to fully transparent at the edge). */
-        .rail-left::before, .rail-right::before {
+           texture under the panels. Only paints when the rail has at least
+           one VISIBLE panel (uses `:has` to skip when every child is .d-none),
+           so the halo doesn't bleed into empty space. */
+        .rail-left:has(> :not(.d-none))::before,
+        .rail-right:has(> :not(.d-none))::before {
             content: ''; position: fixed; top: 56px; bottom: 0;
             width: 420px; pointer-events: none; z-index: -1;
             background: radial-gradient(ellipse at center,
@@ -172,8 +174,8 @@
                 rgba(246,239,222,.30) 40%,
                 rgba(246,239,222,0) 80%);
         }
-        .rail-left::before  { left: -30px; }
-        .rail-right::before { right: -30px; }
+        .rail-left:has(> :not(.d-none))::before  { left: -30px; }
+        .rail-right:has(> :not(.d-none))::before { right: -30px; }
 
         /* =========================================================
            Glass panel
