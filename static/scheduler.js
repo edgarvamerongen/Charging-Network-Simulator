@@ -51,6 +51,20 @@ window.CNSScheduler = (function () {
     }
     function tripsAt(ident) { return loadTrips().filter(t => roleAt(t, ident)); }
 
+    // Does a freq>1 trip mean SEPARATE aircraft (a fleet, flying in parallel)
+    // or ONE aircraft doing sequential rotations?
+    //   • one-way  → always separate (the plane lands at the dest and stays).
+    //   • retour   → user's choice via trip.fleetMode; defaults to 'separate'
+    //                (an operator adding "3/day" usually means 3 tails).
+    //   • training → defaults to 'shared' (a school plane flies N sessions),
+    //                unless the user picked 'separate'.
+    function fleetSeparate(trip) {
+        if (trip.tripType === 'one-way') return true;
+        if (trip.fleetMode === 'separate') return true;
+        if (trip.fleetMode === 'shared') return false;
+        return trip.tripType === 'retour';   // unset default
+    }
+
     function energyAt(trip, ident, fullCharge) {
         const leg = num(trip, 'legEnergy'), batt = batteryOf(trip);
         const role = roleAt(trip, ident);
@@ -112,7 +126,12 @@ window.CNSScheduler = (function () {
         } else {
             trips.forEach(t => { powers[t.id] = fleet[0] ? fleet[0].power_kw : 0; });
         }
-        return { targetSoc, fullCharge: targetSoc === 1.0, powers, fleetSize: Math.max(1, fleet.length) };
+        // fleetPowers = the ACTUAL physical chargers (their kW), biggest first.
+        // The global sim binds each to a pool slot so peak draw can never
+        // exceed the installed total (the old anonymous-slot pool let two
+        // parallel charges both bill the 400 kW charger → impossible 800 kW).
+        const fleetPowers = fleet.map(c => c.power_kw || 0).sort((a, b) => b - a);
+        return { targetSoc, fullCharge: targetSoc === 1.0, powers, fleetPowers, fleetSize: Math.max(1, fleet.length) };
     }
     function fleetSizeAt(ident) { return getContext(ident).fleetSize; }
 
@@ -235,7 +254,7 @@ window.CNSScheduler = (function () {
             //   • retour/training → one aircraft flying sequential rotations,
             //     so lay them back-to-back (it can't start the next until the
             //     previous one lands).
-            const parallel = trip.tripType === 'one-way' && n > 1;
+            const parallel = fleetSeparate(trip) && n > 1;
             arr = [];
             for (let k = 0; k < n; k++) arr.push(parallel ? DAY_START : Math.min(DAY_END, DAY_START + k * dur));
             sched[trip.id] = arr; saveSched(sched);
@@ -287,19 +306,25 @@ window.CNSScheduler = (function () {
             const { ph, total } = tripPhases(t, null);     // charges carry .ident
             const starts = instanceStarts(t);
             const base = { trip: t, ph, total, cap: batteryOf(t) };
-            if (t.tripType === 'one-way' && starts.length > 1) {
+            if (fleetSeparate(t) && starts.length > 1) {
+                // Separate aircraft (fleet) → one lane each, can fly in parallel.
                 starts.forEach((d, k) => lanes.push({ ...base, desired: [d], planeIdx: k + 1, planeTotal: starts.length, schedSlot: k }));
             } else {
+                // One aircraft doing sequential rotations → a single lane.
                 lanes.push({ ...base, desired: starts });
             }
         });
 
-        // 2. Charger pools, lazily built per airport from its fleet size.
+        // 2. Charger pools — one slot per PHYSICAL charger, carrying its real
+        //    power. A charge sizes its duration by the charger it actually
+        //    claims, and peak draw is the sum of in-use slot powers, so it's
+        //    bounded by the installed fleet.
         const pools = {};
         const poolOf = (ident) => {
             if (!pools[ident]) {
-                const N = Math.max(1, fleetSizeAt(ident));
-                pools[ident] = Array.from({ length: N }, () => ({ freeAt: -Infinity }));
+                const fp = getContext(ident).fleetPowers;
+                const powers = (fp && fp.length) ? fp : [0];
+                pools[ident] = powers.map(p => ({ power: p, freeAt: -Infinity }));
             }
             return pools[ident];
         };
@@ -309,7 +334,7 @@ window.CNSScheduler = (function () {
             L._chargeSeg = [];                              // ph indices that are real charges
             L.ph.forEach((p, i) => { if (p.kind === 'charge' && p.dur > 0) L._chargeSeg.push(i); });
             L.rotations = L.desired.map(d => ({
-                takeoff: d, end: d, cumWait: 0, nextC: 0,
+                takeoff: d, end: d, cumShift: 0, nextC: 0,
                 // actual-timed copy of every phase (start filled in as we go)
                 phases: L.ph.map(p => ({
                     kind: p.kind, ident: p.ident || null, atRole: p.at,
@@ -334,7 +359,7 @@ window.CNSScheduler = (function () {
         function advance(li, k) {
             const L = lanes[li], rot = L.rotations[k];
             if (rot.nextC >= L._chargeSeg.length) {
-                rot.end = rot.takeoff + L.total + rot.cumWait;
+                rot.end = rot.takeoff + L.total + rot.cumShift;
                 if (k + 1 < L.desired.length) {
                     const next = L.rotations[k + 1];
                     next.takeoff = Math.max(L.desired[k + 1], rot.end);   // no self-overlap
@@ -343,7 +368,10 @@ window.CNSScheduler = (function () {
                 return;
             }
             const ci = L._chargeSeg[rot.nextC];
-            const arrival = rot.takeoff + L.ph[ci].start + rot.cumWait;
+            // cumShift = waits + (actual charger dur − baked dur) accumulated so
+            // far this rotation, so a later charge's arrival reflects how long
+            // the actual chargers really took, not the planCharging estimate.
+            const arrival = rot.takeoff + L.ph[ci].start + rot.cumShift;
             pushEv({ li, k, ci, arrival });
         }
         lanes.forEach((L, li) => advance(li, 0));
@@ -353,14 +381,27 @@ window.CNSScheduler = (function () {
         while (pq.length) {
             const e = pq.shift();
             const L = lanes[e.li], rot = L.rotations[e.k], pool = poolOf(L.ph[e.ci].ident);
-            let bi = 0; for (let i = 1; i < pool.length; i++) if (pool[i].freeAt < pool[bi].freeAt) bi = i;
+            // Claim the MOST POWERFUL charger free at arrival (operators plug into
+            // the fastest open bay). pool is ordered power-desc, so the first free
+            // slot scanning from the top is the strongest one available now. If
+            // every charger is busy, wait for whichever frees earliest.
+            let bi = -1;
+            for (let i = 0; i < pool.length; i++) if (pool[i].freeAt <= e.arrival) { bi = i; break; }
+            if (bi < 0) { bi = 0; for (let i = 1; i < pool.length; i++) if (pool[i].freeAt < pool[bi].freeAt) bi = i; }
             const start = Math.max(e.arrival, pool[bi].freeAt);
-            const dur = L.ph[e.ci].dur;
+            // Size this charge by the PHYSICAL charger it claimed — not the
+            // planCharging estimate. Power is the slot's; duration recomputed.
+            const power = pool[bi].power;
+            const dur = _chargeMin(L.ph[e.ci].energy, power, L.cap);
             pool[bi].freeAt = start + dur;
             const phase = rot.phases[e.ci];
             phase.start = start;                 // ACTUAL charge start (queue wait already in)
+            phase.dur = dur;                      // ACTUAL duration on the claimed charger
+            phase.power = power;                  // ACTUAL draw — used for peak
             phase.wait = start - e.arrival;       // queue wait at THIS airport
-            rot.cumWait += phase.wait;
+            // Shift the rest of the rotation by the wait AND by any difference
+            // between the actual charger duration and the baked estimate.
+            rot.cumShift += phase.wait + (dur - L.ph[e.ci].dur);
             rot.nextC += 1;
             advance(e.li, e.k);
         }
