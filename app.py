@@ -300,8 +300,11 @@ def simulate_flight():
             result = simulator.simulate_by_coords(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj, stops)
         else:
             result = simulator.simulate(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj)
-    except (OverflowError, ValueError, ZeroDivisionError) as e:
-        return jsonify({"error": f"Simulation failed: {e}"}), 500
+    except (OverflowError, ValueError, ZeroDivisionError, KeyError, TypeError) as e:
+        # Defense in depth: an inline plane/charger object missing a field the
+        # simulator expects would otherwise escape as Flask's HTML 500 page and
+        # break the browser's JSON parser. Surface it as JSON instead.
+        return jsonify({"error": f"Simulation failed: {type(e).__name__}: {e}"}), 500
     return jsonify(result)
 
 

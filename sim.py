@@ -134,7 +134,7 @@ class Simulator:
                 "charge_time_h": round(charge_time_h, 3),
                 "charge_time_min": round(charge_time_h * 60, 1),
                 "plane": {
-                    "id": plane['id'], "name": plane['name'],
+                    "id": plane.get('id'), "name": plane.get('name'),
                     "seats": plane.get('seats'), "load_kg": plane.get('load_kg'),
                     "battery_kwh": plane['battery_kwh'], "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
                     "avg_usage_kwh_per_100km": round(avg_usage, 2),
@@ -144,7 +144,7 @@ class Simulator:
                     "image": plane.get('image'), "svg": plane.get('svg'),
                 },
                 "charger": {
-                    "id": charger['id'], "name": charger['name'], "power_kw": charger['power_kw'],
+                    "id": charger.get('id'), "name": charger.get('name'), "power_kw": charger['power_kw'],
                 }
             }
 
@@ -184,8 +184,8 @@ class Simulator:
             "charge_time_h": round(charge_time_h, 3),
             "charge_time_min": round(charge_time_h * 60, 1),
             "plane": {
-                "id": plane['id'],
-                "name": plane['name'],
+                "id": plane.get('id'),
+                "name": plane.get('name'),
                 "seats": plane.get('seats'),
                 "load_kg": plane.get('load_kg'),
                 "battery_kwh": plane['battery_kwh'],
@@ -198,8 +198,8 @@ class Simulator:
                 "svg": plane.get('svg')
             },
             "charger": {
-                "id": charger['id'],
-                "name": charger['name'],
+                "id": charger.get('id'),
+                "name": charger.get('name'),
                 "power_kw": charger['power_kw']
             }
         }
@@ -335,7 +335,7 @@ class Simulator:
                 "c_rate": plane.get('c_rate'),                       # battery charge C-rate (charging-curve model factor)
                 "image": plane.get('image'), "svg": plane.get('svg')
             },
-            "charger": {"id": charger.get('id'), "name": charger['name'], "power_kw": charger['power_kw']},
+            "charger": {"id": charger.get('id'), "name": charger.get('name'), "power_kw": charger['power_kw']},
         }
 
     def simulate(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None):
