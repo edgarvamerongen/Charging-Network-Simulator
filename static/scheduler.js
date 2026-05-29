@@ -51,6 +51,20 @@ window.CNSScheduler = (function () {
     }
     function tripsAt(ident) { return loadTrips().filter(t => roleAt(t, ident)); }
 
+    // Does a freq>1 trip mean SEPARATE aircraft (a fleet, flying in parallel)
+    // or ONE aircraft doing sequential rotations?
+    //   • one-way  → always separate (the plane lands at the dest and stays).
+    //   • retour   → user's choice via trip.fleetMode; defaults to 'separate'
+    //                (an operator adding "3/day" usually means 3 tails).
+    //   • training → defaults to 'shared' (a school plane flies N sessions),
+    //                unless the user picked 'separate'.
+    function fleetSeparate(trip) {
+        if (trip.tripType === 'one-way') return true;
+        if (trip.fleetMode === 'separate') return true;
+        if (trip.fleetMode === 'shared') return false;
+        return trip.tripType === 'retour';   // unset default
+    }
+
     function energyAt(trip, ident, fullCharge) {
         const leg = num(trip, 'legEnergy'), batt = batteryOf(trip);
         const role = roleAt(trip, ident);
@@ -112,7 +126,12 @@ window.CNSScheduler = (function () {
         } else {
             trips.forEach(t => { powers[t.id] = fleet[0] ? fleet[0].power_kw : 0; });
         }
-        return { targetSoc, fullCharge: targetSoc === 1.0, powers, fleetSize: Math.max(1, fleet.length) };
+        // fleetPowers = the ACTUAL physical chargers (their kW), biggest first.
+        // The global sim binds each to a pool slot so peak draw can never
+        // exceed the installed total (the old anonymous-slot pool let two
+        // parallel charges both bill the 400 kW charger → impossible 800 kW).
+        const fleetPowers = fleet.map(c => c.power_kw || 0).sort((a, b) => b - a);
+        return { targetSoc, fullCharge: targetSoc === 1.0, powers, fleetPowers, fleetSize: Math.max(1, fleet.length) };
     }
     function fleetSizeAt(ident) { return getContext(ident).fleetSize; }
 
@@ -151,7 +170,7 @@ window.CNSScheduler = (function () {
             : (trip.tripType === 'retour' ? (dctx.fullCharge ? leg : Math.max(0, 2 * leg - usableBatt)) : leg);
         const destPower = dctx.powers[trip.id] || 0;
         const destMin = _chargeMin(destEnergy, destPower, batt);
-        if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, label: 'Charge @ ' + trip.destName }); off += destMin; }
+        if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', ident: trip.destIdent, atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, label: 'Charge @ ' + trip.destName }); off += destMin; }
 
         if (trip.tripType === 'retour') {
             ph.push({ kind: 'fly', leg: 'back', start: off, dur: legMin, label: 'Fly back to ' + trip.originName }); off += legMin;
@@ -160,7 +179,7 @@ window.CNSScheduler = (function () {
                 : Math.min(2 * leg, usableBatt);
             const homePower = hctx.powers[trip.id] || 0;
             const homeMin = _chargeMin(homeEnergy, homePower, batt);
-            if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
+            if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', ident: trip.originIdent, atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
         }
         return { ph, total: off };
     }
@@ -198,7 +217,7 @@ window.CNSScheduler = (function () {
             const dur = _chargeMin(energy, power, batt);
             if (dur > 0) {
                 ph.push({
-                    kind: 'charge', at: c.role,
+                    kind: 'charge', at: c.role, ident: c.ident,
                     atX: viewIdent === c.ident,
                     atIdx: i + 1,                        // chain index — used by animation.js to position the plane
                     start: off, dur, power, energy,
@@ -226,142 +245,249 @@ window.CNSScheduler = (function () {
         const n = instancesPerDay(trip);
         let arr = sched[trip.id];
         if (!Array.isArray(arr) || arr.length !== n) {
-            arr = []; for (let k = 0; k < n; k++) arr.push(Math.min(DAY_END, DAY_START + k * dur));
+            // Default lay-out depends on whether the instances are the SAME
+            // aircraft repeating or DIFFERENT aircraft:
+            //   • one-way freq>1 → each flight is a separate plane that can
+            //     depart in parallel, so default them all to 07:00 (the
+            //     charger queue at the destination, if any, then staggers
+            //     them naturally in the global sim).
+            //   • retour/training → one aircraft flying sequential rotations,
+            //     so lay them back-to-back (it can't start the next until the
+            //     previous one lands).
+            const parallel = fleetSeparate(trip) && n > 1;
+            arr = [];
+            for (let k = 0; k < n; k++) arr.push(parallel ? DAY_START : Math.min(DAY_END, DAY_START + k * dur));
             sched[trip.id] = arr; saveSched(sched);
         }
         return arr.slice();
     }
 
-    // ---------- charger queue: assign charges to N chargers, lower-capacity first ----------
-    function simulateChargers(events, N) {
-        const waits = {};
-        if (!events.length) return waits;
-        const n = Math.max(1, N);
-        const free = new Array(n).fill(-Infinity);
-        const done = new Set();
-        while (done.size < events.length) {
-            let ci = 0; for (let i = 1; i < n; i++) if (free[i] < free[ci]) ci = i;
-            const cf = free[ci];
-            const pending = events.filter(e => !done.has(e.key));
-            const readyNow = pending.filter(e => e.ready <= cf);
-            const job = readyNow.length
-                ? readyNow.sort((a, b) => a.cap - b.cap || a.ready - b.ready)[0]   // lower capacity charges first
-                : pending.sort((a, b) => a.ready - b.ready)[0];
-            const start = Math.max(job.ready, cf);
-            waits[job.key] = start - job.ready;
-            free[ci] = start + job.dur;
-            done.add(job.key);
-        }
-        return waits;
+    // =====================================================================
+    // GLOBAL DISCRETE-EVENT SIMULATION  (single source of truth)
+    // ---------------------------------------------------------------------
+    // The whole network is simulated ONCE. Every consumer (per-airport
+    // scheduler, summary/peak, PDF report) then reads from this result, so
+    // they can never disagree. The key property the old per-airport solver
+    // lacked: a queue wait an aircraft incurs at airport A pushes its
+    // ARRIVAL at airport B later — because an aircraft's rotation is one
+    // continuous timeline across every airport it touches, not a fresh
+    // calculation per airport.
+    //
+    // Model:
+    //   • A LANE is one physical aircraft. retour/training aircraft fly
+    //     sequential rotations (return home each cycle); a freq>1 one-way
+    //     schedule needs a separate aircraft per flight, so each gets its
+    //     own lane (matches the prior semantic split).
+    //   • Each airport has a POOL of N chargers (one aircraft at a time).
+    //   • Charge events are processed in global ARRIVAL-time order (FCFS).
+    //     Claiming a charger updates its free-time; the wait elongates the
+    //     aircraft's rotation, shifting every later phase — including
+    //     arrivals at downstream airports.
+    //
+    // Output per lane → rotations[] → phases[] with ACTUAL absolute-minute
+    // start times, so views just draw what the simulation says.
+    // =====================================================================
+    let _globalStamp = null, _globalCache = null;
+
+    function _globalKey() {
+        return (localStorage.getItem(FOLDER_KEY) || '') + '¦' +
+               (localStorage.getItem(CFG_KEY) || '') + '¦' +
+               (localStorage.getItem(SCHED_KEY) || '') + '¦' + _settingsStamp();
     }
 
-    // Resolve an airport: take-offs + per-instance charge wait, honouring both
-    // same-aircraft sequencing and charger occupancy (fixed-point iteration).
-    let _resStamp = null, _resCache = {};
-    function resolveAirport(ident) {
-        const stamp = (localStorage.getItem(FOLDER_KEY) || '') + '¦' + (localStorage.getItem(CFG_KEY) || '') + '¦' + (localStorage.getItem(SCHED_KEY) || '') + '¦' + _settingsStamp();
-        if (stamp !== _resStamp) { _resStamp = stamp; _resCache = {}; }
-        if (_resCache[ident]) return _resCache[ident];
+    function runGlobal() {
+        const stamp = _globalKey();
+        if (stamp === _globalStamp && _globalCache) return _globalCache;
+        _globalStamp = stamp;
 
-        const N = fleetSizeAt(ident);
-        // A multi-leg trip can have MULTIPLE atX charges per rotation (a retour stop
-        // visited outbound + return = 2 charges at the same airport). Each lane
-        // therefore carries an array of atX charges; the queue and the cascade fan
-        // out over (instance k) × (charge ci).
-        //
-        // SEMANTIC SPLIT: a lane represents one AIRCRAFT. For retour and training
-        // trips the same aircraft can do multiple rotations in a day (it returns
-        // home each time). For one-way trips the plane lands at the destination
-        // and stays — each flight in a freq>1 one-way schedule therefore needs a
-        // separate aircraft, i.e. its own lane. We split here.
+        // 1. Build lanes (aircraft) with their canonical phase template.
         const lanes = [];
-        tripsAt(ident).forEach(t => {
-            const { ph, total } = tripPhases(t, ident);
-            const atXCharges = [];
-            ph.forEach(p => {
-                if (p.kind === 'charge' && p.atX) atXCharges.push({ offset: p.start, dur: p.dur, power: p.power });
-            });
+        loadTrips().forEach(t => {
+            const { ph, total } = tripPhases(t, null);     // charges carry .ident
             const starts = instanceStarts(t);
-            const isOneWay = t.tripType === 'one-way';
-            if (isOneWay && starts.length > 1) {
-                // One lane per flight (= per aircraft). Carry the plane index so
-                // the renderer can label it "plane 1 of N".
-                starts.forEach((d, k) => {
-                    lanes.push({
-                        trip: t, ph, total, atXCharges,
-                        cap: batteryOf(t), desired: [d],
-                        planeIdx: k + 1, planeTotal: starts.length, schedSlot: k,
-                    });
-                });
+            const base = { trip: t, ph, total, cap: batteryOf(t) };
+            if (fleetSeparate(t) && starts.length > 1) {
+                // Separate aircraft (fleet) → one lane each, can fly in parallel.
+                starts.forEach((d, k) => lanes.push({ ...base, desired: [d], planeIdx: k + 1, planeTotal: starts.length, schedSlot: k }));
             } else {
-                lanes.push({ trip: t, ph, total, atXCharges, cap: batteryOf(t), desired: starts });
+                // One aircraft doing sequential rotations → a single lane.
+                lanes.push({ ...base, desired: starts });
             }
         });
-        const keyOf = (li, k) => li + ':' + k;
-        const evKey = (li, k, ci) => keyOf(li, k) + ':' + ci;
 
-        const takeoffs = {};
-        lanes.forEach((L, li) => L.desired.forEach((d, k) => { takeoffs[keyOf(li, k)] = d; }));
-        let waits = {};
-        for (let it = 0; it < 6; it++) {
-            // 1) charger queue — each atX charge in each instance is one event.
-            //    Its `ready` time accumulates the waits of prior charges in the same
-            //    rotation (since each wait pushes the rest of the chain right).
-            const events = [];
-            lanes.forEach((L, li) => {
-                if (!L.atXCharges.length) return;
-                L.desired.forEach((d, k) => {
-                    let cumWait = 0;
-                    L.atXCharges.forEach((ch, ci) => {
-                        if (ch.dur <= 0) return;
-                        events.push({ key: evKey(li, k, ci), ready: takeoffs[keyOf(li, k)] + ch.offset + cumWait, dur: ch.dur, cap: L.cap });
-                        cumWait += (waits[evKey(li, k, ci)] || 0);
-                    });
-                });
-            });
-            const newWaits = simulateChargers(events, N);
-            // 2) cascade: a lane's rotation footprint = canonical total + ALL its waits.
-            let moved = false;
-            lanes.forEach((L, li) => {
-                const order = [...L.desired.keys()].sort((a, b) => L.desired[a] - L.desired[b]);
-                let prevEnd = -Infinity;
-                order.forEach(k => {
-                    const totalWait = L.atXCharges.reduce((s, _ch, ci) => s + (newWaits[evKey(li, k, ci)] || 0), 0);
-                    const foot = L.total + totalWait;
-                    const st = Math.max(L.desired[k], prevEnd);
-                    if (Math.abs((takeoffs[keyOf(li, k)] || 0) - st) > 0.01) moved = true;
-                    takeoffs[keyOf(li, k)] = st; prevEnd = st + foot;
-                });
-            });
-            waits = newWaits;
-            if (!moved) break;
+        // 2. Charger pools — one slot per PHYSICAL charger, carrying its real
+        //    power. A charge sizes its duration by the charger it actually
+        //    claims, and peak draw is the sum of in-use slot powers, so it's
+        //    bounded by the installed fleet.
+        const pools = {};
+        const poolOf = (ident) => {
+            if (!pools[ident]) {
+                const fp = getContext(ident).fleetPowers;
+                const powers = (fp && fp.length) ? fp : [0];
+                pools[ident] = powers.map(p => ({ power: p, freeAt: -Infinity }));
+            }
+            return pools[ident];
+        };
+
+        // 3. Per-lane runtime state: rotation records with mutable actual times.
+        lanes.forEach(L => {
+            L._chargeSeg = [];                              // ph indices that are real charges
+            L.ph.forEach((p, i) => { if (p.kind === 'charge' && p.dur > 0) L._chargeSeg.push(i); });
+            L.rotations = L.desired.map(d => ({
+                takeoff: d, end: d, cumShift: 0, nextC: 0,
+                // actual-timed copy of every phase (start filled in as we go)
+                phases: L.ph.map(p => ({
+                    kind: p.kind, ident: p.ident || null, atRole: p.at,
+                    start: 0, dur: p.dur, power: p.power || 0, energy: p.energy || 0,
+                    atIdx: p.atIdx, label: p.label, wait: 0,
+                })),
+            }));
+        });
+
+        // 4. Event queue ordered by arrival time. Each event = the next
+        //    pending charge of (lane li, rotation k). Insertion-sorted; event
+        //    counts are small (hundreds at most) so this is plenty fast.
+        const pq = [];
+        const pushEv = (e) => {
+            let lo = 0, hi = pq.length;
+            while (lo < hi) { const m = (lo + hi) >> 1; if (pq[m].arrival <= e.arrival) lo = m + 1; else hi = m; }
+            pq.splice(lo, 0, e);
+        };
+
+        // Seed the next charge of a rotation (or finalise it + chain to the
+        // lane's next rotation when no charges remain).
+        function advance(li, k) {
+            const L = lanes[li], rot = L.rotations[k];
+            if (rot.nextC >= L._chargeSeg.length) {
+                rot.end = rot.takeoff + L.total + rot.cumShift;
+                if (k + 1 < L.desired.length) {
+                    const next = L.rotations[k + 1];
+                    next.takeoff = Math.max(L.desired[k + 1], rot.end);   // no self-overlap
+                    advance(li, k + 1);
+                }
+                return;
+            }
+            const ci = L._chargeSeg[rot.nextC];
+            // cumShift = waits + (actual charger dur − baked dur) accumulated so
+            // far this rotation, so a later charge's arrival reflects how long
+            // the actual chargers really took, not the planCharging estimate.
+            const arrival = rot.takeoff + L.ph[ci].start + rot.cumShift;
+            pushEv({ li, k, ci, arrival });
+        }
+        lanes.forEach((L, li) => advance(li, 0));
+
+        // 5. Process charge arrivals in time order: claim the earliest-free
+        //    charger, record the wait, push the rotation's next charge.
+        while (pq.length) {
+            const e = pq.shift();
+            const L = lanes[e.li], rot = L.rotations[e.k], pool = poolOf(L.ph[e.ci].ident);
+            // Claim the MOST POWERFUL charger free at arrival (operators plug into
+            // the fastest open bay). pool is ordered power-desc, so the first free
+            // slot scanning from the top is the strongest one available now. If
+            // every charger is busy, wait for whichever frees earliest.
+            let bi = -1;
+            for (let i = 0; i < pool.length; i++) if (pool[i].freeAt <= e.arrival) { bi = i; break; }
+            if (bi < 0) { bi = 0; for (let i = 1; i < pool.length; i++) if (pool[i].freeAt < pool[bi].freeAt) bi = i; }
+            const start = Math.max(e.arrival, pool[bi].freeAt);
+            // Size this charge by the PHYSICAL charger it claimed — not the
+            // planCharging estimate. Power is the slot's; duration recomputed.
+            const power = pool[bi].power;
+            const dur = _chargeMin(L.ph[e.ci].energy, power, L.cap);
+            pool[bi].freeAt = start + dur;
+            const phase = rot.phases[e.ci];
+            phase.start = start;                 // ACTUAL charge start (queue wait already in)
+            phase.dur = dur;                      // ACTUAL duration on the claimed charger
+            phase.power = power;                  // ACTUAL draw — used for peak
+            phase.wait = start - e.arrival;       // queue wait at THIS airport
+            // Shift the rest of the rotation by the wait AND by any difference
+            // between the actual charger duration and the baked estimate.
+            rot.cumShift += phase.wait + (dur - L.ph[e.ci].dur);
+            rot.nextC += 1;
+            advance(e.li, e.k);
         }
 
-        const res = { lanes, takeoffs, waits, keyOf, evKey };
-        _resCache[ident] = res;
-        return res;
+        // 6. Forward-walk each rotation to stamp actual start times on the
+        //    NON-charge (fly) phases — each begins where the previous ended.
+        //    Charge starts are already actual; the gap before a charge (its
+        //    queue wait) is captured in phase.wait for the renderer.
+        lanes.forEach(L => L.rotations.forEach(rot => {
+            let t = rot.takeoff;
+            L.ph.forEach((p, i) => {
+                const ph = rot.phases[i];
+                if (ph.kind === 'charge' && ph.dur > 0) {
+                    t = ph.start + ph.dur;        // charge body already placed at actual start
+                } else {
+                    ph.start = t; t += ph.dur;
+                }
+            });
+            rot.end = t;
+        }));
+
+        _globalCache = { lanes, pools };
+        return _globalCache;
+    }
+
+    // Per-airport view derived from the global simulation. Returns the lanes
+    // (aircraft) that touch `ident`, each with its rotations expressed as
+    // actual-timed phases relative to that rotation's take-off (so the
+    // renderer can place an instance at `takeoff` and lay phases inside it).
+    function rotationsAt(ident) {
+        const g = runGlobal();
+        const out = [];
+        g.lanes.forEach(L => {
+            if (!roleAt(L.trip, ident)) return;
+            out.push({
+                trip: L.trip, planeIdx: L.planeIdx, planeTotal: L.planeTotal,
+                schedSlot: L.schedSlot, desired: L.desired,
+                rotations: L.rotations.map(rot => {
+                    // Build a render-ready phase list relative to take-off,
+                    // inserting an explicit 'wait' bar wherever the aircraft
+                    // queued for a charger at THIS airport.
+                    const rel = [];
+                    rot.phases.forEach(ph => {
+                        const relStart = ph.start - rot.takeoff;
+                        if (ph.kind === 'charge' && ph.wait > 0) {
+                            // A queue wait fills the gap before a charge. If it
+                            // happened HERE it's the amber "waiting for charger"
+                            // bar; if it happened at another airport on this
+                            // rotation it's a neutral "queued elsewhere" bar so
+                            // the lane has no unexplained blank space.
+                            const here = ph.ident === ident;
+                            rel.push({
+                                kind: here ? 'wait' : 'waitElsewhere',
+                                start: relStart - ph.wait, dur: ph.wait,
+                                label: here ? 'Waiting for free charger'
+                                            : 'Queued at ' + String(ph.label || 'another airport').replace(/^Charge @ /, ''),
+                            });
+                        }
+                        rel.push({
+                            kind: ph.kind,
+                            atX: ph.kind === 'charge' && ph.ident === ident,
+                            start: relStart, dur: ph.dur, power: ph.power, energy: ph.energy,
+                            atIdx: ph.atIdx, label: ph.label,
+                        });
+                    });
+                    return { takeoff: rot.takeoff, end: rot.end, phases: rel };
+                }),
+            });
+        });
+        return out;
     }
 
     function summary(ident) {
-        const { lanes, takeoffs, waits, keyOf, evKey } = resolveAirport(ident);
+        const g = runGlobal();
         const evs = [];
         let latest = DAY_START;
-        lanes.forEach((L, li) => {
-            L.desired.forEach((d, k) => {
-                const to = takeoffs[keyOf(li, k)];
-                // accumulate prior waits in this rotation so each charge sits at the right slot
-                let cumWait = 0;
-                L.atXCharges.forEach((ch, ci) => {
-                    const w = waits[evKey(li, k, ci)] || 0;
-                    if (ch.dur > 0 && ch.power) {
-                        const cs = to + ch.offset + cumWait + w;
-                        evs.push({ tm: cs, d: ch.power });
-                        evs.push({ tm: cs + ch.dur, d: -ch.power });
+        g.lanes.forEach(L => {
+            if (!roleAt(L.trip, ident)) return;
+            L.rotations.forEach(rot => {
+                rot.phases.forEach(ph => {
+                    if (ph.kind === 'charge' && ph.ident === ident && ph.dur > 0 && ph.power) {
+                        evs.push({ tm: ph.start, d: ph.power });
+                        evs.push({ tm: ph.start + ph.dur, d: -ph.power });
                     }
-                    cumWait += w;
                 });
-                const end = to + L.total + cumWait;
-                if (end > latest) latest = end;
+                if (rot.end > latest) latest = rot.end;
             });
         });
         evs.sort((a, b) => a.tm - b.tm || a.d - b.d);
@@ -374,9 +500,9 @@ window.CNSScheduler = (function () {
     // ---------- rendering ----------
     function renderInto(container, ident) {
         if (!container) return;
-        const res = resolveAirport(ident);
+        const rows = rotationsAt(ident);             // actual-timed, from the global sim
         container.innerHTML = '';
-        if (!res.lanes.length) { container.innerHTML = '<p class="text-muted small mb-0">No flights touch this airport yet.</p>'; return; }
+        if (!rows.length) { container.innerHTML = '<p class="text-muted small mb-0">No flights touch this airport yet.</p>'; return; }
 
         const sched = loadSched();
         const ids = new Set(loadTrips().map(t => t.id));
@@ -391,16 +517,13 @@ window.CNSScheduler = (function () {
             '<span style="display:inline-block;width:11px;height:11px;background:#0d6efd;border-radius:2px;vertical-align:middle"></span> flying' +
             ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:#198754;border-radius:2px;vertical-align:middle"></span> charging here' +
             ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:#9bd3ad;border-radius:2px;vertical-align:middle"></span> charging elsewhere' +
-            ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:repeating-linear-gradient(45deg,#f0ad4e,#f0ad4e 3px,#fbe4c4 3px,#fbe4c4 6px);border-radius:2px;vertical-align:middle"></span> waiting for charger';
+            ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:repeating-linear-gradient(45deg,#f0ad4e,#f0ad4e 3px,#fbe4c4 3px,#fbe4c4 6px);border-radius:2px;vertical-align:middle"></span> waiting for charger' +
+            ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 3px,#eef2f6 3px,#eef2f6 6px);border-radius:2px;vertical-align:middle"></span> queued at another airport';
         container.appendChild(legend);
 
-        // extend the timeline if cascaded rotations spill past 23:00, so none get clipped
+        // extend the timeline if any actual rotation spills past 23:00
         let maxMin = DAY_END;
-        res.lanes.forEach((L, li) => L.desired.forEach((d, k) => {
-            const totalWait = L.atXCharges.reduce((s, _ch, ci) => s + (res.waits[res.evKey(li, k, ci)] || 0), 0);
-            const end = res.takeoffs[res.keyOf(li, k)] + L.total + totalWait;
-            if (end > maxMin) maxMin = end;
-        }));
+        rows.forEach(row => row.rotations.forEach(rot => { if (rot.end > maxMin) maxMin = rot.end; }));
         const lastHour = Math.min(30, Math.max(23, Math.ceil(maxMin / 60)));
 
         const scroll = document.createElement('div');
@@ -421,7 +544,7 @@ window.CNSScheduler = (function () {
         inner.appendChild(axis);
 
         const chart = document.createElement('div');
-        chart.style.cssText = `position:relative;height:${res.lanes.length * LANE_H}px;border:1px solid #eee;border-radius:6px`;
+        chart.style.cssText = `position:relative;height:${rows.length * LANE_H}px;border:1px solid #eee;border-radius:6px`;
         for (let h = 7; h <= lastHour; h++) {
             const x = LABEL_W + (h * 60 - DAY_START) * PX;
             const line = document.createElement('div');
@@ -429,8 +552,8 @@ window.CNSScheduler = (function () {
             chart.appendChild(line);
         }
 
-        res.lanes.forEach((L, li) => {
-            const trip = L.trip;
+        rows.forEach((row, li) => {
+            const trip = row.trip;
             const role = roleAt(trip, ident);
             const roleLabel = role === 'home' ? 'departure' : role === 'stop' ? 'stop' : 'destination';
             const lane = document.createElement('div');
@@ -439,45 +562,24 @@ window.CNSScheduler = (function () {
             const label = document.createElement('div');
             label.title = `${trip.originName} → ${trip.destName} (${trip.planeName})`;
             label.style.cssText = `position:absolute;left:0;width:${LABEL_W}px;height:100%;padding:4px 8px;box-sizing:border-box;overflow:hidden;font-size:.74rem;line-height:1.15`;
-            // For split one-way lanes (one aircraft per flight) the sub-label
-            // shows "aircraft k of N" instead of "N/day" — clearer that each
-            // bar represents a distinct plane, not a repeated rotation.
-            const subRight = L.planeIdx
-                ? `aircraft ${L.planeIdx} of ${L.planeTotal}`
-                : `${L.desired.length}/day`;
+            const subRight = row.planeIdx
+                ? `aircraft ${row.planeIdx} of ${row.planeTotal}`
+                : `${row.rotations.length}/day`;
             label.innerHTML = `<div style="font-weight:600">${shorten(trip.originName)} → ${shorten(trip.destName)}</div>` +
                 `<div class="text-muted" style="font-size:.68rem">${trip.planeName} · ${roleLabel}${trip.multiLeg ? ' · multi-leg' : ''} · ${subRight}</div>`;
             lane.appendChild(label);
 
             const track = document.createElement('div');
             track.style.cssText = `position:absolute;left:${LABEL_W}px;right:0;top:0;bottom:0`;
-            L.desired.forEach((d, k) => {
-                const takeoff = res.takeoffs[res.keyOf(li, k)];
-                let iph = L.ph;
-                // For each atX charge in this rotation, insert a wait phase before it
-                // if the queue says so (multi-leg trips can have multiple atX charges).
-                const atXIdxs = [];
-                L.ph.forEach((p, i) => { if (p.kind === 'charge' && p.atX) atXIdxs.push(i); });
-                let anyWait = false;
-                for (let ci = 0; ci < atXIdxs.length; ci++) {
-                    if ((res.waits[res.evKey(li, k, ci)] || 0) > 0) { anyWait = true; break; }
-                }
-                if (anyWait) {
-                    iph = L.ph.map(p => ({ ...p }));
-                    const origLen = iph.length;
-                    atXIdxs.forEach((origChIdx, ci) => {
-                        const w = res.waits[res.evKey(li, k, ci)] || 0;
-                        if (w <= 0) return;
-                        const cs = iph[origChIdx].start;             // already shifted by any prior waits
-                        for (let i = origChIdx; i < origLen; i++) iph[i].start += w;
-                        iph.push({ kind: 'wait', start: cs, dur: w, label: 'Waiting for free charger' });
-                    });
-                }
-                // For split one-way lanes (planeIdx set), the original schedule
-                // slot is in L.schedSlot — passing `k` (always 0 for split lanes)
-                // would clobber slot 0 every time the user drags any of the planes.
-                const schedSlot = (L.schedSlot != null) ? L.schedSlot : k;
-                track.appendChild(buildInstance(trip, schedSlot, takeoff, iph));
+            row.rotations.forEach((rot, k) => {
+                // Each rotation's phases are already actual-timed (relative to
+                // its take-off) by the global sim — including any 'wait' bars
+                // for queueing. The renderer just lays them out; no per-airport
+                // re-derivation. A delay upstream is already baked into this
+                // rotation's take-off, so the bars sit at globally-consistent
+                // clock positions.
+                const schedSlot = (row.schedSlot != null) ? row.schedSlot : k;
+                track.appendChild(buildInstance(trip, schedSlot, rot.takeoff, rot.phases));
             });
             lane.appendChild(track);
             chart.appendChild(lane);
@@ -499,6 +601,7 @@ window.CNSScheduler = (function () {
             let bg = '#0d6efd';
             if (p.kind === 'charge') bg = p.atX ? '#198754' : '#9bd3ad';
             if (p.kind === 'wait') bg = 'repeating-linear-gradient(45deg,#f0ad4e,#f0ad4e 4px,#fbe4c4 4px,#fbe4c4 8px)';
+            if (p.kind === 'waitElsewhere') bg = 'repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 4px,#eef2f6 4px,#eef2f6 8px)';
             bar.style.cssText = `position:absolute;top:0;height:100%;left:${p.start * PX}px;width:${Math.max(2, p.dur * PX)}px;background:${bg};border-radius:3px;border:1px solid rgba(0,0,0,.12)`;
             inst.appendChild(bar);
         });
@@ -509,7 +612,7 @@ window.CNSScheduler = (function () {
             inst.style.outline = overflow ? '2px solid #dc3545' : 'none';
             const lines = [`${trip.originName} → ${trip.destName} — rotation`, `Take-off ${fmtTime(s)}`];
             ph.slice().sort((a, b) => a.start - b.start).forEach(p => {
-                const icon = p.kind === 'fly' ? '✈' : (p.kind === 'wait' ? '⏳' : '⚡');
+                const icon = p.kind === 'fly' ? '✈' : (p.kind === 'wait' ? '⏳' : (p.kind === 'waitElsewhere' ? '🅿' : '⚡'));
                 lines.push(`${icon} ${p.label}: ${fmtDur(p.dur)} (${fmtTime(s + p.start)}–${fmtTime(s + p.start + p.dur)})`);
             });
             if (overflow) lines.push('⚠ extends past 23:00 closing time');
@@ -549,8 +652,8 @@ window.CNSScheduler = (function () {
         opts = opts || {};
         catalog = opts.chargers || {};
         onChange = opts.onChange || null;
-        _stamp = null; _ctx = {}; _resStamp = null; _resCache = {};
+        _stamp = null; _ctx = {}; _globalStamp = null; _globalCache = null;
     }
 
-    return { init, renderInto, peakPowerKw, summary, tripsAt, phasesAnim, instanceStarts, roleAt, resolveAirport, tripPhases, DAY_START, DAY_END, SPAN };
+    return { init, renderInto, peakPowerKw, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, DAY_START, DAY_END, SPAN };
 })();
