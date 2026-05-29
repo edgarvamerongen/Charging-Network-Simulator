@@ -20,6 +20,25 @@
     let routeLayers = [];
     let startMarker = null, endMarker = null;
     let lastResult = null;
+    // Marker cluster + zoom/size filter bookkeeping.
+    let clusterLayer = null;
+    let airportMarkers = [];          // { ap, marker } — built once, added/removed on zoom
+    let clusterRefreshTimer = null;
+    // Range ring (L.circle around the origin) + its current picker role.
+    let rangeRing = null;
+    let pickerRole = null;            // 'origin' | 'destination' while #mPicker is open
+    let pickerMatches = [];           // current filtered list backing #mPickerList
+
+    // Respect the user's reduced-motion preference for map fly + JS animation.
+    const prefersReducedMotion = !!(window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    // Single-arg vibrate helper — guarded so unsupported browsers no-op.
+    function buzz(pattern) { if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) {} } }
+    // aria-live announcer for screen readers.
+    function announce(msg) {
+        const el = document.getElementById('mLiveRegion');
+        if (el) el.textContent = msg;
+    }
 
     // ---------- Map ---------------------------------------------------------
     function initMap() {
@@ -34,17 +53,64 @@
         try {
             allAirports = await fetch('/api/airports').then(r => r.json());
         } catch (e) { console.error('airports', e); return; }
-        // Plot a lightweight marker layer — circle markers, no clustering on
-        // mobile (keeps the JS simple; the orange dots are recognisable).
-        const layer = L.layerGroup().addTo(map);
+        // Cluster ~7,800 circle markers (Leaflet.markercluster, loaded before
+        // this script) instead of a flat layerGroup. Markers are built once and
+        // added/removed from the cluster by a zoom/size filter so dense
+        // low-zoom views stay readable and snappy.
+        clusterLayer = L.markerClusterGroup({
+            chunkedLoading: true,
+            showCoverageOnHover: false,
+            maxClusterRadius: 50,
+            // Reduced-motion: skip the cluster spiderfy/zoom animations.
+            animate: !prefersReducedMotion,
+        }).addTo(map);
+        airportMarkers = [];
         allAirports.forEach(a => {
             if (!isFinite(a.latitude_deg) || !isFinite(a.longitude_deg)) return;
             const m = L.circleMarker([a.latitude_deg, a.longitude_deg], {
                 radius: 5, color: '#fff', weight: 1, fillColor: '#ff7800', fillOpacity: .9
             });
             m.on('click', () => openMapPopup(a, m));
-            m.addTo(layer);
+            airportMarkers.push({ ap: a, marker: m });
         });
+        // Debounced recompute on pan/zoom — only the markers appropriate to the
+        // current zoom (by airport `.type`) are kept in the cluster.
+        const debounced = () => {
+            clearTimeout(clusterRefreshTimer);
+            clusterRefreshTimer = setTimeout(refreshClusterMarkers, 150);
+        };
+        map.on('zoomend', debounced);
+        map.on('moveend', debounced);
+        refreshClusterMarkers();
+    }
+
+    // Decide whether an airport should be visible at the given zoom, keyed off
+    // its `.type` field (verified against /api/airports: 'large_airport',
+    // 'medium_airport', 'small_airport'; defensive for 'heliport',
+    // 'seaplane_base', 'closed' which the European dataset omits).
+    function airportVisibleAtZoom(ap, zoom) {
+        const t = ap.type || '';
+        if (t === 'closed') return zoom >= 11;
+        if (t === 'large_airport') return true;                  // always
+        if (t === 'medium_airport') return zoom >= 6;
+        if (t === 'small_airport') return zoom >= 8;
+        if (t === 'heliport' || t === 'seaplane_base') return zoom >= 10;
+        // Unknown types: treat like small airports so nothing silently vanishes.
+        return zoom >= 8;
+    }
+
+    function refreshClusterMarkers() {
+        if (!clusterLayer) return;
+        const zoom = map.getZoom();
+        const add = [], remove = [];
+        airportMarkers.forEach(({ ap, marker }) => {
+            const want = airportVisibleAtZoom(ap, zoom);
+            const has = clusterLayer.hasLayer(marker);
+            if (want && !has) add.push(marker);
+            else if (!want && has) remove.push(marker);
+        });
+        if (remove.length) clusterLayer.removeLayers(remove);
+        if (add.length) clusterLayer.addLayers(add);
     }
 
     function openMapPopup(ap, marker) {
@@ -72,60 +138,110 @@
         }, 0);
     }
 
-    // ---------- Autocomplete -----------------------------------------------
-    function setupAutocomplete(inputId, listId, field) {
-        const input = document.getElementById(inputId);
-        const list  = document.getElementById(listId);
-        const clear = document.querySelector(`button.m-clear[data-clear="${inputId}"]`);
-        let current = [];
-        input.addEventListener('input', () => {
-            const q = input.value.trim().toLowerCase();
-            selected[field] = null;
-            updateSummary();
-            if (clear) clear.classList.toggle('d-none', !input.value);
-            if (q.length < 2) { list.classList.add('d-none'); return; }
-            current = allAirports.filter(a =>
-                (a.name && a.name.toLowerCase().includes(q)) ||
-                (a.municipality && a.municipality.toLowerCase().includes(q)) ||
-                (a.iata_code && a.iata_code.toLowerCase() === q)
-            ).slice(0, 30);
-            list.innerHTML = current.length
-                ? current.map((a, i) => `<div class="m-ac-item" data-i="${i}"><strong>${a.name}</strong><small>${a.ident || ''} ${a.municipality ? '· ' + a.municipality : ''}</small></div>`).join('')
-                : '<div class="m-ac-item text-muted">No matches</div>';
-            list.classList.remove('d-none');
-        });
-        list.addEventListener('mousedown', e => {
-            const item = e.target.closest('.m-ac-item[data-i]');
-            if (!item) return;
-            pickAirport(field, current[+item.dataset.i]);
-        });
-        list.addEventListener('touchstart', e => {
-            const item = e.target.closest('.m-ac-item[data-i]');
-            if (!item) return;
-            e.preventDefault();
-            pickAirport(field, current[+item.dataset.i]);
-        }, { passive: false });
-        input.addEventListener('blur', () => setTimeout(() => list.classList.add('d-none'), 200));
-        if (clear) clear.addEventListener('click', () => {
-            input.value = ''; selected[field] = null; clear.classList.add('d-none');
-            list.classList.add('d-none'); updateSummary(); refreshSimulateButton();
-        });
+    // ---------- Airport picker (full-screen overlay) -----------------------
+    // Shared filter predicate over name / municipality / iata — same fields the
+    // old autocomplete used. Returns the first 30 matches for a query.
+    function filterAirports(q) {
+        q = (q || '').trim().toLowerCase();
+        if (q.length < 2) return [];
+        return allAirports.filter(a =>
+            (a.name && a.name.toLowerCase().includes(q)) ||
+            (a.municipality && a.municipality.toLowerCase().includes(q)) ||
+            (a.iata_code && a.iata_code.toLowerCase() === q)
+        ).slice(0, 30);
     }
 
-    function pickAirport(field, ap) {
-        if (!ap) return;
-        selected[field] = ap;
-        const inp = document.getElementById(field === 'origin' ? 'mOrigin' : 'mDestination');
-        if (inp) {
-            inp.value = ap.name;
-            const clear = document.querySelector(`button.m-clear[data-clear="${inp.id}"]`);
-            if (clear) clear.classList.remove('d-none');
+    // Render matches into #mPickerList reusing the existing .m-ac-item markup
+    // (so the row look matches the rest of the app).
+    function renderPickerList(matches) {
+        const list = document.getElementById('mPickerList');
+        if (!list) return;
+        pickerMatches = matches;
+        list.innerHTML = matches.length
+            ? matches.map((a, i) => `<div class="m-ac-item" data-i="${i}"><strong>${a.name}</strong><small>${a.ident || ''} ${a.municipality ? '· ' + a.municipality : ''}</small></div>`).join('')
+            : '<div class="m-ac-item text-muted">No matches</div>';
+    }
+
+    // Open the full-screen picker for a role ('origin' | 'destination').
+    function openPicker(role) {
+        pickerRole = role;
+        const picker = document.getElementById('mPicker');
+        const title  = document.getElementById('mPickerTitle');
+        const input  = document.getElementById('mPickerInput');
+        if (title) title.textContent = role === 'origin' ? 'Set departure' : 'Set destination';
+        if (input) input.value = '';
+        renderPickerList([]);
+        if (picker) picker.classList.remove('d-none');
+        // Focus after the overlay paints so the mobile keyboard reliably opens.
+        if (input) setTimeout(() => input.focus(), 50);
+    }
+    function closePicker() {
+        pickerRole = null;
+        document.getElementById('mPicker')?.classList.add('d-none');
+    }
+
+    // Reflect the selected airport into a chip's label/code (chips replaced the
+    // removed #mOrigin/#mDestination text inputs).
+    function updateChip(role) {
+        const chip = document.getElementById(role === 'origin' ? 'mOriginChip' : 'mDestChip');
+        if (!chip) return;
+        const labelEl = chip.querySelector('.m-chip-label');
+        const codeEl  = chip.querySelector('.m-chip-code');
+        const ap = selected[role];
+        if (ap) {
+            if (labelEl) labelEl.textContent = ap.name;
+            if (codeEl)  codeEl.textContent  = _shortCode(ap);
+            chip.classList.add('is-filled');
+            chip.classList.remove('is-placeholder');
+        } else {
+            if (labelEl) labelEl.textContent = role === 'origin' ? 'Set departure' : 'Set destination';
+            if (codeEl)  codeEl.textContent  = '';
+            chip.classList.remove('is-filled');
+            chip.classList.add('is-placeholder');
         }
-        document.getElementById('mOriginList').classList.add('d-none');
-        document.getElementById('mDestinationList').classList.add('d-none');
+    }
+
+    function pickAirport(role, ap) {
+        if (!ap) return;
+        selected[role] = ap;
+        updateChip(role);
+        closePicker();
         updateSummary();
         refreshSimulateButton();
         drawLivePreview();
+        updateRangeRing();
+        // After a pick, rest the sheet at half so the planner is comfortably visible.
+        if (sheetCtl) sheetCtl.go(1);
+    }
+
+    // Swap origin/destination and re-sync everything that depends on them.
+    function swapAirports() {
+        const tmp = selected.origin;
+        selected.origin = selected.destination;
+        selected.destination = tmp;
+        updateChip('origin');
+        updateChip('destination');
+        updateSummary();
+        refreshSimulateButton();
+        drawLivePreview();
+        updateRangeRing();
+        buzz(10);
+    }
+
+    // ---------- Range ring --------------------------------------------------
+    // L.circle around the origin with radius = plane.range_km × 1000 m. Driven
+    // by #mRangeToggle, redrawn on origin change and #mPlane change.
+    function updateRangeRing() {
+        if (rangeRing) { map.removeLayer(rangeRing); rangeRing = null; }
+        const toggle = document.getElementById('mRangeToggle');
+        if (!toggle || !toggle.checked) return;
+        if (!selected.origin) return;
+        const plane = (window.PLANES_BY_ID || {})[document.getElementById('mPlane').value];
+        if (!plane || !plane.range_km) return;
+        rangeRing = L.circle(
+            [selected.origin.latitude_deg, selected.origin.longitude_deg],
+            { radius: plane.range_km * 1000, className: 'm-range-ring', interactive: false }
+        ).addTo(map);
     }
 
     // ---------- Live route preview -----------------------------------------
@@ -164,6 +280,7 @@
         let snap = 0;
         function go(idx) {
             idx = Math.max(0, Math.min(2, idx));
+            if (idx !== snap) buzz(8);     // haptic tick on snap-state change
             snap = idx;
             sheet.classList.remove('snap-half', 'snap-full');
             if (snaps[idx]) sheet.classList.add(snaps[idx]);
@@ -269,9 +386,58 @@
     }
 
     // ---------- Simulate + result ------------------------------------------
+    // Show an error in the #mError card (text in #mErrorText) and optionally
+    // populate the #mErrorActions slot with action buttons. `actions` is an
+    // array of { label, onClick }.
+    function showError(msg, actions) {
+        const card = document.getElementById('mError');
+        const txt  = document.getElementById('mErrorText');
+        const acts = document.getElementById('mErrorActions');
+        if (txt) txt.textContent = msg;
+        else if (card) card.textContent = msg;     // defensive fallback
+        if (acts) {
+            acts.innerHTML = '';
+            (actions || []).forEach(a => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'm-btn-secondary';
+                b.textContent = a.label;
+                b.addEventListener('click', a.onClick);
+                acts.appendChild(b);
+            });
+        }
+        if (card) {
+            card.classList.remove('d-none');
+            // Make sure it's actually seen: open the sheet and scroll to the card
+            // (errors otherwise land below the Simulate button, off-screen at half).
+            if (sheetCtl) sheetCtl.go(2);
+            const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+            requestAnimationFrame(() => card.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }));
+        }
+        announce(msg);
+        buzz([12, 60, 12]);
+    }
+    function clearError() {
+        document.getElementById('mError')?.classList.add('d-none');
+        const acts = document.getElementById('mErrorActions');
+        if (acts) acts.innerHTML = '';
+    }
+    // Action that opens the aircraft picker so the user can choose a longer-range
+    // plane — used by the soft-fail path (no "enable more airport types" copy on
+    // mobile, since that control doesn't exist here).
+    function focusPlaneAction() {
+        return {
+            label: 'Change aircraft',
+            onClick: () => {
+                if (sheetCtl) sheetCtl.go(1);
+                const sel = document.getElementById('mPlane');
+                if (sel) { sel.focus(); if (sel.showPicker) { try { sel.showPicker(); } catch (e) {} } }
+            },
+        };
+    }
+
     async function simulate() {
-        const errEl = document.getElementById('mError');
-        errEl.classList.add('d-none');
+        clearError();
         if (!selected.origin || !selected.destination) return;
         const planeId = document.getElementById('mPlane').value;
         const plane = (window.PLANES_BY_ID || {})[planeId];
@@ -281,7 +447,8 @@
         // Auto-plan stops when the direct hop exceeds the aircraft's range.
         // Keeps the mobile UX one-tap: the user picks airports, the planner
         // handles the chain transparently. If routing fails (no reachable
-        // intermediate airports) the backend's error surfaces normally.
+        // intermediate airports) we surface actionable copy — never the old
+        // "enable more airport types" line (no such control on mobile).
         const directKm = CNSRouting.haversineKm(origin, destination);
         let stops = null;
         if (plane && plane.range_km && directKm > plane.range_km) {
@@ -292,8 +459,12 @@
                 options: { reservePct: 0, maxStops: 10 },
             });
             if (planRes.error) {
-                errEl.textContent = `${planRes.error} (route too long for this aircraft)`;
-                errEl.classList.remove('d-none');
+                const planeName = (plane && plane.name) || 'aircraft';
+                showError(
+                    `A ${planeName} can't reach ${destination.name} (${Math.round(directKm)} km) even with charging stops. Try a longer-range aircraft or a closer destination.`,
+                    [focusPlaneAction()]
+                );
+                buzz([20, 80, 20]);
                 return;
             }
             stops = planRes.stops;
@@ -307,8 +478,17 @@
         };
         if (stops && stops.length) payload.stops = stops;
 
+        // Frequency — how often this trip flies (per day / per week).
+        const freqN = +(document.getElementById('mFreqN').value || 1);
+
         const btn = document.getElementById('mSimulateBtn');
         const original = btn.textContent;
+        const skeleton = document.getElementById('mResultSkeleton');
+        // Reveal the result pane (so the skeleton is visible) and show it during
+        // the await; hide on success or error.
+        document.getElementById('mPlanner').classList.add('d-none');
+        document.getElementById('mResult').classList.remove('d-none');
+        if (skeleton) skeleton.classList.remove('d-none');
         btn.disabled = true; btn.textContent = 'Simulating…';
         try {
             const resp = await fetch('/api/simulate', {
@@ -316,20 +496,45 @@
                 body: JSON.stringify(payload),
             });
             const data = await resp.json();
-            if (data.error) { errEl.textContent = data.error; errEl.classList.remove('d-none'); return; }
+            if (data.error) {
+                if (skeleton) skeleton.classList.add('d-none');
+                // Backend rejected the trip — return to the planner and show
+                // actionable copy. When it's a reach/range problem, steer the
+                // user to a longer-range aircraft (never "enable airport types",
+                // which has no control on mobile). Otherwise surface the backend
+                // message verbatim.
+                document.getElementById('mResult').classList.add('d-none');
+                document.getElementById('mPlanner').classList.remove('d-none');
+                const planeName = (plane && plane.name) || 'aircraft';
+                const rangey = /range|reach|exceed|too long|leg /i.test(data.error || '');
+                showError(
+                    rangey
+                        ? `A ${planeName} can't reach ${destination.name} (${Math.round(directKm)} km) even with charging stops. Try a longer-range aircraft or a closer destination.`
+                        : data.error,
+                    rangey ? [focusPlaneAction()] : []
+                );
+                buzz([20, 80, 20]);
+                return;
+            }
             // Stash inputs on the result for the Add-to-demand handler below.
             data._origin = origin; data._dest = destination;
             data._chargerId = payload.charger_id;
-            data._freqN = 1;
+            data._freqN = freqN;
             data._freqUnit = document.getElementById('mFreqUnit').value;
             lastResult = data;
+            if (skeleton) skeleton.classList.add('d-none');
             renderResult(data);
             drawSimulatedRoute(data);
             // Bump sheet to full so the result is fully visible.
             sheetCtl.go(2);
+            buzz(15);    // success tick
         } catch (e) {
-            errEl.textContent = 'Network error: ' + e.message;
-            errEl.classList.remove('d-none');
+            if (skeleton) skeleton.classList.add('d-none');
+            // Back to the planner so the error card is shown in context.
+            document.getElementById('mResult').classList.add('d-none');
+            document.getElementById('mPlanner').classList.remove('d-none');
+            showError('Network error: ' + e.message);
+            buzz([20, 80, 20]);
         } finally {
             btn.textContent = original; btn.disabled = false;
         }
@@ -374,7 +579,79 @@
         document.getElementById('mResTotal').textContent   = Math.round(data.total_distance_km || 0) + ' km' + (legs ? ` (${legs} leg${legs === 1 ? '' : 's'})` : '');
         document.getElementById('mResPlane').textContent   = data.plane?.name || '—';
         document.getElementById('mResCharger').textContent = `${data.charger?.name || ''} (${Math.round(data.charger?.power_kw || 0)} kW)`;
+
+        renderStopCards(data);
+
+        // Concise aria-live summary for screen readers.
+        const announceStops = isMulti ? stopCount : 0;
+        announce(`Route ready: ${announceStops} stop${announceStops === 1 ? '' : 's'}, ${fmtDur(flightMin)}.`);
+
         updateSummary();
+    }
+
+    // Render one .m-stop-card per leg/stop into #mStopCards. Multi-leg uses the
+    // backend's per-leg `legs` + `charges`; single-leg synthesises one card for
+    // the destination from the per-leg fields. Degrades gracefully when per-leg
+    // data is absent (no charger kW / dwell / SoC rows).
+    function renderStopCards(data) {
+        const host = document.getElementById('mStopCards');
+        if (!host) return;
+        host.innerHTML = '';
+        const powerKw = data.charger?.power_kw || 0;
+        const battery = data.plane?.battery_kwh || 0;
+
+        const metaRow = (label, value) =>
+            `<div class="m-stop-meta"><span class="lbl">${label}</span><span class="val">${value}</span></div>`;
+
+        const cardHtml = (name, code, metas) => `
+            <div class="m-stop-card">
+                <div class="m-stop-head">
+                    <span class="m-stop-name">${name || '—'}</span>
+                    <span class="m-stop-code">${code || ''}</span>
+                </div>
+                ${metas.join('')}
+            </div>`;
+
+        if (data.multi_leg && Array.isArray(data.charges) && data.charges.length) {
+            // One card per charge event (each intermediate stop + destination).
+            const legs = Array.isArray(data.legs) ? data.legs : [];
+            host.innerHTML = data.charges.map(c => {
+                const metas = [];
+                if (powerKw) metas.push(metaRow('Charger', `${Math.round(powerKw)} kW`));
+                if (isFinite(c.charge_time_min)) metas.push(metaRow('Dwell', fmtDur(c.charge_time_min)));
+                // Arrival SoC: battery state on arrival = (battery − energy of the
+                // leg that lands here) / battery. legs[i] lands at chain index i+1,
+                // so the leg feeding charge at_index k is legs[k-1].
+                const legIdx = (c.at_index || 0) - 1;
+                const leg = legs[legIdx];
+                if (battery && leg && isFinite(leg.energy_kwh)) {
+                    const soc = Math.max(0, (battery - leg.energy_kwh) / battery) * 100;
+                    metas.push(metaRow('Arrival SoC', `${Math.round(soc)}%`));
+                }
+                return cardHtml(c.name, _codeFromIdent(c.ident, c.name), metas);
+            }).join('');
+            return;
+        }
+
+        // Single-leg: a single destination card from per-leg fields.
+        const dest = data._dest || data.destination || {};
+        const metas = [];
+        if (powerKw) metas.push(metaRow('Charger', `${Math.round(powerKw)} kW`));
+        if (isFinite(data.charge_time_min)) metas.push(metaRow('Dwell', fmtDur(data.charge_time_min)));
+        if (battery && isFinite(data.leg_energy_kwh)) {
+            const soc = Math.max(0, (battery - data.leg_energy_kwh) / battery) * 100;
+            metas.push(metaRow('Arrival SoC', `${Math.round(soc)}%`));
+        }
+        // Only render a card if we have something meaningful (graceful degrade).
+        if (metas.length) {
+            host.innerHTML = cardHtml(dest.name, _codeFromIdent(dest.ident, dest.name), metas);
+        }
+    }
+
+    // Short code from an ident/name (the result payload doesn't carry iata_code
+    // for stops, so fall back to ident then first word of the name).
+    function _codeFromIdent(ident, name) {
+        return (ident || (name || '').split(/\s+/)[0] || '').toUpperCase();
     }
 
     function fmtDur(mins) {
@@ -447,7 +724,11 @@
             mainLine = L.polyline([p1, p2], { color: '#0d6efd', weight: 3 });
             mainLine.addTo(map); routeLayers.push(mainLine);
         }
-        map.fitBounds(L.featureGroup([startMarker, endMarker, mainLine].concat(stopMarkers)).getBounds(), { padding: [40, 40], maxZoom: 8 });
+        map.fitBounds(
+            L.featureGroup([startMarker, endMarker, mainLine].concat(stopMarkers)).getBounds(),
+            // Reduced-motion: snap to the bounds without a fly animation.
+            { padding: [40, 40], maxZoom: 8, animate: !prefersReducedMotion }
+        );
     }
 
     function addToDemand() {
@@ -474,19 +755,21 @@
     function backToPlanner() {
         document.getElementById('mResult').classList.add('d-none');
         document.getElementById('mPlanner').classList.remove('d-none');
+        clearError();
         lastResult = null;
         updateSummary();
     }
 
     function resetAll() {
         selected.origin = null; selected.destination = null;
-        document.getElementById('mOrigin').value = '';
-        document.getElementById('mDestination').value = '';
-        document.querySelectorAll('.m-clear').forEach(b => b.classList.add('d-none'));
-        document.getElementById('mError').classList.add('d-none');
+        // Reset the chips back to their empty labels (text inputs are gone).
+        updateChip('origin');
+        updateChip('destination');
+        clearError();
         lastResult = null;
         backToPlanner();
         clearRoute();
+        updateRangeRing();
         refreshSimulateButton();
         updateSummary();
     }
@@ -621,21 +904,48 @@
         }
     }
 
+    // ---------- Picker wiring ----------------------------------------------
+    // Chips open the full-screen #mPicker; typing filters allAirports; tapping a
+    // row calls pickAirport(role, ap).
+    function initPicker() {
+        const input = document.getElementById('mPickerInput');
+        const list  = document.getElementById('mPickerList');
+        document.getElementById('mOriginChip')?.addEventListener('click', () => openPicker('origin'));
+        document.getElementById('mDestChip')?.addEventListener('click', () => openPicker('destination'));
+        document.getElementById('mPickerClose')?.addEventListener('click', closePicker);
+        document.getElementById('mSwapBtn')?.addEventListener('click', swapAirports);
+        if (input) input.addEventListener('input', () => renderPickerList(filterAirports(input.value)));
+        const choose = (e) => {
+            const item = e.target.closest('.m-ac-item[data-i]');
+            if (!item) return;
+            if (e.type === 'touchstart') e.preventDefault();
+            pickAirport(pickerRole, pickerMatches[+item.dataset.i]);
+        };
+        if (list) {
+            list.addEventListener('mousedown', choose);
+            list.addEventListener('touchstart', choose, { passive: false });
+        }
+    }
+
     // ---------- Wire everything --------------------------------------------
     let sheetCtl;
     document.addEventListener('DOMContentLoaded', async () => {
         initMap();
         await loadAirports();
-        setupAutocomplete('mOrigin',      'mOriginList',      'origin');
-        setupAutocomplete('mDestination', 'mDestinationList', 'destination');
+        initPicker();
         sheetCtl = initSheet();
         document.getElementById('mSimulateBtn').addEventListener('click', simulate);
         document.getElementById('mResetBtn').addEventListener('click', resetAll);
         document.getElementById('mAddFolderBtn').addEventListener('click', addToDemand);
         document.getElementById('mBackToPlannerBtn').addEventListener('click', backToPlanner);
-        document.getElementById('mPlane').addEventListener('change', drawLivePreview);
+        // Aircraft change refreshes both the live preview and the range ring.
+        document.getElementById('mPlane').addEventListener('change', () => { drawLivePreview(); updateRangeRing(); });
+        // Range-ring toggle.
+        document.getElementById('mRangeToggle')?.addEventListener('change', updateRangeRing);
         document.getElementById('mDCBtn')?.addEventListener('click', openDC);
         document.getElementById('mDCClose')?.addEventListener('click', closeDC);
+        // DC empty-state CTA → close the overlay and open the planner sheet at half.
+        document.getElementById('mDCPlanBtn')?.addEventListener('click', () => { closeDC(); sheetCtl.go(1); });
         document.getElementById('mSettingsBtn')?.addEventListener('click', openSettings);
         document.getElementById('mSettingsClose')?.addEventListener('click', closeSettings);
         document.getElementById('mSetReset')?.addEventListener('click', () => {
