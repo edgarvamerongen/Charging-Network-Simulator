@@ -363,8 +363,8 @@ window.CNSTour = (function () {
             // the routing-padding factor; "propagates" no longer bold (was over-
             // emphasised vs the surrounding text).
             {
-                element: '#realismSettingsBtn',
-                popover: { title: 'Model settings', description: 'Operational realism factors — landing reserve, charger efficiency, charging-curve taper, SID/STAR routing distance. Each one propagates through every calculation in the app (planner, demand calc, scheduler, PDF). Off by default; opt in when you need them.', side: 'top' },
+                element: '#modelSettingsBtn',
+                popover: { title: 'Model settings', description: 'Operational model factors — landing reserve, charger efficiency, charging-curve taper, SID/STAR routing distance. Each one propagates through every calculation in the app (planner, demand calc, scheduler, PDF). Off by default; opt in when you need them.', side: 'top' },
                 onHighlightStarted: async () => { await _ensureDrawerOpen(); },
             },
             // 22. PDF report

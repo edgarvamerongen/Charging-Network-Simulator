@@ -47,7 +47,7 @@ window.CNSReport = (function () {
         });
         const chargers = Object.values(fleetAgg);
 
-        // One aircraft per contribution feeds CNSCharging — same realism +
+        // One aircraft per contribution feeds CNSCharging — same model +
         // cross-airport target-SoC logic as renderFolder, so the PDF agrees
         // with what the operator sees on screen.
         const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
@@ -83,8 +83,12 @@ window.CNSReport = (function () {
             const t = c.t;
             const asg = plan.assignments[i];
             const energy = asg.aircraft.energy;
-            const power = asg.charger ? asg.charger.power_kw : 0;
+            const nameplate = asg.charger ? asg.charger.power_kw : 0;
             const battery = t.battery ?? t.legEnergy * 2;
+            const cRate = ((window.PLANES_BY_ID || {})[t.planeId] || t).c_rate;
+            const power = window.CNSSettings
+                ? CNSSettings.effectiveChargePower(nameplate, battery, cRate)
+                : nameplate;
             const chargeMin = window.CNSSettings && power
                 ? CNSSettings.chargeTimeMin(energy, power, battery)
                 : asg.chargeTimeMin;

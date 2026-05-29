@@ -1,5 +1,5 @@
 /*
- * CNSSettings — operator-facing realism factors for the energy / charging model.
+ * CNSSettings — operator-facing model factors for the energy / charging model.
  * ------------------------------------------------------------------------------
  * Each factor has a toggle. When OFF the accessor returns the identity value
  * (1.0 / linear), so call sites can use the accessor unconditionally without
@@ -11,8 +11,18 @@
  *                        usable battery per leg.
  *   chargerEfficiency  — grid→cell efficiency. Inflates grid kWh demand vs
  *                        aircraft-side kWh; doesn't change charge time.
- *   chargeTaper        — charging above ~80% SoC tapers (lithium-ion CV phase).
- *                        Stretches charge time when topping up to near-full.
+ *   chargeTaper        — models the real charging curve. Two coupled effects,
+ *                        both active when this one factor is on:
+ *                          (a) C-rate acceptance cap — effective power is
+ *                              limited to min(charger kW, C-rate × battery kWh),
+ *                              because a small pack can't physically absorb an
+ *                              over-sized charger (e.g. a 3.75 MW MCS into a
+ *                              22 kWh Pipistrel). Per-aircraft `c_rate` overrides
+ *                              the global `cRate` default.
+ *                          (b) CV-phase taper — above `threshold` SoC power
+ *                              falls toward `taperPower × peak`, stretching the
+ *                              top-up to near-full.
+ *                        Together they form the plateau-then-taper curve.
  *   routingPadding     — multiplier on great-circle distance to approximate
  *                        SID/STAR + airways padding.
  *
@@ -31,7 +41,7 @@ window.CNSSettings = (function () {
     const DEFAULTS = Object.freeze({
         landingReserve:    { enabled: false, minLandingSoc: 0.30 },   // 0..1
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
-        chargeTaper:       { enabled: false, threshold: 0.80, taperPower: 0.40 },
+        chargeTaper:       { enabled: false, threshold: 0.80, taperPower: 0.40, cRate: 2.0 },  // cRate: global C-rate; per-plane c_rate overrides
         routingPadding:    { enabled: false, factor: 1.05 },          // ≥1
     });
 
@@ -103,6 +113,27 @@ window.CNSSettings = (function () {
         return Math.max(1.0, Math.min(1.5, +s.factor || 1.05));
     }
 
+    /** Effective charge power (kW) a battery can actually accept: the smaller
+     *  of the charger's rated power and the pack's C-rate limit
+     *  (`cRate × batteryKwh`). This is the CC-plateau half of the charging-curve
+     *  model, so it's gated on the SAME `chargeTaper` toggle. Identity (returns
+     *  `powerKw`) when that toggle is off or battery size is unknown. A
+     *  per-aircraft `planeCRate` (from the catalog's `c_rate`) takes precedence
+     *  over the global slider — small GA packs (~1C) and high-power eVTOLs
+     *  differ a lot, and C-rate is already normalised to pack size so it scales
+     *  correctly to each aircraft. */
+    function effectiveChargePower(powerKw, batteryKwh, planeCRate) {
+        const p = Math.max(0, +powerKw || 0);
+        const s = loadAll().chargeTaper;
+        if (!s.enabled) return p;
+        const batt = Math.max(0, +batteryKwh || 0);
+        if (!batt) return p;
+        const cr = (planeCRate != null && isFinite(+planeCRate) && +planeCRate > 0)
+            ? +planeCRate
+            : Math.max(0.1, Math.min(10, +s.cRate || 2.0));
+        return Math.min(p, cr * batt);
+    }
+
     /** Minutes to deliver `energyKwh` from a charger rated `powerKw`, against
      *  a battery of size `batteryKwh`. Linear when the taper toggle is off.
      *  When on: full power up to `threshold` SoC, then linearly down to
@@ -145,6 +176,6 @@ window.CNSSettings = (function () {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
         usableFraction, gridDemandFactor, routingFactor, chargeTimeMin,
-        activeFlags,
+        effectiveChargePower, activeFlags,
     };
 })();

@@ -691,7 +691,7 @@
         .est-note { font-size: .72rem; color: var(--muted); }
         .modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-lg); }
 
-        /* Realism-settings modal: one row per opt-in factor. */
+        /* Model-settings modal: one row per opt-in factor. */
         .rs-row { padding: 12px 0; border-bottom: 1px solid var(--panel-border); }
         .rs-row:last-child { border-bottom: none; }
         .rs-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; font-size: .9rem; color: var(--ink); }
@@ -704,7 +704,7 @@
         .rs-help { font-size: .78rem; color: var(--muted); margin: 4px 0 0 0; line-height: 1.4; }
 
         /* Badge on the trigger button — shows the count of active factors. */
-        .realism-badge {
+        .model-badge {
             display: inline-block; min-width: 18px; text-align: center;
             background: var(--primary); color: #fff; font-size: .7rem; font-weight: 700;
             padding: 1px 6px; border-radius: 999px; margin-left: 4px; line-height: 1.4;
@@ -817,7 +817,7 @@
             display: inline-flex; align-items: center; gap: 4px;
         }
         .modelset-btn:hover { background: rgba(229,120,80,.10); border-color: rgba(229,120,80,.25); color: var(--ink); }
-        .modelset-btn .realism-badge { margin-left: 2px; }
+        .modelset-btn .model-badge { margin-left: 2px; }
 
         /* Preference order — inline in the Suggested route section. */
         .stops-pref {
@@ -975,10 +975,10 @@
                     </label>
                     <!-- Replaces the old > Advanced details. One click opens the
                          same Model settings modal used by the Demand Calculator —
-                         operators can tweak realism factors while planning. -->
-                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#realismSettingsModal" title="Open Model settings — realism factors cascade through the planner and result panel">
+                         operators can tweak model factors while planning. -->
+                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Open Model settings — model factors cascade through the planner and result panel">
                         <span aria-hidden="true">⚙</span> Model settings
-                        <span id="planModelBadge" class="realism-badge d-none">0</span>
+                        <span id="planModelBadge" class="model-badge d-none">0</span>
                     </button>
                 </div>
                 <div id="stopsSection" class="stops-section d-none">
@@ -1120,7 +1120,7 @@
                     <label class="inline-field">Show airport
                         <select id="airportFilter" class="form-select form-select-sm"></select>
                     </label>
-                    <button id="realismSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#realismSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true">⚙</span> Model settings <span id="realismBadge" class="realism-badge d-none">0</span></button>
+                    <button id="modelSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true">⚙</span> Model settings <span id="modelBadge" class="model-badge d-none">0</span></button>
                     <button id="generateReport" class="btn-cns btn-sm-cns" type="button" title="Generate a PDF report of the current plan">Generate PDF report</button>
                     <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
                 </div>
@@ -1153,8 +1153,8 @@
         </div>
     </div>
 
-    <!-- Realism settings: opt-in factors that cascade through every calculation. -->
-    <div class="modal fade" id="realismSettingsModal" tabindex="-1">
+    <!-- Model settings: opt-in factors that cascade through every calculation. -->
+    <div class="modal fade" id="modelSettingsModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
@@ -1179,11 +1179,26 @@
                                 <label>Minimum landing SoC <span class="rs-val" id="rsMinSocVal">30%</span></label>
                                 <input type="range" id="rsMinSoc" min="5" max="50" step="5" value="30" class="form-range">
                             </div>
-                            <p class="rs-help">Each aircraft must land with at least this state of charge. Applied uniformly across the whole fleet — per-aircraft <code>min_landing_soc</code> values in the catalog (Pipistrel POH 30%, Beta 20%, Vaeridion 20%) are kept as published-spec documentation but this slider overrides them while the toggle is on.</p>
+                            <p class="rs-help">Each aircraft must land with at least this state of charge. Applied uniformly across the whole fleet.</p>
                         </div>
                     </div>
 
-                    <!-- 2. Charger efficiency -->
+                    <!-- 2. Routing padding (SID/STAR + airways) -->
+                    <div class="rs-row">
+                        <label class="rs-toggle">
+                            <input type="checkbox" id="rsRouting">
+                            <span>Apply routing padding (SID/STAR + airways)</span>
+                        </label>
+                        <div class="rs-detail">
+                            <div class="rs-slider-row">
+                                <label>Distance multiplier <span class="rs-val" id="rsRoutingVal">×1.05</span></label>
+                                <input type="range" id="rsRoutingSl" min="100" max="125" step="1" value="105" class="form-range">
+                            </div>
+                            <p class="rs-help">Multiplier on great-circle distance to approximate standardised departure/arrival procedures and airway constraints. EUROCONTROL average is ~3–8% over GC.</p>
+                        </div>
+                    </div>
+
+                    <!-- 3. Charger efficiency -->
                     <div class="rs-row">
                         <label class="rs-toggle">
                             <input type="checkbox" id="rsChargerEff">
@@ -1198,29 +1213,18 @@
                         </div>
                     </div>
 
-                    <!-- 3. Charging curve taper -->
+                    <!-- 4. Charging curve (C-rate cap + CV taper) -->
                     <div class="rs-row">
                         <label class="rs-toggle">
                             <input type="checkbox" id="rsTaper">
-                            <span>Apply charging-curve taper (slower above 80% SoC)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <p class="rs-help">Lithium-ion chargers run constant-power up to ~80% SoC then taper. Stretches charge time when topping up to near-full, and lowers average grid draw in the taper region.</p>
-                        </div>
-                    </div>
-
-                    <!-- 4. Routing padding (SID/STAR + airways) -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsRouting">
-                            <span>Apply routing padding (SID/STAR + airways)</span>
+                            <span>Apply charging curve (C-rate cap + taper above 80% SoC)</span>
                         </label>
                         <div class="rs-detail">
                             <div class="rs-slider-row">
-                                <label>Distance multiplier <span class="rs-val" id="rsRoutingVal">×1.05</span></label>
-                                <input type="range" id="rsRoutingSl" min="100" max="125" step="1" value="105" class="form-range">
+                                <label>Default charge C-rate <span class="rs-val" id="rsTaperCRateVal">2.0C</span></label>
+                                <input type="range" id="rsTaperCRate" min="5" max="60" step="1" value="20" class="form-range">
                             </div>
-                            <p class="rs-help">Multiplier on great-circle distance to approximate standardised departure/arrival procedures and airway constraints. EUROCONTROL average is ~3–8% over GC.</p>
+                            <p class="rs-help">Models the real charging curve: power runs flat at min(charger kW, C-rate × battery kWh) up to ~80% SoC, then tapers off. The C-rate cap means a small pack can't absorb an over-sized charger (e.g. a 3.75 MW MCS into a 22 kWh Pipistrel); the taper stretches the final top-up. Aircraft with a published <code>c_rate</code> use their own value; others use this default. Typical fast-charge C-rates: 1–3C.</p>
                         </div>
                     </div>
                 </div>
@@ -1284,6 +1288,8 @@
                             <input id="cpSeats" type="number" min="0" step="1" class="form-control" placeholder="#"></div>
                         <div class="col-6 mb-2"><label class="form-label">Max load <span class="text-muted">(kg, optional)</span></label>
                             <input id="cpLoad" type="number" min="0" step="any" class="form-control" placeholder="kg"></div>
+                        <div class="col-6 mb-2"><label class="form-label">Charge C-rate <span class="text-muted">(optional)</span></label>
+                            <input id="cpCRate" type="number" min="0.1" max="10" step="any" class="form-control" placeholder="e.g. 2.0"></div>
                     </div>
                     <div id="cpError" class="text-danger small d-none"></div>
                     <p class="est-note mb-0 mt-2">Enter metric values (kWh, km, km/h) regardless of the nm/kn display toggle.</p>
@@ -1474,7 +1480,7 @@
             return [...document.querySelectorAll('.airport-filter')].filter(cb => cb.checked).map(cb => cb.value);
         }
         function _routingOptions() {
-            // Reserve margin is now exclusively handled by the Realism settings
+            // Reserve margin is now exclusively handled by the Model settings
             // (landing-reserve toggle, with per-aircraft min_landing_soc). The
             // routing planner reads CNSSettings.usableFraction directly, so we
             // no longer pass reservePct here.
@@ -1504,7 +1510,7 @@
             plannedLegIssues = []; plannedError = null;
             const t = _terminus(); const plane = _selectedPlane();
             if (!t || !plane) return;
-            // Effective reach honours the realism landing-reserve setting
+            // Effective reach honours the model landing-reserve setting
             // when on; otherwise it's nameplate range (no advanced override).
             const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
             const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
@@ -1949,7 +1955,7 @@
             renderStops();
             clearRoute();
         });
-        // (advReserve was removed when the global Realism settings took over reserve handling)
+        // (advReserve was removed when the global Model settings took over reserve handling)
         // Switching planes re-plans the route (range changes auto-stops) AND must
         // redraw the map — recomputeRoute only updates the stop chain + validation.
         document.getElementById('plane').addEventListener('change', () => { smartReplan(); drawLiveRoute(); });
@@ -2238,7 +2244,7 @@
             const isMulti = !!data.multi_leg;
             const isRetour = data.trip_type === 'retour';
             const isTraining = data.trip_type === 'training';
-            // ---- Realism factors (cascade through everything below) -----------
+            // ---- Model factors (cascade through everything below) -----------
             // When all toggles are off these reduce to 1.0 and the original
             // numbers come through unchanged.
             const route   = isTraining ? 1.0 : CNSSettings.routingFactor();   // training has no routing pad
@@ -2251,10 +2257,25 @@
             // Energy actually consumed by the aircraft on the trip — informative
             // value for the headline (what comes out of the battery).
             let usedKwh, rechargeKwh, flightMin;
+            // Recharge (the energy this trip's charger must deliver) is sourced
+            // from CNSDemand.deliveredEnergy — the SAME authority the demand
+            // calculator, the global discrete-event sim (scheduler.js), peak
+            // power and the PDF report already use — so the headline can never
+            // drift from them. The result panel is a single-flight preview with
+            // no per-airport SoC target yet, so both target args are null; that
+            // makes deliveredEnergy reduce to the original formulas exactly
+            // (retour → max(0, 2·leg − usable), one-way → leg, training →
+            // min(leg, usable)). The fallback keeps the panel working if the
+            // demand module hasn't loaded. Multi-leg keeps the backend total.
+            const _tripLite = { tripType: data.trip_type };
+            const _delivered = (role, fallback) =>
+                (window.CNSDemand && CNSDemand.deliveredEnergy)
+                    ? CNSDemand.deliveredEnergy(_tripLite, role, legEnergy, p.battery_kwh || 0, usableBatteryKwh, null, null)
+                    : fallback;
             if (isTraining) {
                 // Training: energy used per flight is capped at usable battery.
                 usedKwh = Math.min(legEnergy, usableBatteryKwh);
-                rechargeKwh = usedKwh;                       // origin refills exactly what was used
+                rechargeKwh = _delivered('training', usedKwh);   // origin refills exactly what was used
                 flightMin = data.flight_time_h * 60;
             } else if (isMulti) {
                 usedKwh = data.total_recharge_energy_kwh * route;
@@ -2262,20 +2283,23 @@
                 flightMin = data.total_flight_time_h * 60 * route;
             } else if (isRetour) {
                 usedKwh = legEnergy * 2;
-                rechargeKwh = Math.max(0, 2 * legEnergy - usableBatteryKwh);
+                rechargeKwh = _delivered('dest', Math.max(0, 2 * legEnergy - usableBatteryKwh));
                 flightMin = data.flight_time_h * 60 * 2 * route;
             } else {
                 usedKwh = legEnergy;
-                rechargeKwh = legEnergy;
+                rechargeKwh = _delivered('dest', legEnergy);
                 flightMin = data.flight_time_h * 60 * route;
             }
-            const chargeMin = CNSSettings.chargeTimeMin(rechargeKwh, data.charger.power_kw, p.battery_kwh);
+            // Battery-acceptance cap: effective power = min(charger, C-rate×batt).
+            // Identity when the acceptance toggle is off.
+            const effPower = CNSSettings.effectiveChargePower(data.charger.power_kw, p.battery_kwh, p.c_rate);
+            const chargeMin = CNSSettings.chargeTimeMin(rechargeKwh, effPower, p.battery_kwh);
             const gridKwh = rechargeKwh * gridMul;
 
             document.getElementById('hlUsed').textContent = num(usedKwh);
             document.getElementById('hlFlight').textContent = fmtDuration(flightMin);
             document.getElementById('hlTime').textContent = fmtDuration(chargeMin);
-            // Sub-labels adapt to the trip context AND active realism flags.
+            // Sub-labels adapt to the trip context AND active model flags.
             const flags = CNSSettings.activeFlags();
             document.getElementById('hlUsedLabel').textContent =
                 isTraining ? 'Energy used (per session)'
@@ -2549,7 +2573,7 @@
                 const targetSocLabel = targetSoc == null ? 'auto' : Math.round(targetSoc * 100) + '%';
                 const fullCharge = !!cfg.fullCharge;     // legacy: still readable by the old code paths we haven't migrated
 
-                // Apply realism factors to each contribution before feeding the
+                // Apply model factors to each contribution before feeding the
                 // charging algorithm. Factors default to no-op (1.0) when their
                 // toggle is off, so this matches the original behaviour exactly.
                 const route   = CNSSettings.routingFactor();
@@ -2592,8 +2616,10 @@
                     const energy = asg.aircraft.energy;
                     // Override charging.js's linear time with the optional taper
                     // model. Identity (linear) when the taper toggle is off.
-                    const power = asg.charger ? asg.charger.power_kw : 0;
+                    const nameplate = asg.charger ? asg.charger.power_kw : 0;
                     const battery = t.battery ?? t.legEnergy * 2;
+                    const cRate = ((window.PLANES_BY_ID || {})[t.planeId] || t).c_rate;
+                    const power = CNSSettings.effectiveChargePower(nameplate, battery, cRate);
                     const chargeMin = power ? CNSSettings.chargeTimeMin(energy, power, battery) : Infinity;
                     dailyEnergy += energy * flightsPerDay(t);
                     if (isFinite(chargeMin)) dailyHours += (chargeMin / 60) * flightsPerDay(t);
@@ -2785,7 +2811,7 @@
                 originIdent: d._origin.ident, originName: d._origin.name, originLat: d._origin.lat, originLon: d._origin.lon,
                 planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
                 chargerId: d._chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
-                legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh,
+                legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
                 freqN: d._freqN, freqUnit: d._freqUnit,
                 // 'shared' = one aircraft cycles N rotations; 'separate' = N
                 // distinct planes (a fleet). Only meaningful for retour/training
@@ -2828,12 +2854,12 @@
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
         document.getElementById('generateReport').addEventListener('click', (e) => CNSReport.generate(e.currentTarget));
 
-        // ---- Realism settings modal -------------------------------------------
+        // ---- Model settings modal -------------------------------------------
         (function () {
             const map = {
                 landingReserve:    { check: 'rsLandingReserve', extras: { minLandingSoc: { input: 'rsMinSoc',     valEl: 'rsMinSocVal',     fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 chargerEfficiency: { check: 'rsChargerEff',    extras: { value:         { input: 'rsChargerEffSl', valEl: 'rsChargerEffVal', fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
-                chargeTaper:       { check: 'rsTaper',         extras: {} },
+                chargeTaper:       { check: 'rsTaper',         extras: { cRate:         { input: 'rsTaperCRate',   valEl: 'rsTaperCRateVal', fmt: (v) => `${(v / 10).toFixed(1)}C`,             to: (v) => v / 10,  from: (v) => Math.round(v * 10) } } },
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
 
@@ -2862,7 +2888,7 @@
                 const flags = CNSSettings.activeFlags();
                 const n = Object.keys(flags).filter(k => k !== 'anyOn' && flags[k] === true).length;
                 // Both trigger buttons (demand-drawer + planner) show the same badge.
-                ['realismBadge', 'planModelBadge'].forEach(id => {
+                ['modelBadge', 'planModelBadge'].forEach(id => {
                     const badge = document.getElementById(id);
                     if (!badge) return;
                     badge.textContent = n;
@@ -3072,13 +3098,19 @@
             const speed = parseFloat(document.getElementById('cpSpeed').value);
             const seats = parseInt(document.getElementById('cpSeats').value, 10);
             const load = parseFloat(document.getElementById('cpLoad').value);
+            const cRate = parseFloat(document.getElementById('cpCRate').value);
             if (!name || !(battery > 0) || !(range > 0) || !(speed > 0)) {
                 err.textContent = 'Enter a name and positive battery (kWh), range (km) and cruise speed (km/h).';
+                err.classList.remove('d-none'); return;
+            }
+            if (!isNaN(cRate) && !(cRate > 0)) {
+                err.textContent = 'Charge C-rate must be a positive number (or leave it blank).';
                 err.classList.remove('d-none'); return;
             }
             const draft = { name, battery_kwh: battery, range_km: range, speed_kmh: speed };
             if (!isNaN(seats)) draft.seats = seats;
             if (!isNaN(load)) draft.load_kg = load;
+            if (!isNaN(cRate)) draft.c_rate = cRate;
             try {
                 const p = await CNSPlanes.add(draft);
                 customById[p.id] = p;

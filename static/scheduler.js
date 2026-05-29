@@ -73,7 +73,7 @@ window.CNSScheduler = (function () {
         return fullCharge ? leg : Math.max(0, 2 * leg - batt);
     }
 
-    // ---------- per-airport charger context (memoised on folder + cfg + realism settings) ----------
+    // ---------- per-airport charger context (memoised on folder + cfg + model settings) ----------
     let _stamp = null, _ctx = {};
     function _settingsStamp() {
         // Settings affect every computed phase, so changing them must bust the
@@ -135,7 +135,7 @@ window.CNSScheduler = (function () {
     }
     function fleetSizeAt(ident) { return getContext(ident).fleetSize; }
 
-    // ---------- realism factors (cascade if CNSSettings is loaded) ----------
+    // ---------- model factors (cascade if CNSSettings is loaded) ----------
     const _rs = () => (window.CNSSettings || null);
     const _route   = () => _rs() ? CNSSettings.routingFactor() : 1.0;
     const _usableB = (trip) => {
@@ -147,6 +147,13 @@ window.CNSScheduler = (function () {
         if (!_rs() || !power) return power ? energy / power * 60 : 0;
         return CNSSettings.chargeTimeMin(energy, power, batt);
     };
+    // Battery acceptance cap: a small pack can't absorb an over-sized charger.
+    // `power` here must already be the charger's nameplate; the result is the
+    // EFFECTIVE power used for both charge time and peak draw. Identity when the
+    // acceptance toggle is off. Pass the plane's c_rate (catalog) when known.
+    const _cRateOf = (trip) => ((window.PLANES_BY_ID || {})[trip.planeId] || trip || {}).c_rate;
+    const _effPower = (power, batt, cRate) =>
+        (_rs() && CNSSettings.effectiveChargePower) ? CNSSettings.effectiveChargePower(power, batt, cRate) : (power || 0);
 
     // ---------- rotation timeline (airport-driven charge times; viewIdent flags atX) ----------
     function tripPhases(trip, viewIdent) {
@@ -157,6 +164,7 @@ window.CNSScheduler = (function () {
         const leg = num(trip, 'legEnergy') * route;
         const batt = batteryOf(trip);
         const usableBatt = _usableB(trip);
+        const cRate = _cRateOf(trip);
 
         const ph = []; let off = 0;
         ph.push({ kind: 'fly', leg: 'out', start: off, dur: legMin, label: 'Fly to ' + trip.destName }); off += legMin;
@@ -168,7 +176,7 @@ window.CNSScheduler = (function () {
         const destEnergy = window.CNSDemand && CNSDemand.deliveredEnergy
             ? CNSDemand.deliveredEnergy(trip, 'dest', leg, batt, usableBatt, dctx.targetSoc, hctx ? hctx.targetSoc : null)
             : (trip.tripType === 'retour' ? (dctx.fullCharge ? leg : Math.max(0, 2 * leg - usableBatt)) : leg);
-        const destPower = dctx.powers[trip.id] || 0;
+        const destPower = _effPower(dctx.powers[trip.id] || 0, batt, cRate);
         const destMin = _chargeMin(destEnergy, destPower, batt);
         if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', ident: trip.destIdent, atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, label: 'Charge @ ' + trip.destName }); off += destMin; }
 
@@ -177,7 +185,7 @@ window.CNSScheduler = (function () {
             const homeEnergy = window.CNSDemand && CNSDemand.deliveredEnergy
                 ? CNSDemand.deliveredEnergy(trip, 'home', leg, batt, usableBatt, hctx.targetSoc, dctx.targetSoc)
                 : Math.min(2 * leg, usableBatt);
-            const homePower = hctx.powers[trip.id] || 0;
+            const homePower = _effPower(hctx.powers[trip.id] || 0, batt, cRate);
             const homeMin = _chargeMin(homeEnergy, homePower, batt);
             if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', ident: trip.originIdent, atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
         }
@@ -196,6 +204,7 @@ window.CNSScheduler = (function () {
         const route = _route();
         const batt = batteryOf(trip);
         const usableBatt = _usableB(trip);
+        const cRate = _cRateOf(trip);
         // Recompute per-stop charge energies using the per-airport SoC targets
         // (cascades through every downstream stop in one forward walk).
         const liveCharges = (window.CNSDemand && CNSDemand.recomputeMultiLegCharges)
@@ -212,7 +221,7 @@ window.CNSScheduler = (function () {
             const c = liveCharges[i] || charges[i];
             if (!c) return;
             const ctx = getContext(c.ident);
-            const power = ctx.powers[trip.id] || 0;
+            const power = _effPower(ctx.powers[trip.id] || 0, batt, cRate);
             const energy = Number(c.energy_kwh) || 0;     // already recomputed with route + targets
             const dur = _chargeMin(energy, power, batt);
             if (dur > 0) {
@@ -305,7 +314,7 @@ window.CNSScheduler = (function () {
         loadTrips().forEach(t => {
             const { ph, total } = tripPhases(t, null);     // charges carry .ident
             const starts = instanceStarts(t);
-            const base = { trip: t, ph, total, cap: batteryOf(t) };
+            const base = { trip: t, ph, total, cap: batteryOf(t), cRate: _cRateOf(t) };
             if (fleetSeparate(t) && starts.length > 1) {
                 // Separate aircraft (fleet) → one lane each, can fly in parallel.
                 starts.forEach((d, k) => lanes.push({ ...base, desired: [d], planeIdx: k + 1, planeTotal: starts.length, schedSlot: k }));
@@ -390,8 +399,10 @@ window.CNSScheduler = (function () {
             if (bi < 0) { bi = 0; for (let i = 1; i < pool.length; i++) if (pool[i].freeAt < pool[bi].freeAt) bi = i; }
             const start = Math.max(e.arrival, pool[bi].freeAt);
             // Size this charge by the PHYSICAL charger it claimed — not the
-            // planCharging estimate. Power is the slot's; duration recomputed.
-            const power = pool[bi].power;
+            // planCharging estimate. Power is the slot's nameplate, capped by the
+            // battery's acceptance (C-rate) so the recorded draw and duration are
+            // both physical. The bay is still occupied for the (capped) duration.
+            const power = _effPower(pool[bi].power, L.cap, L.cRate);
             const dur = _chargeMin(L.ph[e.ci].energy, power, L.cap);
             pool[bi].freeAt = start + dur;
             const phase = rot.phases[e.ci];

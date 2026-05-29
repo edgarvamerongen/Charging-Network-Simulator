@@ -182,6 +182,16 @@ def add_custom_plane():
     if p.get('load_kg') not in (None, ''):
         try:    saved['load_kg'] = float(p['load_kg'])
         except: pass
+    # Optional battery charge C-rate (used by the charging-curve model factor).
+    # Only persist a sane, finite, positive value; otherwise it falls back to
+    # the global slider default at calculation time.
+    if p.get('c_rate') not in (None, ''):
+        try:
+            cr = float(p['c_rate'])
+            if math.isfinite(cr) and 0 < cr <= 10:
+                saved['c_rate'] = cr
+        except (TypeError, ValueError):
+            pass
 
     data.append(saved)
     _write_list(CUSTOM_FILES['planes'], data)
