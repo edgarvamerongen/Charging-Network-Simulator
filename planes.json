@@ -19,7 +19,6 @@
     "battery_kwh": 225,
     "range_km": 500,
     "speed_kmh": 250,
-    "c_rate": 1.4,
     "image": "beta.png",
     "svg": "beta.svg"
   },
@@ -31,7 +30,6 @@
     "battery_kwh": 500,
     "range_km": 500,
     "speed_kmh": 400,
-    "c_rate": 1.0,
     "image": "vaeridion.png",
     "svg": "vaeridion.svg"
   }
