@@ -1950,7 +1950,9 @@
             clearRoute();
         });
         // (advReserve was removed when the global Realism settings took over reserve handling)
-        document.getElementById('plane').addEventListener('change', smartReplan);
+        // Switching planes re-plans the route (range changes auto-stops) AND must
+        // redraw the map — recomputeRoute only updates the stop chain + validation.
+        document.getElementById('plane').addEventListener('change', () => { smartReplan(); drawLiveRoute(); });
 
         function setupAutocomplete(field) {
             const input = document.getElementById(field);
