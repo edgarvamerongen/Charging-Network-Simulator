@@ -20,7 +20,7 @@
  *                              22 kWh Pipistrel). Per-aircraft `c_rate` overrides
  *                              the global `cRate` default.
  *                          (b) CV-phase taper — above `threshold` SoC power
- *                              falls toward `taperPower × peak`, stretching the
+ *                              rolls off exponentially toward `taperPower × peak`, stretching the
  *                              top-up to near-full.
  *                        Together they form the plateau-then-taper curve.
  *   routingPadding     — multiplier on great-circle distance to approximate
@@ -41,7 +41,7 @@ window.CNSSettings = (function () {
     const DEFAULTS = Object.freeze({
         landingReserve:    { enabled: false, minLandingSoc: 0.30 },   // 0..1
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
-        chargeTaper:       { enabled: false, threshold: 0.80, taperPower: 0.40, cRate: 2.0 },  // cRate: global C-rate; per-plane c_rate overrides
+        chargeTaper:       { enabled: false, threshold: 0.70, taperPower: 0.15, cRate: 2.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate (per-plane c_rate overrides)
         routingPadding:    { enabled: false, factor: 1.05 },          // ≥1
     });
 
@@ -136,27 +136,35 @@ window.CNSSettings = (function () {
 
     /** Minutes to deliver `energyKwh` from a charger rated `powerKw`, against
      *  a battery of size `batteryKwh`. Linear when the taper toggle is off.
-     *  When on: full power up to `threshold` SoC, then linearly down to
-     *  `taperPower × powerKw` at 100%. We don't know absolute start-SoC at
-     *  this layer, so we treat the charge as occupying the "top slice" of
-     *  the battery — i.e. if the delivered energy is larger than the top-
-     *  slice capacity `batt × (1 - thr)` (which is everything above the
-     *  taper threshold), the EXCESS sits below the threshold and charges
-     *  at full power; the top slice itself charges at the tapered average. */
+     *  When on: full power up to `threshold` SoC, then an EXPONENTIAL roll-off
+     *  to `taperPower × powerKw` at 100% (a realistic CV-phase taper). We don't
+     *  know absolute start-SoC at this layer, so we treat the charge as
+     *  occupying the "top slice" of the battery — energy beyond the top-slice
+     *  capacity `batt × (1 - thr)` sits below the threshold and charges at full
+     *  power; the top slice itself rolls off along the exponential curve. */
     function chargeTimeMin(energyKwh, powerKw, batteryKwh) {
         const e = Math.max(0, +energyKwh || 0);
         const p = Math.max(1e-9, +powerKw || 0);
         if (e === 0) return 0;
         const s = loadAll().chargeTaper;
         if (!s.enabled || !batteryKwh) return 60 * e / p;
-        const thr = Math.max(0.5, Math.min(0.99, +s.threshold || 0.80));
-        const tp  = Math.max(0.1, Math.min(0.95, +s.taperPower || 0.40));
-        const batt = Math.max(1e-9, +batteryKwh);
-        const topSliceCap = batt * (1 - thr);       // capacity above the taper threshold
-        const taperKwh = Math.min(e, topSliceCap);  // top slice (if filled) — tapered
-        const fastKwh  = e - taperKwh;              // bottom portion — full power
-        const avgTaperPower = p * (1 + tp) / 2;     // linear taper → average power
-        return 60 * (fastKwh / p + taperKwh / avgTaperPower);
+        const thr   = Math.max(0.5, Math.min(0.95, +s.threshold || 0.70));
+        const floor = Math.max(0.05, Math.min(0.95, +s.taperPower || 0.15));
+        const batt  = Math.max(1e-9, +batteryKwh);
+        // Above `thr` SoC the accepted power decays EXPONENTIALLY from peak to
+        // floor·peak at 100%:  P(SoC) = p · floor^((SoC-thr)/(1-thr)).  That
+        // constant-fraction roll-off mirrors a real CV-phase current taper far
+        // better than a straight line. Time over the tapered top slice is the
+        // closed-form integral of dE / P(SoC); below `thr` it's just full power.
+        const topSlice = batt * (1 - thr);          // capacity above the CC→CV knee
+        const b = -Math.log(floor);                 // decay constant (> 0)
+        if (e <= topSlice) {                         // whole charge sits in the taper band, ending at 100%
+            const u0 = (1 - e / batt - thr) / (1 - thr);             // 0..1 up from the knee
+            return 60 * topSlice / (p * b) * (Math.exp(b) - Math.exp(u0 * b));
+        }
+        const fastKwh = e - topSlice;                               // below the knee → full power
+        const taperHr = topSlice / (p * b) * (Math.exp(b) - 1);     // tapered top slice (hours)
+        return 60 * (fastKwh / p + taperHr);
     }
 
     /** Convenience: state-of-the-world flags for UI badges / explanations. */

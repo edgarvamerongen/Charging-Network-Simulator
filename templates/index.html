@@ -1217,14 +1217,14 @@
                     <div class="rs-row">
                         <label class="rs-toggle">
                             <input type="checkbox" id="rsTaper">
-                            <span>Apply charging curve (C-rate cap + taper above 80% SoC)</span>
+                            <span>Apply charging curve (C-rate cap + taper above 70% SoC)</span>
                         </label>
                         <div class="rs-detail">
                             <div class="rs-slider-row">
                                 <label>Default charge C-rate <span class="rs-val" id="rsTaperCRateVal">2.0C</span></label>
                                 <input type="range" id="rsTaperCRate" min="5" max="60" step="1" value="20" class="form-range">
                             </div>
-                            <p class="rs-help">Models the real charging curve: power runs flat at min(charger kW, C-rate × battery kWh) up to ~80% SoC, then tapers off. The C-rate cap means a small pack can't absorb an over-sized charger (e.g. a 3.75 MW MCS into a 22 kWh Pipistrel); the taper stretches the final top-up. Aircraft with a published <code>c_rate</code> use their own value; others use this default. Typical fast-charge C-rates: 1–3C.</p>
+                            <p class="rs-help">Models the real charging curve: power runs flat at min(charger kW, C-rate × battery kWh) up to ~70% SoC, then rolls off exponentially toward a low floor at 100% (a realistic CV taper). The C-rate cap means a small pack can't absorb an over-sized charger (e.g. a 3.75 MW MCS into a 22 kWh Pipistrel); the taper stretches the final top-up. Aircraft with a published <code>c_rate</code> use their own value; others use this default. Typical fast-charge C-rates: 1–3C.</p>
                         </div>
                     </div>
                 </div>

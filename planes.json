@@ -1,13 +1,13 @@
 [
   {
     "id": "pipistrel_velis",
-    "name": "Pipistrel Velis Electro",
+    "name": "Velis Electro",
     "seats": 2,
     "battery_kwh": 22,
     "range_km": 100,
     "speed_kmh": 150,
     "training_range_km": 70,
-    "c_rate": 1.0,
+    "c_rate": 0.9,
     "image": "pipistrel.png",
     "svg": "pepistrel.svg"
   },
