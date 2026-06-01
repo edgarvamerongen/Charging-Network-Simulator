@@ -295,6 +295,9 @@
         }
         .rail-left:has(> :not(.d-none))::before  { left: -30px; }
         .rail-right:has(> :not(.d-none))::before { right: -30px; }
+        /* When the result is collapsed to its summary, drop the cream halo — the
+           dark summary card is opaque, and a full-height glow behind a tiny card looks off. */
+        .rail-right:has(> #result.minimized)::before { display: none; }
 
         /* =========================================================
            Glass panel
