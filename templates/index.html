@@ -307,6 +307,24 @@
             box-shadow: var(--shadow);
             padding: 18px;
         }
+        /* ---- Results panel: hover-reveal minimize / click-to-expand ---- */
+        #result { position: relative; }
+        .result-min {
+            position: absolute; top: 10px; right: 10px; z-index: 6;
+            width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%;
+            display: grid; place-items: center; line-height: 1;
+            background: rgba(255,255,255,.18); color: #fff; font-size: 17px; cursor: pointer;
+            opacity: 0; transition: opacity .15s ease, background .15s ease;
+        }
+        #result:hover .result-min { opacity: 1; }
+        .result-min:hover { background: rgba(255,255,255,.34); }
+        #result.minimized > :not(.headline-box) { display: none !important; }
+        #result.minimized .headline-box { cursor: pointer; position: relative; }
+        #result.minimized .headline-box::after {
+            content: '⌄'; position: absolute; top: 4px; right: 12px;
+            font-size: 16px; color: rgba(255,255,255,.55); pointer-events: none;
+        }
+        #result.minimized .headline-box:hover::after { color: #fff; }
         .panel-head {
             display: flex; align-items: center; justify-content: space-between;
             margin: -2px 0 14px 0; padding-bottom: 12px;
@@ -1052,6 +1070,7 @@
     <!-- right rail: result panel -->
     <aside class="rail-right">
         <section id="result" class="panel d-none">
+            <button type="button" id="resultMin" class="result-min" title="Minimize" aria-label="Minimize results">×</button>
             <div class="headline-box">
                 <div class="row text-center g-0">
                     <div class="col-4 border-end border-light">
@@ -1089,7 +1108,6 @@
                     <span class="section-tag tag-trip">Trip Calculated</span>
                     <table class="spec-table">
                         <tr><td>Trip type</td><td id="trType"></td></tr>
-                        <tr><td>Leg distance</td><td id="trLeg"></td></tr>
                         <tr><td>Total distance</td><td id="trTotal"></td></tr>
                         <tr><td>Total flight time</td><td id="trFlight"></td></tr>
                         <tr><td>Charger</td><td id="trCharger"></td></tr>
@@ -1789,6 +1807,16 @@
         // the map — recomputeRoute only updates the stop chain + validation.
         document.getElementById('advBias').addEventListener('change', () => { smartReplan(); drawLiveRoute(); });
 
+        // Results panel collapse: the ✕ (revealed on hover) minimises to just the
+        // dark-blue summary; clicking the summary while collapsed re-expands it.
+        (function () {
+            const result = document.getElementById('result');
+            const minBtn = document.getElementById('resultMin');
+            const headline = result && result.querySelector('.headline-box');
+            if (minBtn) minBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); result.classList.add('minimized'); });
+            if (headline) headline.addEventListener('click', () => { if (result.classList.contains('minimized')) result.classList.remove('minimized'); });
+        })();
+
         // ============================================================
         // Manual stop fields — first-class form inputs between Departure
         // and Destination. Each `+ Add stop` appends a new autocomplete
@@ -2341,11 +2369,6 @@
                 isTraining ? `Training pattern (${Math.round(flightMin)} min)`
                 : (data.trip_type === 'retour' ? 'Round Trip (Retour)' : 'One-Way')
                   + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
-            // Guard: when the backend doesn't populate leg_distance_km (some
-            // edge cases — direct one-way with auto-stops collapsed back to
-            // zero, etc.), fall back to '—' instead of rendering "0 km".
-            const legDistOk = Number(data.leg_distance_km) > 0;
-            document.getElementById('trLeg').textContent = isTraining || isMulti || !legDistOk ? '—' : fmtDist(data.leg_distance_km);
             document.getElementById('trTotal').textContent = isTraining
                 ? fmtDist(data.training_range_km) + ' loop'
                 : fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
