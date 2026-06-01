@@ -1785,7 +1785,9 @@
             if (typeof updateTrajectory === 'function') updateTrajectory();
             drawLiveRoute();
         });
-        document.getElementById('advBias').addEventListener('change', smartReplan);
+        // Changing the airport-size preference re-plans the route AND must redraw
+        // the map — recomputeRoute only updates the stop chain + validation.
+        document.getElementById('advBias').addEventListener('change', () => { smartReplan(); drawLiveRoute(); });
 
         // ============================================================
         // Manual stop fields — first-class form inputs between Departure
