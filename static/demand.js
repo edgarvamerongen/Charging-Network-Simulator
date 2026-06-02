@@ -63,8 +63,22 @@ window.CNSDemand = (function () {
     // charger assignment (charging.js) for charge times + peak.
     function computeAirports() {
         const airports = {};
-        const ensure = (ident, name, lat, lon) =>
-            airports[ident] || (airports[ident] = { ident, name, lat, lon, contribs: [] });
+        // Group flights into airports by a STABLE key. Normally that key is the
+        // ICAO `ident`, which is unique per airport. But if a waypoint ever
+        // reaches here WITHOUT an ident (a hand-edited or legacy stop, or a
+        // backend stop emitted with no code), an empty ident would make EVERY
+        // such airport collapse onto one and the same key — so only the first
+        // would ever show and all the others would silently disappear from the
+        // calculator. Falling back to the name, then the coordinates, gives each
+        // airport its own key. When a real ident is present this is unchanged.
+        const keyFor = (ident, name, lat, lon) =>
+            (ident && String(ident).trim()) ||
+            (name && String(name).trim()) ||
+            `@${lat},${lon}`;
+        const ensure = (ident, name, lat, lon) => {
+            const key = keyFor(ident, name, lat, lon);
+            return airports[key] || (airports[key] = { ident: ident || key, name, lat, lon, contribs: [] });
+        };
 
         loadFolder().forEach(t => {
             // Multi-leg trip: each backend-precomputed charge event becomes one
@@ -78,7 +92,7 @@ window.CNSDemand = (function () {
                 const nStops = (t.stops || []).length;
                 const retourMidIdx = (t.tripType === 'retour') ? nStops + 1 : null;
                 t.charges.forEach((c, idx) => {
-                    if (!c || !c.ident) return;
+                    if (!c) return;   // keep real charge events even if they lack an ident — ensure() keys them by name/coords instead of dropping them
                     const a = ensure(c.ident, c.name, c.lat, c.lon);
                     const isReturnVisit = (retourMidIdx !== null) && (Number(c.at_index) > retourMidIdx);
                     const other =
@@ -93,6 +107,18 @@ window.CNSDemand = (function () {
                         direction: isReturnVisit ? 'back' : 'out'
                     });
                 });
+                // A ONE-WAY multi-leg trip is charged at its ORIGIN before it
+                // departs, but the origin is never a charge event (you don't
+                // recharge where you start) — so it used to be left out of the
+                // calculator entirely, making a pure departure hub disappear.
+                // Add it with the first leg's energy (the charge needed to set
+                // off). Retour trips already get their origin back via the
+                // return-home charge, so we skip those here.
+                if (t.tripType !== 'retour') {
+                    const firstLeg = (Array.isArray(t.legs) && t.legs[0]) ? numOf(t.legs[0], 'energy_kwh') : 0;
+                    ensure(t.originIdent, t.originName, t.originLat, t.originLon)
+                        .contribs.push({ t, role: 'origin', other: t.destName, base: firstLeg, direction: 'out' });
+                }
                 return;
             }
             // Training path: a single contribution at the home base. The base
@@ -111,6 +137,12 @@ window.CNSDemand = (function () {
                 ensure(t.destIdent, t.destName, t.destLat, t.destLon)
                     .contribs.push({ t, role: 'dest', other: t.originName, base: Math.max(0, 2 * t.legEnergy - battery) });
             } else {
+                // One-way single-leg: the ORIGIN charges the plane to fly the
+                // leg, then the DEST tops it back up on arrival. The origin used
+                // to be omitted, so a one-way departure hub vanished from the
+                // calculator — add it as a departure charge.
+                ensure(t.originIdent, t.originName, t.originLat, t.originLon)
+                    .contribs.push({ t, role: 'origin', other: t.destName, base: t.legEnergy });
                 ensure(t.destIdent, t.destName, t.destLat, t.destLon)
                     .contribs.push({ t, role: 'dest', other: t.originName, base: t.legEnergy });
             }

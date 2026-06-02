@@ -146,6 +146,7 @@
                 <td>
                     <span class="role role-{{ c.role }}">{{ c.role | upper }}</span>
                     {% if c.role == 'home' %}→ {{ c.other }} &amp; back
+                    {% elif c.role == 'origin' %}→ {{ c.other }}
                     {% elif c.role == 'stop' %}on {{ c.other }}
                     {% else %}from {{ c.other }}
                     {% endif %}

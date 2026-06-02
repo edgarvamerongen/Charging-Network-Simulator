@@ -2658,13 +2658,14 @@
                     // TRAINING — A→A loop pattern
                     const roleTag = c.role === 'training'
                         ? `<span class="section-tag tag-training">TRAINING</span>`
-                        : c.role === 'home'
+                        : (c.role === 'home' || c.role === 'origin')
                         ? `<span class="section-tag tag-home">DEPARTURE</span>`
                         : c.role === 'stop'
                         ? `<span class="section-tag tag-stop">STOP</span>`
                         : `<span class="section-tag tag-dest">DESTINATION</span>`;
                     const dir =
                         c.role === 'training' ? `${t.originName}` :
+                        c.role === 'origin'   ? `→ ${c.other}` :
                         c.role === 'home'     ? `→ ${c.other} & back` :
                         c.role === 'stop'     ? `on ${c.other}` :
                                                 `from ${c.other}`;

@@ -353,7 +353,7 @@ def generate_pdf(payload, css_url, request_root):
     map_airports = []
     for a in airports:
         map_airports.append({'lat': a.get('lat'), 'lon': a.get('lon'),
-                             'role': 'terminal' if any(c.get('role') in ('home', 'dest')
+                             'role': 'terminal' if any(c.get('role') in ('home', 'dest', 'origin')
                                                        for c in a.get('contribs') or [])
                                                    else 'stop'})
     map_png = _network_map_png(routes, map_airports)

@@ -32,7 +32,7 @@ function loadDemand() {
       getJSON: (k, d) => (k in store ? JSON.parse(JSON.stringify(store[k])) : d),
       setJSON: (k, v) => { store[k] = JSON.parse(JSON.stringify(v)); },
     },
-    console, JSON, Math, Object, Array, Number, isFinite,
+    console, JSON, Math, Object, Array, Number, isFinite, String,
   };
   vm.createContext(sandbox);
   vm.runInContext(code, sandbox);
@@ -113,6 +113,61 @@ test('energyAt: one-way dest == legEnergy', () => {
 test('energyAt: retour home == min(2*leg, batt)', () => {
   const trip = { tripType: 'retour', originIdent: 'H', destIdent: 'D', legEnergy: 180, battery: 225 };
   assert.ok(approx(D.energyAt(trip, 'H', false), Math.min(360, 225)));   // 225
+});
+
+// ---- computeAirports: a trip's ORIGIN must show up ------------------------
+// Regression for the "Berlin missing from the demand calculator" bug: a one-way
+// trip is charged at its origin before departure, but the origin is never a
+// "charge event", so it used to be omitted entirely — worst for a pure
+// departure hub that's never also a stop/destination elsewhere.
+test('computeAirports: one-way single-leg lists BOTH origin and destination', () => {
+  D.saveFolder([{
+    tripType: 'one-way', legEnergy: 90, battery: 225,
+    originIdent: 'EDDB', originName: 'Berlin', originLat: 52.36, originLon: 13.50,
+    destIdent: 'EHAM', destName: 'Amsterdam', destLat: 52.31, destLon: 4.77,
+  }]);
+  const ap = D.computeAirports();
+  assert.ok('EDDB' in ap, 'one-way origin (Berlin) is missing');
+  assert.ok('EHAM' in ap, 'one-way destination is missing');
+  assert.equal(ap.EDDB.contribs[0].role, 'origin');
+  D.saveFolder([]);
+});
+
+test('computeAirports: one-way MULTI-LEG lists the origin (the Berlin case)', () => {
+  D.saveFolder([{
+    multiLeg: true, tripType: 'one-way',
+    originIdent: 'EDDB', originName: 'Berlin', originLat: 52.36, originLon: 13.50,
+    destIdent: 'EHAM', destName: 'Amsterdam', destLat: 52.31, destLon: 4.77,
+    legs: [{ energy_kwh: 15 }, { energy_kwh: 15 }],
+    stops: [{ ident: 'EDDP' }],
+    charges: [
+      { ident: 'EDDP', name: 'Leipzig',   lat: 51.4, lon: 12.2, role: 'stop', at_index: 1, energy_kwh: 15 },
+      { ident: 'EHAM', name: 'Amsterdam', lat: 52.31, lon: 4.77, role: 'dest', at_index: 2, energy_kwh: 15 },
+    ],
+  }]);
+  const ap = D.computeAirports();
+  assert.ok('EDDB' in ap, 'multi-leg one-way origin (Berlin) is missing from the calculator');
+  assert.equal(ap.EDDB.contribs[0].role, 'origin');
+  D.saveFolder([]);
+});
+
+// ---- computeAirports: a missing ident must NOT swallow other airports ------
+// Airports are keyed by ident; if two arrive with a blank ident they used to
+// collapse onto one empty key (first-write-wins) and the rest vanished. The
+// key now falls back to name/coords so each keeps its own slot.
+test('computeAirports: two ident-less airports both survive (no key collapse)', () => {
+  D.saveFolder([
+    { tripType: 'one-way', legEnergy: 50, battery: 225,
+      originIdent: 'X1', originName: 'Origin 1', originLat: 1, originLon: 1,
+      destIdent: '', destName: 'No-Ident A', destLat: 10, destLon: 10 },
+    { tripType: 'one-way', legEnergy: 50, battery: 225,
+      originIdent: 'X2', originName: 'Origin 2', originLat: 2, originLon: 2,
+      destIdent: '', destName: 'No-Ident B', destLat: 20, destLon: 20 },
+  ]);
+  const names = Object.values(D.computeAirports()).map(a => a.name);
+  assert.ok(names.includes('No-Ident A'), 'first ident-less airport was dropped');
+  assert.ok(names.includes('No-Ident B'), 'second ident-less airport collapsed onto the first');
+  D.saveFolder([]);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
