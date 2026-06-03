@@ -78,10 +78,19 @@ window.CNSTour = (function () {
         document.getElementById('charger').value = 'dc_250';
         document.getElementById('charger').dispatchEvent(new Event('change'));
         document.getElementById('freqN').value = 1;
-        // NOTE: "Plan with charging stops" is left OFF here on purpose. The tour
-        // enables it at the Suggested-route step so the operator sees the natural
-        // progression — first the warning that the Beta can't reach Frankfurt
-        // direct under the applied reserve, then the planner adding a stop.
+        // "Plan with charging stops" must START OFF so the tour can reveal it at
+        // its dedicated step — the operator then sees the natural progression:
+        // first the over-range warning (the Beta can't reach Frankfurt direct
+        // under the applied 30% reserve + padding), then the toggle flips on and
+        // the planner adds the stop. The page's own _applyDefaultFlight() enables
+        // the toggle on load and planReset does NOT clear it, so we explicitly
+        // switch it back off here — otherwise the route is already split before
+        // the user reaches the toggle, and steps 6 + 10 read as stale.
+        const stopsToggle = document.getElementById('withStops');
+        if (stopsToggle && stopsToggle.checked) {
+            stopsToggle.checked = false;
+            stopsToggle.dispatchEvent(new Event('change'));
+        }
         if (typeof pickAirport === 'function') {
             pickAirport('origin', lelystad);
             pickAirport('destination', frankfurt);
@@ -341,7 +350,7 @@ window.CNSTour = (function () {
             // 11. Suggested route — the stop the applied factors forced.
             {
                 element: '#stopsSection',
-                popover: { title: 'Suggested route', description: 'The planner split the trajectory into legs through an intermediate airport (shortest-path A*). Each row shows the leg distance; over-range legs would flag red. Drag the ≡ handle to reorder a manual stop; × removes one. More airport types are under Options, top-right.', side: 'right' },
+                popover: { title: 'Suggested route', description: 'The planner split the trajectory into legs through an intermediate airport (shortest-path A*). The <strong>Prefer</strong> dropdown biases which airport sizes it favours when picking stops. Each row shows the leg distance; over-range legs would flag red. Drag the ≡ handle to reorder a manual stop; × removes one. More airport types are under Options, top-right.', side: 'right' },
                 onHighlightStarted: async () => { await _ensureStopsOn(); },
             },
             // 12. Expected frequency
@@ -516,7 +525,15 @@ window.CNSTour = (function () {
                         }
                     } catch (e) { /* best-effort */ }
                 },
-                onDeselected: async () => { await _closeFlightsMap(); },
+                onDeselected: async () => {
+                    await _closeFlightsMap();
+                    // Undo the stacking overrides added in onHighlightStarted so
+                    // they don't linger after the tour ends (the other interaction
+                    // steps clean up their body classes the same way) — otherwise
+                    // the flights modal keeps a very high z-index for normal use.
+                    document.getElementById('flightsMapModal')?.classList.remove('tour-modal-front');
+                    document.body.classList.remove('tour-network-step');
+                },
             },
             // 24. Wrap up
             {
