@@ -156,13 +156,23 @@ window.CNSScheduler = (function () {
         (_rs() && CNSSettings.effectiveChargePower) ? CNSSettings.effectiveChargePower(power, batt, cRate) : (power || 0);
 
     // ---------- rotation timeline (airport-driven charge times; viewIdent flags atX) ----------
-    // `chargerKw` is the SINGLE-CHARGER preview override used by the results
-    // panel (tripBreakdown): when supplied, every charge uses that charger and
-    // SoC targets are null (no saved network). When omitted, behaviour is exactly
-    // as before — the DES path reads each airport's assigned charger + targets.
-    function tripPhases(trip, viewIdent, chargerKw) {
-        if (trip.multiLeg) return _multiLegPhases(trip, viewIdent, chargerKw);
-        const preview = chargerKw != null;
+    // tripPhases takes a `ctx` that resolves, per airport, the charger power and
+    // the SoC target to charge to. Two contexts exist:
+    //   • DES (default, _desContext): each airport's assigned charger from
+    //     planCharging + its saved SoC target.
+    //   • preview (built by tripBreakdown for the results panel): one explicit
+    //     charger + no saved targets.
+    // Same one function for both; the only difference is the context, so the
+    // panel and the scheduler can never disagree.
+    function _desContext(trip) {
+        return {
+            chargerAt: (id) => getContext(id).powers[trip.id] || 0,
+            targetAt:  (id) => getContext(id).targetSoc,
+        };
+    }
+    function tripPhases(trip, viewIdent, ctx) {
+        if (trip.multiLeg) return _multiLegPhases(trip, viewIdent, ctx);
+        ctx = ctx || _desContext(trip);
         const legs = trip.tripType === 'retour' ? 2 : 1;
         const route = _route();
         const legMin = num(trip, 'flightTimeH') * 60 / legs * route;
@@ -170,20 +180,18 @@ window.CNSScheduler = (function () {
         const batt = batteryOf(trip);
         const usableBatt = _usableB(trip);
         const cRate = _cRateOf(trip);
+        const destTarget = ctx.targetAt(trip.destIdent);
+        const homeTarget = trip.tripType === 'retour' ? ctx.targetAt(trip.originIdent) : null;
 
         const ph = []; let off = 0;
         ph.push({ kind: 'fly', leg: 'out', start: off, dur: legMin, label: 'Fly to ' + trip.destName }); off += legMin;
 
         // Energy at each end uses CNSDemand.deliveredEnergy so the cross-airport
         // SoC targets stay consistent with the demand drawer + PDF.
-        const dctx = preview ? null : getContext(trip.destIdent);
-        const hctx = (!preview && trip.tripType === 'retour') ? getContext(trip.originIdent) : null;
-        const destTarget = preview ? null : dctx.targetSoc;
-        const homeTarget = preview ? null : (hctx ? hctx.targetSoc : null);
         const destEnergy = window.CNSDemand && CNSDemand.deliveredEnergy
             ? CNSDemand.deliveredEnergy(trip, 'dest', leg, batt, usableBatt, destTarget, homeTarget)
             : (trip.tripType === 'retour' ? Math.max(0, 2 * leg - usableBatt) : leg);
-        const destPower = _effPower(preview ? chargerKw : (dctx.powers[trip.id] || 0), batt, cRate);
+        const destPower = _effPower(ctx.chargerAt(trip.destIdent), batt, cRate);
         const destMin = _chargeMin(destEnergy, destPower, batt);
         if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', ident: trip.destIdent, name: trip.destName, atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, label: 'Charge @ ' + trip.destName }); off += destMin; }
 
@@ -192,7 +200,7 @@ window.CNSScheduler = (function () {
             const homeEnergy = window.CNSDemand && CNSDemand.deliveredEnergy
                 ? CNSDemand.deliveredEnergy(trip, 'home', leg, batt, usableBatt, homeTarget, destTarget)
                 : Math.min(2 * leg, usableBatt);
-            const homePower = _effPower(preview ? chargerKw : (hctx.powers[trip.id] || 0), batt, cRate);
+            const homePower = _effPower(ctx.chargerAt(trip.originIdent), batt, cRate);
             const homeMin = _chargeMin(homeEnergy, homePower, batt);
             if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', ident: trip.originIdent, name: trip.originName, atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
         }
@@ -204,8 +212,8 @@ window.CNSScheduler = (function () {
     // Charge POWER is the per-airport assigned charger (so toggling the airport's
     // fleet updates the rotation live), but the energy is what _simulate_multi
     // computed when the trip was added.
-    function _multiLegPhases(trip, viewIdent, chargerKw) {
-        const preview = chargerKw != null;
+    function _multiLegPhases(trip, viewIdent, ctx) {
+        ctx = ctx || _desContext(trip);
         const ph = []; let off = 0;
         const legs = Array.isArray(trip.legs) ? trip.legs : [];
         const charges = Array.isArray(trip.charges) ? trip.charges : [];
@@ -213,14 +221,14 @@ window.CNSScheduler = (function () {
         const batt = batteryOf(trip);
         const usableBatt = _usableB(trip);
         const cRate = _cRateOf(trip);
-        // DES: recompute per-stop charge energies against the per-airport SoC
-        // targets (already routing-padded). Preview: no saved network, so use the
-        // trip's own backend energies and apply the routing pad here.
-        const liveCharges = (!preview && window.CNSDemand && CNSDemand.recomputeMultiLegCharges)
-            ? CNSDemand.recomputeMultiLegCharges(trip, (id) => {
-                const c = loadCfg()[id];
-                return (window.CNSDemand.targetSocFromCfg ? CNSDemand.targetSocFromCfg(c) : (c && c.fullCharge ? 1.0 : null));
-              }, usableBatt)
+        // Reserve-aware forward walk: each stop charges only what's needed for the
+        // NEXT leg + landing reserve (or its SoC target); the terminal tops up to
+        // full. Same path for panel + DES — only ctx.targetAt differs (saved cfg
+        // vs none). (Using the raw backend charges here was the earlier bug: a
+        // big-battery plane charged 0 en route and dumped everything at the
+        // destination, collapsing its travel time to flight-only.)
+        const liveCharges = (window.CNSDemand && CNSDemand.recomputeMultiLegCharges)
+            ? CNSDemand.recomputeMultiLegCharges(trip, (id) => ctx.targetAt(id), usableBatt)
             : charges;
         legs.forEach((leg, i) => {
             const legMin = (Number(leg.flight_time_h) || 0) * 60 * route;
@@ -229,8 +237,8 @@ window.CNSScheduler = (function () {
             off += legMin;
             const c = liveCharges[i] || charges[i];
             if (!c) return;
-            const power = _effPower(preview ? chargerKw : (getContext(c.ident).powers[trip.id] || 0), batt, cRate);
-            const energy = (Number(c.energy_kwh) || 0) * (preview ? route : 1);   // DES energies already padded; preview pads here
+            const power = _effPower(ctx.chargerAt(c.ident), batt, cRate);
+            const energy = Number(c.energy_kwh) || 0;     // recompute already applied routing padding
             const dur = _chargeMin(energy, power, batt);
             if (dur > 0) {
                 ph.push({
@@ -257,7 +265,11 @@ window.CNSScheduler = (function () {
     //   arrivalSoc    — SoC on arrival there (clamped to the landing-reserve floor)
     //   energyUsedKwh — energy the aircraft consumes (== what it recharges)
     function tripBreakdown(trip, chargerKw) {
-        const { ph } = tripPhases(trip, null, Math.max(0, +chargerKw || 0));
+        const power = Math.max(0, +chargerKw || 0);
+        // Preview context: the operator's single chosen charger at every airport,
+        // and no saved SoC targets (the flight isn't in the network yet).
+        const ctx = { chargerAt: () => power, targetAt: () => null };
+        const { ph } = tripPhases(trip, null, ctx);
         const batt = batteryOf(trip);
         const usableBatt = _usableB(trip);
         const charges = ph.filter(p => p.kind === 'charge');

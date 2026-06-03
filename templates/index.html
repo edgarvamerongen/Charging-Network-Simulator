@@ -988,7 +988,7 @@
                 </div>
 
                 <!-- Charging stops: when on, an over-range route is auto-split into legs
-                     through intermediate airports (greedy max-reach with preference bias). -->
+                     through intermediate airports (A* shortest-path with preference bias). -->
                 <div class="field stops-toggle-row">
                     <label class="switch stops-switch">
                         <input type="checkbox" id="withStops">
@@ -1113,7 +1113,7 @@
                         <tr><td>Trip type</td><td id="trType"></td></tr>
                         <tr><td>Total distance</td><td id="trTotal"></td></tr>
                         <tr><td id="trFlightLabel">Total travel time</td><td id="trFlight"></td></tr>
-                        <tr id="trFinalRow"><td>Final destination</td><td id="trFinal"></td></tr>
+                        <tr id="trFinalRow"><td id="trFinalLabel">Final destination</td><td id="trFinal"></td></tr>
                         <tr><td>Charger</td><td id="trCharger"></td></tr>
                     </table>
                 </div>
@@ -1701,7 +1701,7 @@
                 hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span>`;
             } else {
                 hintEl.textContent = plannedSource === 'auto'
-                    ? 'Greedy max-reach with your preference order. Click × to remove a stop, or + Add stop above to insert one manually.'
+                    ? 'Shortest-path routing (A*) with your preference order. Click × to remove a stop, or + Add stop above to insert one manually.'
                     : 'Custom route — legs are re-validated against the aircraft\'s range. ↻ to revert to the algorithm.';
             }
             section.classList.remove('d-none');
@@ -2352,26 +2352,18 @@
             document.getElementById('trTotal').textContent = isTraining
                 ? fmtDist(data.training_range_km) + ' loop'
                 : fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
-            // "Total travel time" = flying + the en-route charging you must do to
-            // reach the destination. The terminal top-up (after arrival) is shown
-            // on its own row — it isn't part of getting there. Retour trips keep
-            // the simpler "flight time" label, since they return home.
-            const travelLabel = document.getElementById('trFlightLabel');
-            const finalRow = document.getElementById('trFinalRow');
-            if (isRetour) {
-                travelLabel.textContent = 'Total flight time';
-                document.getElementById('trFlight').textContent = fmtDuration(flightMin);
-                finalRow.classList.add('d-none');
-            } else {
-                travelLabel.textContent = 'Total travel time';
-                document.getElementById('trFlight').textContent = enRouteMin > 0.5
-                    ? `${fmtDuration(travelMin)} (${fmtDuration(flightMin)} flying + ${fmtDuration(enRouteMin)} charging)`
-                    : fmtDuration(travelMin);
-                finalRow.classList.remove('d-none');
-                document.getElementById('trFinal').textContent = terminalMin > 0.5
-                    ? `${terminalName} · ${Math.round(arrivalSoc * 100)}% on arrival, +${fmtDuration(terminalMin)} to full`
-                    : `${terminalName} · no charge needed`;
-            }
+            // "Total travel time" = flying + the en-route charging needed to reach
+            // the destination; the terminal top-up (after you arrive — the home
+            // recharge on a retour) gets its own row. Same shape for every trip.
+            document.getElementById('trFlightLabel').textContent = 'Total travel time';
+            document.getElementById('trFlight').textContent = enRouteMin > 0.5
+                ? `${fmtDuration(travelMin)} (${fmtDuration(flightMin)} flying + ${fmtDuration(enRouteMin)} charging)`
+                : fmtDuration(travelMin);
+            document.getElementById('trFinalLabel').textContent = isRetour ? 'Back at base' : 'Final destination';
+            document.getElementById('trFinalRow').classList.remove('d-none');
+            document.getElementById('trFinal').textContent = terminalMin > 0.5
+                ? `${terminalName} · ${Math.round(arrivalSoc * 100)}% on arrival, +${fmtDuration(terminalMin)} to full`
+                : `${terminalName} · no charge needed`;
             document.getElementById('trCharger').textContent = data.charger.name + ' (' + data.charger.power_kw + ' kW)';
 
             const common = [
