@@ -1112,7 +1112,8 @@
                     <table class="spec-table">
                         <tr><td>Trip type</td><td id="trType"></td></tr>
                         <tr><td>Total distance</td><td id="trTotal"></td></tr>
-                        <tr><td>Total flight time</td><td id="trFlight"></td></tr>
+                        <tr><td id="trFlightLabel">Total travel time</td><td id="trFlight"></td></tr>
+                        <tr id="trFinalRow"><td>Final destination</td><td id="trFinal"></td></tr>
                         <tr><td>Charger</td><td id="trCharger"></td></tr>
                     </table>
                 </div>
@@ -2324,9 +2325,29 @@
                 flightMin = data.flight_time_h * 60 * route;
             }
             // Battery-acceptance cap: effective power = min(charger, C-rate×batt).
-            // Identity when the acceptance toggle is off.
             const effPower = CNSSettings.effectiveChargePower(data.charger.power_kw, p.battery_kwh, p.c_rate);
-            const chargeMin = CNSSettings.chargeTimeMin(rechargeKwh, effPower, p.battery_kwh);
+            const cMin = (kwh) => CNSSettings.chargeTimeMin(kwh, effPower, p.battery_kwh);
+            // Time EACH charge separately (cap + taper per stop) instead of lumping
+            // the whole trip into one charge — lumping skips most of the slow
+            // top-of-charge taper and badly under-counts a multi-stop journey, so
+            // the headline used to disagree with the scheduler. Split into the
+            // EN-ROUTE charges (needed to reach the destination) and the TERMINAL
+            // top-up at the final stop (which happens after arrival).
+            const chargeKwhs = isMulti
+                ? (data.charges || []).map(c => (+c.energy_kwh || 0) * route)
+                : (rechargeKwh > 0 ? [rechargeKwh] : []);
+            const chargeMins   = chargeKwhs.map(cMin);
+            const chargeMin    = chargeMins.reduce((s, m) => s + m, 0);              // all charging (headline)
+            const enRouteMin   = chargeMins.slice(0, -1).reduce((s, m) => s + m, 0); // charging done DURING the trip
+            const terminalMin  = chargeMins.length ? chargeMins[chargeMins.length - 1] : 0;
+            const terminalKwh  = chargeKwhs.length ? chargeKwhs[chargeKwhs.length - 1] : 0;
+            const travelMin    = flightMin + enRouteMin;                            // take-off → arrival at the final stop
+            // Clamp to the landing-reserve floor — the plane never lands below the
+            // minimum-landing-SoC the operator set, so don't display a lower number.
+            const arrivalSoc   = Math.max(0, Math.min(1, Math.max(1 - usable, ((p.battery_kwh || 0) - terminalKwh) / (p.battery_kwh || 1))));
+            const terminalName = (isMulti && (data.charges || []).length)
+                ? data.charges[data.charges.length - 1].name
+                : (isTraining ? (data._origin && data._origin.name) : (data._dest && data._dest.name)) || 'destination';
             const gridKwh = rechargeKwh * gridMul;
 
             document.getElementById('hlUsed').textContent = num(usedKwh);
@@ -2375,9 +2396,26 @@
             document.getElementById('trTotal').textContent = isTraining
                 ? fmtDist(data.training_range_km) + ' loop'
                 : fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
-            // "Total flight time" matches the headline (whole trip, padded if
-            // routingPadding is on).
-            document.getElementById('trFlight').textContent = fmtDuration(flightMin);
+            // "Total travel time" = flying + the en-route charging you must do to
+            // reach the destination. The terminal top-up (after arrival) is shown
+            // on its own row — it isn't part of getting there. Retour trips keep
+            // the simpler "flight time" label, since they return home.
+            const travelLabel = document.getElementById('trFlightLabel');
+            const finalRow = document.getElementById('trFinalRow');
+            if (isRetour) {
+                travelLabel.textContent = 'Total flight time';
+                document.getElementById('trFlight').textContent = fmtDuration(flightMin);
+                finalRow.classList.add('d-none');
+            } else {
+                travelLabel.textContent = 'Total travel time';
+                document.getElementById('trFlight').textContent = enRouteMin > 0.5
+                    ? `${fmtDuration(travelMin)} (${fmtDuration(flightMin)} flying + ${fmtDuration(enRouteMin)} charging)`
+                    : fmtDuration(travelMin);
+                finalRow.classList.remove('d-none');
+                document.getElementById('trFinal').textContent = terminalMin > 0.5
+                    ? `${terminalName} · ${Math.round(arrivalSoc * 100)}% on arrival, +${fmtDuration(terminalMin)} to full`
+                    : `${terminalName} · no charge needed`;
+            }
             document.getElementById('trCharger').textContent = data.charger.name + ' (' + data.charger.power_kw + ' kW)';
 
             const common = [
