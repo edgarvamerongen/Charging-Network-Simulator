@@ -194,15 +194,18 @@
 
     <h3>Battery model</h3>
     <p>Per-leg energy is computed from the aircraft's stated <strong>battery (kWh)</strong> and <strong>range (km)</strong>:
-    <code>leg_energy = battery × distance / range</code>. For a return trip the airport at the home end recharges
-    only the deficit that remains after the round trip (<code>max(0, 2 × leg_energy − battery)</code>) unless
-    <em>Recharge to full</em> is enabled, in which case both ends top the aircraft up to 100% of capacity.</p>
+    <code>leg_energy = battery × distance / range</code>. By default every aircraft charges to a <strong>global charge
+    target</strong> (set in Model settings, 80% by default), which individual airports can override — a local target
+    always wins. With no target in effect the model falls back to deficit charging: a return trip recharges only the
+    deficit that remains after the round trip (<code>max(0, 2 × leg_energy − battery)</code>), unless
+    <em>Recharge to full</em> tops both ends up to 100% of capacity.</p>
 
     <h3>Multi-leg routing</h3>
     <p>When a single battery can't reach the destination the planner inserts charging stops along the way using
-    a <strong>greedy max-reach</strong> algorithm with a bias toward <strong>medium-size airports</strong>
-    (small/large fields are penalised). At each stop the aircraft charges just enough for the next leg; the
-    terminal airport (one-way destination, or retour home) tops it to 100%. Users can override any stop or replan.</p>
+    a <strong>shortest-path (A*)</strong> algorithm that minimises total distance, with an optional bias toward a
+    preferred airport size (e.g. <strong>medium-size airports</strong>). At each stop the aircraft charges to the
+    applicable charge target — but never below what the next leg needs plus reserve; the terminal airport
+    (one-way destination, or retour home) charges to that target too. Users can override any stop or replan.</p>
 
     <h3>Rotation scheduler</h3>
     <p>A <em>rotation</em> is one aircraft cycle: depart → charge at destination → return → recharge at home.

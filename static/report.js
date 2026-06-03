@@ -52,7 +52,7 @@ window.CNSReport = (function () {
         // with what the operator sees on screen.
         const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
         const cfgs = CNSDemand.loadCfg();
-        const getTargetSoc = (id) => CNSDemand.targetSocFromCfg(cfgs[id]);
+        const getTargetSoc = (id) => CNSDemand.resolveTargetSoc(cfgs[id]);
         const multiCache = {};
         const aircraftList = a.contribs.map((c, i) => {
             const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;

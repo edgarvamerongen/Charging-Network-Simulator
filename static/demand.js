@@ -187,6 +187,19 @@ window.CNSDemand = (function () {
         return null;
     }
 
+    // Resolve the EFFECTIVE charge target for an airport: the per-airport
+    // (LOCAL) target wins; otherwise fall back to the GLOBAL default from model
+    // settings. Returns null only when neither is set (chargeTarget factor off)
+    // → pure deficit charging, the original behaviour. Energy math uses THIS;
+    // the per-airport control keeps reading the raw `targetSocFromCfg` so it can
+    // still show "Auto" when no local override exists.
+    function resolveTargetSoc(cfg) {
+        const local = targetSocFromCfg(cfg);
+        if (local != null) return local;
+        return (window.CNSSettings && window.CNSSettings.chargeTargetDefault)
+            ? window.CNSSettings.chargeTargetDefault() : null;
+    }
+
     // Energy that THIS airport's chargers deliver per flight, considering the
     // operator-set departure-SoC target at BOTH ends of a retour trip.
     //
@@ -272,9 +285,14 @@ window.CNSDemand = (function () {
         const reserve = batt - usable;
         const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
 
-        // Depart origin at the originating airport's target SoC (default = full).
+        // Depart origin at the originating airport's target SoC (default = full),
+        // but NEVER below what the first leg needs (leg + reserve). The route
+        // planner sizes legs assuming a feasible departure, so a low global
+        // charge target must not under-charge the plane into an infeasible first
+        // hop (e.g. departing at 80% when the opening leg needs ~99%).
         const originTarget = getTargetSoc(trip.originIdent);
-        let socKwh = (originTarget != null ? originTarget : 1.0) * batt;
+        const firstLegE = ((legs[0] && legs[0].energy_kwh) || 0) * route;
+        let socKwh = Math.min(batt, Math.max((originTarget != null ? originTarget : 1.0) * batt, firstLegE + reserve));
 
         const out = baseCharges.map((c, i) => {
             const legE = ((legs[i] && legs[i].energy_kwh) || 0) * route;
@@ -304,7 +322,7 @@ window.CNSDemand = (function () {
         loadFolder, saveFolder, loadCfg, saveCfg,
         flightsPerDay, batteryOf, roleAt, tripsAt, energyAt,
         computeAirports, updateTrip,
-        defaultChargerFleet, targetSocFromCfg, deliveredEnergy,
+        defaultChargerFleet, targetSocFromCfg, resolveTargetSoc, deliveredEnergy,
         recomputeMultiLegCharges,
     };
 })();

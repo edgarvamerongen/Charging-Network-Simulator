@@ -174,6 +174,28 @@
         .cns-tour-popover .driver-popover-description .role-home { background: #a44a23; }
         .cns-tour-popover .driver-popover-description .role-dest { background: #6b541a; }
         .cns-tour-popover .driver-popover-description .role-stop { background: var(--brand-ink); }
+        /* Welcome-step crew hover: dotted-underline name → card pinned top-centre. */
+        .cns-tour-popover .driver-popover-description .tour-crew {
+            border-bottom: 1px dotted var(--brand-ink); cursor: help;
+            font-weight: 600; color: var(--brand-ink); white-space: nowrap;
+        }
+        .tour-crew-card {
+            position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+            z-index: 100070; width: 360px; max-width: 92vw;
+            display: none; align-items: center; gap: 14px;
+            background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
+            border-radius: var(--radius); padding: 14px 16px;
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+        .tour-crew-card.show { display: flex; }
+        .tour-crew-card img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--brand-ink); flex: 0 0 auto; }
+        .tour-crew-card .tcc-name { font-weight: 700; color: var(--brand-ink); font-size: .95rem; }
+        .tour-crew-card .tcc-role { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 4px; }
+        .tour-crew-card .tcc-bio { font-size: .76rem; color: var(--ink-soft); line-height: 1.4; }
+        .tour-crew-card .tcc-links { margin-top: 5px; font-size: .74rem; display: flex; gap: 12px; }
+        .tour-crew-card .tcc-links a { color: var(--brand-ink); text-decoration: none; pointer-events: auto; }
+        .tour-crew-card .tcc-links a:hover { text-decoration: underline; }
         /* Network-animation tour step: lift the Bootstrap modal above the
            tour overlay so the map is visible (not darkened), and pin the
            popover to the bottom of the viewport so it doesn't cover the
@@ -483,10 +505,35 @@
         .spec-table td:last-child { color: var(--ink); font-weight: 500; }
 
         .ac-photo {
-            width: 100%; height: 130px; object-fit: contain; background: #f8fafc;
-            border-radius: var(--radius-sm); margin-bottom: 8px; padding: 4px;
+            width: 100%; height: 130px; object-fit: cover; display: block;
+            border-radius: var(--radius-sm); margin-bottom: 8px;
             border: 1px solid var(--panel-border);
         }
+
+        /* Selected-aircraft spec card under the planner Aircraft dropdown */
+        .plane-spec-card {
+            margin-top: 8px; border: 1px solid var(--panel-border);
+            border-radius: var(--radius-sm); overflow: hidden; background: #fff;
+        }
+        .plane-spec-card.overridden { border-color: var(--brand-ink); box-shadow: inset 0 0 0 1px var(--brand-ink); }
+        .ps-thumb { width: 100%; height: 96px; object-fit: cover; display: block; border-bottom: 1px solid var(--panel-border); }
+        .ps-main { padding: 8px 10px; }
+        .ps-name { font-weight: 600; font-size: .9rem; color: var(--ink); }
+        .ps-stats { display: flex; gap: 18px; margin-top: 4px; }
+        .ps-stat { display: flex; flex-direction: column; line-height: 1.15; }
+        .ps-stat strong { font-size: .9rem; color: var(--ink); }
+        .ps-stat-l { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+        .ps-override-toggle { margin-top: 8px; background: none; border: none; padding: 0; font-size: .76rem; color: var(--brand-ink); cursor: pointer; font-weight: 500; }
+        .ps-override-toggle .chev { font-size: .7rem; }
+        .plane-spec-card.overridden .ps-override-toggle::after { content: " · overridden"; color: var(--brand-ink); font-weight: 600; }
+        .ps-override { padding: 2px 10px 10px; }
+        .ps-override-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+        .ps-override-grid label { font-size: .66rem; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+        .ps-override-grid .ps-u { color: var(--muted); font-weight: 400; }
+        .ps-override-grid input { font-size: .82rem; }
+        .ps-override-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+        .ps-override-note { font-size: .66rem; color: var(--muted); }
+        .ps-reset { background: none; border: none; padding: 0; font-size: .72rem; color: var(--brand-ink); cursor: pointer; }
 
         #calcPanel {
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem;
@@ -585,6 +632,16 @@
             transition: transform .28s ease, opacity .28s ease;
         }
         .drawer.open .drawer-body { transform: translateY(0); opacity: 1; pointer-events: auto; }
+        /* Close (×) — top-right of the drawer, mirrors the result-panel minimise. */
+        .drawer-close {
+            position: absolute; top: 12px; right: 14px; z-index: 6;
+            width: 30px; height: 30px; padding: 0; border: none; border-radius: 50%;
+            display: grid; place-items: center; line-height: 1;
+            background: rgba(15,23,41,.06); color: var(--ink-soft); font-size: 20px; cursor: pointer;
+            transition: background .15s ease;
+        }
+        .drawer-close:hover { background: rgba(15,23,41,.12); }
+        .drawer-head { padding-right: 36px; }
 
         .drawer-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
         .drawer-title { font-size: 1.1rem; font-weight: 700; margin: 0; }
@@ -987,6 +1044,41 @@
                     <p id="trainingHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a pattern around the origin for a fixed duration (matched to the aircraft's training range). Energy per flight is capped at the usable battery.</p>
                 </div>
 
+                <div class="field">
+                    <label>Aircraft</label>
+                    <select id="plane" class="form-select">
+                        {% for p in planes %}
+                        <option value="{{ p.id }}">{{ p.name }} — {{ p.battery_kwh }} kWh</option>
+                        {% endfor %}
+                        <option value="__custom__">➕ Add custom plane…</option>
+                    </select>
+                    <!-- Selected-aircraft spec card: thumbnail + key specs, with a
+                         collapsible per-flight override (never touches the catalog). -->
+                    <div id="planeSpecCard" class="plane-spec-card d-none">
+                        <img id="psThumb" class="ps-thumb d-none" alt="">
+                        <div class="ps-main">
+                            <div class="ps-name" id="psName"></div>
+                            <div class="ps-stats">
+                                <span class="ps-stat"><strong id="psRange"></strong><span class="ps-stat-l">range</span></span>
+                                <span class="ps-stat"><strong id="psBattery"></strong><span class="ps-stat-l">battery</span></span>
+                            </div>
+                            <button type="button" id="psOverrideToggle" class="ps-override-toggle">Override for this flight <span class="chev">▾</span></button>
+                        </div>
+                        <div id="psOverride" class="ps-override d-none">
+                            <div class="ps-override-grid">
+                                <label>Battery <span class="ps-u">kWh</span><input type="number" id="psoBattery" min="1" step="any" class="form-control form-control-sm"></label>
+                                <label>Range <span class="ps-u">km</span><input type="number" id="psoRange" min="1" step="any" class="form-control form-control-sm"></label>
+                                <label>Cruise <span class="ps-u">km/h</span><input type="number" id="psoSpeed" min="1" step="any" class="form-control form-control-sm"></label>
+                                <label>C-rate <span class="ps-u">C</span><input type="number" id="psoCRate" min="0.1" step="any" class="form-control form-control-sm"></label>
+                            </div>
+                            <div class="ps-override-foot">
+                                <span class="ps-override-note">Applies to this flight only.</span>
+                                <button type="button" id="psoReset" class="ps-reset">↺ reset to catalog</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Charging stops: when on, an over-range route is auto-split into legs
                      through intermediate airports (A* shortest-path with preference bias). -->
                 <div class="field stops-toggle-row">
@@ -1041,15 +1133,6 @@
                         <label class="fleet-opt"><input type="radio" name="fleetMode" value="shared"><span>One aircraft · <strong class="fm-n">2</strong> rotations</span></label>
                         <label class="fleet-opt"><input type="radio" name="fleetMode" value="separate" checked><span>Separate aircraft · <strong class="fm-n">2</strong> planes</span></label>
                     </div>
-                </div>
-                <div class="field">
-                    <label>Aircraft</label>
-                    <select id="plane" class="form-select">
-                        {% for p in planes %}
-                        <option value="{{ p.id }}">{{ p.name }} — {{ p.battery_kwh }} kWh</option>
-                        {% endfor %}
-                        <option value="__custom__">➕ Add custom plane…</option>
-                    </select>
                 </div>
                 <div class="field">
                     <label>Charger</label>
@@ -1136,6 +1219,7 @@
             <span class="handle-sub" id="drawerSub">— add flights to project the charging load</span>
         </button>
         <div class="drawer-body">
+            <button type="button" id="drawerClose" class="drawer-close" title="Close" aria-label="Close demand calculator">×</button>
             <header class="drawer-head">
                 <h2 class="drawer-title">Demand Calculator</h2>
                 <div class="drawer-tools">
@@ -1247,6 +1331,21 @@
                                 <input type="range" id="rsTaperCRate" min="5" max="60" step="1" value="20" class="form-range">
                             </div>
                             <p class="rs-help">Models the real charging curve: power runs flat at min(charger kW, C-rate × battery kWh) up to ~70% SoC, then rolls off exponentially toward a low floor at 100% (a realistic CV taper). The C-rate cap means a small pack can't absorb an over-sized charger (e.g. a 3.75 MW MCS into a 22 kWh Pipistrel); the taper stretches the final top-up. Aircraft with a published <code>c_rate</code> use their own value; others use this default. Typical fast-charge C-rates: 1–3C.</p>
+                        </div>
+                    </div>
+
+                    <!-- 5. Default charge target (departure SoC) -->
+                    <div class="rs-row">
+                        <label class="rs-toggle">
+                            <input type="checkbox" id="rsChargeTarget">
+                            <span>Apply a default charge target (departure SoC)</span>
+                        </label>
+                        <div class="rs-detail">
+                            <div class="rs-slider-row">
+                                <label>Default charge target <span class="rs-val" id="rsChargeTargetVal">80%</span></label>
+                                <input type="range" id="rsChargeTargetSl" min="50" max="100" step="5" value="80" class="form-range">
+                            </div>
+                            <p class="rs-help">The state of charge every aircraft charges to before departing, unless a specific airport overrides it in the demand calculator (a LOCAL target always wins over this GLOBAL default). When off, the model charges only the deficit needed for the next leg and tops the terminus to full — the original behaviour.</p>
                         </div>
                     </div>
                 </div>
@@ -1515,10 +1614,23 @@
             };
             return { typePenalty: ORDERS[bias] || ORDERS['medium-large-small'] };
         }
-        function _selectedPlane() {
+        // Per-flight spec override (battery / range / speed / c_rate). Null = use
+        // the catalog plane as-is. Temporary — it rides along on the simulate
+        // payload (payload.plane) and is NEVER written back to planes.json.
+        let _planeOverride = null;
+        function _basePlane() {
             const id = document.getElementById('plane').value;
             return customById[id] || BUILTIN_PLANES_BY_ID[id] || null;
         }
+        // Effective spec = catalog plane merged with any active per-flight override.
+        // Everything downstream (routing reach, trajectory, preview, simulate)
+        // reads the plane through here, so an override is honoured everywhere.
+        function selectedPlaneSpec() {
+            const base = _basePlane();
+            if (!base) return null;
+            return _planeOverride ? { ...base, ..._planeOverride } : base;
+        }
+        function _selectedPlane() { return selectedPlaneSpec(); }
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
             return {
@@ -1992,7 +2104,67 @@
         // (advReserve was removed when the global Model settings took over reserve handling)
         // Switching planes re-plans the route (range changes auto-stops) AND must
         // redraw the map — recomputeRoute only updates the stop chain + validation.
-        document.getElementById('plane').addEventListener('change', () => { smartReplan(); drawLiveRoute(); });
+        document.getElementById('plane').addEventListener('change', () => { _planeOverride = null; renderPlaneSpecCard(); smartReplan(); drawLiveRoute(); });
+
+        // ---- Selected-aircraft spec card + per-flight override --------------
+        function renderPlaneSpecCard() {
+            const card = document.getElementById('planeSpecCard');
+            if (!card) return;
+            const id = document.getElementById('plane').value;
+            const base = _basePlane();
+            if (!base || id === '__custom__') { card.classList.add('d-none'); return; }
+            const spec = selectedPlaneSpec();
+            card.classList.remove('d-none');
+            const thumb = document.getElementById('psThumb');
+            if (spec.image) { thumb.src = '/pics/' + spec.image; thumb.alt = spec.name; thumb.classList.remove('d-none'); }
+            else thumb.classList.add('d-none');
+            document.getElementById('psName').textContent = spec.name;
+            _refreshSpecStats(spec);
+            // Prefill the override inputs from the EFFECTIVE spec (metric units).
+            document.getElementById('psoBattery').value = spec.battery_kwh != null ? spec.battery_kwh : '';
+            document.getElementById('psoRange').value   = spec.range_km != null ? spec.range_km : '';
+            document.getElementById('psoSpeed').value   = spec.speed_kmh != null ? spec.speed_kmh : '';
+            document.getElementById('psoCRate').value   = spec.c_rate != null ? spec.c_rate : '';
+            card.classList.toggle('overridden', !!_planeOverride);
+        }
+        function _refreshSpecStats(spec) {
+            document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
+            document.getElementById('psBattery').textContent = (spec.battery_kwh || 0) + ' kWh';
+        }
+        (function _wirePlaneOverride() {
+            const toggle = document.getElementById('psOverrideToggle');
+            const panel  = document.getElementById('psOverride');
+            if (toggle && panel) toggle.addEventListener('click', () => panel.classList.toggle('d-none'));
+            function readOverride() {
+                const base = _basePlane(); if (!base) return null;
+                const map = [['battery_kwh','psoBattery'],['range_km','psoRange'],['speed_kmh','psoSpeed'],['c_rate','psoCRate']];
+                const o = {};
+                map.forEach(([k, eid]) => {
+                    const v = parseFloat(document.getElementById(eid).value);
+                    if (isFinite(v) && v > 0 && v !== +base[k]) o[k] = v;
+                });
+                return Object.keys(o).length ? o : null;
+            }
+            function onEdit() {
+                _planeOverride = readOverride();
+                const card = document.getElementById('planeSpecCard');
+                const spec = selectedPlaneSpec();
+                if (spec) _refreshSpecStats(spec);
+                if (card) card.classList.toggle('overridden', !!_planeOverride);
+                if (typeof smartReplan === 'function') smartReplan();
+                if (typeof drawLiveRoute === 'function') drawLiveRoute();
+            }
+            ['psoBattery','psoRange','psoSpeed','psoCRate'].forEach(eid => {
+                const el = document.getElementById(eid);
+                if (el) { el.addEventListener('input', onEdit); el.addEventListener('change', onEdit); }
+            });
+            const reset = document.getElementById('psoReset');
+            if (reset) reset.addEventListener('click', () => {
+                _planeOverride = null; renderPlaneSpecCard();
+                if (typeof smartReplan === 'function') smartReplan();
+                if (typeof drawLiveRoute === 'function') drawLiveRoute();
+            });
+        })();
 
         function setupAutocomplete(field) {
             const input = document.getElementById(field);
@@ -2361,8 +2533,10 @@
                 : fmtDuration(travelMin);
             document.getElementById('trFinalLabel').textContent = isRetour ? 'Back at base' : 'Final destination';
             document.getElementById('trFinalRow').classList.remove('d-none');
+            const _termTgt = (window.CNSDemand && CNSDemand.resolveTargetSoc) ? CNSDemand.resolveTargetSoc({}) : null;
+            const _tgtLabel = (_termTgt != null && _termTgt < 0.999) ? `to ${Math.round(_termTgt * 100)}%` : 'to full';
             document.getElementById('trFinal').textContent = terminalMin > 0.5
-                ? `${terminalName} · ${Math.round(arrivalSoc * 100)}% on arrival, +${fmtDuration(terminalMin)} to full`
+                ? `${terminalName} · ${Math.round(arrivalSoc * 100)}% on arrival, +${fmtDuration(terminalMin)} ${_tgtLabel}`
                 : `${terminalName} · no charge needed`;
             document.getElementById('trCharger').textContent = data.charger.name + ' (' + data.charger.power_kw + ' kW)';
 
@@ -2468,7 +2642,9 @@
                 plane_id: planeId, charger_id: chargerId,
                 trip_type: tripType,
             };
-            if (customById[planeId]) payload.plane = customById[planeId];
+            // Custom plane OR an active per-flight override → send the effective
+            // spec so the backend computes with the overridden battery/range/etc.
+            if (customById[planeId] || _planeOverride) payload.plane = selectedPlaneSpec();
             // server-side custom chargers (id starts with "charger_") aren't in the static catalog —
             // pass the object through so sim.py can size the charge time correctly.
             if (window.CNSChargers && CNSChargers.get(chargerId)) payload.charger = CNSChargers.get(chargerId);
@@ -2592,7 +2768,7 @@
                 // toggle is off, so this matches the original behaviour exactly.
                 const route   = CNSSettings.routingFactor();
                 const gridMul = CNSSettings.gridDemandFactor();
-                const getTargetSoc = (id) => CNSDemand.targetSocFromCfg(cfgs[id]);
+                const getTargetSoc = (id) => CNSDemand.resolveTargetSoc(cfgs[id]);
                 // Per-trip cache so each multi-leg trip recomputes its charges
                 // exactly once per render (cheap, but no point doing it once per contrib).
                 const multiCache = {};
@@ -2708,7 +2884,7 @@
                         </div>
                         <div class="soc-panel ${targetSoc != null ? '' : 'd-none'}" data-soc-ident="${ident}">
                             <div class="soc-row">
-                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="auto" ${targetSoc == null ? 'checked' : ''}><span>Auto — charge only the deficit needed to safely return</span></label>
+                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="auto" ${targetSoc == null ? 'checked' : ''}><span>Auto — use the global default charge target (Model settings)</span></label>
                             </div>
                             <div class="soc-row">
                                 <label class="opt-check"><input type="radio" name="soc-${ident}" value="target" ${targetSoc != null ? 'checked' : ''}><span>Charge to at least</span></label>
@@ -2876,6 +3052,7 @@
                 chargerEfficiency: { check: 'rsChargerEff',    extras: { value:         { input: 'rsChargerEffSl', valEl: 'rsChargerEffVal', fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 chargeTaper:       { check: 'rsTaper',         extras: { cRate:         { input: 'rsTaperCRate',   valEl: 'rsTaperCRateVal', fmt: (v) => `${(v / 10).toFixed(1)}C`,             to: (v) => v / 10,  from: (v) => Math.round(v * 10) } } },
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
+                chargeTarget:      { check: 'rsChargeTarget',  extras: { value:         { input: 'rsChargeTargetSl', valEl: 'rsChargeTargetVal', fmt: (v) => `${v}%`,                              to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
 
             function syncFromState() {
@@ -2937,7 +3114,7 @@
             });
 
             document.getElementById('rsResetBtn').addEventListener('click', () => {
-                if (confirm('Reset all model settings to defaults (all factors off)?')) {
+                if (confirm('Reset all model settings to defaults (realistic model on)?')) {
                     CNSSettings.reset();
                     syncFromState();
                 }
@@ -3000,6 +3177,7 @@
             unitToggle.checked = isNautical();
             updateTrajectory();
             if (lastResult) renderResult(lastResult);
+            renderPlaneSpecCard();
             renderFolder();
         });
 
@@ -3164,6 +3342,7 @@
         // Drawer (Demand Calculator) toggle + live subtitle
         const demandDrawer = document.getElementById('demandDrawer');
         document.getElementById('drawerToggle').addEventListener('click', () => demandDrawer.classList.toggle('open'));
+        document.getElementById('drawerClose').addEventListener('click', () => demandDrawer.classList.remove('open'));
         function updateDrawerSub() {
             const trips = CNSDemand.loadFolder();
             const airports = Object.keys(CNSDemand.computeAirports()).length;
@@ -3187,12 +3366,39 @@
             }
             setupAutocomplete('origin');
             setupAutocomplete('destination');
-            loadAirports();
+            await loadAirports();
             if (window.CNSScheduler) CNSScheduler.init({ chargers: chargerById, onChange: renderFolder });
             if (window.CNSAnimation) CNSAnimation.init();
             renderFolder();
             updateDrawerSub();
+            renderPlaneSpecCard();
+            _applyDefaultFlight();
         })();
+
+        // First-load convenience: prefill a realistic example (Lelystad → Frankfurt
+        // with the Beta Alia, charging stops on) so the canvas isn't empty. Only
+        // runs when the planner is untouched; the ↺ reset still clears to blank.
+        function _applyDefaultFlight() {
+            const originEl = document.getElementById('origin');
+            const destEl = document.getElementById('destination');
+            if ((originEl && originEl.value.trim()) || (destEl && destEl.value.trim())) return;  // user already typed
+            const o = airportByIdent['EHLE'], d = airportByIdent['EDDF'];
+            if (!o || !d) return;                                   // airports not in dataset → leave blank
+            const planeSel = document.getElementById('plane');
+            if (planeSel && [...planeSel.options].some(op => op.value === 'beta_plane')) {
+                planeSel.value = 'beta_plane';
+                planeSel.dispatchEvent(new Event('change'));
+            }
+            const chgSel = document.getElementById('charger');
+            if (chgSel && [...chgSel.options].some(op => op.value === 'dc_250')) chgSel.value = 'dc_250';
+            const stops = document.getElementById('withStops');
+            if (stops && !stops.checked) { stops.checked = true; stops.dispatchEvent(new Event('change')); }
+            if (typeof pickAirport === 'function') {
+                pickAirport('origin', o);
+                pickAirport('destination', d);
+            }
+            renderPlaneSpecCard();
+        }
     </script>
 </body>
 </html>

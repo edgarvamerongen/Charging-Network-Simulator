@@ -88,8 +88,8 @@ window.CNSScheduler = (function () {
     }
     function buildContext(ident) {
         const cfg = loadCfg()[ident] || {};
-        const targetSoc = (window.CNSDemand && CNSDemand.targetSocFromCfg)
-            ? CNSDemand.targetSocFromCfg(cfg) : (cfg.fullCharge ? 1.0 : null);
+        const targetSoc = (window.CNSDemand && CNSDemand.resolveTargetSoc)
+            ? CNSDemand.resolveTargetSoc(cfg) : (cfg.fullCharge ? 1.0 : null);
         const trips = tripsAt(ident);
         // Default fleet = union of every distinct charger used by trips touching
         // this airport (so a hub with mixed aircraft doesn't get bottlenecked by
@@ -112,8 +112,8 @@ window.CNSScheduler = (function () {
                              : role === 'dest' ? t.originIdent
                              : null;
             const otherCfg = otherIdent ? (loadCfg()[otherIdent] || null) : null;
-            const targetOther = (window.CNSDemand && CNSDemand.targetSocFromCfg)
-                ? CNSDemand.targetSocFromCfg(otherCfg) : (otherCfg && otherCfg.fullCharge ? 1.0 : null);
+            const targetOther = (window.CNSDemand && CNSDemand.resolveTargetSoc)
+                ? CNSDemand.resolveTargetSoc(otherCfg) : (otherCfg && otherCfg.fullCharge ? 1.0 : null);
             const energy = (window.CNSDemand && CNSDemand.deliveredEnergy && !t.multiLeg)
                 ? CNSDemand.deliveredEnergy(t, role, leg, batt, usable, targetSoc, targetOther)
                 : energyAt(t, ident, targetSoc === 1.0);
@@ -266,9 +266,13 @@ window.CNSScheduler = (function () {
     //   energyUsedKwh — energy the aircraft consumes (== what it recharges)
     function tripBreakdown(trip, chargerKw) {
         const power = Math.max(0, +chargerKw || 0);
-        // Preview context: the operator's single chosen charger at every airport,
-        // and no saved SoC targets (the flight isn't in the network yet).
-        const ctx = { chargerAt: () => power, targetAt: () => null };
+        // Preview context: the operator's single chosen charger at every airport.
+        // No per-airport SoC targets yet (the flight isn't in the network), so
+        // every terminus uses the GLOBAL default charge target — the same value
+        // the DES will apply once the flight is added, keeping panel == DES.
+        const previewTarget = (window.CNSDemand && CNSDemand.resolveTargetSoc)
+            ? CNSDemand.resolveTargetSoc({}) : null;
+        const ctx = { chargerAt: () => power, targetAt: () => previewTarget };
         const { ph } = tripPhases(trip, null, ctx);
         const batt = batteryOf(trip);
         const usableBatt = _usableB(trip);
@@ -282,7 +286,11 @@ window.CNSScheduler = (function () {
         const terminalKwh  = terminal ? terminal.energy : 0;
         const terminalName = terminal ? terminal.name : (trip.destName || '');
         const reserveFrac  = batt > 0 ? Math.max(0, (batt - usableBatt) / batt) : 0;
-        const arrivalSoc   = Math.max(0, Math.min(1, Math.max(reserveFrac, (batt - terminalKwh) / (batt || 1))));
+        // Arrival SoC at the terminus = its charge target minus the top-up taken
+        // there. Don't assume a charge-to-full — that over-states arrival SoC
+        // whenever a charge target below 100% is in effect.
+        const termTarget   = (previewTarget != null ? previewTarget : 1.0);
+        const arrivalSoc   = Math.max(0, Math.min(1, Math.max(reserveFrac, termTarget - terminalKwh / (batt || 1))));
         const energyUsedKwh = charges.reduce((s, p) => s + (p.energy || 0), 0);
         return { flightMin, chargeMin, enRouteMin, terminalMin, terminalKwh, terminalName, arrivalSoc, energyUsedKwh };
     }

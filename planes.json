@@ -4,11 +4,11 @@
     "name": "Velis Electro",
     "seats": 2,
     "battery_kwh": 22,
-    "range_km": 100,
+    "range_km": 50,
     "speed_kmh": 150,
-    "training_range_km": 70,
+    "training_range_km": 100,
     "c_rate": 0.9,
-    "image": "pipistrel.png",
+    "image": "pipistrel.jpg",
     "svg": "pepistrel.svg"
   },
   {
@@ -17,20 +17,33 @@
     "seats": 6,
     "load_kg": 500,
     "battery_kwh": 225,
-    "range_km": 500,
+    "range_km": 400,
     "speed_kmh": 250,
     "image": "beta.png",
     "svg": "beta.svg"
   },
   {
     "id": "vaeridion",
-    "name": "Vaeridion",
+    "name": "Vaeridion Microliner",
     "seats": 30,
     "load_kg": 3000,
     "battery_kwh": 500,
-    "range_km": 500,
+    "range_km": 400,
     "speed_kmh": 400,
-    "image": "vaeridion.png",
+    "image": "vaeridion.jpg",
     "svg": "vaeridion.svg"
+  },
+  {
+    "id": "elysian_e9x",
+    "name": "Elysian E9X",
+    "seats": 90,
+    "load_kg": 9000,
+    "battery_kwh": 14000,
+    "range_km": 800,
+    "speed_kmh": 720,
+    "c_rate": 1.0,
+    "image": "elysian.jpg",
+    "svg": "vaeridion.svg",
+    "simultaneous_charging": { "enabled": true, "max": 2 }
   }
 ]

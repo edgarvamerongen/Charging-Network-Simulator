@@ -17,40 +17,92 @@ window.CNSTour = (function () {
     const KEY_DONE = 'cns_tour_done';
     let _activeDriver = null;
 
+    // ---- crew hover cards (welcome step) -------------------------------------
+    // The welcome popover names Merlijn + Jacco with a dotted underline; hovering
+    // either pops a card pinned to the top of the screen. Data + photos come from
+    // the crew/ folder (photos served from pics/crew/).
+    const _crewData = {
+        merlijn: {
+            name: 'Merlijn van Vliet', role: 'CEO', photo: '/pics/crew/merlijn.jpeg',
+            bio: "Co-owner of Europe's first electric flight academy and board member of the Electric Flying Connection. Combines a background in brand strategy with a passion for electric aviation; leads NRG2fly's European partnerships and ecosystem building.",
+            linkedin: 'https://www.linkedin.com/in/merlijnvanvliet/', email: 'merlijn@nrg2fly.com',
+        },
+        jacco: {
+            name: 'Jacco Bink', role: 'COO', photo: '/pics/crew/jacco.jpeg',
+            bio: 'With a background at KLM and Alliander, Jacco brings deep expertise in aviation and energy systems. As Consulting Director at NRG2fly he leads the rollout of charging infrastructure at airports across the Netherlands and Europe.',
+            linkedin: 'https://www.linkedin.com/in/jacco-bink-ba6254/', email: 'jacco@nrg2fly.com',
+        },
+    };
+    let _crewCardEl = null, _crewHideTimer = null;
+    function _crewCard() {
+        if (!_crewCardEl) {
+            _crewCardEl = document.createElement('div');
+            _crewCardEl.className = 'tour-crew-card';
+            _crewCardEl.addEventListener('mouseenter', _cancelHideCrew);
+            _crewCardEl.addEventListener('mouseleave', _scheduleHideCrew);
+            document.body.appendChild(_crewCardEl);
+        }
+        return _crewCardEl;
+    }
+    function _showCrew(key) {
+        const c = _crewData[key]; if (!c) return;
+        _cancelHideCrew();
+        const card = _crewCard();
+        card.innerHTML =
+            `<img src="${c.photo}" alt="${c.name}" onerror="this.style.display='none'">` +
+            `<div><div class="tcc-name">${c.name}</div><div class="tcc-role">${c.role}</div>` +
+            `<div class="tcc-bio">${c.bio}</div>` +
+            `<div class="tcc-links"><a href="${c.linkedin}" target="_blank" rel="noopener">LinkedIn ↗</a>` +
+            `<a href="mailto:${c.email}">${c.email}</a></div></div>`;
+        card.classList.add('show');
+    }
+    function _cancelHideCrew() { if (_crewHideTimer) { clearTimeout(_crewHideTimer); _crewHideTimer = null; } }
+    function _scheduleHideCrew() { _cancelHideCrew(); _crewHideTimer = setTimeout(() => { if (_crewCardEl) _crewCardEl.classList.remove('show'); }, 350); }
+    // Delegated hover — robust to whenever Driver.js (re)renders the popover.
+    document.addEventListener('mouseover', (e) => {
+        const t = e.target.closest && e.target.closest('.tour-crew');
+        if (t && t.dataset.crew) _showCrew(t.dataset.crew);
+    });
+    document.addEventListener('mouseout', (e) => {
+        const t = e.target.closest && e.target.closest('.tour-crew');
+        if (t) _scheduleHideCrew();
+    });
+
     // ---- demo-data seeding ----------------------------------------------------
-    // Seed a realistic Amsterdam → Paris CDG retour with Beta Plane so the
-    // tour's downstream steps (result panel, demand calc, scheduler) have
+    // Seed a realistic Lelystad → Frankfurt retour with the Beta Alia CX300 so
+    // the tour's downstream steps (result panel, demand calc, scheduler) have
     // non-zero numbers to show. We don't simulate or save to the folder yet —
     // those happen mid-tour to demonstrate the buttons.
     async function _seedDemoForm() {
         const airports = await fetch('/api/airports').then(r => r.json());
-        const ams = airports.find(a => a.ident === 'EHAM');
-        const cdg = airports.find(a => a.ident === 'LFPG');
-        if (!ams || !cdg) return;
+        const lelystad  = airports.find(a => a.ident === 'EHLE');
+        const frankfurt = airports.find(a => a.ident === 'EDDF');
+        if (!lelystad || !frankfurt) return;
 
-        // Pipistrel Velis Electro has a 100 km range — flying AMS↔CDG (~400 km)
-        // forces the auto-planner to insert 4–5 charging stops, so the tour can
-        // actually demonstrate the Suggested route panel doing meaningful work.
+        // Beta Alia CX300: 400 km range, but with the realistic model factors on
+        // by default (30% landing reserve + ~5% routing padding) its usable reach
+        // drops to ~280 km — so Lelystad→Frankfurt (~365 km) no longer fits in one
+        // hop and the auto-planner inserts a charging stop. That's exactly what we
+        // showcase at the Model-settings + Suggested-route steps.
         //
-        // Order matters: enable Plan-with-charging-stops + set plane FIRST,
-        // so that when pickAirport fires its smartReplan + updateTrajectory,
-        // the over-range warning in the trajectory pill is suppressed (the
-        // pill only warns in direct-flight mode — Suggested route handles it
-        // when stops are on).
+        // Order matters: set plane FIRST, so that when pickAirport fires its
+        // smartReplan + updateTrajectory the over-range warning in the trajectory
+        // pill is suppressed (the pill only warns in direct-flight mode — the
+        // Suggested route panel handles it once stops are on).
         document.getElementById('tripType').value = 'retour';
         document.getElementById('tripType').dispatchEvent(new Event('change'));
-        document.getElementById('plane').value = 'pipistrel_velis';
+        document.getElementById('plane').value = 'beta_plane';
         document.getElementById('plane').dispatchEvent(new Event('change'));
-        document.getElementById('charger').value = 'dc_mobile';
+        document.getElementById('charger').value = 'dc_250';
         document.getElementById('charger').dispatchEvent(new Event('change'));
         document.getElementById('freqN').value = 1;
-        // NOTE: "Plan with charging stops" is left OFF here on purpose. The
-        // tour enables it at the Suggested-route step so the operator sees
-        // the natural progression — first the warning that Pipi can't make
-        // CDG direct, then the planner suggesting stops to bridge the gap.
+        // NOTE: "Plan with charging stops" is left OFF here on purpose. The tour
+        // enables it at the Suggested-route step so the operator sees the natural
+        // progression — first the warning that the Beta can't reach Frankfurt
+        // direct under the applied reserve, then the planner adding a stop.
         if (typeof pickAirport === 'function') {
-            pickAirport('origin', ams);
-            pickAirport('destination', cdg);
+            pickAirport('origin', lelystad);
+            pickAirport('destination', frankfurt);
         }
     }
 
@@ -91,7 +143,7 @@ window.CNSTour = (function () {
             beta:     window.PLANES_BY_ID?.beta_plane     || { id:'beta_plane',     name:'Beta Plane',     battery_kwh:225, svg:'beta.svg'      },
             vaer:     window.PLANES_BY_ID?.vaeridion      || { id:'vaeridion',      name:'Vaeridion',      battery_kwh:500, svg:'vaeridion.svg' },
         };
-        const charger = (window.CHARGERS_BY_ID || {}).aircraft_charger || { id:'aircraft_charger', name:'Aircraft Charger', power_kw:172 };
+        const charger = (window.CHARGERS_BY_ID || {}).dc_250 || { id:'dc_250', name:'250 kW DC charger', power_kw:250 };
         // The tour's existing folder entry (from Add-to-demand) stays.
         const existing = CNSDemand.loadFolder();
         const ams = a('EHAM');
@@ -201,12 +253,12 @@ window.CNSTour = (function () {
             // 1. Welcome — what is this tool and why does it exist?
             {
                 popover: {
-                    title: 'Welcome to the Charging Network Simulator',
+                    title: 'Welcome to the NRG2fly Charging Network Simulator',
                     description:
-                        '<p>This tool helps electric-aviation operators answer a strategic question: <strong>how much charging infrastructure does our network actually need?</strong></p>' +
-                        '<p>You plan flights (aircraft, route, frequency) and the simulator works out, per airport, the daily energy throughput, the peak power draw, the number of chargers required, and how the daily rotation actually plays out hour-by-hour.</p>' +
-                        '<p>The result is a defensible, client-ready sizing brief — exported as a PDF — instead of a back-of-envelope guess.</p>' +
-                        '<p class="tour-foot">~3-minute tour. We\'ve pre-filled an example: <strong>Amsterdam ↔ Paris CDG</strong> with a Pipistrel Velis Electro (short range — needs charging stops). Press <kbd>Esc</kbd> to skip any time.</p>',
+                        '<p>At NRG2fly we are rolling out a European charging network that makes point-to-point electric aviation possible. This tool helps airports and operators answer the strategic questions we keep coming back to: <strong>what kind of charging infrastructure, and how much power, do we need?</strong></p>' +
+                        '<p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — the result is a defensible, client-ready sizing brief, exported as a PDF, rather than a back-of-envelope guess.</p>' +
+                        '<p>We advise everyone to start with this demo tour first, then move on to running simulations yourself.</p>' +
+                        '<p class="tour-foot">Pre-filled example: <strong>Beta Alia · Lelystad → Frankfurt</strong>. Questions? Reach out to <span class="tour-crew" data-crew="merlijn">Merlijn van Vliet (CEO)</span> and <span class="tour-crew" data-crew="jacco">Jacco Bink (COO)</span>. Press <kbd>Esc</kbd> to skip any time.</p>',
                     side: 'over', align: 'center',
                 },
             },
@@ -238,14 +290,21 @@ window.CNSTour = (function () {
             // 7. Plan with charging stops
             {
                 element: '.stops-toggle-row',
-                popover: { title: 'Plan with charging stops', description: 'Toggle on to let the planner add charging stops automatically when the aircraft can\'t reach the destination in one hop. We\'ve already enabled it for the demo since a Pipistrel can\'t cross 400&nbsp;km in one hop.', side: 'right' },
+                popover: { title: 'Plan with charging stops', description: 'Toggle on to let the planner add charging stops automatically when the aircraft can\'t reach the destination in one hop. We\'ve already enabled it for the demo, because under the applied model factors the Beta Alia can\'t reach Frankfurt directly.', side: 'right' },
             },
-            // 8. NEW — Suggested route panel (Pipi requires multi-stop).
-            // This step enables the toggle on entry so the planner has run
-            // by the time the popover appears.
+            // 8. Model settings — surfaced HERE (before the route is shown) so the
+            // user understands the realistic factors applied to every calculation,
+            // and therefore WHY a charging stop appears in the next step.
+            {
+                element: '#planModelSettingsBtn',
+                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. The reserve and padding are exactly why the Beta Alia\'s 400&nbsp;km range can\'t reach Frankfurt in one hop — so the planner has to add a stop. Open this any time to adjust the factors or switch them off.', side: 'right' },
+            },
+            // 9. Suggested route — the stop the applied factors forced.
+            // Enables the toggle on entry so the planner has run by the time the
+            // popover appears.
             {
                 element: '#stopsSection',
-                popover: { title: 'Suggested route', description: 'Now that "Plan with charging stops" is on, the planner has split the trajectory into multiple legs through intermediate airports — the Pipistrel\'s 100&nbsp;km range can\'t reach Paris in one hop. Each row shows the leg distance; over-range legs would be flagged red. Drag the ≡ handle on a manual stop to reorder; × removes one. For a wider selection of airports, go to Options in the upper right corner and make your selection.', side: 'right' },
+                popover: { title: 'Suggested route', description: 'With "Plan with charging stops" on, the planner split the trajectory into legs through an intermediate airport — the Beta Alia can\'t cross Lelystad→Frankfurt in one hop once the 30% reserve and routing padding are applied. Each row shows the leg distance; over-range legs would be flagged red. Drag the ≡ handle on a manual stop to reorder; × removes one. For a wider selection of airports, go to Options in the upper-right corner.', side: 'right' },
                 onHighlightStarted: async () => { await _ensureStopsOn(); },
             },
             // 9. Aircraft
@@ -337,7 +396,7 @@ window.CNSTour = (function () {
             // 19. NEW — Charge target chip
             {
                 element: '#folder .soc-chip',
-                popover: { title: 'Charge target', description: '<strong>Auto</strong> means deficit charging — top up only enough for the return leg. Set a percentage (e.g. 80%) to charge the plane to a specific state-of-charge before departure. Higher targets give the plane more reserve but slow charging (lithium-ion tapers above ~80% SoC).', side: 'top' },
+                popover: { title: 'Charge target', description: '<strong>Auto</strong> inherits the global default charge target from Model settings (80% by default). Set a percentage here to override it for <em>this</em> airport — a LOCAL target always wins over the GLOBAL default. Higher targets give the plane more reserve but slow charging (lithium-ion tapers above ~80% SoC).', side: 'top' },
                 onHighlightStarted: async () => { await _ensureDrawerOpen(); },
             },
             // 20. Rotation scheduler — lift the drawer above the tour overlay
@@ -359,15 +418,10 @@ window.CNSTour = (function () {
                     document.body.classList.remove('tour-scheduler-step');
                 },
             },
-            // 21. Model settings — "SID/STAR" is the correct aviation term for
-            // the routing-padding factor; "propagates" no longer bold (was over-
-            // emphasised vs the surrounding text).
-            {
-                element: '#modelSettingsBtn',
-                popover: { title: 'Model settings', description: 'Operational model factors — landing reserve, charger efficiency, charging-curve taper, SID/STAR routing distance. Each one propagates through every calculation in the app (planner, demand calc, scheduler, PDF). Off by default; opt in when you need them.', side: 'top' },
-                onHighlightStarted: async () => { await _ensureDrawerOpen(); },
-            },
-            // 22. PDF report
+            // (Model settings is now shown earlier, in the planner flow — right
+            // after "Plan with charging stops" — so its factors are introduced
+            // before the route is computed.)
+            // PDF report
             {
                 element: '#generateReport',
                 popover: { title: 'PDF report', description: 'Exports the whole plan as a print-ready PDF — cover with headline numbers, executive summary, network map, per-airport pages with rotation charts, methodology notes. Great for client deliverables.', side: 'top' },

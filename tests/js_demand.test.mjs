@@ -22,11 +22,13 @@ import assert from 'node:assert/strict';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
 
-function loadDemand() {
+function loadDemand(globalTarget) {
   const code = fs.readFileSync(path.join(REPO, 'static', 'demand.js'), 'utf8');
   const store = {};
   const sandbox = {
-    window: {},
+    // Optional CNSSettings stub so resolveTargetSoc's GLOBAL fallback is
+    // testable; `globalTarget` undefined => factor off (returns null).
+    window: { CNSSettings: { chargeTargetDefault: () => (globalTarget == null ? null : globalTarget) } },
     CNSState: {
       KEYS: { folder: 'cns_folder', cfg: 'cns_airport_cfg' },
       getJSON: (k, d) => (k in store ? JSON.parse(JSON.stringify(store[k])) : d),
@@ -168,6 +170,25 @@ test('computeAirports: two ident-less airports both survive (no key collapse)', 
   assert.ok(names.includes('No-Ident A'), 'first ident-less airport was dropped');
   assert.ok(names.includes('No-Ident B'), 'second ident-less airport collapsed onto the first');
   D.saveFolder([]);
+});
+
+// ---- resolveTargetSoc: LOCAL (per-airport) overrides GLOBAL default --------
+// The crux of the global charge-target feature: energy math reads the resolved
+// target, where a per-airport value always wins over the model-settings default,
+// and the default only applies when no per-airport value is set.
+test('resolveTargetSoc: local per-airport target wins over global default', () => {
+  const Dg = loadDemand(0.80);                       // global default 80%
+  assert.ok(approx(Dg.resolveTargetSoc({ targetDepartureSoc: 0.6 }), 0.6), 'local 60% should win');
+});
+test('resolveTargetSoc: falls back to global default when no local target', () => {
+  const Dg = loadDemand(0.80);
+  assert.ok(approx(Dg.resolveTargetSoc({}), 0.80), 'empty cfg should inherit global 80%');
+  assert.ok(approx(Dg.resolveTargetSoc(null), 0.80), 'null cfg should inherit global 80%');
+});
+test('resolveTargetSoc: null (deficit) when factor off and no local target', () => {
+  const Doff = loadDemand(null);                     // chargeTarget factor off
+  assert.equal(Doff.resolveTargetSoc({}), null, 'no global, no local => null/deficit');
+  assert.ok(approx(Doff.resolveTargetSoc({ fullCharge: true }), 1.0), 'legacy fullCharge still resolves to 1.0');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

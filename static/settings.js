@@ -37,12 +37,16 @@
  * Depends on: CNSState (load earlier).
  */
 window.CNSSettings = (function () {
-    const KEY = 'cns_settings_v1';
+    // v2: the realistic model is now the default (reserve + padding + taper +
+    // charge target all ON). Bumping the key from v1 retires browsers' old
+    // all-off blobs so everyone picks up the new defaults on next load.
+    const KEY = 'cns_settings_v2';
     const DEFAULTS = Object.freeze({
-        landingReserve:    { enabled: false, minLandingSoc: 0.30 },   // 0..1
+        landingReserve:    { enabled: true,  minLandingSoc: 0.30 },   // 0..1
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
-        chargeTaper:       { enabled: false, threshold: 0.70, taperPower: 0.15, cRate: 2.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate (per-plane c_rate overrides)
-        routingPadding:    { enabled: false, factor: 1.05 },          // ≥1
+        chargeTaper:       { enabled: true,  threshold: 0.70, taperPower: 0.15, cRate: 2.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate (per-plane c_rate overrides)
+        routingPadding:    { enabled: true,  factor: 1.05 },          // ≥1
+        chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
     });
 
     // Cloned so call sites can't mutate the frozen defaults via the returned object.
@@ -113,6 +117,17 @@ window.CNSSettings = (function () {
         return Math.max(1.0, Math.min(1.5, +s.factor || 1.05));
     }
 
+    /** Default state-of-charge every aircraft charges to at a terminus, unless a
+     *  per-airport target overrides it (LOCAL > GLOBAL). Returns a fraction in
+     *  (0,1] when the factor is on, or null when off — null means pure deficit
+     *  charging (top up only what the next leg needs), the original behaviour.
+     *  Resolvers should use `perAirportTarget(id) ?? chargeTargetDefault()`. */
+    function chargeTargetDefault() {
+        const s = loadAll().chargeTarget;
+        if (!s || !s.enabled) return null;
+        return Math.max(0.1, Math.min(1.0, +s.value || 0.80));
+    }
+
     /** Effective charge power (kW) a battery can actually accept: the smaller
      *  of the charger's rated power and the pack's C-rate limit
      *  (`cRate × batteryKwh`). This is the CC-plateau half of the charging-curve
@@ -175,8 +190,10 @@ window.CNSSettings = (function () {
             chargerEfficiency: !!s.chargerEfficiency.enabled,
             chargeTaper:       !!s.chargeTaper.enabled,
             routingPadding:    !!s.routingPadding.enabled,
+            chargeTarget:      !!(s.chargeTarget && s.chargeTarget.enabled),
             anyOn: !!(s.landingReserve.enabled || s.chargerEfficiency.enabled ||
-                      s.chargeTaper.enabled || s.routingPadding.enabled),
+                      s.chargeTaper.enabled || s.routingPadding.enabled ||
+                      (s.chargeTarget && s.chargeTarget.enabled)),
         };
     }
 
@@ -184,6 +201,6 @@ window.CNSSettings = (function () {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
         usableFraction, gridDemandFactor, routingFactor, chargeTimeMin,
-        effectiveChargePower, activeFlags,
+        effectiveChargePower, chargeTargetDefault, activeFlags,
     };
 })();

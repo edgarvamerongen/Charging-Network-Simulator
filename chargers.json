@@ -1,32 +1,47 @@
 [
   {
-    "id": "aircraft_charger",
-    "name": "Aircraft Charger",
-    "power_kw": 172
-  },
-  {
-    "id": "gse_charger",
-    "name": "GSE Charger",
-    "power_kw": 180
-  },
-  {
-    "id": "mobile_aircraft",
-    "name": "Mobile Aircraft Charger (GB/T)",
+    "id": "dc_22",
+    "name": "22 kW DC charger",
     "power_kw": 22
   },
   {
-    "id": "dc_mobile",
-    "name": "DC Mobile Charger",
+    "id": "dc_40",
+    "name": "40 kW DC charger",
     "power_kw": 40
   },
   {
-    "id": "ccs",
-    "name": "CCS",
+    "id": "dc_60",
+    "name": "60 kW DC charger",
+    "power_kw": 60
+  },
+  {
+    "id": "dc_100",
+    "name": "100 kW DC charger",
+    "power_kw": 100
+  },
+  {
+    "id": "dc_250",
+    "name": "250 kW DC charger",
+    "power_kw": 250
+  },
+  {
+    "id": "dc_400",
+    "name": "400 kW DC charger",
     "power_kw": 400
   },
   {
-    "id": "mcs",
-    "name": "MCS",
+    "id": "dc_1000",
+    "name": "1 MW DC charger",
+    "power_kw": 1000
+  },
+  {
+    "id": "dc_2400",
+    "name": "2.4 MW DC charger",
+    "power_kw": 2400
+  },
+  {
+    "id": "dc_3750",
+    "name": "3.75 MW DC charger",
     "power_kw": 3750
   }
 ]
