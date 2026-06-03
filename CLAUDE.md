@@ -56,3 +56,23 @@ subagents over many human-driven sessions.
 ## Data
 
 - `data/` is gitignored. `planes.json` / `chargers.json` are tracked catalogs.
+
+## Guided tour
+
+The onboarding tour lives in `static/tour.js` (Driver.js). Step content +
+side-effects are the `_steps()` array; tour CSS is in `templates/index.html`
+(`.cns-tour-*`, `.tour-lead-*`). Each step anchors to a DOM selector, so app
+markup changes can silently break it.
+
+- **Step order follows the Create-a-route form, top to bottom.** The demo seeds
+  Lelystad → Frankfurt (Beta Alia); the final "Overview" step seeds real,
+  backend-routed flights out of Lelystad via `_seedNetworkFlights()`.
+- **Detect drift:** `CNSTour.check()` in the browser console lists every step's
+  anchor + whether it resolves; the tour also console-warns (`[CNSTour] …`) at
+  startup for any missing static anchor. (`#folder …` anchors only resolve
+  mid-tour once the demand drawer renders — expected to read missing before then.)
+- **Refresh it: run `/update-tour`** (`.claude/commands/update-tour.md`),
+  ideally in a fresh, tour-focused session. It reconciles each step's anchor +
+  copy with the current UI and re-verifies by replaying the tour in the browser.
+  The `.claude/` command is gitignored (local only); this section is the tracked,
+  shared source of truth for the process.

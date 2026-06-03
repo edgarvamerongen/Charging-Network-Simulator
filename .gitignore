@@ -4,7 +4,10 @@ __pycache__/
 *.pyo
 .DS_Store
 *.log
-.claude/
+# Ignore everything Claude-local (worktrees, session data, settings) EXCEPT
+# shared slash commands, which we track so e.g. /update-tour is available to all.
+.claude/*
+!.claude/commands/
 
 # Raw source data — only used by prepare_data.py to (re)generate european_airports.csv.
 # The app serves european_airports.csv at runtime; the 12 MB raw file isn't needed to deploy.

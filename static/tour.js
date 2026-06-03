@@ -17,56 +17,38 @@ window.CNSTour = (function () {
     const KEY_DONE = 'cns_tour_done';
     let _activeDriver = null;
 
-    // ---- crew hover cards (welcome step) -------------------------------------
-    // The welcome popover names Merlijn + Jacco with a dotted underline; hovering
-    // either pops a card pinned to the top of the screen. Data + photos come from
-    // the crew/ folder (photos served from pics/crew/).
-    const _crewData = {
-        merlijn: {
-            name: 'Merlijn van Vliet', role: 'CEO', photo: '/pics/crew/merlijn.jpeg',
-            bio: "Co-owner of Europe's first electric flight academy and board member of the Electric Flying Connection. Combines a background in brand strategy with a passion for electric aviation; leads NRG2fly's European partnerships and ecosystem building.",
-            linkedin: 'https://www.linkedin.com/in/merlijnvanvliet/', email: 'merlijn@nrg2fly.com',
-        },
-        jacco: {
+    // ---- leadership cards (welcome slide) ------------------------------------
+    // Rendered inline in the welcome popover in the nrg2fly.com/about.html
+    // "Leadership" style: circular photo, name, role, bio, credential tag pills.
+    // Data + photos come from the crew/ folder (photos served from pics/crew/).
+    const _leadership = [
+        {
             name: 'Jacco Bink', role: 'COO', photo: '/pics/crew/jacco.jpeg',
-            bio: 'With a background at KLM and Alliander, Jacco brings deep expertise in aviation and energy systems. As Consulting Director at NRG2fly he leads the rollout of charging infrastructure at airports across the Netherlands and Europe.',
+            bio: 'A background at KLM and Alliander brings deep expertise in aviation and energy systems. As Consulting Director he leads the rollout of charging infrastructure at airports across the Netherlands and Europe.',
+            tags: ['KLM', 'Alliander'],
             linkedin: 'https://www.linkedin.com/in/jacco-bink-ba6254/', email: 'jacco@nrg2fly.com',
         },
-    };
-    let _crewCardEl = null, _crewHideTimer = null;
-    function _crewCard() {
-        if (!_crewCardEl) {
-            _crewCardEl = document.createElement('div');
-            _crewCardEl.className = 'tour-crew-card';
-            _crewCardEl.addEventListener('mouseenter', _cancelHideCrew);
-            _crewCardEl.addEventListener('mouseleave', _scheduleHideCrew);
-            document.body.appendChild(_crewCardEl);
-        }
-        return _crewCardEl;
+        {
+            name: 'Merlijn van Vliet', role: 'CEO', photo: '/pics/crew/merlijn.jpeg',
+            bio: "Co-owner of Europe's first electric flight academy and board member of the Electric Flying Connection. Combines brand strategy with a passion for electric aviation; leads NRG2fly's European partnerships and ecosystem building.",
+            tags: ['✈ Pilot', 'E-Flight Academy', 'Electric Flying Connection'],
+            linkedin: 'https://www.linkedin.com/in/merlijnvanvliet/', email: 'merlijn@nrg2fly.com',
+        },
+    ];
+    function _leadershipCardsHTML() {
+        const card = (c) =>
+            '<div class="tour-lead-card">' +
+              `<img class="tlc-photo" src="${c.photo}" alt="${c.name}" onerror="this.style.visibility='hidden'">` +
+              `<div class="tlc-name">${c.name}</div>` +
+              `<div class="tlc-role">${c.role}</div>` +
+              `<p class="tlc-bio">${c.bio}</p>` +
+              `<div class="tlc-tags">${c.tags.map((t) => `<span class="tlc-tag">${t}</span>`).join('')}</div>` +
+              `<div class="tlc-links"><a href="${c.linkedin}" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:${c.email}">${c.email}</a></div>` +
+            '</div>';
+        return '<div class="tour-lead">' +
+                 `<div class="tour-lead-grid">${_leadership.map(card).join('')}</div>` +
+               '</div>';
     }
-    function _showCrew(key) {
-        const c = _crewData[key]; if (!c) return;
-        _cancelHideCrew();
-        const card = _crewCard();
-        card.innerHTML =
-            `<img src="${c.photo}" alt="${c.name}" onerror="this.style.display='none'">` +
-            `<div><div class="tcc-name">${c.name}</div><div class="tcc-role">${c.role}</div>` +
-            `<div class="tcc-bio">${c.bio}</div>` +
-            `<div class="tcc-links"><a href="${c.linkedin}" target="_blank" rel="noopener">LinkedIn ↗</a>` +
-            `<a href="mailto:${c.email}">${c.email}</a></div></div>`;
-        card.classList.add('show');
-    }
-    function _cancelHideCrew() { if (_crewHideTimer) { clearTimeout(_crewHideTimer); _crewHideTimer = null; } }
-    function _scheduleHideCrew() { _cancelHideCrew(); _crewHideTimer = setTimeout(() => { if (_crewCardEl) _crewCardEl.classList.remove('show'); }, 350); }
-    // Delegated hover — robust to whenever Driver.js (re)renders the popover.
-    document.addEventListener('mouseover', (e) => {
-        const t = e.target.closest && e.target.closest('.tour-crew');
-        if (t && t.dataset.crew) _showCrew(t.dataset.crew);
-    });
-    document.addEventListener('mouseout', (e) => {
-        const t = e.target.closest && e.target.closest('.tour-crew');
-        if (t) _scheduleHideCrew();
-    });
 
     // ---- demo-data seeding ----------------------------------------------------
     // Seed a realistic Lelystad → Frankfurt retour with the Beta Alia CX300 so
@@ -122,41 +104,85 @@ window.CNSTour = (function () {
         }
     }
 
-    // For the final "wow" step we seed a small network — three more flights
-    // across different aircraft + routes — then open the flights-map modal so
-    // the user sees an animated daily cycle with multiple planes in flight.
-    async function _seedNetworkFlights() {
-        const airports = await fetch('/api/airports').then(r => r.json());
-        const a = id => airports.find(x => x.ident === id);
-        const pack = (origin, dest, planeId, plane, charger, type) => ({
-            id: 'tour_' + planeId + '_' + dest.ident,
+    // For the final "Overview" step we seed a small but REAL network — a handful
+    // of flights out of Lelystad, each routed (charging stops via the same A*
+    // planner) and simulated through the same backend the planner uses, so legs/
+    // energy/charges are physically valid rather than faked. Sims run in parallel.
+    function _seedWp(ap) { return { ident: ap.ident, name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg, type: ap.type }; }
+
+    // Map a /api/simulate response into a demand-folder entry — same shape the
+    // planner's "Add to demand calculator" builds (keep in sync with that code).
+    function _entryFromSim(d, origin, dest, chargerId, freqN, freqUnit, tag) {
+        const e = {
+            id: 'tour_' + tag,
             destIdent: dest.ident, destName: dest.name, destLat: dest.latitude_deg, destLon: dest.longitude_deg,
             originIdent: origin.ident, originName: origin.name, originLat: origin.latitude_deg, originLon: origin.longitude_deg,
-            planeName: plane.name, planeId, planeSvg: plane.svg, tripType: type || 'retour',
-            chargerId: charger.id, chargerName: charger.name, chargerPower: charger.power_kw,
-            legEnergy: plane.battery_kwh * 0.7,            // approximate; only used as a fallback
-            battery: plane.battery_kwh,
-            freqN: 2, freqUnit: 'day',
-            flightTimeH: 1.5,
-        });
-        const planes = {
-            beta:     window.PLANES_BY_ID?.beta_plane     || { id:'beta_plane',     name:'Beta Plane',     battery_kwh:225, svg:'beta.svg'      },
-            vaer:     window.PLANES_BY_ID?.vaeridion      || { id:'vaeridion',      name:'Vaeridion',      battery_kwh:500, svg:'vaeridion.svg' },
+            planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
+            chargerId: chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
+            legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
+            freqN: freqN, freqUnit: freqUnit, fleetMode: 'separate',
         };
-        const charger = (window.CHARGERS_BY_ID || {}).dc_250 || { id:'dc_250', name:'250 kW DC charger', power_kw:250 };
-        // The tour's existing folder entry (from Add-to-demand) stays.
-        const existing = CNSDemand.loadFolder();
-        const ams = a('EHAM');
-        const lhr = a('EGLL');
-        const bcn = a('LEBL');
-        const cdg = a('LFPG');
-        if (!ams || !lhr || !bcn || !cdg) return;
-        const extras = [
-            pack(ams, lhr, 'beta_plane',     planes.beta, charger, 'retour'),
-            pack(ams, bcn, 'vaeridion',      planes.vaer, charger, 'retour'),
-            pack(cdg, lhr, 'beta_plane',     planes.beta, charger, 'one-way'),
+        if (d.multi_leg) {
+            Object.assign(e, {
+                multiLeg: true, flightTimeH: d.total_flight_time_h,
+                rechargeEnergy: d.total_recharge_energy_kwh,
+                stops: d.stops, charges: d.charges, legs: d.legs,
+                totalDistanceKm: d.total_distance_km, totalFlightTimeH: d.total_flight_time_h,
+                totalChargeMin: d.total_charge_time_min, totalRechargeKwh: d.total_recharge_energy_kwh,
+            });
+        } else {
+            Object.assign(e, { rechargeEnergy: d.recharge_energy_kwh, flightTimeH: d.flight_time_h });
+        }
+        return e;
+    }
+
+    async function _seedNetworkFlights() {
+        const airports = await fetch('/api/airports').then(r => r.json());
+        const A = (id) => airports.find((x) => x.ident === id);
+        const lelystad = A('EHLE');
+        if (!lelystad) return;
+        const planeOf = (id) => (window.PLANES_BY_ID || {})[id];
+        const chargerId = 'dc_250';
+        const coord = (ap) => ({ ident: ap.ident, name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg });
+        // All out of Lelystad: local NL hops, a 2nd Frankfurt run (the demo flight
+        // already in the folder is the 1st), and a one-way into N. France.
+        const specs = [
+            { dest: 'EHAM', plane: 'beta_plane', type: 'retour',  freqN: 4 },   // Schiphol (commuter)
+            { dest: 'EHRD', plane: 'beta_plane', type: 'retour',  freqN: 3 },   // Rotterdam
+            { dest: 'EHTE', plane: 'beta_plane', type: 'one-way', freqN: 2 },   // Teuge
+            { dest: 'EDDF', plane: 'vaeridion',  type: 'one-way', freqN: 1 },   // Frankfurt (2nd)
+            { dest: 'LFQQ', plane: 'beta_plane', type: 'one-way', freqN: 1 },   // Lille, FR
         ];
-        CNSDemand.saveFolder(existing.concat(extras));
+        async function build(spec) {
+            const dest = A(spec.dest); const plane = planeOf(spec.plane);
+            if (!dest || !plane) return null;
+            // Plan charging stops for over-range hops (returns [] when it fits).
+            let stops = [];
+            try {
+                const r = (window.CNSRouting) ? CNSRouting.planRoute({
+                    origin: _seedWp(lelystad), destination: _seedWp(dest), plane,
+                    allAirports: airports,
+                    allowedTypes: ['small_airport', 'medium_airport', 'large_airport'],
+                    options: {},
+                }) : { stops: [] };
+                stops = (r && Array.isArray(r.stops)) ? r.stops : [];
+            } catch (e) { stops = []; }
+            const payload = {
+                origin: coord(lelystad), destination: coord(dest),
+                plane_id: spec.plane, charger_id: chargerId, trip_type: spec.type,
+            };
+            if (stops.length) payload.stops = stops.map((s) => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type }));
+            let d;
+            try {
+                d = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then((r) => r.json());
+            } catch (e) { return null; }
+            if (!d || d.error || !d.plane) return null;
+            return _entryFromSim(d, lelystad, dest, chargerId, spec.freqN, 'day', spec.plane + '_' + spec.dest + '_' + spec.type);
+        }
+        const entries = (await Promise.all(specs.map(build))).filter(Boolean);
+        if (!entries.length) return;
+        const existing = CNSDemand.loadFolder();        // keep the demo Lelystad→Frankfurt flight
+        CNSDemand.saveFolder(existing.concat(entries));
         if (typeof renderFolder === 'function') renderFolder();
     }
 
@@ -253,74 +279,85 @@ window.CNSTour = (function () {
             // 1. Welcome — what is this tool and why does it exist?
             {
                 popover: {
-                    title: 'Welcome to the NRG2fly Charging Network Simulator',
+                    title: 'NRG2fly Charging Network Simulator',
                     description:
                         '<p>At NRG2fly we are rolling out a European charging network that makes point-to-point electric aviation possible. This tool helps airports and operators answer the strategic questions we keep coming back to: <strong>what kind of charging infrastructure, and how much power, do we need?</strong></p>' +
-                        '<p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — the result is a defensible, client-ready sizing brief, exported as a PDF, rather than a back-of-envelope guess.</p>' +
-                        '<p>We advise everyone to start with this demo tour first, then move on to running simulations yourself.</p>' +
-                        '<p class="tour-foot">Pre-filled example: <strong>Beta Alia · Lelystad → Frankfurt</strong>. Questions? Reach out to <span class="tour-crew" data-crew="merlijn">Merlijn van Vliet (CEO)</span> and <span class="tour-crew" data-crew="jacco">Jacco Bink (COO)</span>. Press <kbd>Esc</kbd> to skip any time.</p>',
+                        '<p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — a defensible, client-ready sizing brief exported as a PDF, not a back-of-envelope guess. We advise starting with this demo tour, then running your own simulations.</p>' +
+                        '<p>Got questions about your network? <strong>Merlijn van Vliet</strong> and <strong>Jacco Bink</strong> would love to hear from you.</p>' +
+                        _leadershipCardsHTML() +
+                        '<p class="tour-foot">Pre-filled example: <strong>Beta Alia · Lelystad → Frankfurt</strong>. Press <kbd>Esc</kbd> to skip any time.</p>',
                     side: 'over', align: 'center',
+                    popoverClass: 'cns-tour-popover cns-tour-welcome',
                 },
             },
-            // 2. Planner panel
+            // 2. Whole screen — the simulator at a glance.
             {
-                element: '.rail-left .panel',
-                popover: { title: 'Plan a flight', description: 'The planner. Pick a Departure, Destination, aircraft and charger — Simulate computes the per-flight energy and charge time.', side: 'right', align: 'start' },
+                element: 'body',
+                popover: { title: 'Your simulator at a glance', description: 'Left: the route builder. Centre: the map. Bottom: the Demand Calculator drawer. Top-right: Options and this Tour. We\'ll walk the route builder top to bottom, then read the network it produces.', side: 'over', align: 'center' },
             },
             // 3. Departure
             {
                 element: '#origin',
-                popover: { title: 'Departure airport', description: 'Type to search by name, IATA, or municipality. You can also click any orange marker on the map and pick "Set as Departure".' , side: 'right' },
+                popover: { title: 'Departure airport', description: 'Type to search by name, IATA, or municipality — or click any orange marker on the map and pick "Set as Departure".', side: 'right' },
             },
-            // 4. Destination
+            // 4. + Add stop (the small button itself, not the whole row)
+            {
+                element: '#addStopLink',
+                popover: { title: 'Manual stops', description: '+ Add stop inserts an intermediate airport between Departure and Destination when you want to control the route yourself. The auto-planner still fills in further stops between manual ones if a leg is too long.', side: 'right' },
+            },
+            // 5. Destination
             {
                 element: '#destination',
-                popover: { title: 'Destination airport', description: 'Same picker as Departure. For training flights (loop around one airport) this field hides automatically.', side: 'right' },
+                popover: { title: 'Pick a destination', description: 'Where the route ends. Type to search, or click an orange marker and choose "Set as Destination". For training flights (a loop around one airport) this field hides automatically.', side: 'right' },
             },
-            // 5. Manual stops
+            // 6. Trajectory pill
             {
-                element: '.addstop-link-row',
-                popover: { title: 'Manual stops', description: '+ Add stop inserts an intermediate airport between Departure and Destination — useful when you want to control the route. The auto-planner will fill in further stops between manual ones if any leg is still too long.', side: 'right' },
+                element: '#trajInfo',
+                popover: { title: 'Trajectory', description: 'The straight-line distance between Departure and Destination. If it\'s further than the chosen aircraft can fly on one charge, this turns into an over-range warning — your cue to plan charging stops.', side: 'right' },
             },
-            // 6. Trip type
+            // 7. Trip type
             {
                 element: '#tripType',
-                popover: { title: 'Trip type', description: 'One-way, Retour (round trip), or Training (A→A loop with a fixed pattern radius).', side: 'right' },
+                popover: { title: 'Trip type', description: 'One-way, Retour (round trip), or Training (an A→A loop with a fixed pattern radius).', side: 'right' },
             },
-            // 7. Plan with charging stops
-            {
-                element: '.stops-toggle-row',
-                popover: { title: 'Plan with charging stops', description: 'Toggle on to let the planner add charging stops automatically when the aircraft can\'t reach the destination in one hop. We\'ve already enabled it for the demo, because under the applied model factors the Beta Alia can\'t reach Frankfurt directly.', side: 'right' },
-            },
-            // 8. Model settings — surfaced HERE (before the route is shown) so the
-            // user understands the realistic factors applied to every calculation,
-            // and therefore WHY a charging stop appears in the next step.
-            {
-                element: '#planModelSettingsBtn',
-                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. The reserve and padding are exactly why the Beta Alia\'s 400&nbsp;km range can\'t reach Frankfurt in one hop — so the planner has to add a stop. Open this any time to adjust the factors or switch them off.', side: 'right' },
-            },
-            // 9. Suggested route — the stop the applied factors forced.
-            // Enables the toggle on entry so the planner has run by the time the
-            // popover appears.
-            {
-                element: '#stopsSection',
-                popover: { title: 'Suggested route', description: 'With "Plan with charging stops" on, the planner split the trajectory into legs through an intermediate airport — the Beta Alia can\'t cross Lelystad→Frankfurt in one hop once the 30% reserve and routing padding are applied. Each row shows the leg distance; over-range legs would be flagged red. Drag the ≡ handle on a manual stop to reorder; × removes one. For a wider selection of airports, go to Options in the upper-right corner.', side: 'right' },
-                onHighlightStarted: async () => { await _ensureStopsOn(); },
-            },
-            // 9. Aircraft
+            // 8. Aircraft
             {
                 element: '#plane',
-                popover: { title: 'Aircraft', description: 'Pick a model. Custom planes can be added via the ➕ option at the bottom — they\'re saved on the server so your colleagues see them too.', side: 'right' },
+                popover: { title: 'Aircraft', description: 'Pick a model — the card below shows its range, battery and a photo. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
             },
-            // 10. Charger
+            // 9. Model settings — surfaced BEFORE the route so the factors that
+            // shape it (and force a stop) are understood first.
+            {
+                element: '#planModelSettingsBtn',
+                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. The reserve and padding are exactly why the Beta Alia\'s 400&nbsp;km range can\'t reach Frankfurt in one hop — so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
+            },
+            // 10. Plan with charging stops — toggle it ON here so the user watches
+            // the suggested route appear in the next step.
+            {
+                element: '.stops-toggle-row',
+                popover: { title: 'Plan with charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. Watch — we\'re turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Frankfurt run.', side: 'right' },
+                onHighlightStarted: async () => { await _ensureStopsOn(); },
+            },
+            // 11. Suggested route — the stop the applied factors forced.
+            {
+                element: '#stopsSection',
+                popover: { title: 'Suggested route', description: 'The planner split the trajectory into legs through an intermediate airport (shortest-path A*). Each row shows the leg distance; over-range legs would flag red. Drag the ≡ handle to reorder a manual stop; × removes one. More airport types are under Options, top-right.', side: 'right' },
+                onHighlightStarted: async () => { await _ensureStopsOn(); },
+            },
+            // 12. Expected frequency
+            {
+                element: '#freqField',
+                popover: { title: 'Expected frequency', description: 'How often this route runs. For retour or training flights you can also choose whether one aircraft cycles the rotations or a fleet of separate planes flies them — which changes how many chargers each airport needs.', side: 'right' },
+            },
+            // 13. Charger
             {
                 element: '#charger',
-                popover: { title: 'Charger', description: 'Pick a charger. The charger\'s power and the plane\'s battery determine per-flight charge time.', side: 'right' },
+                popover: { title: 'Charger', description: 'The charger model offered at the airports on this route. Its power and the aircraft\'s battery (and C-rate) set the per-flight charge time.', side: 'right' },
             },
-            // 11. Simulate — fires the simulate then we step to the map
+            // 14. Simulate — fires the simulate then we step to the map
             {
                 element: '.sim-btn',
-                popover: { title: 'Simulate', description: 'Click to compute the per-flight energy, flight time, and charge time for the chain. The result panel appears on the right and the route is drawn on the map.', side: 'right' },
+                popover: { title: 'Simulate', description: 'Computes the per-flight energy, flight time and charge time for the whole chain. The result panel appears on the right and the route is drawn on the map.', side: 'right' },
                 onHighlightStarted: async () => { await _ensureSimulated(); },
             },
             // 12. NEW — Show the full route on the map. Zoom happens HERE (not
@@ -349,9 +386,16 @@ window.CNSTour = (function () {
                 popover: { title: 'Add to demand calculator', description: 'Saves the flight to the network. Demand at each airport touched by the trip (Departure, Destination, every stop) gets attributed and aggregated across ALL saved flights.', side: 'left' },
                 onHighlightStarted: async () => {
                     await _ensureSimulated(); await _ensureInFolder();
+                    // The Add button is the LAST element in the result panel, which
+                    // scrolls independently. Scroll its rail fully to the bottom
+                    // (instant) so the button is visible, then wait so Driver
+                    // measures the settled position — otherwise the highlight box
+                    // lands a margin above the button.
+                    const rail = document.querySelector('.rail-right');
+                    if (rail) rail.scrollTop = rail.scrollHeight;
                     const btn = document.getElementById('addFolder');
-                    if (btn && btn.scrollIntoView) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    await _wait(300);
+                    if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'center', behavior: 'auto' });
+                    await _wait(450);
                 },
             },
             // 15. Demand Calculator — centered popover, no element. Anchoring
@@ -433,7 +477,7 @@ window.CNSTour = (function () {
             // playing, and pin the popover near the bottom of the viewport
             // so it doesn't cover the map.
             {
-                popover: { title: 'Watch the network come alive', description: 'Above is the per-airport flights-map animation — planes fly their trajectories at adjustable speed (try the slider in the modal), pausing while charging. We seeded three extra flights with different aircraft (Beta, Vaeridion) so the network feels alive. Close the modal when you\'re done.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-bottom' },
+                popover: { title: 'Overview', description: 'Above, every saved flight flies its real, routed trajectory — adjust the speed with the slider, and watch planes pause to charge. This is the demo network: a handful of real routes out of Lelystad — local hops to Schiphol, Rotterdam and Teuge, two runs to Frankfurt, and a one-way to Lille. Close the modal when you\'re done.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-bottom' },
                 onHighlightStarted: async () => {
                     // Drawer must be open momentarily so the View-flights-
                     // on-map button is available to click; then close it so
@@ -502,13 +546,17 @@ window.CNSTour = (function () {
         const D = window.driver.js.driver;
         _activeDriver = D({
             showProgress: true,
-            allowClose: true,
+            // Don't close the tour when the user clicks outside the popover —
+            // otherwise interacting with the page (e.g. dragging the speed slider
+            // or panning the map on the Overview step) ends the tour unexpectedly.
+            // Deliberate exit is via the footer Close button or Esc.
+            allowClose: false,
+            showButtons: ['next', 'previous', 'close'],
             stagePadding: 6,
             smoothScroll: true,
             popoverClass: 'cns-tour-popover',
-            // We don't want Driver.js to install any keyboard shortcuts that
-            // collide with the planner's autocomplete (ArrowDown, Enter).
-            // Esc-to-close is still on; everything else is button-driven.
+            // Allow the user to interact with the highlighted element / page while
+            // the tour is open (no input blocking).
             disableActiveInteraction: false,
             onDestroyed: () => {
                 _activeDriver = null;
@@ -516,7 +564,33 @@ window.CNSTour = (function () {
             },
             steps: _steps(),
         });
+        _warnMissingAnchors();
         _activeDriver.drive();
+    }
+
+    // ---- drift detection ------------------------------------------------------
+    // The tour points each step at a DOM selector. As the app's markup evolves
+    // those anchors can silently break. check() reports every anchor + whether it
+    // currently resolves — run CNSTour.check() in the console (or a Claude session
+    // runs it during "update the tour") to find steps whose target moved or
+    // vanished. NOTE: '#folder …' anchors only exist once the demand drawer has
+    // rendered flights mid-tour, so they read `found:false` until then.
+    function check() {
+        return _steps().map((s, i) => ({
+            step: i + 1,
+            title: (s.popover && s.popover.title) || '',
+            element: s.element || null,
+            found: s.element ? !!document.querySelector(s.element) : 'centered (no element)',
+        }));
+    }
+    // On start, warn about any STATIC anchor already missing (skip the dynamic
+    // #folder ones) — an instant signal that a step needs updating.
+    function _warnMissingAnchors() {
+        try {
+            check()
+                .filter((r) => r.element && r.element.indexOf('#folder') !== 0 && r.found === false)
+                .forEach((r) => console.warn(`[CNSTour] step ${r.step} "${r.title}" — anchor not found: ${r.element}`));
+        } catch (e) { /* never block the tour on diagnostics */ }
     }
 
     function autoStartIfFirstVisit() {
@@ -531,7 +605,7 @@ window.CNSTour = (function () {
         try { CNSState.setJSON(KEY_DONE, false); } catch (e) {}
     }
 
-    return { start, autoStartIfFirstVisit, reset };
+    return { start, autoStartIfFirstVisit, reset, check };
 })();
 
 // Wire the topbar Tour button + first-visit auto-start.

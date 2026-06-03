@@ -174,28 +174,29 @@
         .cns-tour-popover .driver-popover-description .role-home { background: #a44a23; }
         .cns-tour-popover .driver-popover-description .role-dest { background: #6b541a; }
         .cns-tour-popover .driver-popover-description .role-stop { background: var(--brand-ink); }
-        /* Welcome-step crew hover: dotted-underline name → card pinned top-centre. */
-        .cns-tour-popover .driver-popover-description .tour-crew {
-            border-bottom: 1px dotted var(--brand-ink); cursor: help;
-            font-weight: 600; color: var(--brand-ink); white-space: nowrap;
+        /* Welcome slide: wider, more spacious popover to host the Leadership cards. */
+        .cns-tour-popover.cns-tour-welcome.driver-popover { max-width: 640px; }
+        /* Leadership cards (nrg2fly.com/about.html style) embedded in the welcome slide. */
+        .tour-lead { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--panel-border); }
+        .tour-lead-overline { font-size: .64rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+        .tour-lead-head { font-size: 1.3rem; font-weight: 700; color: var(--brand-ink); margin: 2px 0 12px; letter-spacing: -.01em; }
+        .tour-lead-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .tour-lead-card {
+            background: #fff; border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+            padding: 16px 14px; text-align: center; display: flex; flex-direction: column; align-items: center;
         }
-        .tour-crew-card {
-            position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
-            z-index: 100070; width: 360px; max-width: 92vw;
-            display: none; align-items: center; gap: 14px;
-            background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
-            border-radius: var(--radius); padding: 14px 16px;
-            font-family: 'Inter', system-ui, sans-serif;
-        }
-        .tour-crew-card.show { display: flex; }
-        .tour-crew-card img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--brand-ink); flex: 0 0 auto; }
-        .tour-crew-card .tcc-name { font-weight: 700; color: var(--brand-ink); font-size: .95rem; }
-        .tour-crew-card .tcc-role { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 4px; }
-        .tour-crew-card .tcc-bio { font-size: .76rem; color: var(--ink-soft); line-height: 1.4; }
-        .tour-crew-card .tcc-links { margin-top: 5px; font-size: .74rem; display: flex; gap: 12px; }
-        .tour-crew-card .tcc-links a { color: var(--brand-ink); text-decoration: none; pointer-events: auto; }
-        .tour-crew-card .tcc-links a:hover { text-decoration: underline; }
+        .tlc-photo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; border: 3px solid var(--brand-ink); margin-bottom: 10px; }
+        .tlc-name { font-weight: 700; color: var(--ink); font-size: .95rem; }
+        .tlc-role { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; }
+        .tlc-bio { font-size: .75rem; color: var(--ink-soft); line-height: 1.45; margin: 0 0 10px; }
+        .tlc-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 8px; }
+        .tlc-tag { font-size: .62rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+                   color: var(--brand-ink); background: rgba(43,47,90,.06); border: 1px solid var(--panel-border);
+                   border-radius: 999px; padding: 2px 9px; }
+        .tlc-links { font-size: .72rem; color: var(--muted); margin-top: auto; }
+        .tlc-links a { color: var(--brand-ink); text-decoration: none; }
+        .tlc-links a:hover { text-decoration: underline; }
+        @media (max-width: 680px) { .cns-tour-popover.cns-tour-welcome.driver-popover { max-width: 92vw; } .tour-lead-grid { grid-template-columns: 1fr; } }
         /* Network-animation tour step: lift the Bootstrap modal above the
            tour overlay so the map is visible (not darkened), and pin the
            popover to the bottom of the viewport so it doesn't cover the
@@ -832,7 +833,9 @@
            ghost-style affordance — doesn't compete with the primary form. */
         /* Right-aligned so Departure / Destination read as a single unit
            with the link as a discrete affordance on the side. */
-        .addstop-link-row { margin: -2px 0 4px 0; text-align: right; }
+        /* Departure label + inline "+ Add stop" share one row. */
+        .field-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+        .field-label-row label { margin: 0; }
         .addstop-link {
             background: none; border: none; padding: 2px 8px;
             font-size: .76rem; color: var(--brand-orange-3); font-weight: 600;
@@ -1008,25 +1011,26 @@
     <aside class="rail-left">
         <section class="panel">
             <div class="panel-head">
-                <h2 class="panel-title">Plan a flight</h2>
+                <h2 class="panel-title">Create a route</h2>
                 <span class="est-pill" title="All calculated figures are rough estimates, rounded up for planning headroom.">Estimates</span>
             </div>
             <form id="simForm">
                 <div class="field ac-wrap">
-                    <label>Departure airport</label>
+                    <!-- + Add stop sits inline on the Departure label row so
+                         Departure and Destination stay visually adjacent and the
+                         tour can spotlight just the small button. -->
+                    <div class="field-label-row">
+                        <label>Departure airport</label>
+                        <button type="button" id="addStopLink" class="addstop-link" title="Insert a manual stop between Departure and Destination">+ Add stop</button>
+                    </div>
                     <input type="text" id="origin" class="form-control ac-input" placeholder="Search e.g. Heathrow" autocomplete="off" required>
                     <div id="originList" class="ac-list d-none"></div>
                 </div>
-                <!-- Manual-stop fields go here. Each stop is a first-class form
-                     field (autocomplete + × delete) — same UX as Departure /
-                     Destination. JS owns the lifecycle: + Add stop appends a
-                     blank field; × removes it; map "Set as Stop" fills/appends. -->
+                <!-- Manual-stop fields render here, between Departure and
+                     Destination. Each stop is a first-class form field
+                     (autocomplete + × delete). Empty (0-height) by default, so
+                     Departure sits directly above Destination. -->
                 <div id="stopsContainer"></div>
-                <!-- + Add stop affordance — right-aligned so Departure and
-                     Destination remain visually adjacent. -->
-                <div class="addstop-link-row">
-                    <button type="button" id="addStopLink" class="addstop-link" title="Insert a manual stop between Departure and Destination">+ Add stop</button>
-                </div>
                 <div id="destinationField" class="field ac-wrap">
                     <label>Destination airport</label>
                     <input type="text" id="destination" class="form-control ac-input" placeholder="Search e.g. Charles de Gaulle" autocomplete="off" required>
@@ -1115,7 +1119,7 @@
                     <div id="stopsHint" class="est-note"></div>
                 </div>
 
-                <div class="field">
+                <div class="field" id="freqField">
                     <label>Expected frequency</label>
                     <div class="input-group">
                         <input type="number" id="freqN" class="form-control" value="1" min="1" step="1">
@@ -1138,7 +1142,7 @@
                     <label>Charger</label>
                     <select id="charger" class="form-select">
                         {% for c in chargers %}
-                        <option value="{{ c.id }}">{{ c.name }} ({{ c.power_kw }} kW)</option>
+                        <option value="{{ c.id }}">{{ c.name }}{% if 'kW' not in c.name and 'MW' not in c.name %} ({{ c.power_kw }} kW){% endif %}</option>
                         {% endfor %}
                         <option value="__custom_charger__">➕ Add custom charger…</option>
                     </select>
@@ -1448,6 +1452,10 @@
     <script>
         const CHARGERS = {{ chargers|tojson }};                  // mutated at runtime: custom chargers are pushed in
         const chargerById = Object.fromEntries(CHARGERS.map(c => [c.id, c]));
+        // Catalog chargers now carry the power in their name (e.g. "250 kW DC
+        // charger"), so only append "(N kW)" when the name doesn't already state
+        // a power — avoids redundant labels like "250 kW DC charger (250 kW)".
+        const chargerLabel = (c) => (/\d\s*[kM]W/i.test(c.name || '') ? c.name : `${c.name} (${c.power_kw} kW)`);
         const BUILTIN_PLANES = {{ planes|tojson }};              // client-side lookup for the routing planner
         const BUILTIN_PLANES_BY_ID = Object.fromEntries(BUILTIN_PLANES.map(p => [p.id, p]));
         // Expose the catalogs to other window-scoped modules (the PDF report
@@ -2541,7 +2549,7 @@
             document.getElementById('trFinal').textContent = terminalMin > 0.5
                 ? `${terminalName} · ${Math.round(arrivalSoc * 100)}% on arrival, +${fmtDuration(terminalMin)} ${_tgtLabel}`
                 : `${terminalName} · no charge needed`;
-            document.getElementById('trCharger').textContent = data.charger.name + ' (' + data.charger.power_kw + ' kW)';
+            document.getElementById('trCharger').textContent = chargerLabel(data.charger);
 
             const common = [
                 `avg usage      = battery / range × 100`,
@@ -2859,7 +2867,7 @@
                 // simple charger-fleet plan peak (a sensible upper-bound) so the card stays meaningful.
                 const peakPower = sInfo.peakKw || plan.peakPower;
                 const installed = fleet.reduce((s, c) => s + c.power_kw, 0);
-                const chargerOptsFor = (selId) => CHARGERS.map(c => `<option value="${c.id}" ${c.id === selId ? 'selected' : ''}>${c.name} (${c.power_kw} kW)</option>`).join('');
+                const chargerOptsFor = (selId) => CHARGERS.map(c => `<option value="${c.id}" ${c.id === selId ? 'selected' : ''}>${chargerLabel(c)}</option>`).join('');
                 const fleetHtml = fleet.map((c, i) => `
                     <div class="input-group input-group-sm" style="width:auto">
                         <select class="form-select form-select-sm fleet-charger" data-i="${i}">${chargerOptsFor(c.id)}</select>
@@ -3202,7 +3210,7 @@
         function addChargerOption(c) {
             const opt = document.createElement('option');
             opt.value = c.id;
-            opt.textContent = `${c.name} (${c.power_kw} kW) (custom)`;
+            opt.textContent = `${chargerLabel(c)} (custom)`;
             chargerSelect.insertBefore(opt, chargerSelect.querySelector('option[value="__custom_charger__"]'));
         }
 
