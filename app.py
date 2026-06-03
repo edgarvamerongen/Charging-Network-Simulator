@@ -2,6 +2,7 @@ import json
 import math
 import os
 import re
+import subprocess
 import time
 from datetime import datetime, timezone
 
@@ -11,6 +12,30 @@ from report import generate_pdf
 
 app = Flask(__name__)
 simulator = Simulator()
+
+
+def _compute_asset_version():
+    """Cache-busting token for /static/*.js, computed ONCE at startup so it adds
+    nothing to request latency. It's the current git commit, so the token only
+    changes when new code is DEPLOYED — between deploys the static URLs are
+    identical and browsers cache the JS exactly as before (zero per-load cost).
+    On a deploy the token changes, forcing a single fresh fetch — which is the
+    point: it kills the stale-cache bug. Falls back to the process start time if
+    git isn't available (still stable per process / per restart)."""
+    try:
+        sha = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        if sha:
+            return sha
+    except Exception:
+        pass
+    return str(int(time.time()))
+
+
+ASSET_VERSION = _compute_asset_version()
 
 # MDN-recommended UA test: presence of "Mobi" covers iPhone Safari, Chrome/
 # Firefox on Android, etc., without false-positiving Android tablets. Users
@@ -111,7 +136,7 @@ def index():
         override = False
     if not override and _MOBILE_UA_RE.search(request.headers.get('User-Agent', '')):
         return redirect('/m/')
-    resp = make_response(render_template('index.html', planes=simulator.planes, chargers=simulator.chargers))
+    resp = make_response(render_template('index.html', planes=simulator.planes, chargers=simulator.chargers, asset_version=ASSET_VERSION))
     if request.args.get('desktop') == '1':
         resp.set_cookie('cns_force_desktop', '1', max_age=60*60*24*365, samesite='Lax')
     elif clear:

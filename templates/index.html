@@ -1428,20 +1428,23 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     <!-- shared data/logic modules (framework-agnostic; UI consumes them) -->
-    <script src="/static/state.js"></script>
-    <script src="/static/units.js"></script>
-    <script src="/static/settings.js"></script>
-    <script src="/static/planes.js"></script>
-    <script src="/static/chargers.js"></script>
-    <script src="/static/demand.js"></script>
-    <script src="/static/routing.js"></script>
+    <!-- ?v=<commit> cache-busts on deploy only: the token is the git SHA fixed
+         at server start, so between deploys URLs are stable and browsers cache
+         these exactly as before — no per-load cost. -->
+    <script src="/static/state.js?v={{ asset_version }}"></script>
+    <script src="/static/units.js?v={{ asset_version }}"></script>
+    <script src="/static/settings.js?v={{ asset_version }}"></script>
+    <script src="/static/planes.js?v={{ asset_version }}"></script>
+    <script src="/static/chargers.js?v={{ asset_version }}"></script>
+    <script src="/static/demand.js?v={{ asset_version }}"></script>
+    <script src="/static/routing.js?v={{ asset_version }}"></script>
     <!-- domain modules -->
-    <script src="/static/charging.js"></script>
-    <script src="/static/scheduler.js"></script>
-    <script src="/static/animation.js"></script>
-    <script src="/static/report.js"></script>
+    <script src="/static/charging.js?v={{ asset_version }}"></script>
+    <script src="/static/scheduler.js?v={{ asset_version }}"></script>
+    <script src="/static/animation.js?v={{ asset_version }}"></script>
+    <script src="/static/report.js?v={{ asset_version }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-    <script src="/static/tour.js"></script>
+    <script src="/static/tour.js?v={{ asset_version }}"></script>
     <script>
         const CHARGERS = {{ chargers|tojson }};                  // mutated at runtime: custom chargers are pushed in
         const chargerById = Object.fromEntries(CHARGERS.map(c => [c.id, c]));
