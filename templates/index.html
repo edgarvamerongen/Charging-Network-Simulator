@@ -2278,78 +2278,34 @@
             const isMulti = !!data.multi_leg;
             const isRetour = data.trip_type === 'retour';
             const isTraining = data.trip_type === 'training';
-            // ---- Model factors (cascade through everything below) -----------
-            // When all toggles are off these reduce to 1.0 and the original
-            // numbers come through unchanged.
-            const route   = isTraining ? 1.0 : CNSSettings.routingFactor();   // training has no routing pad
-            const usable  = CNSSettings.usableFraction(p);            // 1.0 or e.g. 0.70
-            const gridMul = CNSSettings.gridDemandFactor();           // 1.0 or e.g. 1/0.88
-            const usableBatteryKwh = (p.battery_kwh || 0) * usable;
+            // Charger-efficiency factor (1/eff) — still feeds the grid-demand sub-label.
+            const gridMul = CNSSettings.gridDemandFactor();
 
-            // Per-leg energy with SID/STAR padding applied (training: no pad).
-            const legEnergy = (data.leg_energy_kwh || 0) * route;
-            // Energy actually consumed by the aircraft on the trip — informative
-            // value for the headline (what comes out of the battery).
-            let usedKwh, rechargeKwh, flightMin;
-            // Recharge (the energy this trip's charger must deliver) is sourced
-            // from CNSDemand.deliveredEnergy — the SAME authority the demand
-            // calculator, the global discrete-event sim (scheduler.js), peak
-            // power and the PDF report already use — so the headline can never
-            // drift from them. The result panel is a single-flight preview with
-            // no per-airport SoC target yet, so both target args are null; that
-            // makes deliveredEnergy reduce to the original formulas exactly
-            // (retour → max(0, 2·leg − usable), one-way → leg, training →
-            // min(leg, usable)). The fallback keeps the panel working if the
-            // demand module hasn't loaded. Multi-leg keeps the backend total.
-            const _tripLite = { tripType: data.trip_type };
-            const _delivered = (role, fallback) =>
-                (window.CNSDemand && CNSDemand.deliveredEnergy)
-                    ? CNSDemand.deliveredEnergy(_tripLite, role, legEnergy, p.battery_kwh || 0, usableBatteryKwh, null, null)
-                    : fallback;
-            if (isTraining) {
-                // Training: energy used per flight is capped at usable battery.
-                usedKwh = Math.min(legEnergy, usableBatteryKwh);
-                rechargeKwh = _delivered('training', usedKwh);   // origin refills exactly what was used
-                flightMin = data.flight_time_h * 60;
-            } else if (isMulti) {
-                usedKwh = data.total_recharge_energy_kwh * route;
-                rechargeKwh = usedKwh;
-                flightMin = data.total_flight_time_h * 60 * route;
-            } else if (isRetour) {
-                usedKwh = legEnergy * 2;
-                rechargeKwh = _delivered('dest', Math.max(0, 2 * legEnergy - usableBatteryKwh));
-                flightMin = data.flight_time_h * 60 * 2 * route;
-            } else {
-                usedKwh = legEnergy;
-                rechargeKwh = _delivered('dest', legEnergy);
-                flightMin = data.flight_time_h * 60 * route;
-            }
-            // Battery-acceptance cap: effective power = min(charger, C-rate×batt).
-            const effPower = CNSSettings.effectiveChargePower(data.charger.power_kw, p.battery_kwh, p.c_rate);
-            const cMin = (kwh) => CNSSettings.chargeTimeMin(kwh, effPower, p.battery_kwh);
-            // Time EACH charge separately (cap + taper per stop) instead of lumping
-            // the whole trip into one charge — lumping skips most of the slow
-            // top-of-charge taper and badly under-counts a multi-stop journey, so
-            // the headline used to disagree with the scheduler. Split into the
-            // EN-ROUTE charges (needed to reach the destination) and the TERMINAL
-            // top-up at the final stop (which happens after arrival).
-            const chargeKwhs = isMulti
-                ? (data.charges || []).map(c => (+c.energy_kwh || 0) * route)
-                : (rechargeKwh > 0 ? [rechargeKwh] : []);
-            const chargeMins   = chargeKwhs.map(cMin);
-            const chargeMin    = chargeMins.reduce((s, m) => s + m, 0);              // all charging (headline)
-            const enRouteMin   = chargeMins.slice(0, -1).reduce((s, m) => s + m, 0); // charging done DURING the trip
-            const terminalMin  = chargeMins.length ? chargeMins[chargeMins.length - 1] : 0;
-            const terminalKwh  = chargeKwhs.length ? chargeKwhs[chargeKwhs.length - 1] : 0;
-            const travelMin    = flightMin + enRouteMin;                            // take-off → arrival at the final stop
-            // Clamp to the landing-reserve floor — the plane never lands below the
-            // minimum-landing-SoC the operator set, so don't display a lower number.
-            const arrivalSoc   = Math.max(0, Math.min(1, Math.max(1 - usable, ((p.battery_kwh || 0) - terminalKwh) / (p.battery_kwh || 1))));
-            const terminalName = (isMulti && (data.charges || []).length)
-                ? data.charges[data.charges.length - 1].name
-                : (isTraining ? (data._origin && data._origin.name) : (data._dest && data._dest.name)) || 'destination';
-            const gridKwh = rechargeKwh * gridMul;
-
+            // Every per-trip number now comes from ONE place: the scheduler's pure
+            // CNSScheduler.tripBreakdown(). The panel just shapes the trip from the
+            // simulate response and reads back the SAME flight/charge times the DES
+            // uses, so the two can never drift — an independent recompute here was
+            // exactly what made the headline charge time disagree with the
+            // scheduler. All the math lives in the logic layer (scheduler.js).
+            const previewTrip = {
+                id: 'preview', tripType: data.trip_type, multiLeg: isMulti,
+                originIdent: data._origin && data._origin.ident, originName: data._origin && data._origin.name,
+                destIdent:   data._dest   && data._dest.ident,   destName:   data._dest   && data._dest.name,
+                planeId: p.id, c_rate: p.c_rate, battery: p.battery_kwh,
+                flightTimeH: isMulti ? data.total_flight_time_h : data.flight_time_h,
+                legEnergy: data.leg_energy_kwh, legs: data.legs, charges: data.charges, stops: data.stops,
+            };
+            const bd = CNSScheduler.tripBreakdown(previewTrip, data.charger.power_kw);
+            const usedKwh      = bd.energyUsedKwh;
+            const rechargeKwh  = bd.energyUsedKwh;        // recharged == consumed (energy conservation)
+            const flightMin    = bd.flightMin;
+            const chargeMin    = bd.chargeMin;
+            const enRouteMin   = bd.enRouteMin;
+            const terminalMin  = bd.terminalMin;
+            const terminalName = bd.terminalName;
+            const arrivalSoc   = bd.arrivalSoc;
+            const travelMin    = bd.flightMin + bd.enRouteMin;
+            const gridKwh      = rechargeKwh * gridMul;
             document.getElementById('hlUsed').textContent = num(usedKwh);
             document.getElementById('hlFlight').textContent = fmtDuration(flightMin);
             document.getElementById('hlTime').textContent = fmtDuration(chargeMin);
