@@ -168,26 +168,29 @@
             color: #fff; box-shadow: 0 4px 10px rgba(229,120,80,.40);
         }
 
-        /* B3 — brand news ticker. Brand-orange band directly under the topbar.
-           Pure-CSS marquee: .cns-ticker-track holds TWO identical text spans and
-           slides 0 → -50%, so when the first copy scrolls off the second has
-           seamlessly taken its place. position:relative + z-index above the map
-           but below the topbar — never shifts the fixed rails/map/panels. */
+        /* B3 — brand news ticker. Black band FIXED directly under the 56px topbar
+           (height 28px → the rails start at 90px, leaving a gap). A static
+           "⚡ NEWS" label sits on the left; the headlines scroll past it. Pure-CSS
+           marquee: .cns-ticker-track holds TWO identical spans sliding 0 → -50%
+           for a seamless loop. Content is populated from static/ticker.json — edit
+           that file to update the news (read fresh on every load). */
         .cns-ticker {
-            /* position:relative + top = the topbar height: the fixed 56px topbar
-               reserves no flow space, so the in-flow ticker would otherwise render
-               at y=0 behind it. Offsetting it down by 56px seats it just under the
-               topbar WITHOUT reflowing anything (relative offsets never move
-               siblings, and the rails/map/panels are all position:fixed). */
-            position: relative; top: 56px; z-index: 25; overflow: hidden;
-            background: var(--brand-orange-3); color: #fff5ec;
+            position: fixed; top: 56px; left: 0; right: 0; height: 28px; z-index: 25;
+            display: flex; align-items: stretch; overflow: hidden;
+            background: #0f1923; color: #e6e9ef;
             font-size: .8rem; font-weight: 600; line-height: 1;
-            padding: 6px 0; border-bottom: 1px solid rgba(43,47,90,.12);
-            box-shadow: var(--shadow-sm);
+            border-bottom: 1px solid rgba(255,255,255,.08);
         }
+        .cns-ticker-label {
+            flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+            padding: 0 14px; color: #ffd23f; font-weight: 800;
+            letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
+            border-right: 1px solid rgba(255,255,255,.14);
+        }
+        .cns-ticker-viewport { flex: 1 1 auto; min-width: 0; overflow: hidden; display: flex; align-items: center; }
         .cns-ticker-track {
             display: inline-flex; flex-wrap: nowrap; white-space: nowrap;
-            will-change: transform; animation: ticker-scroll 38s linear infinite;
+            will-change: transform; animation: ticker-scroll 76s linear infinite;
         }
         .cns-ticker-text { padding: 0; display: inline-block; }
         .cns-ticker:hover .cns-ticker-track { animation-play-state: paused; }
@@ -363,8 +366,8 @@
            Left rail (form + result)
            ========================================================= */
         .rail-left {
-            position: fixed; top: 72px; left: 16px; z-index: 10;
-            width: 360px; max-height: calc(100vh - 96px);
+            position: fixed; top: 90px; left: 16px; z-index: 10;
+            width: 360px; max-height: calc(100vh - 114px);
             overflow-y: auto; padding-right: 6px;
             display: flex; flex-direction: column; gap: 12px;
             pointer-events: none;       /* let map drags through gaps */
@@ -616,8 +619,8 @@
            Right rail (result panel + error)
            ========================================================= */
         .rail-right {
-            position: fixed; top: 72px; right: 16px; z-index: 10;
-            width: 360px; max-height: calc(100vh - 96px);
+            position: fixed; top: 90px; right: 16px; z-index: 10;
+            width: 360px; max-height: calc(100vh - 114px);
             overflow-y: auto; padding-left: 6px;
             display: flex; flex-direction: column; gap: 12px;
             pointer-events: none;
@@ -1078,10 +1081,8 @@
                 <input type="checkbox" id="unitToggle">
                 <span>Nautical (nm / kn)</span>
             </label>
-            <!-- NRG2fly platform links: outline "onepager" download + prominent
-                 "Back to platform" CTA. Both wrap/stack on narrow nav widths. -->
+            <!-- Onepager download (outline). Wraps on narrow nav widths. -->
             <a class="cns-brand-btn" href="/static/NRG2fly_onepager.pdf" download>Download NRG2fly onepager</a>
-            <a class="cns-brand-btn cns-brand-btn-cta" href="https://nrg2fly.com" target="_blank" rel="noopener noreferrer">← Back to platform</a>
         </div>
     </header>
 
@@ -1089,10 +1090,13 @@
          the text is duplicated and the track translates 0 → -50% so the loop
          is seamless (no JS). position:relative so it never shifts the fixed
          rails/map. -->
-    <div class="cns-ticker" role="marquee" aria-label="NRG2fly news ticker">
-        <div class="cns-ticker-track">
-            <span class="cns-ticker-text">NEWS: BETA Technologies concludes demo days in the Netherlands with E-Smart Avia&nbsp;&nbsp;•••&nbsp;&nbsp;NRG2fly now operates 8 charging stations across the Netherlands and Germany&nbsp;&nbsp;•••&nbsp;&nbsp;E-Flight Academy leads the world with the most electric flight movements and distances flown&nbsp;&nbsp;•••&nbsp;&nbsp;</span>
-            <span class="cns-ticker-text" aria-hidden="true">NEWS: BETA Technologies concludes demo days in the Netherlands with E-Smart Avia&nbsp;&nbsp;•••&nbsp;&nbsp;NRG2fly now operates 8 charging stations across the Netherlands and Germany&nbsp;&nbsp;•••&nbsp;&nbsp;E-Flight Academy leads the world with the most electric flight movements and distances flown&nbsp;&nbsp;•••&nbsp;&nbsp;</span>
+    <div class="cns-ticker" aria-label="NRG2fly news ticker">
+        <span class="cns-ticker-label">⚡ NEWS</span>
+        <div class="cns-ticker-viewport">
+            <div class="cns-ticker-track" id="cnsTickerTrack">
+                <span class="cns-ticker-text">&nbsp;&nbsp;•••&nbsp;&nbsp;BETA Technologies concludes demo days in the Netherlands with E-Smart Avia&nbsp;&nbsp;•••&nbsp;&nbsp;NRG2fly now operates 8 charging stations across the Netherlands and Germany&nbsp;&nbsp;•••&nbsp;&nbsp;E-Flight Academy leads the world with the most electric flight movements and distances flown</span>
+                <span class="cns-ticker-text" aria-hidden="true">&nbsp;&nbsp;•••&nbsp;&nbsp;BETA Technologies concludes demo days in the Netherlands with E-Smart Avia&nbsp;&nbsp;•••&nbsp;&nbsp;NRG2fly now operates 8 charging stations across the Netherlands and Germany&nbsp;&nbsp;•••&nbsp;&nbsp;E-Flight Academy leads the world with the most electric flight movements and distances flown</span>
+            </div>
         </div>
     </div>
 
@@ -1141,7 +1145,7 @@
                     <label>Aircraft</label>
                     <select id="plane" class="form-select">
                         {% for p in planes %}
-                        <option value="{{ p.id }}">{{ p.name }} — {{ p.battery_kwh }} kWh</option>
+                        <option value="{{ p.id }}">{{ p.name }} — {% if p.battery_kwh >= 1000 %}{{ '%.2f'|format(p.battery_kwh / 1000) }} MWh{% else %}{{ p.battery_kwh }} kWh{% endif %}</option>
                         {% endfor %}
                         <option value="__custom__">➕ Add custom plane…</option>
                     </select>
@@ -3499,6 +3503,27 @@
             }
             renderPlaneSpecCard();
         }
+
+        // News ticker — populate the marquee from static/ticker.json (edit that
+        // file to update the headlines; it's read fresh on each load). Falls back
+        // to the default content baked into the HTML if the fetch fails.
+        (function initNewsTicker() {
+            const track = document.getElementById('cnsTickerTrack');
+            if (!track) return;
+            const SEP = '  •••  ';
+            const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            fetch('/static/ticker.json', { cache: 'no-store' })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((d) => {
+                    const items = d && Array.isArray(d.items) ? d.items.filter(Boolean) : null;
+                    if (!items || !items.length) return;
+                    const line = SEP + items.map(esc).join(SEP);
+                    track.innerHTML =
+                        '<span class="cns-ticker-text">' + line + '</span>' +
+                        '<span class="cns-ticker-text" aria-hidden="true">' + line + '</span>';
+                })
+                .catch(() => { /* keep the HTML default */ });
+        })();
     </script>
 </body>
 </html>
