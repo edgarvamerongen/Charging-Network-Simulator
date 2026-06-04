@@ -1455,7 +1455,7 @@
         // Catalog chargers now carry the power in their name (e.g. "250 kW DC
         // charger"), so only append "(N kW)" when the name doesn't already state
         // a power — avoids redundant labels like "250 kW DC charger (250 kW)".
-        const chargerLabel = (c) => (/\d\s*[kM]W/i.test(c.name || '') ? c.name : `${c.name} (${c.power_kw} kW)`);
+        const chargerLabel = (c) => (/\d\s*[kM]W/i.test(c.name || '') ? c.name : `${c.name} (${fmtPower(c.power_kw)})`);
         const BUILTIN_PLANES = {{ planes|tojson }};              // client-side lookup for the routing planner
         const BUILTIN_PLANES_BY_ID = Object.fromEntries(BUILTIN_PLANES.map(p => [p.id, p]));
         // Expose the catalogs to other window-scoped modules (the PDF report
@@ -2140,7 +2140,7 @@
         }
         function _refreshSpecStats(spec) {
             document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
-            document.getElementById('psBattery').textContent = (spec.battery_kwh || 0) + ' kWh';
+            document.getElementById('psBattery').textContent = fmtEnergy(spec.battery_kwh || 0);
         }
         (function _wirePlaneOverride() {
             const toggle = document.getElementById('psOverrideToggle');
@@ -2504,13 +2504,13 @@
                 : 'Flight time';
             let tSub;
             if (isTraining) {
-                tSub = 'at origin' + (flags.chargerEfficiency ? ` · ${Math.round(gridKwh)} kWh grid` : '');
+                tSub = 'at origin' + (flags.chargerEfficiency ? ` · ${fmtEnergy(gridKwh)} grid` : '');
             } else if (chargeMin === 0 && isRetour) {
                 tSub = flags.landingReserve ? 'battery + reserve cover it' : 'battery covers it';
             } else if (isMulti) {
                 tSub = 'all stops combined';
             } else if (flags.chargerEfficiency) {
-                tSub = `at destination · ${Math.round(gridKwh)} kWh grid`;
+                tSub = `at destination · ${fmtEnergy(gridKwh)} grid`;
             } else {
                 tSub = 'at destination';
             }
@@ -2522,7 +2522,7 @@
             document.getElementById('acName').textContent = p.name;
             document.getElementById('acSeats').textContent = p.seats ?? '—';
             document.getElementById('acLoad').textContent = p.load_kg ? p.load_kg + ' kg' : '—';
-            document.getElementById('acBattery').textContent = p.battery_kwh + ' kWh';
+            document.getElementById('acBattery').textContent = fmtEnergy(p.battery_kwh);
             document.getElementById('acRange').textContent = fmtDist(p.range_km);
             document.getElementById('acSpeed').textContent = fmtSpeed(p.speed_kmh);
             document.getElementById('acUsage').textContent = fmtUsage(p.avg_usage_kwh_per_100km);
@@ -3204,7 +3204,7 @@
         function addPlaneOption(p) {
             const opt = document.createElement('option');
             opt.value = p.id;
-            opt.textContent = `${p.name} — ${p.battery_kwh} kWh (custom)`;
+            opt.textContent = `${p.name} — ${fmtEnergy(p.battery_kwh)} (custom)`;
             planeSelect.insertBefore(opt, planeSelect.querySelector('option[value="__custom__"]'));
         }
         function addChargerOption(c) {
@@ -3253,7 +3253,7 @@
             const el = document.getElementById('cpList');
             const rows = planes.length
                 ? '<ul>' + planes.map(p =>
-                    `<li><span><strong>${p.name}</strong> <small>— ${p.battery_kwh} kWh · ${p.range_km} km · ${p.speed_kmh} km/h</small></span>` +
+                    `<li><span><strong>${p.name}</strong> <small>— ${fmtEnergy(p.battery_kwh)} · ${fmtDist(p.range_km)} · ${fmtSpeed(p.speed_kmh)}</small></span>` +
                     `<button class="cl-rm" type="button" title="Remove" data-rm-plane="${p.id}">×</button></li>`).join('') + '</ul>'
                 : '<div class="cl-empty">No custom aircraft yet.</div>';
             el.innerHTML =
@@ -3274,7 +3274,7 @@
             const el = document.getElementById('ccList');
             const rows = chargers.length
                 ? '<ul>' + chargers.map(c =>
-                    `<li><span><strong>${c.name}</strong> <small>— ${c.power_kw} kW</small></span>` +
+                    `<li><span><strong>${c.name}</strong> <small>— ${fmtPower(c.power_kw)}</small></span>` +
                     `<button class="cl-rm" type="button" title="Remove" data-rm-charger="${c.id}">×</button></li>`).join('') + '</ul>'
                 : '<div class="cl-empty">No custom chargers yet.</div>';
             el.innerHTML =
