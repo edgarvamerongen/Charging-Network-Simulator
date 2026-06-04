@@ -1,0 +1,70 @@
+{
+  "EHSE": {
+    "name": "Breda Airport",
+    "icao": "EHSE",
+    "network": "NRG2FLY",
+    "plugs": [
+      { "connector": "GB/T", "power_kw": 22, "label": "Mobile Aircraft Charger" }
+    ]
+  },
+  "EHHV": {
+    "name": "Hilversum Airport",
+    "icao": "EHHV",
+    "network": "NRG2FLY",
+    "plugs": [
+      { "connector": "GB/T", "power_kw": 22, "label": "Mobile Aircraft Charger Hilversum" }
+    ]
+  },
+  "EHAM": {
+    "name": "Schiphol Oost - Jet Support",
+    "icao": "EHAM",
+    "network": "NRG2FLY",
+    "plugs": [
+      { "connector": "GB/T", "power_kw": 22, "label": "22 kW GB/T" }
+    ]
+  },
+  "EHLE": {
+    "name": "Lelystad Airport",
+    "icao": "EHLE",
+    "network": "NRG2FLY",
+    "plugs": [
+      { "connector": "CCS2", "power_kw": 22, "label": "Plug 1" },
+      { "connector": "CCS2", "power_kw": 22, "label": "Plug 2" },
+      { "connector": "CCS2", "power_kw": 22, "label": "GSE Charger" },
+      { "connector": "GB/T", "power_kw": 22, "label": "Mobile Charger" },
+      { "connector": "GB/T", "power_kw": 22, "label": "Mobile Charger" },
+      { "connector": "GB/T", "power_kw": 22, "label": "ROC Lelystad" }
+    ]
+  },
+  "EHTE": {
+    "name": "Teuge",
+    "icao": "EHTE",
+    "network": "NRG2FLY",
+    "plugs": [
+      { "connector": "CCS2", "power_kw": 44, "label": "Aircraft Charger 1" },
+      { "connector": "CCS2", "power_kw": 44, "label": "Aircraft Charger 2" },
+      { "connector": "CCS2", "power_kw": 44, "label": "Aircraft Charger 3" },
+      { "connector": "CCS2", "power_kw": 44, "label": "Aircraft Charger 4" },
+      { "connector": "GB/T", "power_kw": 22, "label": "Mobile Charger 1" },
+      { "connector": "GB/T", "power_kw": 22, "label": "Mobile Charger 2" },
+      { "connector": "GB/T", "power_kw": 22, "label": "Aircraft Charger 3" },
+      { "connector": "GB/T", "power_kw": 22, "label": "Aircraft Charger 4" }
+    ]
+  },
+  "EHTW": {
+    "name": "Twente Airport",
+    "icao": "EHTW",
+    "network": "NRG2FLY",
+    "plugs": [
+      { "connector": "GB/T", "power_kw": 22, "label": "22 kW GB/T" }
+    ]
+  },
+  "EDLS": {
+    "name": "Stadtlohn-Vreden Airport",
+    "icao": "EDLS",
+    "network": "NRG2FLY",
+    "plugs": [
+      { "connector": "GB/T", "power_kw": 22, "label": "Mobile Aircraft Charger" }
+    ]
+  }
+}
