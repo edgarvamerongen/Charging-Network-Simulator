@@ -4,6 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Charging Network Simulator</title>
+
+    <!-- Favicon + Apple touch icon (fav.ico served via the /pics/ route) -->
+    <link rel="icon" href="/pics/logos/fav.ico">
+    <link rel="apple-touch-icon" href="/pics/logos/NRG2fly_logo_compact.png">
+
+    <!-- Open Graph (Facebook / LinkedIn / Slack link previews) -->
+    <meta property="og:title" content="NRG2fly Charging Network Simulator">
+    <meta property="og:description" content="Plan electric-aviation routes, size charging stops, and model fleet energy demand across Europe.">
+    <meta property="og:image" content="https://cns.ghettofaust.exposed/pics/logos/NRG2fly_logo_compact.png">
+    <meta property="og:url" content="https://cns.ghettofaust.exposed/">
+    <meta property="og:type" content="website">
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NRG2fly Charging Network Simulator">
+    <meta name="twitter:description" content="Plan electric-aviation routes, size charging stops, and model fleet energy demand across Europe.">
+    <meta name="twitter:image" content="https://cns.ghettofaust.exposed/pics/logos/NRG2fly_logo_compact.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -126,8 +143,61 @@
         /* =========================================================
            Topbar tools + Options dropdown
            ========================================================= */
-        .topbar-tools { display: flex; align-items: center; gap: 18px; }
+        .topbar-tools { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: flex-end; }
         .options-wrap { position: relative; }
+
+        /* B4 — NRG2fly platform buttons (onepager download + back-to-platform).
+           Outline/secondary by default; the CTA variant gets the brand-orange
+           gradient fill so it reads as the primary "return" action. Pill shape
+           + flex-wrap on .topbar-tools lets both stack gracefully on narrow nav. */
+        .cns-brand-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #fff; border: 1px solid var(--brand-orange-3); color: var(--brand-orange-3);
+            font-size: .82rem; font-weight: 600; line-height: 1; white-space: nowrap;
+            padding: 7px 13px; border-radius: 999px; cursor: pointer; text-decoration: none;
+            transition: background .15s, box-shadow .15s, border-color .15s, color .15s;
+        }
+        .cns-brand-btn:hover { background: rgba(229,120,80,.10); box-shadow: var(--shadow-sm); }
+        .cns-brand-btn-cta {
+            background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3));
+            border-color: var(--brand-orange-3); color: #fff;
+            box-shadow: 0 2px 6px rgba(229,120,80,.30);
+        }
+        .cns-brand-btn-cta:hover {
+            background: linear-gradient(180deg, var(--brand-orange-3), var(--primary-2));
+            color: #fff; box-shadow: 0 4px 10px rgba(229,120,80,.40);
+        }
+
+        /* B3 — brand news ticker. Brand-orange band directly under the topbar.
+           Pure-CSS marquee: .cns-ticker-track holds TWO identical text spans and
+           slides 0 → -50%, so when the first copy scrolls off the second has
+           seamlessly taken its place. position:relative + z-index above the map
+           but below the topbar — never shifts the fixed rails/map/panels. */
+        .cns-ticker {
+            /* position:relative + top = the topbar height: the fixed 56px topbar
+               reserves no flow space, so the in-flow ticker would otherwise render
+               at y=0 behind it. Offsetting it down by 56px seats it just under the
+               topbar WITHOUT reflowing anything (relative offsets never move
+               siblings, and the rails/map/panels are all position:fixed). */
+            position: relative; top: 56px; z-index: 25; overflow: hidden;
+            background: var(--brand-orange-3); color: #fff5ec;
+            font-size: .8rem; font-weight: 600; line-height: 1;
+            padding: 6px 0; border-bottom: 1px solid rgba(43,47,90,.12);
+            box-shadow: var(--shadow-sm);
+        }
+        .cns-ticker-track {
+            display: inline-flex; flex-wrap: nowrap; white-space: nowrap;
+            will-change: transform; animation: ticker-scroll 38s linear infinite;
+        }
+        .cns-ticker-text { padding: 0; display: inline-block; }
+        .cns-ticker:hover .cns-ticker-track { animation-play-state: paused; }
+        @keyframes ticker-scroll {
+            from { transform: translateX(0); }
+            to   { transform: translateX(-50%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .cns-ticker-track { animation: none; }
+        }
         .options-btn {
             display: inline-flex; align-items: center; gap: 7px;
             background: #fff; border: 1px solid var(--panel-border); color: var(--ink);
@@ -961,6 +1031,10 @@
             .rail-left { left: 8px; right: 8px; width: auto; max-height: 60vh; }
             .map-controls { top: 64px; right: 8px; }
             .control-pill .pill-label { display: none; }
+            /* Tighter topbar gaps + compact brand buttons so the wrapped tools
+               row stays as shallow as possible when .topbar-tools flex-wraps. */
+            .topbar-tools { gap: 8px 10px; }
+            .cns-brand-btn { padding: 5px 10px; font-size: .76rem; }
         }
     </style>
 </head>
@@ -970,7 +1044,7 @@
 
     <!-- top bar -->
     <header class="topbar">
-        <a class="brand" href="/">
+        <a class="brand" href="https://nrg2fly.com" target="_blank" rel="noopener noreferrer">
             <img class="brand-wide" src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2FLY" onerror="this.style.display='none'">
             <span class="brand-tagline">Charging Network Simulator</span>
         </a>
@@ -1004,8 +1078,23 @@
                 <input type="checkbox" id="unitToggle">
                 <span>Nautical (nm / kn)</span>
             </label>
+            <!-- NRG2fly platform links: outline "onepager" download + prominent
+                 "Back to platform" CTA. Both wrap/stack on narrow nav widths. -->
+            <a class="cns-brand-btn" href="/static/NRG2fly_onepager.pdf" download>Download NRG2fly onepager</a>
+            <a class="cns-brand-btn cns-brand-btn-cta" href="https://nrg2fly.com" target="_blank" rel="noopener noreferrer">← Back to platform</a>
         </div>
     </header>
+
+    <!-- B3 — brand news ticker, directly under the topbar. Pure-CSS marquee:
+         the text is duplicated and the track translates 0 → -50% so the loop
+         is seamless (no JS). position:relative so it never shifts the fixed
+         rails/map. -->
+    <div class="cns-ticker" role="marquee" aria-label="NRG2fly news ticker">
+        <div class="cns-ticker-track">
+            <span class="cns-ticker-text">NEWS: BETA Technologies concludes demo days in the Netherlands with E-Smart Avia&nbsp;&nbsp;•••&nbsp;&nbsp;NRG2fly now operates 8 charging stations across the Netherlands and Germany&nbsp;&nbsp;•••&nbsp;&nbsp;E-Flight Academy leads the world with the most electric flight movements and distances flown&nbsp;&nbsp;•••&nbsp;&nbsp;</span>
+            <span class="cns-ticker-text" aria-hidden="true">NEWS: BETA Technologies concludes demo days in the Netherlands with E-Smart Avia&nbsp;&nbsp;•••&nbsp;&nbsp;NRG2fly now operates 8 charging stations across the Netherlands and Germany&nbsp;&nbsp;•••&nbsp;&nbsp;E-Flight Academy leads the world with the most electric flight movements and distances flown&nbsp;&nbsp;•••&nbsp;&nbsp;</span>
+        </div>
+    </div>
 
     <!-- left rail: plan-a-flight form + result -->
     <aside class="rail-left">
