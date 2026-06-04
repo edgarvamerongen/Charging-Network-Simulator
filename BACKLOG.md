@@ -52,3 +52,13 @@ before `airport-db`'s map layer.
 - **PDF:** P1 visual upgrade + onepager append · P2 advisory reframe
 - **Features:** F1 training range · F4 favicon · F5 leg labels · F6 specs→card · F7 result restructure · F8 model-settings compact · F9 tapering curve (revised — replaces F2)
 - **Airport DB:** A1 real-charger DB — Step 1 data/endpoint (now); Steps 2–4 map/override/demand (explain-first)
+
+## Added during rollout
+- **Charging model — charge-to-reach option (raised 2026-06-04, result-panel review):**
+  today every stop (intermediate *and* termini) charges to the global SoC target, so a
+  quick mid-route stop tops up to e.g. 80% even when the next leg needs little. Option:
+  intermediate/en-route stops charge **only enough for the next leg + landing reserve**;
+  **only the destination/home hit the target**. More realistic, less dwell. Model-wide:
+  `scheduler.js recomputeMultiLegCharges` (forward walk) + `demand.js deliveredEnergy`;
+  cascades to DES + demand calculator + PDF. Prefer a **Model-settings toggle**
+  (charge-to-target vs charge-to-reach) over replacing current behaviour outright.
