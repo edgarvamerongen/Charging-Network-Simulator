@@ -117,25 +117,25 @@ test('energyAt: retour home == min(2*leg, batt)', () => {
   assert.ok(approx(D.energyAt(trip, 'H', false), Math.min(360, 225)));   // 225
 });
 
-// ---- computeAirports: a trip's ORIGIN must show up ------------------------
-// Regression for the "Berlin missing from the demand calculator" bug: a one-way
-// trip is charged at its origin before departure, but the origin is never a
-// "charge event", so it used to be omitted entirely — worst for a pure
-// departure hub that's never also a stop/destination elsewhere.
-test('computeAirports: one-way single-leg lists BOTH origin and destination', () => {
+// ---- computeAirports: a one-way ORIGIN does NOT charge ---------------------
+// Model decision (B): a one-way departure leaves FULL — its charge is accounted
+// for at the airport where it last landed (a 'dest' there), so charging it again
+// at the origin would double-count. The origin contributes no charging demand;
+// destinations and intermediate stops still do.
+test('computeAirports: one-way single-leg charges the DEST, not the origin', () => {
   D.saveFolder([{
     tripType: 'one-way', legEnergy: 90, battery: 225,
     originIdent: 'EDDB', originName: 'Berlin', originLat: 52.36, originLon: 13.50,
     destIdent: 'EHAM', destName: 'Amsterdam', destLat: 52.31, destLon: 4.77,
   }]);
   const ap = D.computeAirports();
-  assert.ok('EDDB' in ap, 'one-way origin (Berlin) is missing');
   assert.ok('EHAM' in ap, 'one-way destination is missing');
-  assert.equal(ap.EDDB.contribs[0].role, 'origin');
+  assert.equal(ap.EHAM.contribs[0].role, 'dest');
+  assert.ok(!('EDDB' in ap), 'one-way ORIGIN must not contribute charging (departs full)');
   D.saveFolder([]);
 });
 
-test('computeAirports: one-way MULTI-LEG lists the origin (the Berlin case)', () => {
+test('computeAirports: one-way MULTI-LEG charges stops + dest, not the origin', () => {
   D.saveFolder([{
     multiLeg: true, tripType: 'one-way',
     originIdent: 'EDDB', originName: 'Berlin', originLat: 52.36, originLon: 13.50,
@@ -148,8 +148,9 @@ test('computeAirports: one-way MULTI-LEG lists the origin (the Berlin case)', ()
     ],
   }]);
   const ap = D.computeAirports();
-  assert.ok('EDDB' in ap, 'multi-leg one-way origin (Berlin) is missing from the calculator');
-  assert.equal(ap.EDDB.contribs[0].role, 'origin');
+  assert.ok(!('EDDB' in ap), 'multi-leg one-way ORIGIN must not contribute charging (departs full)');
+  assert.ok('EDDP' in ap, 'intermediate charging stop is missing');
+  assert.ok('EHAM' in ap, 'destination is missing');
   D.saveFolder([]);
 });
 

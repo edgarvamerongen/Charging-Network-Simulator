@@ -107,18 +107,13 @@ window.CNSDemand = (function () {
                         direction: isReturnVisit ? 'back' : 'out'
                     });
                 });
-                // A ONE-WAY multi-leg trip is charged at its ORIGIN before it
-                // departs, but the origin is never a charge event (you don't
-                // recharge where you start) — so it used to be left out of the
-                // calculator entirely, making a pure departure hub disappear.
-                // Add it with the first leg's energy (the charge needed to set
-                // off). Retour trips already get their origin back via the
-                // return-home charge, so we skip those here.
-                if (t.tripType !== 'retour') {
-                    const firstLeg = (Array.isArray(t.legs) && t.legs[0]) ? numOf(t.legs[0], 'energy_kwh') : 0;
-                    ensure(t.originIdent, t.originName, t.originLat, t.originLon)
-                        .contribs.push({ t, role: 'origin', other: t.destName, base: firstLeg, direction: 'out' });
-                }
+                // A one-way departure is assumed to leave FULL: the plane's charge
+                // is attributed at the airport where it last LANDED (a 'dest'
+                // contribution there), so adding an origin charge here would
+                // double-count. A one-way origin therefore contributes no charging
+                // demand. (Retour origins still charge — as 'home' below. A pure
+                // departure hub with no inbound flight is treated as pre-charged
+                // off-model.)
                 return;
             }
             // Training path: a single contribution at the home base. The base
@@ -137,12 +132,10 @@ window.CNSDemand = (function () {
                 ensure(t.destIdent, t.destName, t.destLat, t.destLon)
                     .contribs.push({ t, role: 'dest', other: t.originName, base: Math.max(0, 2 * t.legEnergy - battery) });
             } else {
-                // One-way single-leg: the ORIGIN charges the plane to fly the
-                // leg, then the DEST tops it back up on arrival. The origin used
-                // to be omitted, so a one-way departure hub vanished from the
-                // calculator — add it as a departure charge.
-                ensure(t.originIdent, t.originName, t.originLat, t.originLon)
-                    .contribs.push({ t, role: 'origin', other: t.destName, base: t.legEnergy });
+                // One-way single-leg: the departure is assumed to leave FULL (its
+                // charge is accounted for at the airport where it last landed — a
+                // 'dest' there — so charging it again at the origin would double-
+                // count). Only the arrival top-up at the DEST is attributed here.
                 ensure(t.destIdent, t.destName, t.destLat, t.destLon)
                     .contribs.push({ t, role: 'dest', other: t.originName, base: t.legEnergy });
             }
