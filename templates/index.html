@@ -571,12 +571,45 @@
         .tag-dest     { background: #faecbe; color: #6b541a;        border-color: #ead993; }
         .tag-stop     { background: #e3e6f1; color: var(--brand-ink); border-color: #c9cee0; }
         .tag-training { background: #fde0e0; color: #a31818;        border-color: #f6c0c0; }
+        /* result-panel detail groups (F7): Route / Charging / Revenue. */
+        .tag-route    { background: #e3ecfb; color: #1c4e8a;        border-color: #cadcf4; }
+        .tag-charging { background: #e2f3ea; color: #1b6b43;        border-color: #c8e9d6; }
+        .tag-revenue  { background: #faf0d6; color: #6b541a;        border-color: #ecdba8; }
 
         .spec-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
         .spec-table td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
         .spec-table tr:last-child td { border-bottom: none; }
         .spec-table td:first-child { color: var(--muted); width: 42%; font-weight: 500; font-size: .78rem; }
         .spec-table td:last-child { color: var(--ink); font-weight: 500; }
+
+        /* result-panel grouped layout (F7) */
+        .result-group { margin-top: 14px; }
+        .result-aircraft { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+        .result-aircraft .ac-photo { width: 150px; height: 62px; margin-bottom: 0; flex: 0 0 auto; }
+        .result-ac-name { font-weight: 700; font-size: .95rem; color: var(--ink); margin-top: 0; }
+        .revenue-val { font-weight: 800 !important; color: var(--brand-gold) !important; }
+        /* route itinerary: one row per leg / charge */
+        .route-steps .step td { width: auto; color: var(--ink); font-size: .85rem; }
+        .step-main { font-weight: 600; color: var(--ink); font-size: .84rem; }
+        .step-sub { color: var(--muted); font-size: .76rem; margin-top: 1px; }
+        .step-ico { display: inline-block; width: 1.1em; margin-right: 5px; text-align: center; }
+        .step-fly { color: var(--brand-ink); }
+        .step-charge-ico { color: #10b981; }
+        .route-steps .step-total td { border-top: 1px solid #e2e8f0; padding-top: 7px; }
+        /* collapsible sections — clickable header bar with a large chevron */
+        .sec-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+        .sec-header .section-tag { margin-bottom: 6px; }
+        .sec-chev { font-size: 1.6rem; line-height: .5; color: var(--muted); transition: transform .15s; display: inline-block; padding: 0 4px 6px 4px; }
+        .sec-header:hover .sec-chev { color: var(--brand-ink); }
+        .result-group.collapsed .sec-chev { transform: rotate(-90deg); }
+        .result-group.collapsed .spec-table { display: none; }
+        /* return divider + destination (turnaround) highlight */
+        .step-return td { width: auto; font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--brand-ink); background: #eef1f8; border-radius: 4px; padding: 5px 8px !important; border-bottom: none; }
+        .ret-ico { margin-right: 6px; font-size: 1.05em; }
+        .step-dest { background: #fff7e6; }
+        .step-dest .step-main { color: #8a5a14; }
+        .dest-badge { margin-left: 7px; font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--brand-gold); color: #3a2e0a; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
+        .charge-note-row td { width: auto !important; color: var(--muted) !important; font-size: .72rem !important; font-style: italic; font-weight: 400 !important; padding-top: 2px !important; border-bottom: none; }
 
         .ac-photo {
             width: 100%; height: 130px; object-fit: cover; display: block;
@@ -593,7 +626,7 @@
         .ps-thumb { width: 100%; height: 96px; object-fit: cover; display: block; border-bottom: 1px solid var(--panel-border); }
         .ps-main { padding: 8px 10px; }
         .ps-name { font-weight: 600; font-size: .9rem; color: var(--ink); }
-        .ps-stats { display: flex; gap: 18px; margin-top: 4px; }
+        .ps-stats { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 6px; }
         .ps-stat { display: flex; flex-direction: column; line-height: 1.15; }
         .ps-stat strong { font-size: .9rem; color: var(--ink); }
         .ps-stat-l { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
@@ -1158,6 +1191,9 @@
                             <div class="ps-stats">
                                 <span class="ps-stat"><strong id="psRange"></strong><span class="ps-stat-l">range</span></span>
                                 <span class="ps-stat"><strong id="psBattery"></strong><span class="ps-stat-l">battery</span></span>
+                                <span class="ps-stat"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
+                                <span class="ps-stat"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
+                                <span class="ps-stat"><strong id="psUsage"></strong><span class="ps-stat-l">avg usage</span></span>
                             </div>
                             <button type="button" id="psOverrideToggle" class="ps-override-toggle">Override for this flight <span class="chev">▾</span></button>
                         </div>
@@ -1273,28 +1309,41 @@
                 </div>
             </div>
 
-            <div class="row">
-                <div class="col-12 mb-3">
-                    <span class="section-tag tag-aircraft">Aircraft Used</span>
+            <div class="result-groups">
+                <!-- Aircraft: photo + name side by side (name to the right). Full
+                     specs live on the in-form spec card under the selector (F6). -->
+                <div class="result-aircraft">
                     <img id="acPhoto" class="ac-photo d-none" alt="">
-                    <table class="spec-table">
-                        <tr><td>Model</td><td id="acName"></td></tr>
-                        <tr><td>Seats</td><td id="acSeats"></td></tr>
-                        <tr><td>Max load</td><td id="acLoad"></td></tr>
-                        <tr><td>Battery</td><td id="acBattery"></td></tr>
-                        <tr><td>Range</td><td id="acRange"></td></tr>
-                        <tr><td>Cruise speed</td><td id="acSpeed"></td></tr>
-                        <tr><td>Avg usage</td><td id="acUsage"></td></tr>
-                    </table>
+                    <div class="result-ac-name" id="acName"></div>
                 </div>
-                <div class="col-12">
-                    <span class="section-tag tag-trip">Trip Calculated</span>
+
+                <!-- Route: one row per action (leg / en-route charge) + a total,
+                     built dynamically in renderResult(). -->
+                <div class="result-group collapsed">
+                    <div class="sec-header" role="button" aria-expanded="false">
+                        <span class="section-tag tag-route">Route</span>
+                        <span class="sec-chev">▾</span>
+                    </div>
+                    <table class="spec-table route-steps" id="routeSteps"></table>
+                </div>
+
+                <!-- Charging: terminal top-up, one row per fact (built dynamically). -->
+                <div class="result-group collapsed">
+                    <div class="sec-header" role="button" aria-expanded="false">
+                        <span class="section-tag tag-charging">Charging</span>
+                        <span class="sec-chev">▾</span>
+                    </div>
+                    <table class="spec-table" id="chargeRows"></table>
+                </div>
+
+                <div class="result-group collapsed">
+                    <div class="sec-header" role="button" aria-expanded="false">
+                        <span class="section-tag tag-revenue">Revenue potential</span>
+                        <span class="sec-chev">▾</span>
+                    </div>
                     <table class="spec-table">
-                        <tr><td>Trip type</td><td id="trType"></td></tr>
-                        <tr><td>Total distance</td><td id="trTotal"></td></tr>
-                        <tr><td id="trFlightLabel">Total travel time</td><td id="trFlight"></td></tr>
-                        <tr id="trFinalRow"><td id="trFinalLabel">Final destination</td><td id="trFinal"></td></tr>
-                        <tr><td>Charger</td><td id="trCharger"></td></tr>
+                        <tr><td>Energy charged</td><td id="trEnergyCharged"></td></tr>
+                        <tr><td>Airport revenue</td><td id="trRevenue" class="revenue-val"></td></tr>
                     </table>
                 </div>
             </div>
@@ -2234,6 +2283,13 @@
         function _refreshSpecStats(spec) {
             document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
             document.getElementById('psBattery').textContent = fmtEnergy(spec.battery_kwh || 0);
+            document.getElementById('psSpeed').textContent = (typeof fmtSpeed === 'function') ? fmtSpeed(spec.speed_kmh) : (spec.speed_kmh + ' km/h');
+            document.getElementById('psSeats').textContent = spec.seats != null ? spec.seats : '—';
+            // Catalog has no avg_usage field — derive it from battery / range.
+            const usage = spec.avg_usage_kwh_per_100km != null ? spec.avg_usage_kwh_per_100km
+                        : (spec.battery_kwh && spec.range_km ? spec.battery_kwh / spec.range_km * 100 : null);
+            document.getElementById('psUsage').textContent =
+                usage == null ? '—' : ((typeof fmtUsage === 'function') ? fmtUsage(usage) : (Math.round(usage) + ' kWh/100km'));
         }
         (function _wirePlaneOverride() {
             const toggle = document.getElementById('psOverrideToggle');
@@ -2548,7 +2604,9 @@
         // (The map-options Reset was removed — Plan-a-flight's Reset button
         // now handles clearing the drawn route alongside the form fields.)
 
+        let _lastResultData = null;
         function renderResult(data) {
+            _lastResultData = data;   // remembered so Model-settings changes re-render live
             const p = data.plane;
             // Multi-leg result has totals in different fields; map them to a unified shape
             const isMulti = !!data.multi_leg;
@@ -2583,7 +2641,7 @@
             const travelMin    = bd.flightMin + bd.enRouteMin;
             const gridKwh      = rechargeKwh * gridMul;
             document.getElementById('hlUsed').textContent = num(usedKwh);
-            document.getElementById('hlFlight').textContent = fmtDuration(flightMin);
+            document.getElementById('hlFlight').textContent = fmtDuration(travelMin);
             document.getElementById('hlTime').textContent = fmtDuration(chargeMin);
             // Sub-labels adapt to the trip context AND active model flags.
             const flags = CNSSettings.activeFlags();
@@ -2593,8 +2651,8 @@
                 : 'Energy used';
             document.getElementById('hlFlightLabel').textContent =
                 isTraining ? 'Pattern duration'
-                : isRetour ? 'Flight time (round trip)'
-                : 'Flight time';
+                : isRetour ? 'Travel time (round trip)'
+                : 'Total travel time';
             let tSub;
             if (isTraining) {
                 tSub = 'at origin' + (flags.chargerEfficiency ? ` · ${fmtEnergy(gridKwh)} grid` : '');
@@ -2610,39 +2668,81 @@
             document.getElementById('hlTimeSub').textContent = tSub;
 
             const photo = document.getElementById('acPhoto');
-            if (p.image) { photo.src = '/pics/' + p.image; photo.alt = p.name; photo.classList.remove('d-none'); } else photo.classList.add('d-none');
+            if (p.image) { photo.src = '/pics/' + p.image; photo.alt = p.name; photo.title = p.name; photo.classList.remove('d-none'); } else photo.classList.add('d-none');
 
+            // Aircraft specs now live on the in-form spec card (F6) — the result
+            // panel only echoes the model name beside the photo.
             document.getElementById('acName').textContent = p.name;
-            document.getElementById('acSeats').textContent = p.seats ?? '—';
-            document.getElementById('acLoad').textContent = p.load_kg ? p.load_kg + ' kg' : '—';
-            document.getElementById('acBattery').textContent = fmtEnergy(p.battery_kwh);
-            document.getElementById('acRange').textContent = fmtDist(p.range_km);
-            document.getElementById('acSpeed').textContent = fmtSpeed(p.speed_kmh);
-            document.getElementById('acUsage').textContent = fmtUsage(p.avg_usage_kwh_per_100km);
 
-            const legs = isMulti ? data.legs_count : data.legs;
-            document.getElementById('trType').textContent =
-                isTraining ? `Training pattern (${Math.round(flightMin)} min)`
-                : (data.trip_type === 'retour' ? 'Round Trip (Retour)' : 'One-Way')
+            // ---- Route: one row per action, driven by the SAME phases the headline
+            //      and DES use (taper- + charge-target-aware), so every per-stop time
+            //      and energy reconciles with the totals and updates live with Model
+            //      settings. The terminal top-up is NOT shown here — it happens after
+            //      arrival and belongs to the Charging section. ---------------------
+            const _esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const _legRow = (from, to, distKm, durMin, energyKwh) =>
+                `<tr class="step"><td colspan="2"><div class="step-main"><span class="step-ico step-fly">✈</span>${_esc(from)} → ${_esc(to)}</div>` +
+                `<div class="step-sub">${fmtDist(distKm)} · ${fmtDuration(durMin)} · ${fmtEnergy(energyKwh)}</div></td></tr>`;
+            const _chgRow = (name, min, energy, isDest) =>
+                `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico">⚡</span>Charge at ${_esc(name)}${isDest ? '<span class="dest-badge">turnaround</span>' : ''}</div>` +
+                `<div class="step-sub">+${fmtDuration(min)} · ${fmtEnergy(energy)}</div></td></tr>`;
+            const _typeLabel = isTraining ? `Training pattern (${Math.round(flightMin)} min)`
+                : (isRetour ? 'Round Trip (Retour)' : 'One-Way')
                   + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
-            document.getElementById('trTotal').textContent = isTraining
-                ? fmtDist(data.training_range_km) + ' loop'
-                : fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
-            // "Total travel time" = flying + the en-route charging needed to reach
-            // the destination; the terminal top-up (after you arrive — the home
-            // recharge on a retour) gets its own row. Same shape for every trip.
-            document.getElementById('trFlightLabel').textContent = 'Total travel time';
-            document.getElementById('trFlight').textContent = enRouteMin > 0.5
-                ? `${fmtDuration(travelMin)} (${fmtDuration(flightMin)} flying + ${fmtDuration(enRouteMin)} charging)`
-                : fmtDuration(travelMin);
-            document.getElementById('trFinalLabel').textContent = isRetour ? 'Back at base' : 'Final destination';
-            document.getElementById('trFinalRow').classList.remove('d-none');
+            const _steps = [`<tr class="step-head"><td>Trip type</td><td>${_esc(_typeLabel)}</td></tr>`];
+            const _destNm = (data._dest && data._dest.name) || '', _originNm = (data._origin && data._origin.name) || '';
+            if (isTraining) {
+                _steps.push(`<tr class="step"><td colspan="2"><div class="step-main"><span class="step-ico step-fly">✈</span>Training pattern</div>` +
+                    `<div class="step-sub">${fmtDist(data.training_range_km)} loop · ${fmtDuration(flightMin)} · ${fmtEnergy(usedKwh)}</div></td></tr>`);
+            } else {
+                const _phases = bd.phases || [];
+                const _chg = _phases.filter(ph => ph.kind === 'charge');
+                const _terminal = _chg.length ? _chg[_chg.length - 1] : null;   // shown in Charging, not here
+                const _legMeta = ph => {
+                    if (isMulti && typeof ph.leg === 'number') {
+                        const l = (data.legs || [])[ph.leg] || {};
+                        return { from: l.from && l.from.name, to: l.to && l.to.name, dist: l.distance_km, energy: l.energy_kwh };
+                    }
+                    return ph.leg === 'back'
+                        ? { from: _destNm, to: _originNm, dist: data.leg_distance_km, energy: data.leg_energy_kwh }
+                        : { from: _originNm, to: _destNm, dist: data.leg_distance_km, energy: data.leg_energy_kwh };
+                };
+                let _ret = false;
+                _phases.forEach(ph => {
+                    if (ph.kind === 'fly') {
+                        const m = _legMeta(ph);
+                        if (isRetour && !_ret && m.from === _destNm) { _steps.push('<tr class="step-return"><td colspan="2"><span class="ret-ico">↩</span>Return</td></tr>'); _ret = true; }
+                        _steps.push(_legRow(m.from, m.to, m.dist, ph.dur, m.energy));
+                    } else if (ph.kind === 'charge' && ph !== _terminal) {
+                        _steps.push(_chgRow(ph.name, ph.dur, ph.energy, ph.at === 'dest'));
+                    }
+                });
+            }
+            if (!isTraining) _steps.push(`<tr class="step-total"><td>Total travel</td><td>${fmtDist(data.total_distance_km)} · ${fmtDuration(travelMin)}</td></tr>`);
+            document.getElementById('routeSteps').innerHTML = _steps.join('');
+
+            // ---- Charging: the terminal top-up. It happens AFTER you arrive, so it is
+            //      deliberately NOT part of travel time — one row per fact. ----------
             const _termTgt = (window.CNSDemand && CNSDemand.resolveTargetSoc) ? CNSDemand.resolveTargetSoc({}) : null;
-            const _tgtLabel = (_termTgt != null && _termTgt < 0.999) ? `to ${Math.round(_termTgt * 100)}%` : 'to full';
-            document.getElementById('trFinal').textContent = terminalMin > 0.5
-                ? `${terminalName} · ${Math.round(arrivalSoc * 100)}% on arrival, +${fmtDuration(terminalMin)} ${_tgtLabel}`
-                : `${terminalName} · no charge needed`;
-            document.getElementById('trCharger').textContent = chargerLabel(data.charger);
+            const _tgtLabel = (_termTgt != null && _termTgt < 0.999) ? `${Math.round(_termTgt * 100)}%` : 'full';
+            const _finalLabel = isRetour ? 'Back at base' : (isTraining ? 'Recharge at' : 'Final destination');
+            const _crows = [`<tr><td>${_finalLabel}</td><td>${_esc(terminalName)}</td></tr>`];
+            if (terminalMin > 0.5) {
+                _crows.push(`<tr><td>Arrival charge</td><td>${Math.round(arrivalSoc * 100)}%</td></tr>`);
+                _crows.push(`<tr><td>Charge to</td><td>${_tgtLabel}</td></tr>`);
+                _crows.push(`<tr><td>Top-up time</td><td>+${fmtDuration(terminalMin)}</td></tr>`);
+                _crows.push(`<tr class="charge-note-row"><td colspan="2">After the trip — separate from travel time.</td></tr>`);
+            } else {
+                _crows.push(`<tr><td>Top-up</td><td>no charge needed</td></tr>`);
+            }
+            _crows.push(`<tr><td>Charger</td><td>${_esc(chargerLabel(data.charger))}</td></tr>`);
+            if (flags.chargerEfficiency) _crows.push(`<tr><td>Grid demand</td><td>${fmtEnergy(gridKwh)}</td></tr>`);
+            document.getElementById('chargeRows').innerHTML = _crows.join('');
+
+            // ---- Revenue → the airport's charging income = €/kWh × energy charged
+            const _rate = (window.CNSSettings && CNSSettings.chargeRate) ? CNSSettings.chargeRate() : 0.60;
+            document.getElementById('trEnergyCharged').textContent = fmtEnergy(rechargeKwh);
+            document.getElementById('trRevenue').textContent = `€${(_rate * rechargeKwh).toFixed(2)}  ·  €${_rate.toFixed(2)}/kWh`;
 
             const common = [
                 `avg usage      = battery / range × 100`,
@@ -2708,6 +2808,24 @@
             const hidden = panel.classList.toggle('d-none');
             document.getElementById('toggleCalc').textContent = hidden ? 'Show calculation' : 'Hide calculation';
         });
+
+        // Collapsible result sections: clicking a section header folds/unfolds its rows.
+        document.getElementById('result').addEventListener('click', (e) => {
+            const hdr = e.target.closest('.sec-header');
+            if (!hdr) return;
+            const grp = hdr.closest('.result-group');
+            if (grp) hdr.setAttribute('aria-expanded', String(!grp.classList.toggle('collapsed')));
+        });
+
+        // Live-refresh the result panel when Model settings change (charge target,
+        // taper, charger efficiency …) so the preview never goes stale — no re-sim.
+        if (window.CNSSettings && CNSSettings.subscribe) {
+            CNSSettings.subscribe(() => {
+                if (_lastResultData && !document.getElementById('result').classList.contains('d-none')) {
+                    try { renderResult(_lastResultData); } catch (err) { console.error(err); }
+                }
+            });
+        }
 
         document.getElementById('simForm').addEventListener('submit', async (e) => {
             e.preventDefault();

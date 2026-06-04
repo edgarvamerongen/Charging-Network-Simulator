@@ -292,7 +292,10 @@ window.CNSScheduler = (function () {
         const termTarget   = (previewTarget != null ? previewTarget : 1.0);
         const arrivalSoc   = Math.max(0, Math.min(1, Math.max(reserveFrac, termTarget - terminalKwh / (batt || 1))));
         const energyUsedKwh = charges.reduce((s, p) => s + (p.energy || 0), 0);
-        return { flightMin, chargeMin, enRouteMin, terminalMin, terminalKwh, terminalName, arrivalSoc, energyUsedKwh };
+        // `phases` is the ordered fly/charge list (same objects the DES uses) so the
+        // results panel can render a per-action itinerary whose times + energies are
+        // guaranteed to match these aggregates (and the scheduler).
+        return { flightMin, chargeMin, enRouteMin, terminalMin, terminalKwh, terminalName, arrivalSoc, energyUsedKwh, phases: ph };
     }
     function phasesAnim(trip) { return tripPhases(trip, null); }
     function rotationLength(trip) { return tripPhases(trip, null).total || 30; }

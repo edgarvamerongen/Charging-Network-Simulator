@@ -47,6 +47,7 @@ window.CNSSettings = (function () {
         chargeTaper:       { enabled: true,  threshold: 0.70, taperPower: 0.15, cRate: 2.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate (per-plane c_rate overrides)
         routingPadding:    { enabled: true,  factor: 1.05 },          // ≥1
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
+        chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
     });
 
     // Cloned so call sites can't mutate the frozen defaults via the returned object.
@@ -128,6 +129,16 @@ window.CNSSettings = (function () {
         return Math.max(0.1, Math.min(1.0, +s.value || 0.80));
     }
 
+    /** Charging price in €/kWh for the result panel's potential-revenue figure.
+     *  A pricing parameter, not a physics flag, so it never feeds the model-flag
+     *  badge or `activeFlags`. The €/kWh field in Model settings (C1a) edits this
+     *  same value; until then it returns the 0.60 default. */
+    function chargeRate() {
+        const s = loadAll().chargeRate;
+        const v = +(s && s.value);
+        return isFinite(v) && v >= 0 ? v : 0.60;
+    }
+
     /** Effective charge power (kW) a battery can actually accept: the smaller
      *  of the charger's rated power and the pack's C-rate limit
      *  (`cRate × batteryKwh`). This is the CC-plateau half of the charging-curve
@@ -201,6 +212,6 @@ window.CNSSettings = (function () {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
         usableFraction, gridDemandFactor, routingFactor, chargeTimeMin,
-        effectiveChargePower, chargeTargetDefault, activeFlags,
+        effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
     };
 })();
