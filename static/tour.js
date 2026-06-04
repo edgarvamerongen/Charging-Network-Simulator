@@ -19,18 +19,16 @@ window.CNSTour = (function () {
 
     // ---- leadership cards (welcome slide) ------------------------------------
     // Rendered inline in the welcome popover in the nrg2fly.com/about.html
-    // "Leadership" style: circular photo, name, role, bio, credential tag pills.
+    // "Leadership" style: circular photo, name, role, credential tag pills.
     // Data + photos come from the crew/ folder (photos served from pics/crew/).
     const _leadership = [
         {
             name: 'Jacco Bink', role: 'COO', photo: '/pics/crew/jacco.jpeg',
-            bio: 'A background at KLM and Alliander brings deep expertise in aviation and energy systems. As Consulting Director he leads the rollout of charging infrastructure at airports across the Netherlands and Europe.',
             tags: ['KLM', 'Alliander'],
             linkedin: 'https://www.linkedin.com/in/jacco-bink-ba6254/', email: 'jacco@nrg2fly.com',
         },
         {
             name: 'Merlijn van Vliet', role: 'CEO', photo: '/pics/crew/merlijn.jpeg',
-            bio: "Co-owner of Europe's first electric flight academy and board member of the Electric Flying Connection. Combines brand strategy with a passion for electric aviation; leads NRG2fly's European partnerships and ecosystem building.",
             tags: ['✈ Pilot', 'E-Flight Academy', 'Electric Flying Connection'],
             linkedin: 'https://www.linkedin.com/in/merlijnvanvliet/', email: 'merlijn@nrg2fly.com',
         },
@@ -41,7 +39,6 @@ window.CNSTour = (function () {
               `<img class="tlc-photo" src="${c.photo}" alt="${c.name}" onerror="this.style.visibility='hidden'">` +
               `<div class="tlc-name">${c.name}</div>` +
               `<div class="tlc-role">${c.role}</div>` +
-              `<p class="tlc-bio">${c.bio}</p>` +
               `<div class="tlc-tags">${c.tags.map((t) => `<span class="tlc-tag">${t}</span>`).join('')}</div>` +
               `<div class="tlc-links"><a href="${c.linkedin}" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:${c.email}">${c.email}</a></div>` +
             '</div>';
@@ -290,6 +287,14 @@ window.CNSTour = (function () {
                 popover: {
                     title: 'NRG2fly Charging Network Simulator',
                     description:
+                        // Branded hero — the wide colour logo on a warm banner so
+                        // first-time users land on something welcoming, not a wall
+                        // of text. The logo carries the wordmark, so the popover's
+                        // text title is hidden for this slide (see cns-tour-welcome CSS).
+                        '<div class="tour-welcome-hero">' +
+                          '<img class="tour-welcome-logo" src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2fly" onerror="this.style.display=\'none\'">' +
+                          '<div class="tour-welcome-tag">Charging Network Simulator</div>' +
+                        '</div>' +
                         '<p>At NRG2fly we are rolling out a European charging network that makes point-to-point electric aviation possible. This tool helps airports and operators answer the strategic questions we keep coming back to: <strong>what kind of charging infrastructure, and how much power, do we need?</strong></p>' +
                         '<p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — a defensible, client-ready sizing brief exported as a PDF, not a back-of-envelope guess. We advise starting with this demo tour, then running your own simulations.</p>' +
                         '<p>Got questions about your network? <strong>Merlijn van Vliet</strong> and <strong>Jacco Bink</strong> would love to hear from you.</p>' +
@@ -297,6 +302,19 @@ window.CNSTour = (function () {
                         '<p class="tour-foot">Pre-filled example: <strong>Beta Alia · Lelystad → Frankfurt</strong>. Press <kbd>Esc</kbd> to skip any time.</p>',
                     side: 'over', align: 'center',
                     popoverClass: 'cns-tour-popover cns-tour-welcome',
+                },
+                // On short screens the welcome popover scrolls its body. Driver
+                // auto-focuses the first leadership-card link on show, which
+                // scrolls the hero (logo) out of view — reset to the top so the
+                // logo greets the user, and park focus on Next (in the pinned
+                // footer, so focusing it doesn't re-scroll the body).
+                onHighlightStarted: async () => {
+                    await _wait(150);
+                    const d = document.querySelector('.cns-tour-welcome .driver-popover-description');
+                    if (d) d.scrollTop = 0;
+                    const next = document.querySelector('.cns-tour-welcome .driver-popover-next-btn');
+                    if (next && next.focus) next.focus({ preventScroll: true });
+                    if (d) d.scrollTop = 0;
                 },
             },
             // 2. Whole screen — the simulator at a glance.
