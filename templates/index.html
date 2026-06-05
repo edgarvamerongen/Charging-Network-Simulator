@@ -765,6 +765,72 @@
         }
 
         /* =========================================================
+           "Route added" success feedback
+           Proven HCI patterns (see the #addFolder handler for the
+           rationale): a non-modal snackbar toast that names what was
+           added + offers Undo, paired with a highlight-fade on the
+           airport card(s) the new flight touched and a small button
+           pulse. Motion is suppressed under prefers-reduced-motion.
+           ========================================================= */
+        .cns-toast-wrap {
+            position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+            z-index: 2000; display: flex; flex-direction: column; gap: 10px;
+            align-items: center; pointer-events: none;
+        }
+        .cns-toast {
+            pointer-events: auto;
+            display: inline-flex; align-items: center; gap: 12px;
+            max-width: min(92vw, 460px);
+            background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+            color: #fff; border-radius: 999px;
+            padding: 12px 16px 12px 14px;
+            box-shadow: var(--shadow-lg);
+            font-size: .9rem; font-weight: 500; line-height: 1.25;
+            animation: cns-toast-in .32s cubic-bezier(.2,.9,.25,1) both;
+        }
+        .cns-toast.leaving { animation: cns-toast-out .28s ease forwards; }
+        .cns-toast-icon {
+            flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+            display: grid; place-items: center; line-height: 1;
+            background: var(--success); color: #fff; font-size: .82rem; font-weight: 700;
+        }
+        .cns-toast-msg { flex: 1 1 auto; }
+        .cns-toast-action {
+            flex-shrink: 0; border: none; background: transparent;
+            color: var(--brand-gold); font: inherit; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .04em; font-size: .78rem;
+            padding: 4px 9px; border-radius: 8px; cursor: pointer;
+            transition: background .15s;
+        }
+        .cns-toast-action:hover { background: rgba(255,255,255,.14); }
+        @keyframes cns-toast-in  { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
+        @keyframes cns-toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px) scale(.98); } }
+
+        /* Highlight-fade ("yellow fade technique", 37signals): briefly washes
+           the touched card with a green glow + tint, then recedes so it doesn't
+           linger as visual noise. Uses box-shadow only (inc. a large-spread
+           inset for the fill) so it never fights the !important border/bg rules
+           on #folder [data-dest]. */
+        .cns-card-flash { animation: cns-card-flash 1.6s ease-out both; }
+        @keyframes cns-card-flash {
+            0%   { box-shadow: 0 0 0 3px rgba(16,185,129,.55), inset 0 0 0 999px rgba(16,185,129,.13); }
+            60%  { box-shadow: 0 0 0 2px rgba(16,185,129,.30), inset 0 0 0 999px rgba(16,185,129,.06); }
+            100% { box-shadow: 0 0 0 0 rgba(16,185,129,0),     inset 0 0 0 999px rgba(16,185,129,0); }
+        }
+
+        /* Button micro-interaction: a brief confirming pop on "Added". */
+        .btn-cns-success.is-added { animation: cns-btn-pop .42s cubic-bezier(.2,.9,.25,1); }
+        @keyframes cns-btn-pop { 0% { transform: none; } 42% { transform: scale(1.045); } 100% { transform: none; } }
+
+        /* Keep the confirmation, drop the movement. animation-duration is kept
+           non-zero so the JS animationend cleanup still fires. */
+        @media (prefers-reduced-motion: reduce) {
+            .cns-toast, .cns-toast.leaving { animation-duration: 1ms; }
+            .cns-card-flash { animation-duration: 1ms; }
+            .btn-cns-success.is-added { animation: none; }
+        }
+
+        /* =========================================================
            Misc utilities + small modal polish
            ========================================================= */
         .est-note { font-size: .72rem; color: var(--muted); }
@@ -3004,6 +3070,73 @@
 
         document.getElementById('airportFilter').addEventListener('change', e => { calcFilter = e.target.value; renderFolder(); });
 
+        // ---- "Route added" success feedback ----------------------------------
+        // HCI rationale: the demand-calculator list lives in a drawer that is
+        // usually closed when the user clicks "Add to demand calculator", so a
+        // silent state change has poor "visibility of system status" (Nielsen #1).
+        // We confirm with a Material-style snackbar that (a) NAMES the route so
+        // the user trusts the right thing was captured (recognition over recall),
+        // (b) offers UNDO so the commit is reversible (Nielsen #3, "user control
+        // & freedom") — cheaper and less anxious than a confirm dialog, and
+        // (c) auto-dismisses (~5s) so it never blocks. role=status + aria-live
+        // announce it to assistive tech; the snackbar pairs icon + text + colour
+        // so it never relies on colour alone.
+        const CNSToast = (function () {
+            let wrap = null;
+            function ensureWrap() {
+                if (wrap && document.body.contains(wrap)) return wrap;
+                wrap = document.createElement('div');
+                wrap.className = 'cns-toast-wrap';
+                wrap.setAttribute('role', 'status');
+                wrap.setAttribute('aria-live', 'polite');
+                document.body.appendChild(wrap);
+                return wrap;
+            }
+            function show(message, opts = {}) {
+                const w = ensureWrap();
+                const t = document.createElement('div');
+                t.className = 'cns-toast';
+                const icon = document.createElement('span');
+                icon.className = 'cns-toast-icon'; icon.setAttribute('aria-hidden', 'true');
+                icon.textContent = '✓';
+                const msg = document.createElement('span');
+                msg.className = 'cns-toast-msg'; msg.textContent = message;
+                t.append(icon, msg);
+                let timer;
+                const dismiss = () => {
+                    clearTimeout(timer);
+                    if (!t.isConnected) return;
+                    t.classList.add('leaving');
+                    t.addEventListener('animationend', () => t.remove(), { once: true });
+                    setTimeout(() => t.remove(), 500);   // fallback if animation is suppressed
+                };
+                if (opts.actionLabel && typeof opts.onAction === 'function') {
+                    const btn = document.createElement('button');
+                    btn.type = 'button'; btn.className = 'cns-toast-action';
+                    btn.textContent = opts.actionLabel;
+                    btn.addEventListener('click', () => { opts.onAction(); dismiss(); });
+                    t.appendChild(btn);
+                }
+                w.appendChild(t);
+                timer = setTimeout(dismiss, opts.duration || 5000);
+                return t;
+            }
+            return { show };
+        })();
+
+        // Briefly highlight the airport card(s) a freshly-added flight touched,
+        // so the eye is drawn to *where* it landed in the demand calculator.
+        function flashFolderCards(idents) {
+            const want = new Set(idents.filter(Boolean));
+            document.querySelectorAll('#folder [data-dest]').forEach(card => {
+                if (!want.has(card.dataset.dest)) return;
+                card.classList.remove('cns-card-flash');
+                void card.offsetWidth;                       // restart the animation if mid-flight
+                card.classList.add('cns-card-flash');
+                card.addEventListener('animationend', () => card.classList.remove('cns-card-flash'), { once: true });
+            });
+        }
+
         document.getElementById('addFolder').addEventListener('click', () => {
             if (!lastResult) return;
             const d = lastResult, trips = loadFolder();
@@ -3050,8 +3183,19 @@
             }
             trips.push(trip);
             saveFolder(trips); renderFolder();
+
+            // Confirm the add with three layered signals (see CNSToast above):
+            // button pulse → snackbar w/ Undo → highlight-fade on the card(s) hit.
             const btn = document.getElementById('addFolder');
-            btn.textContent = '✓ Added'; setTimeout(() => { btn.textContent = '+ Add to demand calculator'; }, 1200);
+            btn.classList.remove('is-added'); void btn.offsetWidth; btn.classList.add('is-added');
+            btn.textContent = '✓ Added';
+            setTimeout(() => { btn.classList.remove('is-added'); btn.textContent = '+ Add to demand calculator'; }, 1400);
+
+            flashFolderCards([trip.originIdent, trip.destIdent]);
+            CNSToast.show(`Route added — ${d._origin.name} → ${d._dest.name}`, {
+                actionLabel: 'Undo',
+                onAction: () => { saveFolder(loadFolder().filter(t => t.id !== trip.id)); renderFolder(); },
+            });
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
         document.getElementById('generateReport').addEventListener('click', (e) => CNSReport.generate(e.currentTarget));
