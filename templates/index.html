@@ -948,6 +948,35 @@
         }
         .leg-pin:hover .leg-pin-text { max-width: 220px; opacity: 1; margin-left: 6px; }
 
+        /* A1 Step 2: NRG2fly charger markers — favicon teardrop floated above the
+           airport dot so the dot's Dep/Dest/Stop popup stays clickable. */
+        .nrg-charger-wrap { background: none; border: none; }
+        .nrg-charger-pin {
+            position: absolute;
+            transform: translate(-50%, -100%) translateY(-6px);   /* tail tip ~6px above the airport dot */
+            display: flex; flex-direction: column; align-items: center;
+            cursor: pointer;
+            filter: drop-shadow(0 2px 3px rgba(15, 23, 41, .35));
+        }
+        .nrg-pin-head {
+            width: 34px; height: 34px; border-radius: 50%;
+            background: #fff; border: 2px solid var(--brand-orange-3, #ff7a00);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .nrg-pin-ico { width: 26px; height: 26px; object-fit: contain; }
+        .nrg-pin-tail {
+            width: 0; height: 0; margin-top: -1px;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 10px solid var(--brand-orange-3, #ff7a00);
+        }
+        .nrg-tip-sub { color: var(--ink-soft, #475569); font-size: .9em; }
+        /* Route variant — a blue copy of the teardrop drawn in routePane, directly
+           over the orange network teardrop, so a departure / destination / stop
+           dominates the charging-station marker it sits on. */
+        .nrg-charger-pin.route .nrg-pin-head { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .30); }
+        .nrg-charger-pin.route .nrg-pin-tail { border-top-color: #2563eb; }
+
         /* Badge on the trigger button — shows the count of active factors. */
         .model-badge {
             display: inline-block; min-width: 18px; text-align: center;
@@ -1152,7 +1181,7 @@
             </button>
             <div class="options-wrap">
                 <button id="optionsBtn" class="options-btn" type="button" aria-haspopup="true" aria-expanded="false">
-                    <span class="gear">⚙</span> <span>Options</span>
+                    <span class="gear">⚙</span> <span>Map Options</span>
                 </button>
                 <div id="optionsMenu" class="options-menu" role="menu">
                     <div class="opt-group">
@@ -1160,6 +1189,14 @@
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
+                    </div>
+                    <div class="opt-group">
+                        <div class="opt-label">NRG2fly network</div>
+                        <label class="opt-check"><input type="checkbox" id="nrgChargerToggle" checked><span>Show charger sites</span></label>
+                    </div>
+                    <div class="opt-group">
+                        <div class="opt-label">Route</div>
+                        <label class="opt-check"><input type="checkbox" id="legLabelToggle" checked><span>Show flight labels</span></label>
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">Basemap</div>
@@ -1673,6 +1710,17 @@
         // Built-in +/- zoom buttons are hidden — pan with drag, zoom with scroll/pinch.
         const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([50.0, 10.0], 5);
 
+        // Dedicated pane for route airport markers, stacked ABOVE the markerPane
+        // (600) — where the NRG2fly teardrops live with a high zIndexOffset — so a
+        // blue route dot ALWAYS overlaps both the orange catalog dot and the
+        // network teardrop. An airport on the active route reads blue, not orange.
+        map.createPane('routePane');
+        map.getPane('routePane').style.zIndex = 650;
+        // Teardrops (network pins, blue halos, route pins) ride ABOVE the route dots
+        // so a dot never covers a teardrop's tail — the marker flows on top of the dot.
+        map.createPane('teardropPane');
+        map.getPane('teardropPane').style.zIndex = 660;
+
         // Swappable basemaps. Satellite is the default; the segmented control toggles to Carto Voyager.
         const BASEMAPS = {
             satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', opts: { attribution: 'Tiles &copy; Esri', maxZoom: 19 } },
@@ -1688,16 +1736,25 @@
         }
         setBasemap('satellite');
 
-        let routeLayers = [], startMarker = null, endMarker = null;
+        let routeLayers = [];                 // polylines, leg labels, training circle
+        let routeEndpointMarkers = [];        // origin / destination / stop markers (blue pin or blue-halo)
+        let _routeEndpoints = [];             // [{lat,lon,label}] of the active route's airports
+        let _routeChargerIdents = new Set();  // charger airports on the route → drawn blue, skipped by the orange layer
+        let _routeKey = '';                   // change-detection so the markers only rebuild when the route/toggle changes
+        let _showLegLabels = true;   // Map Options → Route → Show flight labels
         const clusters = {
             small_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
             medium_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
             large_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 })
         };
+        // A1 Step 2: reference layer of NRG2fly's real installed chargers (toggled
+        // independently of the airport-size filters via #nrgChargerToggle).
+        const nrgChargerLayer = L.layerGroup();
         // Only show the layers whose filter checkbox is ticked (Small is off by default).
         document.querySelectorAll('.airport-filter').forEach(cb => { if (cb.checked) map.addLayer(clusters[cb.value]); });
 
         let allAirports = [];
+        let nrgChargerDb = {};
         const airportByIdent = {};
         const selected = { origin: null, destination: null };
         let lastResult = null;
@@ -2312,7 +2369,7 @@
             document.getElementById('result').classList.add('d-none');
             lastResult = null;
             renderStops();
-            clearRoute();
+            clearRoute(); setRoute([]);   // route gone → revert any blue route teardrops to orange
         });
         // (advReserve was removed when the global Model settings took over reserve handling)
         // Switching planes re-plans the route (range changes auto-stops) AND must
@@ -2423,30 +2480,107 @@
             input.addEventListener('blur', () => setTimeout(() => { list.classList.add('d-none'); syncUnset(field); }, 150));
         }
 
+        // One orange airport dot with the Dep/Dest/Stop hover popup. Shared by the
+        // size-cluster layers and the NRG2fly network layer.
+        function _airportDot(ap) {
+            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: 7, fillColor: "#ff7800", color: "#000", weight: 1, opacity: 1, fillOpacity: 0.85 });
+            m.on('mouseover', function (e) {
+                L.popup().setLatLng(e.latlng).setContent(`
+                    <strong>${ap.name}</strong><br>
+                    <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as Departure</button>
+                    <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>
+                    <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${ap.ident}')">Set as Stop</button>`).openOn(map);
+            });
+            return m;
+        }
         async function loadAirports() {
             try {
-                const res = await fetch('/api/airports');
-                allAirports = await res.json();
+                const [airports, chargerDb] = await Promise.all([
+                    fetch('/api/airports').then(r => r.json()),
+                    fetch('/api/airport-chargers').then(r => r.json()).catch(() => ({})),
+                ]);
+                allAirports = airports;
+                nrgChargerDb = chargerDb || {};
+                const chargerIdents = new Set(Object.keys(nrgChargerDb));
                 const buckets = { small_airport: [], medium_airport: [], large_airport: [] };
                 allAirports.forEach(ap => {
                     airportByIdent[ap.ident] = ap;
+                    // Charger airports are managed by refreshNrgChargerLayer() instead of
+                    // the size buckets, so their dot can follow (size-filter OR network)
+                    // from a single source — skip here to avoid a duplicate dot.
+                    if (chargerIdents.has(ap.ident)) return;
                     if (!ap.latitude_deg || !ap.longitude_deg || !buckets[ap.type]) return;
-                    const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: 7, fillColor: "#ff7800", color: "#000", weight: 1, opacity: 1, fillOpacity: 0.85 });
-                    m.on('mouseover', function (e) {
-                        L.popup().setLatLng(e.latlng).setContent(`
-                            <strong>${ap.name}</strong><br>
-                            <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as Departure</button>
-                            <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>
-                            <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${ap.ident}')">Set as Stop</button>`).openOn(map);
-                    });
-                    buckets[ap.type].push(m);
+                    buckets[ap.type].push(_airportDot(ap));
                 });
                 Object.keys(buckets).forEach(t => clusters[t].addLayers(buckets[t]));
+                map.addLayer(nrgChargerLayer);      // always on the map; its contents are managed
+                refreshNrgChargerLayer();           // A1 Step 2 — coords are loaded now
+                // If a route was drawn before the charger DB arrived, its charger
+                // membership (halos / orange-layer skips) was computed blind — re-derive.
+                if (_routeEndpoints.length) { _routeKey = ''; setRoute(_routeEndpoints); }
             } catch (err) { console.error("Error loading airports", err); }
         }
 
+        // A1 Step 2: NRG2fly charger reference markers. Coords come from the airports
+        // DB (by ICAO); the inventory from /api/airport-chargers. Reference only —
+        // nothing here touches the planner, demand calculator, scheduler or PDF.
+        function _nrgPlugSummary(plugs) {
+            const groups = {};
+            (plugs || []).forEach(p => { const k = `${p.power_kw} kW ${p.connector}`; groups[k] = (groups[k] || 0) + 1; });
+            return Object.entries(groups).map(([k, n]) => `${n}× ${k}`).join(' · ');
+        }
+        // Is the size-filter checkbox for this airport category currently ticked?
+        function _sizeFilterOn(type) {
+            const cb = document.querySelector(`.airport-filter[value="${type}"]`);
+            return !!(cb && cb.checked);
+        }
+        // Rebuild the NRG2fly layer. Visibility model (per spec — the two are OR'd
+        // and independent: show_airport = airport_size OR nrg2fly_network):
+        //   orange dot = size-filter(ap) OR network-toggle  → the network layer sits
+        //                ON TOP of the size layers; hiding the network never hides a
+        //                medium/large airport the size filter still wants shown.
+        //   teardrop   = network-toggle only                → the NRG2fly badge,
+        //                floated above the dot so its Dep/Dest/Stop popup stays reachable.
+        // Charger airports live ONLY here (skipped from the size clusters), so this is
+        // the single source of their dot — no duplicates and the OR is exact.
+        function refreshNrgChargerLayer() {
+            nrgChargerLayer.clearLayers();
+            const t = document.getElementById('nrgChargerToggle');
+            const netOn = !t || t.checked;
+            const pin = '<span class="nrg-pin-head"><img class="nrg-pin-ico" src="/pics/logos/NRG2fly_icon_circle.png" alt=""></span><span class="nrg-pin-tail"></span>';
+            Object.entries(nrgChargerDb || {}).forEach(([icao, info]) => {
+                const ap = airportByIdent[icao];
+                if (!ap || ap.latitude_deg == null || ap.longitude_deg == null) return;
+                if (_routeChargerIdents.has(icao)) return;   // dep/dest charger → shown as the blue halo instead
+                // Dot: size filter OR network. Teardrop badge: network only.
+                if (netOn || _sizeFilterOn(ap.type)) nrgChargerLayer.addLayer(_airportDot(ap));
+                if (!netOn) return;
+                const plugs = info.plugs || [];
+                const m = L.marker([ap.latitude_deg, ap.longitude_deg], {
+                    icon: L.divIcon({ className: 'nrg-charger-wrap', iconSize: null, html: `<div class="nrg-charger-pin">${pin}</div>` }),
+                    pane: 'teardropPane', riseOnHover: true, zIndexOffset: 1000,
+                });
+                m.bindTooltip(`<strong>NRG2fly</strong> · ${info.name || icao}<br><span class="nrg-tip-sub">${plugs.length} plug${plugs.length !== 1 ? 's' : ''} — ${_nrgPlugSummary(plugs)}</span>`,
+                    { direction: 'top', className: 'nrg-tip', offset: [0, -44] });
+                nrgChargerLayer.addLayer(m);
+            });
+        }
+
+        // A1 Step 2: NRG2fly network toggle. Adds the teardrop badges and forces the
+        // charger-airport dots on regardless of size filter (OR semantics).
+        const _nrgToggle = document.getElementById('nrgChargerToggle');
+        // Toggling the network swaps each route airport between halo (on) and plain
+        // blue pin (off), so force setRoute to re-evaluate (reset the change key).
+        if (_nrgToggle) _nrgToggle.addEventListener('change', () => { _routeKey = ''; setRoute(_routeEndpoints); });
+        // Map Options → Route → Show flight labels (per-leg distance/time/energy pins).
+        const _legToggle = document.getElementById('legLabelToggle');
+        if (_legToggle) _legToggle.addEventListener('change', (e) => {
+            _showLegLabels = e.target.checked;
+            if (typeof drawLiveRoute === 'function') drawLiveRoute();
+        });
         document.querySelectorAll('.airport-filter').forEach(cb => cb.addEventListener('change', () => {
             if (cb.checked) map.addLayer(clusters[cb.value]); else map.removeLayer(clusters[cb.value]);
+            refreshNrgChargerLayer();   // charger-airport dots follow the size filters too (OR)
             // Re-plan AND redraw the live polyline. The planner refresh
             // alone wasn't enough — the map stayed on the previous red
             // over-range polyline until the user toggled "Plan with
@@ -2492,9 +2626,10 @@
         }
 
         function clearRoute() {
+            // Only the path layers. Endpoint markers are managed by setRoute /
+            // refreshRouteEndpoints (change-detected), so a same-route redraw doesn't
+            // tear them down and rebuild them — that's what avoids a blue/orange flash.
             routeLayers.forEach(l => map.removeLayer(l)); routeLayers = [];
-            if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
-            if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
         }
         // F5: per-leg label (distance · time · energy) centred on each leg.
         // Uses the backend leg metrics when present (after Simulate); otherwise
@@ -2518,6 +2653,7 @@
             };
         }
         function addLegLabel(a, b, leg) {
+            if (!_showLegLabels) return;   // hidden via Map Options → Route
             const e = _legEst(a, b);
             const dist   = leg && leg.distance_km   != null ? leg.distance_km   : e.dist;
             const timeH  = leg && leg.flight_time_h != null ? leg.flight_time_h : e.timeH;
@@ -2536,13 +2672,86 @@
             }).addTo(map);
             routeLayers.push(m);
         }
+        // ICAO of a charger airport sitting exactly at this coordinate, else null.
+        function _chargerAt(lat, lon) {
+            for (const icao in nrgChargerDb) {
+                const ap = airportByIdent[icao];
+                if (ap && Math.abs(ap.latitude_deg - lat) < 1e-4 && Math.abs(ap.longitude_deg - lon) < 1e-4) return icao;
+            }
+            return null;
+        }
+        // Marker for one airport on the active route. Per spec:
+        //   on the NRG2fly network AND the charger layer is on → the blue HALO teardrop
+        //   else (off-network, or charger sites toggled off)    → a standard blue pin
+        // Both live in routePane, above the orange catalog dots / network teardrops.
+        // A blue route dot — covers the orange catalog dot at a "used" airport, so a
+        // route airport always reads blue regardless of the charger DB (race-proof).
+        function _routeBlueDot(e, withTip) {
+            const m = L.circleMarker([e.lat, e.lon], {
+                radius: 9, fillColor: '#2563eb', color: '#fff', weight: 2.5, fillOpacity: 1, pane: 'routePane',
+            });
+            if (withTip) m.bindTooltip(e.label, { direction: 'top' });
+            return m;
+        }
+        // The departure/destination teardrop. Blue HALO when it's an active NRG2fly
+        // site (charger AND the network layer is on); otherwise a standard blue pin.
+        // Lives in teardropPane (above routePane) so it rides on top of the route dots.
+        function _routeTeardrop(e, netOn) {
+            const icao = _chargerAt(e.lat, e.lon);
+            if (icao && netOn) {
+                const html = '<div class="nrg-charger-pin route"><span class="nrg-pin-head"><img class="nrg-pin-ico" src="/pics/logos/NRG2fly_icon_circle.png" alt=""></span><span class="nrg-pin-tail"></span></div>';
+                const m = L.marker([e.lat, e.lon], {
+                    icon: L.divIcon({ className: 'nrg-charger-wrap', iconSize: null, html }),
+                    pane: 'teardropPane', zIndexOffset: 1000, riseOnHover: true,
+                });
+                const plugs = (nrgChargerDb[icao] || {}).plugs || [];
+                m.bindTooltip(`${e.label}<br><span class="nrg-tip-sub">NRG2fly · ${plugs.length} plug${plugs.length !== 1 ? 's' : ''}</span>`,
+                    { direction: 'top', offset: [0, -44], className: 'nrg-tip' });
+                return m;
+            }
+            const m = L.marker([e.lat, e.lon], { pane: 'teardropPane' });   // standard blue pin
+            m.bindTooltip(e.label, { direction: 'top' });
+            return m;
+        }
+        // Redraw the route markers from _routeEndpoints + the toggle. Per the model:
+        //   every route airport      → a blue dot (covers its orange catalog dot)
+        //   departure & destination  → always also a teardrop (halo if charger+on, else pin)
+        function refreshRouteEndpoints() {
+            routeEndpointMarkers.forEach(m => map.removeLayer(m)); routeEndpointMarkers = [];
+            const t = document.getElementById('nrgChargerToggle');
+            const netOn = !t || t.checked;
+            _routeEndpoints.forEach(e => {
+                const isEnd = e.role === 'dep' || e.role === 'dest';
+                routeEndpointMarkers.push(_routeBlueDot(e, !isEnd).addTo(map));   // dot carries the tip for stops
+                if (isEnd) routeEndpointMarkers.push(_routeTeardrop(e, netOn).addTo(map));
+            });
+        }
+        // Set the active route's airports (origin → stops → destination). The orange
+        // network layer skips these (they're drawn blue here instead) and the endpoint
+        // markers re-render. Change-detected (incl. toggle state) so a same-route
+        // redraw — the common live-preview case — neither rebuilds nor flickers.
+        function setRoute(endpoints) {
+            const t = document.getElementById('nrgChargerToggle');
+            const netOn = !t || t.checked;
+            const key = endpoints.map(e => `${e.lat.toFixed(4)},${e.lon.toFixed(4)}`).join('|') + '#' + (netOn ? 1 : 0);
+            if (key === _routeKey) return;
+            _routeKey = key;
+            _routeEndpoints = endpoints;
+            // Only dep/dest chargers are pulled from the orange layer (they become the
+            // blue HALO). A charger used as a STOP keeps its orange network teardrop —
+            // it still gets the blue "used" dot, but no halo (halo reads as endpoint).
+            _routeChargerIdents = new Set(
+                endpoints.filter(e => e.role === 'dep' || e.role === 'dest')
+                         .map(e => _chargerAt(e.lat, e.lon)).filter(Boolean));
+            refreshNrgChargerLayer();
+            refreshRouteEndpoints();
+        }
         function drawRoute(data) {
             clearRoute();
             const p1 = [data.origin.lat, data.origin.lon];
             const p2 = [data.destination.lat, data.destination.lon];
-            startMarker = L.marker(p1, { title: 'Departure: ' + data.origin.name }).addTo(map);
-
             if (data.trip_type === 'training') {
+                setRoute([{ lat: p1[0], lon: p1[1], label: 'Departure: ' + data.origin.name, role: 'dep' }]);
                 // Training: red circle around the origin. Radius = half the published
                 // training_range_km (a typical pattern reach: fly out, circle, return).
                 const radiusM = ((data.training_range_km || 0) / 2) * 1000;
@@ -2557,7 +2766,14 @@
                 return;
             }
 
-            endMarker = L.marker(p2, { title: 'Arrival: ' + data.destination.name }).addTo(map);
+            // Origin → stops → destination. Endpoint markers are drawn by setRoute
+            // (standard blue pin, or the blue-halo teardrop for active NRG2fly sites);
+            // here we only draw the flight path.
+            const endpoints = [{ lat: p1[0], lon: p1[1], label: 'Departure: ' + data.origin.name, role: 'dep' }];
+            (data.multi_leg && Array.isArray(data.stops) ? data.stops : []).forEach(s =>
+                endpoints.push({ lat: s.lat, lon: s.lon, label: s.name, role: 'stop' }));
+            endpoints.push({ lat: p2[0], lon: p2[1], label: 'Arrival: ' + data.destination.name, role: 'dest' });
+            setRoute(endpoints);
 
             // Per-leg colouring: legs flagged in data.legIssues (live preview)
             // get a red dashed segment so the operator sees at a glance which
@@ -2607,19 +2823,7 @@
                         back.addTo(map); routeLayers.push(back);
                     }
                 }
-                // stop markers
-                data.stops.forEach(s => {
-                    // Stop markers sit on top of the catalog airport markers
-                    // at the same coordinates — bigger radius + bringToFront
-                    // so they actually read as "this is a charging stop"
-                    // rather than being hidden behind the orange dot.
-                    const m = L.circleMarker([s.lat, s.lon], { radius: 9, fillColor: '#2563eb', color: '#fff', weight: 2.5, fillOpacity: 1 })
-                        .bindTooltip(`<strong>${s.name}</strong>`, { sticky: true })
-                        .addTo(map);
-                    if (m.bringToFront) m.bringToFront();
-                    routeLayers.push(m);
-                });
-                if (shouldFit) map.fitBounds(L.featureGroup(routeLayers.concat([startMarker, endMarker])).getBounds(), _fitPadding());
+                if (shouldFit) map.fitBounds(L.featureGroup(routeLayers).getBounds(), _fitPadding());
             } else {
                 // Single-leg: if the direct hop is over-range, draw a red
                 // dashed line instead of the blue/arc layer.
@@ -2654,7 +2858,7 @@
         // numbers — purely geometric. Once the user actually clicks Simulate,
         // drawRoute(data) replaces the preview with the full result.
         function drawLiveRoute() {
-            if (!selected.origin) { clearRoute(); return; }
+            if (!selected.origin) { clearRoute(); setRoute([]); return; }
             const tripType = document.getElementById('tripType').value;
             // Training: just the origin + a circle. Destination is irrelevant.
             if (tripType === 'training') {
@@ -2669,7 +2873,7 @@
                 });
                 return;
             }
-            if (!selected.destination) { clearRoute(); return; }
+            if (!selected.destination) { clearRoute(); setRoute([]); return; }
             // Any manual stops queued? Render as multi-leg chain.
             const stops = (plannedStops || []).map(s => ({ ident: s.ident, name: s.name, lat: s.lat, lon: s.lon }));
             // Compute which legs are over-range so drawRoute can colour them
