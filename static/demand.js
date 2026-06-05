@@ -212,9 +212,11 @@ window.CNSDemand = (function () {
     //   targetCurrent — null or 0..1, target at THIS airport
     //   targetOther   — null or 0..1, target at the OTHER airport (for HOME, the dest's target)
     //
-    // The retour helper does a full forward-walk of the cycle with BOTH ends'
-    // targets clamped to the minimum feasible (dep ≥ leg + reserve). That way
-    // arrival SoCs follow physically from the clamped departure SoCs, energy
+    // The retour helper does a full forward-walk of the cycle. HOME is the
+    // plane's BASE, so it always departs on a FULL charge regardless of any
+    // departure charge target (DCT) — the target only governs the DEST end
+    // (away from base), clamped to the minimum feasible (dep ≥ leg + reserve).
+    // That way arrival SoCs follow physically from the departure SoCs, energy
     // conservation holds (DEST_kWh + HOME_kWh = 2×leg always), AND the slider
     // can't produce an infeasible scenario where the plane departs with less
     // SoC than the next leg requires.
@@ -235,15 +237,14 @@ window.CNSDemand = (function () {
             const target = (targetCurrent != null ? targetCurrent : 1.0) * batt;
             return Math.max(0, target - arrival);
         }
-        // Retour: full forward-walk with clamped targets at BOTH ends.
-        const homeTargetRaw = role === 'home' ? targetCurrent : targetOther;
+        // Retour: full forward-walk. Only DEST honours a charge target.
         const destTargetRaw = role === 'dest' ? targetCurrent : targetOther;
         const minDep = leg + reserve;                      // minimum departure SoC at either airport
 
-        // HOME's effective departure SoC. If the operator didn't set a target,
-        // default to a full charge. Either way, never below the minimum needed
-        // to safely fly the outbound leg.
-        const depHome = Math.max((homeTargetRaw != null ? homeTargetRaw : 1.0) * batt, minDep);
+        // HOME is the BASE: the plane always departs base on a full charge, no
+        // matter what departure charge target (DCT) is set. (minDep ≤ batt, so
+        // a full battery is always feasible for the outbound leg.)
+        const depHome = batt;
         // Arrival at DEST is whatever's left after the outbound leg.
         const arrivalDest = Math.max(0, depHome - leg);
         // DEST's effective departure SoC. If no target, charge ONLY if arrival
@@ -266,10 +267,10 @@ window.CNSDemand = (function () {
     // change at one stop propagates correctly through every downstream stop.
     //
     // The forward walk:
-    //   • depart origin at full SoC (or origin's target SoC if set)
+    //   • depart origin (the BASE) at FULL SoC, regardless of any charge target
     //   • for each leg: consume leg energy, arrive at next waypoint
     //   • at each intermediate stop: charge to max(target * batt, next_leg + reserve)
-    //   • at the terminal: charge to (target * batt) or full if no target set
+    //   • at the terminal: full if it's the base (retour home), else (target * batt) or full
     //   • soc_after_charge becomes the departure SoC for the next leg
     //
     // getTargetSoc(ident) → number 0..1 or null  (the caller provides the lookup).
@@ -285,14 +286,10 @@ window.CNSDemand = (function () {
         const reserve = batt - usable;
         const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
 
-        // Depart origin at the originating airport's target SoC (default = full),
-        // but NEVER below what the first leg needs (leg + reserve). The route
-        // planner sizes legs assuming a feasible departure, so a low global
-        // charge target must not under-charge the plane into an infeasible first
-        // hop (e.g. departing at 80% when the opening leg needs ~99%).
-        const originTarget = getTargetSoc(trip.originIdent);
-        const firstLegE = ((legs[0] && legs[0].energy_kwh) || 0) * route;
-        let socKwh = Math.min(batt, Math.max((originTarget != null ? originTarget : 1.0) * batt, firstLegE + reserve));
+        // The origin is the plane's BASE: it always departs base on a FULL
+        // charge, regardless of any departure charge target (DCT). The target
+        // only governs charging at the away-from-base stops/terminus below.
+        let socKwh = batt;
 
         const out = baseCharges.map((c, i) => {
             const legE = ((legs[i] && legs[i].energy_kwh) || 0) * route;
@@ -302,7 +299,12 @@ window.CNSDemand = (function () {
 
             let departure;
             if (isLast) {
-                departure = (stopTarget != null ? stopTarget : 1.0) * batt;
+                // A retour's final waypoint IS the base (home) — top up to a
+                // full battery for the next rotation, ignoring the charge
+                // target. A one-way's final waypoint is the destination, which
+                // honours its target (or fills up when none is set).
+                const isBase = (trip.tripType === 'retour' && c.ident === trip.originIdent);
+                departure = (isBase ? 1.0 : (stopTarget != null ? stopTarget : 1.0)) * batt;
             } else {
                 const nextLegE = ((legs[i + 1] && legs[i + 1].energy_kwh) || 0) * route;
                 const minDeparture = nextLegE + reserve;

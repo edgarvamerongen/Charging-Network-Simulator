@@ -25,10 +25,14 @@ const REPO = path.resolve(__dirname, '..');
 function loadDemand(globalTarget) {
   const code = fs.readFileSync(path.join(REPO, 'static', 'demand.js'), 'utf8');
   const store = {};
+  // Optional CNSSettings stub so resolveTargetSoc's GLOBAL fallback is
+  // testable; `globalTarget` undefined => factor off (returns null). The file
+  // reads it both as `window.CNSSettings` and the bare `CNSSettings` global
+  // (same object in the browser), so expose it under both names here.
+  const CNSSettings = { chargeTargetDefault: () => (globalTarget == null ? null : globalTarget), routingFactor: () => 1.0 };
   const sandbox = {
-    // Optional CNSSettings stub so resolveTargetSoc's GLOBAL fallback is
-    // testable; `globalTarget` undefined => factor off (returns null).
-    window: { CNSSettings: { chargeTargetDefault: () => (globalTarget == null ? null : globalTarget) } },
+    CNSSettings,
+    window: { CNSSettings },
     CNSState: {
       KEYS: { folder: 'cns_folder', cfg: 'cns_airport_cfg' },
       getJSON: (k, d) => (k in store ? JSON.parse(JSON.stringify(store[k])) : d),
@@ -92,6 +96,49 @@ test('retour: conservation holds with explicit targets too', () => {
   const dest = D.deliveredEnergy({ tripType: 'retour' }, 'dest', leg, batt, batt, 1.0, 1.0);
   const home = D.deliveredEnergy({ tripType: 'retour' }, 'home', leg, batt, batt, 1.0, 1.0);
   assert.ok(approx(dest + home, 2 * leg), `dest ${dest} + home ${home} != ${2 * leg}`);
+});
+
+// ---- deliveredEnergy: BASE always departs at 100% (regardless of DCT) ------
+// The plane is based at HOME, so it always takes off from base on a full
+// charge no matter what departure charge target (DCT) is in effect — the
+// target only governs the away-from-base (destination) end.
+test('retour: HOME (base) departs full even with a low home target', () => {
+  const leg = 120, batt = 225;
+  // home target 0.6, dest target none. HOME must still depart at 100%, so the
+  // home recharge equals what a 100% departure needs — identical to a 1.0
+  // (or null) home target. Only the dest end would react to a target.
+  const homeLow  = D.deliveredEnergy({ tripType: 'retour' }, 'home', leg, batt, batt, 0.6, null);
+  const homeFull = D.deliveredEnergy({ tripType: 'retour' }, 'home', leg, batt, batt, 1.0, null);
+  const homeNull = D.deliveredEnergy({ tripType: 'retour' }, 'home', leg, batt, batt, null, null);
+  assert.ok(approx(homeLow, homeFull) && approx(homeLow, homeNull),
+    `home base should ignore its DCT: low ${homeLow}, full ${homeFull}, null ${homeNull}`);
+});
+
+test('retour: conservation still holds when only DEST has a low target', () => {
+  const leg = 120, batt = 225;
+  // dest target 0.6 (this end reacts), home (base) stays full.
+  const dest = D.deliveredEnergy({ tripType: 'retour' }, 'dest', leg, batt, batt, 0.6, null);
+  const home = D.deliveredEnergy({ tripType: 'retour' }, 'home', leg, batt, batt, null, 0.6);
+  assert.ok(approx(dest + home, 2 * leg), `dest ${dest} + home ${home} != ${2 * leg}`);
+});
+
+// ---- recomputeMultiLegCharges: BASE departs full regardless of DCT ---------
+test('multi-leg: origin (base) departs full, so the first stop only tops up its leg', () => {
+  // Origin → stop → dest, each leg 30 kWh, batt 100, no reserve. With the
+  // origin departing at 100% it arrives at the stop with 70; a GLOBAL 0.8
+  // target at the stop charges it to 80 → delivers 10. A non-base origin
+  // departing at 0.8 (the old behaviour) would have arrived at 50, charged 30.
+  const trip = {
+    multiLeg: true, tripType: 'one-way', originIdent: 'BASE', battery: 100,
+    legs: [{ energy_kwh: 30 }, { energy_kwh: 30 }],
+    charges: [
+      { ident: 'STOP', role: 'stop', at_index: 1, energy_kwh: 30 },
+      { ident: 'DEST', role: 'dest', at_index: 2, energy_kwh: 30 },
+    ],
+  };
+  // Global target 0.8 everywhere; the base must still depart at 100%.
+  const out = D.recomputeMultiLegCharges(trip, () => 0.8, 100);
+  assert.ok(approx(out[0].energy_kwh, 10), `stop after full-base departure should be 10, got ${out[0].energy_kwh}`);
 });
 
 // ---- deliveredEnergy: training cap ----------------------------------------
