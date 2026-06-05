@@ -62,3 +62,9 @@ before `airport-db`'s map layer.
   `scheduler.js recomputeMultiLegCharges` (forward walk) + `demand.js deliveredEnergy`;
   cascades to DES + demand calculator + PDF. Prefer a **Model-settings toggle**
   (charge-to-target vs charge-to-reach) over replacing current behaviour outright.
+- **planes.json `max_kw` → retire `c_rate` (raised 2026-06-04, model-settings review):**
+  add an explicit per-aircraft **`max_kw`** (max accepted charge power) to `planes.json` and
+  cap charging at `min(chargerKw, plane.max_kw)`. Then remove `c_rate` / `chargeTaper.cRate`
+  entirely (`settings.js effectiveChargePower`, the DEFAULT + accessor) — the C-rate slider
+  was already pulled from Model settings as redundant; the model still uses the 2.0C default
+  until `max_kw` replaces it.
