@@ -877,7 +877,7 @@
         .modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-lg); }
 
         /* Model-settings modal: one row per opt-in factor. */
-        .rs-row { padding: 12px 0; border-bottom: 1px solid var(--panel-border); }
+        .rs-row { padding: 9px 0; border-bottom: 1px solid var(--panel-border); }
         .rs-row:last-child { border-bottom: none; }
         .rs-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; font-size: .9rem; color: var(--ink); }
         .rs-toggle input[type=checkbox] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
@@ -887,6 +887,31 @@
         .rs-slider-row label { font-size: .8rem; color: var(--ink-soft); display: flex; justify-content: space-between; align-items: center; }
         .rs-val { color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; }
         .rs-help { font-size: .78rem; color: var(--muted); margin: 4px 0 0 0; line-height: 1.4; }
+        /* F8: 2-column grid + categories + hover [?] tooltips + full-width taper curve */
+        .rs-cat { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--primary); margin: 16px 0 7px; }
+        .rs-cat:first-of-type { margin-top: 4px; }
+        .rs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 24px; margin-bottom: 2px; }
+        .rs-cell-head { display: flex; align-items: center; gap: 6px; }
+        .rs-cell-head .rs-toggle { flex: 1; min-width: 0; font-size: .82rem; gap: 7px; }
+        .rs-cell-head .rs-toggle span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rs-static-label { flex: 1; min-width: 0; font-size: .82rem; font-weight: 600; color: var(--ink); }
+        .rs-cell-ctrl { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+        .rs-cell-ctrl .form-range { flex: 1; min-width: 0; height: 5px; padding: 0; }
+        .rs-cell-ctrl .rs-val { font-size: .74rem; min-width: 48px; text-align: right; }
+        .rs-cell:not(.on) .rs-cell-ctrl { opacity: .4; }
+        .rs-cell-static .rs-cell-ctrl { opacity: 1 !important; }
+        .rs-cell-wide { grid-column: 1 / -1; }
+        .rs-cell-wide .rs-cell-ctrl .form-range { flex: 0 1 230px; }
+        .rs-q { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #cbd5e1; background: #fff; color: var(--muted); font-size: .66rem; font-weight: 700; line-height: 15px; text-align: center; cursor: help; display: inline-block; user-select: none; }
+        .rs-q:hover, .rs-q:focus { background: var(--primary); color: #fff; border-color: var(--primary); outline: none; }
+        .rs-q-inline { width: 14px; height: 14px; line-height: 13px; font-size: .6rem; vertical-align: middle; }
+        .rs-curve { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--panel-border); }
+        .rs-curve:not(.on) .rs-curve-body { opacity: .4; }
+        .rs-curve-body { margin-top: 6px; }
+        .taper-curve { display: block; width: 100%; height: auto; background: #f8fafc; border: 1px solid var(--panel-border); border-radius: var(--radius-sm); margin-bottom: 6px; }
+        .rs-curve-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; }
+        .rs-curve-sliders .rs-cell-ctrl { margin-top: 0; }
+        .rs-mini-l { font-size: .72rem; color: var(--muted); min-width: 32px; }
 
         /* Badge on the trigger button — shows the count of active factors. */
         .model-badge {
@@ -1414,84 +1439,84 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="est-note mb-3">
-                        Each toggle layers an operational model factor on top of the simple physical model.
-                        When off, the model behaves exactly as before. When on, the factor cascades through
-                        the result panel, demand calculator, scheduler and PDF report.
+                    <p class="est-note mb-2">
+                        Operational model factors layered on the physical model — they cascade through the result
+                        panel, demand calculator, scheduler and PDF. Hover <span class="rs-q rs-q-inline">?</span> for detail.
                     </p>
 
-                    <!-- 1. Landing reserve -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsLandingReserve">
-                            <span>Account for landing reserve (minimum SoC)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Minimum landing SoC <span class="rs-val" id="rsMinSocVal">30%</span></label>
+                    <div class="rs-cat">Available range</div>
+                    <div class="rs-grid">
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsLandingReserve"><span>Landing reserve</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Minimum state of charge each aircraft must land with — applied uniformly across the fleet.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
                                 <input type="range" id="rsMinSoc" min="5" max="50" step="5" value="30" class="form-range">
+                                <span class="rs-val" id="rsMinSocVal">30%</span>
                             </div>
-                            <p class="rs-help">Each aircraft must land with at least this state of charge. Applied uniformly across the whole fleet.</p>
                         </div>
-                    </div>
-
-                    <!-- 2. Routing padding (SID/STAR + airways) -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsRouting">
-                            <span>Apply routing padding (SID/STAR + airways)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Distance multiplier <span class="rs-val" id="rsRoutingVal">×1.05</span></label>
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsRouting"><span>Routing padding</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Multiplier on great-circle distance for SID/STAR + airways. EUROCONTROL average is ~3–8% over GC.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
                                 <input type="range" id="rsRoutingSl" min="100" max="125" step="1" value="105" class="form-range">
+                                <span class="rs-val" id="rsRoutingVal">×1.05</span>
                             </div>
-                            <p class="rs-help">Multiplier on great-circle distance to approximate standardised departure/arrival procedures and airway constraints. EUROCONTROL average is ~3–8% over GC.</p>
                         </div>
                     </div>
 
-                    <!-- 3. Charger efficiency -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsChargerEff">
-                            <span>Apply charger efficiency (grid → cell losses)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Grid-to-cell efficiency <span class="rs-val" id="rsChargerEffVal">88%</span></label>
-                                <input type="range" id="rsChargerEffSl" min="50" max="100" step="1" value="88" class="form-range">
+                    <div class="rs-cat">Charging</div>
+                    <div class="rs-grid">
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsChargeTarget"><span>Charge target</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="SoC every aircraft charges to before departing; a per-airport target overrides it. Off = charge only the deficit for the next leg.">?</span>
                             </div>
-                            <p class="rs-help">AC→DC conversion + battery losses. Reported grid kWh = aircraft kWh / efficiency. Typical direct DC fast charging: ~88%; with a buffering BESS: ~80%.</p>
-                        </div>
-                    </div>
-
-                    <!-- 4. Charging curve (C-rate cap + CV taper) -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsTaper">
-                            <span>Apply charging curve (C-rate cap + taper above 70% SoC)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Default charge C-rate <span class="rs-val" id="rsTaperCRateVal">2.0C</span></label>
-                                <input type="range" id="rsTaperCRate" min="5" max="60" step="1" value="20" class="form-range">
-                            </div>
-                            <p class="rs-help">Models the real charging curve: power runs flat at min(charger kW, C-rate × battery kWh) up to ~70% SoC, then rolls off exponentially toward a low floor at 100% (a realistic CV taper). The C-rate cap means a small pack can't absorb an over-sized charger (e.g. a 3.75 MW MCS into a 22 kWh Pipistrel); the taper stretches the final top-up. Aircraft with a published <code>c_rate</code> use their own value; others use this default. Typical fast-charge C-rates: 1–3C.</p>
-                        </div>
-                    </div>
-
-                    <!-- 5. Default charge target (departure SoC) -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsChargeTarget">
-                            <span>Apply a default charge target (departure SoC)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Default charge target <span class="rs-val" id="rsChargeTargetVal">80%</span></label>
+                            <div class="rs-cell-ctrl">
                                 <input type="range" id="rsChargeTargetSl" min="50" max="100" step="5" value="80" class="form-range">
+                                <span class="rs-val" id="rsChargeTargetVal">80%</span>
                             </div>
-                            <p class="rs-help">The state of charge every aircraft charges to before departing, unless a specific airport overrides it in the demand calculator (a LOCAL target always wins over this GLOBAL default). When off, the model charges only the deficit needed for the next leg and tops the terminus to full — the original behaviour.</p>
+                        </div>
+                    </div>
+                    <!-- Charging curve (CC → CV taper) — full width with live chart (F9) -->
+                    <div class="rs-curve">
+                        <div class="rs-cell-head">
+                            <label class="rs-toggle"><input type="checkbox" id="rsTaper"><span>Charging curve (CC → CV taper)</span></label>
+                            <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Power runs flat to the knee SoC, then rolls off exponentially toward the floor at 100% — a realistic CV taper that stretches the final top-up.">?</span>
+                        </div>
+                        <div class="rs-curve-body">
+                            <svg id="taperCurve" class="taper-curve" viewBox="0 0 320 72" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Charge power vs state of charge"></svg>
+                            <div class="rs-curve-sliders">
+                                <div class="rs-cell-ctrl"><label class="rs-mini-l">Knee</label><input type="range" id="rsTaperThr" min="40" max="95" step="5" value="70" class="form-range"><span class="rs-val" id="rsTaperThrVal">70%</span></div>
+                                <div class="rs-cell-ctrl"><label class="rs-mini-l">Floor</label><input type="range" id="rsTaperFloor" min="5" max="90" step="5" value="15" class="form-range"><span class="rs-val" id="rsTaperFloorVal">15%</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rs-cat">Revenue</div>
+                    <div class="rs-grid">
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsChargerEff"><span>Charger efficiency</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="AC→DC + battery losses. Grid kWh = aircraft kWh ÷ efficiency (~88% DC fast). Drives grid demand (cost), not the billed revenue.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <input type="range" id="rsChargerEffSl" min="50" max="100" step="1" value="88" class="form-range">
+                                <span class="rs-val" id="rsChargerEffVal">88%</span>
+                            </div>
+                        </div>
+                        <div class="rs-cell rs-cell-static">
+                            <div class="rs-cell-head">
+                                <label class="rs-static-label">Charging price</label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Tariff per kWh delivered to aircraft — drives the result panel's Airport revenue. Informational only; does not change energy or timing.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <input type="range" id="rsChargeRateSl" min="0" max="200" step="5" value="60" class="form-range">
+                                <span class="rs-val" id="rsChargeRateVal">€0.60/kWh</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3272,7 +3297,10 @@
             const map = {
                 landingReserve:    { check: 'rsLandingReserve', extras: { minLandingSoc: { input: 'rsMinSoc',     valEl: 'rsMinSocVal',     fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 chargerEfficiency: { check: 'rsChargerEff',    extras: { value:         { input: 'rsChargerEffSl', valEl: 'rsChargerEffVal', fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
-                chargeTaper:       { check: 'rsTaper',         extras: { cRate:         { input: 'rsTaperCRate',   valEl: 'rsTaperCRateVal', fmt: (v) => `${(v / 10).toFixed(1)}C`,             to: (v) => v / 10,  from: (v) => Math.round(v * 10) } } },
+                chargeTaper:       { check: 'rsTaper',         extras: {
+                    threshold:  { input: 'rsTaperThr',   valEl: 'rsTaperThrVal',   fmt: (v) => `${v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
+                    taperPower: { input: 'rsTaperFloor', valEl: 'rsTaperFloorVal', fmt: (v) => `${v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
+                } },
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 chargeTarget:      { check: 'rsChargeTarget',  extras: { value:         { input: 'rsChargeTargetSl', valEl: 'rsChargeTargetVal', fmt: (v) => `${v}%`,                              to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
@@ -3281,7 +3309,7 @@
                 const s = CNSSettings.loadAll();
                 Object.entries(map).forEach(([key, m]) => {
                     const cb = document.getElementById(m.check);
-                    const row = cb && cb.closest('.rs-row');
+                    const row = cb && cb.closest('.rs-cell, .rs-curve');
                     if (cb) cb.checked = !!s[key].enabled;
                     if (row) row.classList.toggle('on', !!s[key].enabled);
                     Object.entries(m.extras).forEach(([field, ex]) => {
@@ -3292,6 +3320,8 @@
                     });
                 });
                 updateBadge();
+                syncRate();
+                drawTaperCurve();
             }
             function commit(key, patch) {
                 CNSSettings.save({ [key]: patch });
@@ -3323,6 +3353,64 @@
                     }
                 });
             });
+
+            // C1a: charging price — no enable toggle, it always applies to revenue.
+            const rateSl = document.getElementById('rsChargeRateSl');
+            const rateVal = document.getElementById('rsChargeRateVal');
+            const fmtRate = (cents) => `€${(cents / 100).toFixed(2)}/kWh`;
+            function syncRate() {
+                const v = (CNSSettings.loadAll().chargeRate || {}).value;
+                const cents = Math.round((v != null ? v : 0.60) * 100);
+                if (rateSl) rateSl.value = cents;
+                if (rateVal) rateVal.textContent = fmtRate(cents);
+            }
+            if (rateSl) {
+                rateSl.addEventListener('input', () => { if (rateVal) rateVal.textContent = fmtRate(+rateSl.value); });
+                rateSl.addEventListener('change', () => CNSSettings.save({ chargeRate: { value: +rateSl.value / 100 } }));
+            }
+
+            // F9: live SoC -> effective-power curve, normalised to the C-rate-capped
+            // peak. Flat to the knee, then exponential roll-off to the floor at 100%
+            // SoC — the same shape the chargeTimeMin taper model uses.
+            function drawTaperCurve() {
+                const svg = document.getElementById('taperCurve');
+                if (!svg) return;
+                const thrEl = document.getElementById('rsTaperThr'), flEl = document.getElementById('rsTaperFloor');
+                const thr = thrEl ? Math.max(0.05, Math.min(0.95, +thrEl.value / 100)) : 0.70;
+                const floor = flEl ? Math.max(0.02, Math.min(0.95, +flEl.value / 100)) : 0.15;
+                const W = 320, H = 72, mL = 26, mR = 8, mT = 8, mB = 13;
+                const px = soc => mL + soc * (W - mL - mR);
+                const py = p => (H - mB) - p * (H - mT - mB);
+                const pts = [];
+                for (let i = 0; i <= 100; i++) {
+                    const soc = i / 100;
+                    const P = soc < thr ? 1 : Math.pow(floor, (soc - thr) / Math.max(1e-6, 1 - thr));
+                    pts.push(px(soc).toFixed(1) + ',' + py(P).toFixed(1));
+                }
+                let g = '';
+                [0, 0.5, 1].forEach(p => { g += `<line x1="${mL}" y1="${py(p)}" x2="${W - mR}" y2="${py(p)}" stroke="#e2e8f0"/><text x="${mL - 3}" y="${py(p) + 3}" font-size="7" text-anchor="end" fill="#94a3b8">${p * 100}</text>`; });
+                [0, 0.5, 1].forEach(s => { g += `<text x="${px(s)}" y="${H - 7}" font-size="7" text-anchor="middle" fill="#94a3b8">${s * 100}%</text>`; });
+                const knee = `<line x1="${px(thr)}" y1="${py(0)}" x2="${px(thr)}" y2="${py(1)}" stroke="#f59e0b" stroke-dasharray="3 2"/><text x="${px(thr)}" y="${mT + 5}" font-size="7" text-anchor="middle" fill="#d97706">knee</text>`;
+                const area = `M${px(0)},${py(0)} L${pts.join(' L')} L${px(1)},${py(0)} Z`;
+                svg.innerHTML = g + knee
+                    + `<path d="${area}" fill="rgba(37,99,235,.12)"/>`
+                    + `<polyline fill="none" stroke="#2563eb" stroke-width="2" points="${pts.join(' ')}"/>`
+                    + `<text x="2" y="9" font-size="7" fill="#64748b">power %</text>`;
+            }
+            ['rsTaperThr', 'rsTaperFloor'].forEach(id => {
+                const sl = document.getElementById(id);
+                if (sl) sl.addEventListener('input', drawTaperCurve);
+            });
+
+            // F8: hover tooltips on the [?] markers (Bootstrap, body-anchored so they
+            // don't clip inside the modal).
+            document.querySelectorAll('#modelSettingsModal .rs-q[data-bs-toggle="tooltip"]').forEach(el => {
+                try { new bootstrap.Tooltip(el, { container: 'body', trigger: 'hover focus', placement: 'top' }); } catch (e) {}
+            });
+
+            // Redraw the curve + refresh the price whenever the modal opens.
+            const _msModal = document.getElementById('modelSettingsModal');
+            if (_msModal) _msModal.addEventListener('shown.bs.modal', syncFromState);
 
             // Apply settings — explicitly fan out the current state through
             // every subscriber, even if the user didn't change any control
