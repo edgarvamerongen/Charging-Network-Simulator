@@ -615,12 +615,53 @@
             border: 1px solid var(--panel-border); box-shadow: var(--shadow);
             border-radius: 999px; padding: 10px 22px;
             font-size: .92rem; font-weight: 600; color: var(--ink); cursor: pointer;
-            white-space: nowrap; transition: background .15s, box-shadow .15s;
+            white-space: nowrap;
+            transition: background .28s ease, box-shadow .28s ease, color .22s ease, border-color .22s ease;
         }
         .drawer-handle:hover { background: #fff; box-shadow: var(--shadow-lg); }
-        .drawer-handle .chevron { display: inline-block; transition: transform .25s; font-size: .8em; }
+        .drawer-handle .chevron { display: inline-block; transition: transform .25s, opacity .22s; font-size: .8em; }
         .drawer.open .drawer-handle .chevron { transform: rotate(180deg); }
         .drawer-handle .handle-sub { font-weight: 400; color: var(--muted); font-size: .82rem; }
+
+        /* The handle hosts three overlaid states — normal / hover-action /
+           added-confirmation — stacked in one grid cell. The pill sizes to the
+           widest state (the normal label), so the others simply CROSS-FADE in
+           place: this is what lets the DC handle "morph" into the success bar
+           without a second element that could sit on top of it. */
+        .drawer-handle .handle-stack { display: grid; align-items: center; }
+        .drawer-handle .handle-layer {
+            grid-area: 1 / 1; display: flex; align-items: center; gap: 8px;
+            white-space: nowrap; transition: opacity .22s ease;
+        }
+        .drawer-handle .handle-title { font-weight: 600; }
+        .drawer-handle .handle-action,
+        .drawer-handle .handle-confirm { opacity: 0; pointer-events: none; }
+        .drawer-handle .handle-confirm { justify-content: center; }
+
+        /* Hover swaps the label to an explicit action verb. */
+        .drawer-handle .act-close { display: none; }
+        .drawer.open .drawer-handle .act-open { display: none; }
+        .drawer.open .drawer-handle .act-close { display: inline; }
+        .drawer-handle:hover .handle-normal { opacity: 0; }
+        .drawer-handle:hover .handle-action { opacity: 1; }
+
+        /* Confirmation: the pill morphs into the navy "added" bar — white text,
+           a green check — then morphs back (toggled by JS for ~1.5s). It wins
+           over :hover so a hover mid-confirm doesn't flip it back. */
+        .drawer-handle.confirming,
+        .drawer-handle.confirming:hover {
+            background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+            border-color: transparent; color: #fff; box-shadow: var(--shadow-lg);
+        }
+        .drawer-handle.confirming .chevron { opacity: 0; }
+        .drawer-handle.confirming .handle-normal,
+        .drawer-handle.confirming .handle-action { opacity: 0; }
+        .drawer-handle.confirming .handle-confirm { opacity: 1; }
+        .drawer-handle .hc-check {
+            flex-shrink: 0; display: inline-grid; place-items: center;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: var(--success); color: #fff; font-size: .72rem; font-weight: 700;
+        }
 
         .drawer-body {
             position: absolute; left: 16px; right: 16px; bottom: 70px;
@@ -766,46 +807,13 @@
 
         /* =========================================================
            "Route added" success feedback
-           Proven HCI patterns (see the #addFolder handler for the
-           rationale): a non-modal snackbar toast that names what was
-           added + offers Undo, paired with a highlight-fade on the
-           airport card(s) the new flight touched and a small button
-           pulse. Motion is suppressed under prefers-reduced-motion.
+           The bottom-centre Demand-Calculator handle itself morphs into a
+           success bar (see the .drawer-handle rules + the #addFolder
+           handler) so the confirmation never collides with the open-the-
+           drawer affordance. Two companion cues live here: a highlight-fade
+           on the airport card(s) the new flight touched, and a small pulse
+           on the Add button. Motion is suppressed under prefers-reduced-motion.
            ========================================================= */
-        .cns-toast-wrap {
-            position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-            z-index: 2000; display: flex; flex-direction: column; gap: 10px;
-            align-items: center; pointer-events: none;
-        }
-        .cns-toast {
-            pointer-events: auto;
-            display: inline-flex; align-items: center; gap: 12px;
-            max-width: min(92vw, 460px);
-            background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
-            color: #fff; border-radius: 999px;
-            padding: 12px 16px 12px 14px;
-            box-shadow: var(--shadow-lg);
-            font-size: .9rem; font-weight: 500; line-height: 1.25;
-            animation: cns-toast-in .32s cubic-bezier(.2,.9,.25,1) both;
-        }
-        .cns-toast.leaving { animation: cns-toast-out .28s ease forwards; }
-        .cns-toast-icon {
-            flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
-            display: grid; place-items: center; line-height: 1;
-            background: var(--success); color: #fff; font-size: .82rem; font-weight: 700;
-        }
-        .cns-toast-msg { flex: 1 1 auto; }
-        .cns-toast-action {
-            flex-shrink: 0; border: none; background: transparent;
-            color: var(--brand-gold); font: inherit; font-weight: 700;
-            text-transform: uppercase; letter-spacing: .04em; font-size: .78rem;
-            padding: 4px 9px; border-radius: 8px; cursor: pointer;
-            transition: background .15s;
-        }
-        .cns-toast-action:hover { background: rgba(255,255,255,.14); }
-        @keyframes cns-toast-in  { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
-        @keyframes cns-toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px) scale(.98); } }
-
         /* Highlight-fade ("yellow fade technique", 37signals): briefly washes
            the touched card with a green glow + tint, then recedes so it doesn't
            linger as visual noise. Uses box-shadow only (inc. a large-spread
@@ -823,11 +831,12 @@
         @keyframes cns-btn-pop { 0% { transform: none; } 42% { transform: scale(1.045); } 100% { transform: none; } }
 
         /* Keep the confirmation, drop the movement. animation-duration is kept
-           non-zero so the JS animationend cleanup still fires. */
+           non-zero so the JS animationend cleanup still fires; the handle morph
+           falls back to an instant state swap. */
         @media (prefers-reduced-motion: reduce) {
-            .cns-toast, .cns-toast.leaving { animation-duration: 1ms; }
             .cns-card-flash { animation-duration: 1ms; }
             .btn-cns-success.is-added { animation: none; }
+            .drawer-handle, .drawer-handle .handle-layer, .drawer-handle .chevron { transition: none; }
         }
 
         /* =========================================================
@@ -1285,8 +1294,20 @@
     <section class="drawer" id="demandDrawer">
         <button class="drawer-handle" id="drawerToggle" type="button">
             <span class="chevron">▴</span>
-            <span>Demand Calculator</span>
-            <span class="handle-sub" id="drawerSub">— add flights to project the charging load</span>
+            <span class="handle-stack">
+                <span class="handle-layer handle-normal">
+                    <span class="handle-title">Demand Calculator</span>
+                    <span class="handle-sub" id="drawerSub">— add flights to project the charging load</span>
+                </span>
+                <span class="handle-layer handle-action" aria-hidden="true">
+                    <span class="act-open">Open Demand Calculator</span>
+                    <span class="act-close">Close Demand Calculator</span>
+                </span>
+                <span class="handle-layer handle-confirm" aria-hidden="true">
+                    <span class="hc-check">✓</span> Route added
+                </span>
+            </span>
+            <span id="addLive" class="visually-hidden" role="status" aria-live="polite"></span>
         </button>
         <div class="drawer-body">
             <button type="button" id="drawerClose" class="drawer-close" title="Close" aria-label="Close demand calculator">×</button>
@@ -3074,54 +3095,23 @@
         // HCI rationale: the demand-calculator list lives in a drawer that is
         // usually closed when the user clicks "Add to demand calculator", so a
         // silent state change has poor "visibility of system status" (Nielsen #1).
-        // We confirm with a Material-style snackbar that (a) NAMES the route so
-        // the user trusts the right thing was captured (recognition over recall),
-        // (b) offers UNDO so the commit is reversible (Nielsen #3, "user control
-        // & freedom") — cheaper and less anxious than a confirm dialog, and
-        // (c) auto-dismisses (~5s) so it never blocks. role=status + aria-live
-        // announce it to assistive tech; the snackbar pairs icon + text + colour
-        // so it never relies on colour alone.
-        const CNSToast = (function () {
-            let wrap = null;
-            function ensureWrap() {
-                if (wrap && document.body.contains(wrap)) return wrap;
-                wrap = document.createElement('div');
-                wrap.className = 'cns-toast-wrap';
-                wrap.setAttribute('role', 'status');
-                wrap.setAttribute('aria-live', 'polite');
-                document.body.appendChild(wrap);
-                return wrap;
-            }
-            function show(message, opts = {}) {
-                const w = ensureWrap();
-                const t = document.createElement('div');
-                t.className = 'cns-toast';
-                const icon = document.createElement('span');
-                icon.className = 'cns-toast-icon'; icon.setAttribute('aria-hidden', 'true');
-                icon.textContent = '✓';
-                const msg = document.createElement('span');
-                msg.className = 'cns-toast-msg'; msg.textContent = message;
-                t.append(icon, msg);
-                let timer;
-                const dismiss = () => {
-                    clearTimeout(timer);
-                    if (!t.isConnected) return;
-                    t.classList.add('leaving');
-                    t.addEventListener('animationend', () => t.remove(), { once: true });
-                    setTimeout(() => t.remove(), 500);   // fallback if animation is suppressed
-                };
-                if (opts.actionLabel && typeof opts.onAction === 'function') {
-                    const btn = document.createElement('button');
-                    btn.type = 'button'; btn.className = 'cns-toast-action';
-                    btn.textContent = opts.actionLabel;
-                    btn.addEventListener('click', () => { opts.onAction(); dismiss(); });
-                    t.appendChild(btn);
-                }
-                w.appendChild(t);
-                timer = setTimeout(dismiss, opts.duration || 5000);
-                return t;
-            }
-            return { show };
+        // Rather than overlay a separate toast (which sat on top of the open-the-
+        // drawer handle), the handle pill itself briefly MORPHS into a success bar
+        // and back — one element, so it can never block the affordance it shares a
+        // spot with. It's a pure ~1.5s visual confirmation (no Undo: a stray add
+        // is one click to remove via the × on its row). The route name is pushed
+        // to a visually-hidden aria-live region so assistive tech still hears it.
+        const confirmRouteAdded = (function () {
+            let timer;
+            return function (label) {
+                const live = document.getElementById('addLive');
+                if (live) { live.textContent = ''; live.textContent = `Route added to Demand Calculator${label ? ': ' + label : ''}`; }
+                const h = document.getElementById('drawerToggle');
+                if (!h) return;
+                h.classList.add('confirming');
+                clearTimeout(timer);
+                timer = setTimeout(() => h.classList.remove('confirming'), 1500);
+            };
         })();
 
         // Briefly highlight the airport card(s) a freshly-added flight touched,
@@ -3184,18 +3174,16 @@
             trips.push(trip);
             saveFolder(trips); renderFolder();
 
-            // Confirm the add with three layered signals (see CNSToast above):
-            // button pulse → snackbar w/ Undo → highlight-fade on the card(s) hit.
+            // Confirm the add with three layered signals: button pulse (at the
+            // cursor) → the DC handle morphs into the "Route added" bar → a
+            // highlight-fade on the airport card(s) the flight touched.
             const btn = document.getElementById('addFolder');
             btn.classList.remove('is-added'); void btn.offsetWidth; btn.classList.add('is-added');
             btn.textContent = '✓ Added';
             setTimeout(() => { btn.classList.remove('is-added'); btn.textContent = '+ Add to demand calculator'; }, 1400);
 
             flashFolderCards([trip.originIdent, trip.destIdent]);
-            CNSToast.show(`Route added — ${d._origin.name} → ${d._dest.name}`, {
-                actionLabel: 'Undo',
-                onAction: () => { saveFolder(loadFolder().filter(t => t.id !== trip.id)); renderFolder(); },
-            });
+            confirmRouteAdded(`${d._origin.name} → ${d._dest.name}`);
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
         document.getElementById('generateReport').addEventListener('click', (e) => CNSReport.generate(e.currentTarget));
