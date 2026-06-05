@@ -579,12 +579,23 @@ window.CNSTour = (function () {
             await _seedDemoForm();
         }
         const D = window.driver.js.driver;
+        // Esc must always exit the tour. Driver.js (v1.3.1) only honours Esc when
+        // allowClose is true — but we keep allowClose:false so outside-clicks
+        // don't end the tour (see below). So bind our own Esc handler. Capture
+        // phase fires it before the planner's autocomplete reads the key; it is
+        // removed in onDestroyed so it never outlives the tour.
+        const _onEsc = (e) => {
+            if (e.key === 'Escape' && _activeDriver) {
+                e.preventDefault();
+                try { _activeDriver.destroy(); } catch (err) {}
+            }
+        };
         _activeDriver = D({
             showProgress: true,
             // Don't close the tour when the user clicks outside the popover —
             // otherwise interacting with the page (e.g. dragging the speed slider
             // or panning the map on the Overview step) ends the tour unexpectedly.
-            // Deliberate exit is via the footer Close button or Esc.
+            // Deliberate exit is via the footer Close button or Esc (bound above).
             allowClose: false,
             showButtons: ['next', 'previous', 'close'],
             stagePadding: 6,
@@ -594,6 +605,7 @@ window.CNSTour = (function () {
             // the tour is open (no input blocking).
             disableActiveInteraction: false,
             onDestroyed: () => {
+                document.removeEventListener('keydown', _onEsc, true);
                 _activeDriver = null;
                 try { CNSState.setJSON(KEY_DONE, true); } catch (e) {}
             },
@@ -601,6 +613,7 @@ window.CNSTour = (function () {
         });
         _warnMissingAnchors();
         _activeDriver.drive();
+        document.addEventListener('keydown', _onEsc, true);
     }
 
     // ---- drift detection ------------------------------------------------------
