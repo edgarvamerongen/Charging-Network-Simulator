@@ -231,11 +231,12 @@ window.CNSDemand = (function () {
         if (trip.tripType === 'training') {
             return Math.min(leg, usable);
         }
-        // One-way arrival: airport tops the plane up to the target (default 100%).
+        // One-way flight: it departs its BASE at 100% and, on arrival at the
+        // destination (where the plane parks), charges back to a FULL battery.
+        // A one-way trip ignores the departure charge target (DCT) at both ends.
         if (trip.tripType !== 'retour') {
             const arrival = Math.max(0, batt - leg);
-            const target = (targetCurrent != null ? targetCurrent : 1.0) * batt;
-            return Math.max(0, target - arrival);
+            return Math.max(0, batt - arrival);
         }
         // Retour: full forward-walk. Only DEST honours a charge target.
         const destTargetRaw = role === 'dest' ? targetCurrent : targetOther;
@@ -270,7 +271,7 @@ window.CNSDemand = (function () {
     //   • depart origin (the BASE) at FULL SoC, regardless of any charge target
     //   • for each leg: consume leg energy, arrive at next waypoint
     //   • at each intermediate stop: charge to max(target * batt, next_leg + reserve)
-    //   • at the terminal: full if it's the base (retour home), else (target * batt) or full
+    //   • at the terminal (retour base or one-way destination): always full
     //   • soc_after_charge becomes the departure SoC for the next leg
     //
     // getTargetSoc(ident) → number 0..1 or null  (the caller provides the lookup).
@@ -299,12 +300,11 @@ window.CNSDemand = (function () {
 
             let departure;
             if (isLast) {
-                // A retour's final waypoint IS the base (home) — top up to a
-                // full battery for the next rotation, ignoring the charge
-                // target. A one-way's final waypoint is the destination, which
-                // honours its target (or fills up when none is set).
-                const isBase = (trip.tripType === 'retour' && c.ident === trip.originIdent);
-                departure = (isBase ? 1.0 : (stopTarget != null ? stopTarget : 1.0)) * batt;
+                // The terminal is always topped up to a FULL battery, ignoring
+                // the charge target (DCT): a retour's final waypoint is the home
+                // base (full for the next rotation) and a one-way's is the
+                // destination where the plane parks (charged to 100% on arrival).
+                departure = batt;
             } else {
                 const nextLegE = ((legs[i + 1] && legs[i + 1].energy_kwh) || 0) * route;
                 const minDeparture = nextLegE + reserve;

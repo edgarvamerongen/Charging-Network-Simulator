@@ -64,10 +64,13 @@ test('one-way arrival: charge == leg when departing/ending full', () => {
   assert.ok(approx(e, 90), `got ${e}`);
 });
 
-test('one-way arrival: lower target reduces delivered energy', () => {
-  // target 0.8 -> 0.8*225 - 135 = 45.
-  const e = D.deliveredEnergy({ tripType: 'one-way' }, 'dest', 90, 225, 225, 0.8, null);
-  assert.ok(approx(e, 0.8 * 225 - 135), `got ${e}`);
+test('one-way arrival: charges to 100% even with a low target (ignores DCT)', () => {
+  // A one-way flight departs base full and tops back up to 100% on arrival,
+  // regardless of the charge target: batt 225, leg 90 -> arrival 135, fills to
+  // 225 -> delivers 90 (the full leg) whether the target is 0.8 or unset.
+  const low  = D.deliveredEnergy({ tripType: 'one-way' }, 'dest', 90, 225, 225, 0.8, null);
+  const none = D.deliveredEnergy({ tripType: 'one-way' }, 'dest', 90, 225, 225, null, null);
+  assert.ok(approx(low, 90) && approx(none, 90), `one-way arrival should ignore DCT: low ${low}, none ${none}`);
 });
 
 // ---- deliveredEnergy: retour energy conservation --------------------------
@@ -136,9 +139,12 @@ test('multi-leg: origin (base) departs full, so the first stop only tops up its 
       { ident: 'DEST', role: 'dest', at_index: 2, energy_kwh: 30 },
     ],
   };
-  // Global target 0.8 everywhere; the base must still depart at 100%.
+  // Global target 0.8 everywhere; the base must still depart at 100% and the
+  // one-way destination must charge to 100% on arrival (ignoring the target).
   const out = D.recomputeMultiLegCharges(trip, () => 0.8, 100);
   assert.ok(approx(out[0].energy_kwh, 10), `stop after full-base departure should be 10, got ${out[0].energy_kwh}`);
+  // arrive dest at 80 - 30 = 50, fill to 100 -> 50 delivered (not 0.8*100 - 50 = 30).
+  assert.ok(approx(out[1].energy_kwh, 50), `one-way destination should charge to 100% on arrival, got ${out[1].energy_kwh}`);
 });
 
 // ---- deliveredEnergy: training cap ----------------------------------------
