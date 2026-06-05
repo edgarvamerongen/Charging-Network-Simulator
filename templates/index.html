@@ -913,6 +913,41 @@
         .rs-curve-sliders .rs-cell-ctrl { margin-top: 0; }
         .rs-mini-l { font-size: .72rem; color: var(--muted); min-width: 32px; }
 
+        /* F5: per-leg route pin — a route icon that smoothly expands into a brand
+           label (distance · time · energy) on hover. */
+        .leg-pin-wrap { background: none; border: none; }
+        .leg-pin {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            display: inline-flex;
+            align-items: center;
+            background: #fff;
+            border: 1px solid var(--panel-border);
+            border-radius: 9px;
+            box-shadow: 0 2px 6px rgba(15, 23, 41, .16);
+            padding: 4px;
+            cursor: pointer;
+            transition: padding .22s ease, border-color .22s ease, box-shadow .22s ease;
+        }
+        .leg-pin-ico { width: 20px; height: 20px; flex: 0 0 auto; display: block; }
+        .leg-pin-text {
+            max-width: 0;
+            overflow: hidden;
+            white-space: nowrap;
+            opacity: 0;
+            margin-left: 0;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--brand-ink);
+            transition: max-width .26s ease, opacity .2s ease .03s, margin-left .26s ease;
+        }
+        .leg-pin:hover {
+            border-color: var(--brand-orange-3);
+            box-shadow: 0 4px 12px rgba(255, 122, 0, .30);
+            padding: 4px 9px 4px 5px;
+        }
+        .leg-pin:hover .leg-pin-text { max-width: 220px; opacity: 1; margin-left: 6px; }
+
         /* Badge on the trigger button — shows the count of active factors. */
         .model-badge {
             display: inline-block; min-width: 18px; text-align: center;
@@ -2461,6 +2496,46 @@
             if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
             if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
         }
+        // F5: per-leg label (distance · time · energy) centred on each leg.
+        // Uses the backend leg metrics when present (after Simulate); otherwise
+        // estimates from geometry + the selected aircraft so the live preview
+        // labels too. Retour legs are labelled once (outbound only).
+        function _legLabelText(dist, timeH, energy) {
+            const parts = [];
+            if (dist != null)            parts.push(typeof fmtDist === 'function' ? fmtDist(dist) : Math.round(dist) + ' km');
+            if (timeH != null && timeH > 0)   parts.push(typeof fmtDuration === 'function' ? fmtDuration(timeH * 60) : Math.round(timeH * 60) + ' min');
+            if (energy != null && energy > 0) parts.push(typeof fmtEnergy === 'function' ? fmtEnergy(energy) : Math.round(energy) + ' kWh');
+            return parts.join(' · ');
+        }
+        function _legEst(a, b) {
+            const km = (window.CNSRouting ? CNSRouting.haversineKm({ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] }) : 0)
+                     * (window.CNSSettings ? CNSSettings.routingFactor() : 1);
+            const plane = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
+            return {
+                dist:   km,
+                timeH:  plane && plane.speed_kmh ? km / plane.speed_kmh : null,
+                energy: plane && plane.battery_kwh && plane.range_km ? km * plane.battery_kwh / plane.range_km : null,
+            };
+        }
+        function addLegLabel(a, b, leg) {
+            const e = _legEst(a, b);
+            const dist   = leg && leg.distance_km   != null ? leg.distance_km   : e.dist;
+            const timeH  = leg && leg.flight_time_h != null ? leg.flight_time_h : e.timeH;
+            const energy = leg && leg.energy_kwh    != null ? leg.energy_kwh    : e.energy;
+            const txt = _legLabelText(dist, timeH, energy);
+            if (!txt) return;
+            // A small route icon at the leg midpoint that expands into a brand
+            // label with the leg data on hover.
+            const m = L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], {
+                icon: L.divIcon({
+                    className: 'leg-pin-wrap', iconSize: null,
+                    html: '<div class="leg-pin"><img class="leg-pin-ico" src="/pics/route-icon.svg" alt="leg">'
+                        + '<span class="leg-pin-text">' + txt + '</span></div>',
+                }),
+                keyboard: false, riseOnHover: true,
+            }).addTo(map);
+            routeLayers.push(m);
+        }
         function drawRoute(data) {
             clearRoute();
             const p1 = [data.origin.lat, data.origin.lon];
@@ -2519,6 +2594,7 @@
                         const seg = L.polyline([a, b], legStyle(i));
                         seg.addTo(map); routeLayers.push(seg);
                     }
+                    addLegLabel(a, b, (data.legs || [])[i]);   // F5: per-leg label (outbound only)
                 }
                 if (isRetour) {
                     // Return arcs — same per-leg pattern, bowed the other way,
@@ -2554,6 +2630,7 @@
                 }
                 routeLayers.forEach(l => l.addTo(map));
                 if (shouldFit) map.fitBounds(L.featureGroup(routeLayers).getBounds(), _fitPadding());
+                addLegLabel(p1, p2, (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
             }
         }
         // Fit-bounds padding aware of the side rails (planner left, result
