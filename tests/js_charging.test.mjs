@@ -129,5 +129,45 @@ test('assignments preserve input order', () => {
   assert.equal(plan.assignments[0].power, 100);
 });
 
+// ---- manual-first override (forcedChargerId) --------------------------------
+
+test('forcedChargerId pins a flight to its chosen charger (overrides priority)', () => {
+  // Without a pin, the big aircraft (size 500) would take the 400 kW charger.
+  // Pinning it to the 100 kW charger must win, and the small one then takes 400.
+  const plan = C.planCharging(
+    [{ id: 'big', power_kw: 400 }, { id: 'small', power_kw: 100 }],
+    [{ name: 'pinned', energy: 50, size: 500, forcedChargerId: 'small' },
+     { name: 'auto',   energy: 20, size: 22 }]);
+  assert.equal(plan.assignments[0].power, 100, 'pinned flight forced onto 100 kW');
+  assert.equal(plan.assignments[0].forced, true, 'marked as a manual pin');
+  assert.equal(plan.assignments[1].power, 400, 'the auto flight takes the leftover 400 kW');
+});
+
+test('forced charge time uses the pinned charger power', () => {
+  const plan = C.planCharging(
+    [{ id: 'big', power_kw: 400 }, { id: 'small', power_kw: 100 }],
+    [{ name: 'pinned', energy: 50, size: 500, forcedChargerId: 'small' }]);
+  assert.ok(approx(plan.assignments[0].chargeTimeMin, 50 / 100 * 60));
+});
+
+test('a pin naming a charger not in the fleet falls back to automatic', () => {
+  // 'ghost' isn't in the fleet → the flight rejoins the auto pool and lands on
+  // the most powerful charger by the normal rule (no deadlock, no fighting).
+  const plan = C.planCharging(
+    [{ id: 'big', power_kw: 400 }, { id: 'small', power_kw: 100 }],
+    [{ name: 'pinned', energy: 50, size: 500, forcedChargerId: 'ghost' }]);
+  assert.equal(plan.assignments[0].power, 400);
+  assert.ok(!plan.assignments[0].forced, 'not treated as a manual pin');
+});
+
+test('peak counts a pinned charger once, even when also auto-assigned', () => {
+  // Two flights, both end up on the single 400 kW charger (one pinned, one auto).
+  const plan = C.planCharging(
+    [{ id: 'only', power_kw: 400 }],
+    [{ name: 'pinned', energy: 50, size: 80, forcedChargerId: 'only' },
+     { name: 'auto',   energy: 50, size: 900 }]);
+  assert.equal(plan.peakPower, 400, 'shared charger counted once');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
