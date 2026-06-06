@@ -242,6 +242,21 @@ window.CNSTour = (function () {
         if (typeof lastResult === 'undefined' || !lastResult) return;
         if (typeof drawRoute === 'function') drawRoute({ ...lastResult, fitBounds: true });
     }
+    // Open one result-panel section (Route / Charging / Revenue) by id and collapse
+    // the others so the spotlight is clean, then scroll it into the rail's viewport.
+    // The sections render collapsed; the tour opens each as its dedicated slide arrives.
+    async function _expandResultSection(id) {
+        await _ensureSimulated();
+        document.querySelectorAll('.rail-right .result-group').forEach((g) => {
+            const open = (g.id === id);
+            g.classList.toggle('collapsed', !open);
+            const header = g.querySelector('.sec-header');
+            if (header) header.setAttribute('aria-expanded', String(open));
+        });
+        const el = document.getElementById(id);
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'auto' });
+        await _wait(350);
+    }
     async function _ensureInFolder() {
         const folder = (typeof CNSDemand !== 'undefined') ? CNSDemand.loadFolder() : [];
         if (folder.length === 0) {
@@ -350,13 +365,13 @@ window.CNSTour = (function () {
             // 8. Aircraft
             {
                 element: '#plane',
-                popover: { title: 'Aircraft', description: 'Pick a model — the card below shows its range, battery and a photo. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
+                popover: { title: 'Aircraft', description: 'Pick a model — the card below shows its range, battery, cruise speed, seats and a photo. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
             },
             // 9. Model settings — surfaced BEFORE the route so the factors that
             // shape it (and force a stop) are understood first.
             {
                 element: '#planModelSettingsBtn',
-                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. The reserve and padding are exactly why the Beta Alia\'s 400&nbsp;km range can\'t reach Frankfurt in one hop — so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
+                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. It also holds the charging price (€/kWh) and charger efficiency behind the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are exactly why the Beta Alia\'s 400&nbsp;km range can\'t reach Frankfurt in one hop — so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
             },
             // 10. Plan with charging stops — toggle it ON here so the user watches
             // the suggested route appear in the next step.
@@ -392,19 +407,43 @@ window.CNSTour = (function () {
             // pair: clicking Simulate produced this map view.
             {
                 element: '#map',
-                popover: { title: 'Your route on the map', description: 'The blue line is the outbound leg; the green dashed line (for retour trips) is the return. Each blue marker is an intermediate charging stop. The map zooms to fit the whole trip between the side panels.', side: 'bottom', align: 'center' },
+                popover: { title: 'Your route on the map', description: 'The blue line is the outbound leg; the green dashed line (for retour trips) is the return. Each blue marker is an intermediate charging stop, and every leg carries a label with its distance, time and energy. The map zooms to fit the whole trip between the side panels.', side: 'bottom', align: 'center' },
                 onHighlightStarted: async () => { await _ensureSimulated(); await _zoomToSimulatedRoute(); },
             },
             // 13. Result panel — scroll the panel to the TOP so the user sees
-            // the headline numbers first, not a mid-panel chunk.
+            // the headline numbers first, then we drill into each section below.
             {
                 element: '.rail-right .panel',
-                popover: { title: 'Result panel', description: 'Per-flight breakdown: energy used, flight duration, charge time. Below: the aircraft spec and the trip details (legs, total distance, charger). Click "+ Add to demand calculator" next to track this route in your network model.', side: 'left', align: 'start' },
+                popover: { title: 'Result panel', description: 'Headline per-flight numbers up top: energy used, flight time, charge time. Below are three expandable breakdowns — <strong>Route</strong>, <strong>Charging</strong> and <strong>Revenue potential</strong> — we\'ll open each in turn.', side: 'left', align: 'start' },
                 onHighlightStarted: async () => {
                     await _ensureSimulated();
+                    // Start clean: collapse every section so the headline reads first;
+                    // the next three slides open them one at a time.
+                    document.querySelectorAll('.rail-right .result-group').forEach((g) => {
+                        g.classList.add('collapsed');
+                        const h = g.querySelector('.sec-header'); if (h) h.setAttribute('aria-expanded', 'false');
+                    });
                     const r = document.querySelector('.rail-right');
                     if (r) r.scrollTop = 0;
                 },
+            },
+            // 13a. Route — the itinerary (one row per leg + en-route charge).
+            {
+                element: '#rgRoute',
+                popover: { title: 'Route', description: 'The trip itinerary, top to bottom: a row per <strong>flight leg</strong> (distance, time, energy) and per en-route charging stop, a Return divider on retour trips, and a Total travel row. The final-destination top-up sits in Charging, not here.', side: 'left', align: 'start' },
+                onHighlightStarted: async () => { await _expandResultSection('rgRoute'); },
+            },
+            // 13b. Charging — the terminal top-up, separate from travel time.
+            {
+                element: '#rgCharging',
+                popover: { title: 'Charging', description: 'The top-up at the trip\'s terminal airport, after arrival and <strong>separate from travel time</strong>: arrival state-of-charge, charge-to target, top-up minutes (or no charge needed), plus the charger model and, with efficiency on, grid demand in kWh.', side: 'left', align: 'start' },
+                onHighlightStarted: async () => { await _expandResultSection('rgCharging'); },
+            },
+            // 13c. Revenue potential — the airport's charging income.
+            {
+                element: '#rgRevenue',
+                popover: { title: 'Revenue potential', description: 'The airport\'s charging income: energy charged to the aircraft across the trip times the <strong>charging tariff</strong> (€/kWh, set in Model settings), giving airport revenue.', side: 'left', align: 'start' },
+                onHighlightStarted: async () => { await _expandResultSection('rgRevenue'); },
             },
             // 14. Add to demand — scroll the rail DOWN so the button is fully
             // visible (it sits below the trip-calculated table).

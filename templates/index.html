@@ -1453,7 +1453,7 @@
 
                 <!-- Route: one row per action (leg / en-route charge) + a total,
                      built dynamically in renderResult(). -->
-                <div class="result-group collapsed">
+                <div class="result-group collapsed" id="rgRoute">
                     <div class="sec-header" role="button" aria-expanded="false">
                         <span class="section-tag tag-route">Route</span>
                         <span class="sec-chev">▾</span>
@@ -1462,7 +1462,7 @@
                 </div>
 
                 <!-- Charging: terminal top-up, one row per fact (built dynamically). -->
-                <div class="result-group collapsed">
+                <div class="result-group collapsed" id="rgCharging">
                     <div class="sec-header" role="button" aria-expanded="false">
                         <span class="section-tag tag-charging">Charging</span>
                         <span class="sec-chev">▾</span>
@@ -1470,7 +1470,7 @@
                     <table class="spec-table" id="chargeRows"></table>
                 </div>
 
-                <div class="result-group collapsed">
+                <div class="result-group collapsed" id="rgRevenue">
                     <div class="sec-header" role="button" aria-expanded="false">
                         <span class="section-tag tag-revenue">Revenue potential</span>
                         <span class="sec-chev">▾</span>
