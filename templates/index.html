@@ -630,11 +630,14 @@
         .ps-stat { display: flex; flex-direction: column; line-height: 1.15; }
         .ps-stat strong { font-size: .9rem; color: var(--ink); }
         .ps-stat-l { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+        /* The available range is the main, editable variable — highlight it. */
+        .ps-stat-avail { background: rgba(255,122,0,.12); border: 1px solid rgba(255,122,0,.4); border-radius: 8px; padding: 3px 10px; margin: -3px 0; }
+        .ps-stat-avail strong { color: var(--brand-orange-3, #ff7a00); }
         .ps-override-toggle { margin-top: 8px; background: none; border: none; padding: 0; font-size: .76rem; color: var(--brand-ink); cursor: pointer; font-weight: 500; }
         .ps-override-toggle .chev { font-size: .7rem; }
         .plane-spec-card.overridden .ps-override-toggle::after { content: " · overridden"; color: var(--brand-ink); font-weight: 600; }
         .ps-override { padding: 2px 10px 10px; }
-        .ps-override-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+        .ps-override-grid { display: grid; grid-template-columns: 1fr; gap: 6px 8px; }
         .ps-override-grid label { font-size: .66rem; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
         .ps-override-grid .ps-u { color: var(--muted); font-weight: 400; }
         .ps-override-grid input { font-size: .82rem; }
@@ -826,10 +829,13 @@
             padding: 16px 20px; box-shadow: 0 6px 16px rgba(43,47,90,.22);
         }
         .agg-hero-row {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;
             padding-bottom: 14px; margin-bottom: 14px;
             border-bottom: 1px solid rgba(255,255,255,.18);
         }
+        .agg-hero-rev { cursor: pointer; border-radius: 8px; transition: background .12s; }
+        .agg-hero-rev:hover { background: rgba(255,255,255,.06); }
+        .agg-hero-rev .agg-hero-num { color: #6ee7a8; }   /* revenue reads as money, not load */
         .agg-hero {
             display: flex; flex-direction: column; gap: 4px;
         }
@@ -1115,7 +1121,14 @@
         .adv-field input, .adv-field select { width: 100%; font-size: .8rem; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
 
         .stops-section { margin-bottom: 12px; padding: 10px; background: rgba(229,120,80,.07); border-left: 3px solid var(--primary); border-radius: 8px; }
-        .stops-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+        .stops-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;
+            width: 100%; background: none; border: none; padding: 0; cursor: pointer; text-align: left; color: inherit; font: inherit; }
+        .stops-chev { margin-left: 8px; align-self: center; transition: transform .15s ease; opacity: .65; }
+        .stops-section.stops-collapsed .stops-chev { transform: rotate(-90deg); }
+        .stops-section.stops-collapsed .stops-head { margin-bottom: 0; }
+        .stops-section.stops-collapsed .stops-pref,
+        .stops-section.stops-collapsed #stopsList,
+        .stops-section.stops-collapsed #stopsHint { display: none; }
         .stops-title { font-size: .72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .04em; }
         .stops-summary { font-size: .74rem; color: var(--ink-soft); }
         .stops-list { list-style: none; margin: 0; padding: 0; }
@@ -1291,18 +1304,16 @@
                                 <span class="ps-stat"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
                                 <span class="ps-stat"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
                                 <span class="ps-stat"><strong id="psUsage"></strong><span class="ps-stat-l">avg usage</span></span>
+                                <span class="ps-stat ps-stat-avail"><strong id="psAvail"></strong><span class="ps-stat-l">available range</span></span>
                             </div>
-                            <button type="button" id="psOverrideToggle" class="ps-override-toggle">Override for this flight <span class="chev">▾</span></button>
+                            <button type="button" id="psOverrideToggle" class="ps-override-toggle">Edit for this flight <span class="chev">▾</span></button>
                         </div>
                         <div id="psOverride" class="ps-override d-none">
                             <div class="ps-override-grid">
-                                <label>Battery <span class="ps-u">kWh</span><input type="number" id="psoBattery" min="1" step="any" class="form-control form-control-sm"></label>
-                                <label>Range <span class="ps-u">km</span><input type="number" id="psoRange" min="1" step="any" class="form-control form-control-sm"></label>
-                                <label>Cruise <span class="ps-u">km/h</span><input type="number" id="psoSpeed" min="1" step="any" class="form-control form-control-sm"></label>
-                                <label>C-rate <span class="ps-u">C</span><input type="number" id="psoCRate" min="0.1" step="any" class="form-control form-control-sm"></label>
+                                <label>Available range <span class="ps-u">km</span><input type="number" id="psoAvailRange" min="1" step="any" class="form-control form-control-sm" placeholder="auto"></label>
                             </div>
                             <div class="ps-override-foot">
-                                <span class="ps-override-note">Applies to this flight only.</span>
+                                <span class="ps-override-note">Sets the usable range for this flight only — press Enter to apply.</span>
                                 <button type="button" id="psoReset" class="ps-reset">↺ reset to catalog</button>
                             </div>
                         </div>
@@ -1325,10 +1336,11 @@
                     </button>
                 </div>
                 <div id="stopsSection" class="stops-section d-none">
-                    <div class="stops-head">
+                    <button type="button" id="stopsHeadBtn" class="stops-head" aria-expanded="true" title="Collapse / expand the route">
                         <span class="stops-title">Suggested route</span>
                         <span id="stopsSummary" class="stops-summary"></span>
-                    </div>
+                        <span class="stops-chev chev" aria-hidden="true">▾</span>
+                    </button>
                     <!-- Preference order moved out of Advanced. Inline at the
                          top of the Suggested route section because it directly
                          shapes what stops the planner picks. -->
@@ -1823,26 +1835,36 @@
         function updateTrajectory() {
             const box = document.getElementById('trajInfo');
             if (selected.origin && selected.destination) {
-                const km = haversineKm(
-                    [selected.origin.latitude_deg, selected.origin.longitude_deg],
-                    [selected.destination.latitude_deg, selected.destination.longitude_deg]);
+                const hk = (a, b) => (window.CNSRouting ? CNSRouting.haversineKm(a, b) : haversineKm([a.lat, a.lon], [b.lat, b.lon]));
+                const O = { lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg };
+                const D = { lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
+                const stopsOn = document.getElementById('withStops')?.checked;
+                // Match the Suggested-route panel: with planned stops, show the actual
+                // routed distance (origin → stops → destination) via the SAME haversine
+                // the panel uses, not the direct great-circle — so the two never disagree.
+                const useStops = stopsOn && Array.isArray(plannedStops) && plannedStops.length;
+                let km;
+                if (useStops) {
+                    const chain = [O, ...plannedStops.map(s => ({ lat: s.lat, lon: s.lon })), D];
+                    km = 0; for (let i = 0; i < chain.length - 1; i++) km += hk(chain[i], chain[i + 1]);
+                } else {
+                    km = hk(O, D);
+                }
                 // Direct-flight range check against current Model settings —
                 // surfaces the over-range condition in the always-visible pill
-                // ONLY when "Plan with charging stops" is off. When the toggle
-                // is on, the Suggested route panel already shows over-range
-                // legs in red; doubling the warning here is noise.
+                // ONLY when "Plan with charging stops" is off (km is the direct leg then).
                 const plane = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
-                const stopsOn = document.getElementById('withStops')?.checked;
                 let warn = '';
                 if (!stopsOn && plane && plane.range_km) {
                     const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
                     const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                    const maxLeg = plane.range_km * usable / route;
+                    const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
                     if (km > maxLeg) {
-                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km - maxLeg)} over effective range (${fmtDist(maxLeg)})</span>`;
+                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
                 }
-                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${selected.origin.name} → ${selected.destination.name})</span>${warn}`;
+                const via = useStops ? ` <span class="text-muted">via ${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''}</span>` : '';
+                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${selected.origin.name} → ${selected.destination.name})</span>${via}${warn}`;
                 box.classList.toggle('traj-error', !!warn);
                 box.classList.remove('d-none');
             } else {
@@ -1888,6 +1910,7 @@
         // the catalog plane as-is. Temporary — it rides along on the simulate
         // payload (payload.plane) and is NEVER written back to planes.json.
         let _planeOverride = null;
+        let _availRangeOverride = null;   // per-flight "available range" override (km), or null = use the computed value
         function _basePlane() {
             const id = document.getElementById('plane').value;
             return customById[id] || BUILTIN_PLANES_BY_ID[id] || null;
@@ -1901,6 +1924,17 @@
             return _planeOverride ? { ...base, ..._planeOverride } : base;
         }
         function _selectedPlane() { return selectedPlaneSpec(); }
+        function _usableFrac(p) { return (window.CNSSettings && p) ? CNSSettings.usableFraction(p) : 1.0; }
+        // Practical/"available" range = effective range = range × usableFraction (usable
+        // battery after the landing reserve) ÷ routing padding (great-circle vs real path).
+        // This IS the planner's max straight-line leg, so the card value and the routing
+        // reach are always the same number. A per-flight override replaces it directly.
+        function _availableRangeKm(plane) {
+            const p = plane || selectedPlaneSpec();
+            if (!p || !p.range_km) return null;
+            const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+            return _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
+        }
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
             return {
@@ -1918,7 +1952,7 @@
             // when on; otherwise it's nameplate range (no advanced override).
             const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
             const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            const maxLeg = plane.range_km * usable / route;
+            const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
             const chain = [t.origin, ...plannedStops, t.dest];
             for (let i = 0; i < chain.length - 1; i++) {
                 const d = CNSRouting.haversineKm(chain[i], chain[i + 1]);
@@ -1969,7 +2003,9 @@
                     origin: chain[i], destination: chain[i + 1], plane,
                     allAirports: filteredAirports,
                     allowedTypes: _allowedTypes(),
-                    options: _routingOptions(),
+                    // The available range (reserve + route padding folded in, or the
+                    // per-flight override) IS the max straight-line leg the planner allows.
+                    options: { ..._routingOptions(), maxLegKm: _availableRangeKm(plane) },
                 });
                 if (segRes.error && manual.length === 0) {
                     // Pure auto path with no manual stops to anchor on: bubble up.
@@ -2016,6 +2052,7 @@
         const TYPE_TAG = { 'small_airport': ['SMALL','type-small'], 'medium_airport': ['MED','type-medium'], 'large_airport': ['LARGE','type-large'] };
 
         function renderStops() {
+            if (typeof updateTrajectory === 'function') updateTrajectory();   // keep the trajectory pill in sync with the planned stops
             const section  = document.getElementById('stopsSection');
             const summaryEl = document.getElementById('stopsSummary');
             const listEl   = document.getElementById('stopsList');
@@ -2192,6 +2229,12 @@
         // Changing the airport-size preference re-plans the route AND must redraw
         // the map — recomputeRoute only updates the stop chain + validation.
         document.getElementById('advBias').addEventListener('change', () => { smartReplan(); drawLiveRoute(); });
+        // Collapse / expand the Suggested-route window (the head acts as the toggle).
+        document.getElementById('stopsHeadBtn')?.addEventListener('click', (e) => {
+            const sec = document.getElementById('stopsSection');
+            const collapsed = sec.classList.toggle('stops-collapsed');
+            e.currentTarget.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        });
 
         // Results panel collapse: the ✕ (revealed on hover) minimises to just the
         // dark-blue summary; clicking the summary while collapsed re-expands it.
@@ -2374,7 +2417,7 @@
         // (advReserve was removed when the global Model settings took over reserve handling)
         // Switching planes re-plans the route (range changes auto-stops) AND must
         // redraw the map — recomputeRoute only updates the stop chain + validation.
-        document.getElementById('plane').addEventListener('change', () => { _planeOverride = null; renderPlaneSpecCard(); smartReplan(); drawLiveRoute(); });
+        document.getElementById('plane').addEventListener('change', () => { _planeOverride = null; _availRangeOverride = null; renderPlaneSpecCard(); smartReplan(); drawLiveRoute(); });
 
         // ---- Selected-aircraft spec card + per-flight override --------------
         function renderPlaneSpecCard() {
@@ -2390,12 +2433,11 @@
             else thumb.classList.add('d-none');
             document.getElementById('psName').textContent = spec.name;
             _refreshSpecStats(spec);
-            // Prefill the override inputs from the EFFECTIVE spec (metric units).
-            document.getElementById('psoBattery').value = spec.battery_kwh != null ? spec.battery_kwh : '';
-            document.getElementById('psoRange').value   = spec.range_km != null ? spec.range_km : '';
-            document.getElementById('psoSpeed').value   = spec.speed_kmh != null ? spec.speed_kmh : '';
-            document.getElementById('psoCRate').value   = spec.c_rate != null ? spec.c_rate : '';
-            card.classList.toggle('overridden', !!_planeOverride);
+            // Prefill the override with the current available range so the operator
+            // sees the value they're editing (blank = use the computed default).
+            const _av = _availableRangeKm(spec);
+            document.getElementById('psoAvailRange').value = _av != null ? Math.round(_av) : '';
+            card.classList.toggle('overridden', _availRangeOverride != null);
         }
         function _refreshSpecStats(spec) {
             document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
@@ -2407,37 +2449,29 @@
                         : (spec.battery_kwh && spec.range_km ? spec.battery_kwh / spec.range_km * 100 : null);
             document.getElementById('psUsage').textContent =
                 usage == null ? '—' : ((typeof fmtUsage === 'function') ? fmtUsage(usage) : (Math.round(usage) + ' kWh/100km'));
+            const avail = _availableRangeKm(spec);
+            const av = document.getElementById('psAvail');
+            if (av) av.textContent = avail == null ? '—' : ((typeof fmtDist === 'function') ? fmtDist(avail) : (Math.round(avail) + ' km'));
         }
         (function _wirePlaneOverride() {
             const toggle = document.getElementById('psOverrideToggle');
             const panel  = document.getElementById('psOverride');
             if (toggle && panel) toggle.addEventListener('click', () => panel.classList.toggle('d-none'));
-            function readOverride() {
-                const base = _basePlane(); if (!base) return null;
-                const map = [['battery_kwh','psoBattery'],['range_km','psoRange'],['speed_kmh','psoSpeed'],['c_rate','psoCRate']];
-                const o = {};
-                map.forEach(([k, eid]) => {
-                    const v = parseFloat(document.getElementById(eid).value);
-                    if (isFinite(v) && v > 0 && v !== +base[k]) o[k] = v;
-                });
-                return Object.keys(o).length ? o : null;
-            }
             function onEdit() {
-                _planeOverride = readOverride();
+                const v = parseFloat(document.getElementById('psoAvailRange').value);
+                _availRangeOverride = (isFinite(v) && v > 0) ? v : null;
                 const card = document.getElementById('planeSpecCard');
                 const spec = selectedPlaneSpec();
                 if (spec) _refreshSpecStats(spec);
-                if (card) card.classList.toggle('overridden', !!_planeOverride);
+                if (card) card.classList.toggle('overridden', _availRangeOverride != null);
                 if (typeof smartReplan === 'function') smartReplan();
                 if (typeof drawLiveRoute === 'function') drawLiveRoute();
             }
-            ['psoBattery','psoRange','psoSpeed','psoCRate'].forEach(eid => {
-                const el = document.getElementById(eid);
-                if (el) { el.addEventListener('input', onEdit); el.addEventListener('change', onEdit); }
-            });
+            const _avEl = document.getElementById('psoAvailRange');
+            if (_avEl) _avEl.addEventListener('change', onEdit);   // 'change' fires on Enter / blur
             const reset = document.getElementById('psoReset');
             if (reset) reset.addEventListener('click', () => {
-                _planeOverride = null; renderPlaneSpecCard();
+                _availRangeOverride = null; renderPlaneSpecCard();
                 if (typeof smartReplan === 'function') smartReplan();
                 if (typeof drawLiveRoute === 'function') drawLiveRoute();
             });
@@ -2482,15 +2516,25 @@
 
         // One orange airport dot with the Dep/Dest/Stop hover popup. Shared by the
         // size-cluster layers and the NRG2fly network layer.
+        // The airport hover popup (Set as Departure/Destination/Stop) closes a short
+        // moment after the pointer leaves BOTH the dot and the popup — the grace
+        // period lets the user travel from the dot onto the popup's buttons.
+        let _apPopupTimer = null;
+        function _apCancelClose() { if (_apPopupTimer) { clearTimeout(_apPopupTimer); _apPopupTimer = null; } }
+        function _apScheduleClose() { _apCancelClose(); _apPopupTimer = setTimeout(() => map.closePopup(), 240); }
         function _airportDot(ap) {
             const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: 7, fillColor: "#ff7800", color: "#000", weight: 1, opacity: 1, fillOpacity: 0.85 });
             m.on('mouseover', function (e) {
-                L.popup().setLatLng(e.latlng).setContent(`
+                _apCancelClose();
+                const popup = L.popup({ closeButton: false }).setLatLng(e.latlng).setContent(`
                     <strong>${ap.name}</strong><br>
                     <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as Departure</button>
                     <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>
                     <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${ap.ident}')">Set as Stop</button>`).openOn(map);
+                const el = popup.getElement();
+                if (el) { el.addEventListener('mouseenter', _apCancelClose); el.addEventListener('mouseleave', _apScheduleClose); }
             });
+            m.on('mouseout', _apScheduleClose);
             return m;
         }
         async function loadAirports() {
@@ -2886,7 +2930,7 @@
                 if (plane && plane.range_km) {
                     const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
                     const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                    const maxLeg = plane.range_km * usable / route;
+                    const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
                     const chain = [
                         { lat: selected.origin.latitude_deg,      lon: selected.origin.longitude_deg },
                         ...stops,
@@ -3130,6 +3174,10 @@
                 if (_lastResultData && !document.getElementById('result').classList.contains('d-none')) {
                     try { renderResult(_lastResultData); } catch (err) { console.error(err); }
                 }
+                // Keep the card's available-range stat in step with the reserve/usable
+                // fraction (refresh stats only — don't clobber the override input).
+                const spec = (typeof selectedPlaneSpec === 'function') ? selectedPlaneSpec() : null;
+                if (spec && typeof _refreshSpecStats === 'function') _refreshSpecStats(spec);
             });
         }
 
@@ -3153,7 +3201,7 @@
                 validateRoute();
                 if (plannedLegIssues.length) {
                     document.getElementById('result').classList.add('d-none');
-                    errDiv.innerHTML = `<strong>Cannot simulate:</strong> ${plannedError || 'one or more legs exceed the aircraft\'s effective range.'} Adjust the route, change aircraft, or relax Model settings.`;
+                    errDiv.innerHTML = `<strong>Cannot simulate:</strong> ${plannedError || 'one or more legs exceed the aircraft\'s available range.'} Adjust the route, change aircraft, or relax Model settings.`;
                     errDiv.classList.remove('d-none');
                     return;
                 }
@@ -3261,6 +3309,7 @@
         // UI wrapper: mutate via the data module, then re-render.
         function updateTrip(id, patch) { CNSDemand.updateTrip(id, patch); renderFolder(); }
 
+        let _dcRevenueYearly = false;   // Demand-calc revenue hero: false = per day, true = per year
         function renderFolder() {
             const el = document.getElementById('folder');
             const airports = computeAirports();
@@ -3296,6 +3345,7 @@
                 // toggle is off, so this matches the original behaviour exactly.
                 const route   = CNSSettings.routingFactor();
                 const gridMul = CNSSettings.gridDemandFactor();
+                const revRate = (CNSSettings.chargeRate ? CNSSettings.chargeRate() : 0.60);   // EUR per CHARGED kWh (aircraft-side)
                 const getTargetSoc = (id) => CNSDemand.resolveTargetSoc(cfgs[id]);
                 // Per-trip cache so each multi-leg trip recomputes its charges
                 // exactly once per render (cheap, but no point doing it once per contrib).
@@ -3442,6 +3492,11 @@
                                 <div class="agg-hero-num">${fmtEnergy(dailyEnergy * gridMul)}</div>
                                 <div class="agg-hero-sub">${gridMul > 1 ? `aircraft side ${fmtEnergy(dailyEnergy)}` : 'across all flights to/from here'}</div>
                             </div>
+                            <div class="agg-hero agg-hero-rev" role="button" tabindex="0" data-rev-toggle title="Click to switch daily / yearly">
+                                <div class="agg-hero-lbl">Potential revenue ⇄</div>
+                                <div class="agg-hero-num">€${Math.round((_dcRevenueYearly ? dailyEnergy * 365 : dailyEnergy) * revRate).toLocaleString('en-US')}</div>
+                                <div class="agg-hero-sub">${_dcRevenueYearly ? 'per year' : 'per day'} · €${revRate.toFixed(2)}/kWh charged</div>
+                            </div>
                         </div>
                         <div class="agg-small-row">
                             <div class="agg-small"><div class="agg-small-lbl">Monthly</div><div class="agg-small-num">${fmtEnergy(dailyEnergy * 30.44 * gridMul)}</div></div>
@@ -3464,6 +3519,7 @@
                 </div>`;
             }).join('');
 
+            el.querySelectorAll('[data-rev-toggle]').forEach(c => c.addEventListener('click', () => { _dcRevenueYearly = !_dcRevenueYearly; renderFolder(); }));
             el.querySelectorAll('[data-rm]').forEach(btn => btn.addEventListener('click', () => { saveFolder(loadFolder().filter(t => t.id !== btn.dataset.rm)); renderFolder(); }));
             el.querySelectorAll('.trip-freq-n').forEach(inp => inp.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqN: Math.max(1, parseInt(e.target.value || '1', 10)) })));
             el.querySelectorAll('.trip-freq-unit').forEach(s => s.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqUnit: e.target.value })));
