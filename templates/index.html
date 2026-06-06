@@ -1141,7 +1141,7 @@
         .stops-list .type-small { background: #fee2e2; color: #991b1b; }
         .stops-list .leg-dist { font-size: .7rem; color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
         .stops-error { color: var(--danger); font-size: .82rem; }
-        .stops-error button { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
+        .stops-error button, #enableAllTypesBtn { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
         .stops-error-inline { color: var(--danger); font-size: .78rem; }
         .stops-list .stop-rm { margin-left: 4px; border: none; background: transparent; color: var(--danger); cursor: pointer; padding: 0 4px; border-radius: 4px; font-size: 1rem; line-height: 1; opacity: .65; }
         .stops-list .stop-rm:hover { background: rgba(239,68,68,.12); opacity: 1; }
@@ -2051,6 +2051,49 @@
 
         const TYPE_TAG = { 'small_airport': ['SMALL','type-small'], 'medium_airport': ['MED','type-medium'], 'large_airport': ['LARGE','type-large'] };
 
+        // Shared "Enable all types" remedy button — reused by the no-route hard-fail path
+        // AND the over-range-leg path. Ticking the disabled airport-size filters lets the
+        // planner reach airports it currently can't; their change handler then re-plans.
+        function _enableTypesBtnMarkup() {
+            return '<button type="button" id="enableAllTypesBtn">Enable all types</button>';
+        }
+        function _wireEnableTypesBtn() {
+            const b = document.getElementById('enableAllTypesBtn');
+            if (b) b.addEventListener('click', () =>
+                document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } }));
+        }
+        // True iff a size filter is OFF and turning the OFF one(s) on would actually make
+        // EVERY currently-failing leg routable — so we never show a dead remedy button.
+        // Callers gate this behind plannedError, so it adds no planRoute work on success.
+        function _couldEnablingTypesRoute() {
+            const enabled  = _allowedTypes();
+            const allTypes = [...document.querySelectorAll('.airport-filter')].map(cb => cb.value);
+            const disabled = allTypes.filter(x => !enabled.includes(x));
+            if (!disabled.length) return false;
+            const t = _terminus(); const plane = _selectedPlane();
+            if (!t || !plane) return false;
+            const maxLeg = _availableRangeKm(plane);
+            const chain = [t.origin, ...plannedStops, t.dest];
+            const segments = plannedStops.length
+                ? plannedLegIssues.map(i => [chain[i], chain[i + 1]])
+                : [[t.origin, t.dest]];
+            if (!segments.length) return false;
+            const allowed = enabled.concat(disabled);   // every size on
+            // Exclude every airport already on the chain (matches recomputeRoute's
+            // usedIdents) + the operator's removed-stop blacklist.
+            const usedIdents = new Set(chain.map(p => p && p.ident).filter(Boolean));
+            const filtered = allAirports.filter(ap => !usedIdents.has(ap.ident) && !_blacklistedStopIdents.has(ap.ident));
+            return segments.every(([a, b]) => {
+                if (!a || !b) return false;
+                const r = CNSRouting.planRoute({
+                    origin: a, destination: b, plane,
+                    allAirports: filtered, allowedTypes: allowed,
+                    options: { ..._routingOptions(), maxLegKm: maxLeg },
+                });
+                return !r.error;
+            });
+        }
+
         function renderStops() {
             if (typeof updateTrajectory === 'function') updateTrajectory();   // keep the trajectory pill in sync with the planned stops
             const section  = document.getElementById('stopsSection');
@@ -2065,12 +2108,10 @@
             // Error path with no stops (algorithm couldn't route)
             if (plannedError && !plannedStops.length) {
                 section.classList.remove('d-none');
-                listEl.innerHTML = `<li class="stops-error">${plannedError}<button type="button" id="enableAllTypesBtn">Enable all types</button></li>`;
+                listEl.innerHTML = `<li class="stops-error">${plannedError}${_enableTypesBtnMarkup()}</li>`;
                 summaryEl.textContent = '';
                 hintEl.innerHTML = '';
-                document.getElementById('enableAllTypesBtn').addEventListener('click', () =>
-                    document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } })
-                );
+                _wireEnableTypesBtn();
                 return;
             }
             // No auto-stops needed — direct leg fits. We still render the
@@ -2117,7 +2158,12 @@
 
             // Hint / error line
             if (plannedError) {
-                hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span>`;
+                // Over-range legs the planner couldn't bridge with the current airport sizes:
+                // offer the same "Enable all types" remedy ONLY if turning the disabled size(s)
+                // on would actually route every failing leg (otherwise no dead button).
+                const offer = _couldEnablingTypesRoute() ? ' ' + _enableTypesBtnMarkup() : '';
+                hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span>${offer}`;
+                if (offer) _wireEnableTypesBtn();
             } else {
                 hintEl.textContent = plannedSource === 'auto'
                     ? 'Shortest-path routing (A*) with your preference order. Click × to remove a stop, or + Add stop above to insert one manually.'
