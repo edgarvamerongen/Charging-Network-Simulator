@@ -222,11 +222,13 @@ window.CNSDemand = (function () {
         if (trip.tripType === 'training') {
             return Math.min(leg, usable);
         }
-        // One-way arrival: airport tops the plane up to the target (default 100%).
+        // One-way: the plane departs at the charge target (the SAME SoC the airport
+        // recharges it back to), so the energy delivered == the energy the leg just
+        // consumed. (It previously assumed a FULL departure but only topped up to the
+        // target, so a sub-100% target made "energy used" come out BELOW the leg flown.)
         if (trip.tripType !== 'retour') {
-            const arrival = Math.max(0, batt - leg);
-            const target = (targetCurrent != null ? targetCurrent : 1.0) * batt;
-            return Math.max(0, target - arrival);
+            const dep = (targetCurrent != null ? targetCurrent : 1.0) * batt;
+            return Math.max(0, Math.min(leg, dep));
         }
         // Retour: full forward-walk with clamped targets at BOTH ends.
         const homeTargetRaw = role === 'home' ? targetCurrent : targetOther;
