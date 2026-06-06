@@ -65,7 +65,10 @@ window.CNSRouting = (function () {
         // Realism factors: reserves cap usable range, routing padding shrinks reach.
         const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
         const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-        const maxLeg = rng * usable * (1 - options.reservePct) / route;
+        // Caller may pass an explicit max straight-line leg (the planner's "available
+        // range", already incl. reserve + routing padding, or a per-flight override).
+        const maxLeg = options.maxLegKm != null ? options.maxLegKm
+                     : rng * usable * (1 - options.reservePct) / route;
         if (maxLeg <= 0) return { stops: [], totalDistanceKm: 0, legCount: 0, error: 'Aircraft has no usable range.' };
 
         const O = { lat: origin.lat, lon: origin.lon };

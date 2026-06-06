@@ -163,6 +163,37 @@ def get_airports():
     return jsonify(simulator.get_all_airports())
 
 
+# ---- airport-resident chargers (real-world NRG2FLY install data) -------------
+# Structured per-airport plug data, keyed by ICAO. Loaded once at startup (it's
+# a small tracked catalog, like planes.json / chargers.json), so reads add no
+# per-request file IO. Missing/invalid file degrades to an empty mapping rather
+# than crashing the app.
+def _load_airport_chargers():
+    path = os.path.join(os.path.dirname(__file__), 'airports', 'airport_chargers.json')
+    try:
+        with open(path) as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+AIRPORT_CHARGERS = _load_airport_chargers()
+
+
+@app.route('/api/airport-chargers', methods=['GET'])
+def get_airport_chargers():
+    return jsonify(AIRPORT_CHARGERS)
+
+
+@app.route('/api/airport-chargers/<icao>', methods=['GET'])
+def get_airport_chargers_one(icao):
+    airport = AIRPORT_CHARGERS.get(icao.upper())
+    if airport is None:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(airport)
+
+
 # ---- custom planes & chargers (shared across all visitors on this server) ----
 @app.route('/api/custom/planes', methods=['GET'])
 def list_custom_planes():

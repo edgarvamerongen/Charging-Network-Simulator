@@ -10,6 +10,11 @@
     "power_kw": 40
   },
   {
+    "id": "dc_44",
+    "name": "44 kW DC charger",
+    "power_kw": 44
+  },
+  {
     "id": "dc_60",
     "name": "60 kW DC charger",
     "power_kw": 60

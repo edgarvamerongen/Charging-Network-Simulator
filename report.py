@@ -122,6 +122,51 @@ def _png_data_uri(png_bytes: bytes) -> str:
     return 'data:image/png;base64,' + base64.b64encode(png_bytes).decode('ascii')
 
 
+def _fmt_energy(kwh) -> str:
+    """kWh, switching to MWh (2 dp) at >= 1000 — matches the in-app unit display."""
+    try:
+        v = float(kwh)
+    except (TypeError, ValueError):
+        return ''
+    return f'{v / 1000:.2f} MWh' if v >= 1000 else f'{v:.0f} kWh'
+
+
+def _fmt_power(kw) -> str:
+    try:
+        v = float(kw)
+    except (TypeError, ValueError):
+        return ''
+    return f'{v / 1000:.2f} MW' if v >= 1000 else f'{v:.0f} kW'
+
+
+def _fmt_money(eur) -> str:
+    """Whole euros with thousands separators, e.g. 1234.5 -> '€1,235'."""
+    try:
+        v = float(eur)
+    except (TypeError, ValueError):
+        return ''
+    return f'€{v:,.0f}'
+
+
+def _append_onepager(pdf_bytes: bytes) -> bytes:
+    """Append static/NRG2fly_onepager.pdf as the final pages, if present. Skips
+    silently (returns the original bytes) when the file or pypdf is unavailable."""
+    onepager = os.path.join(ROOT, 'static', 'NRG2fly_onepager.pdf')
+    if not os.path.exists(onepager):
+        return pdf_bytes
+    try:
+        import io
+        from pypdf import PdfReader, PdfWriter
+        writer = PdfWriter()
+        writer.append(PdfReader(io.BytesIO(pdf_bytes)))
+        writer.append(PdfReader(onepager))
+        buf = io.BytesIO()
+        writer.write(buf)
+        return buf.getvalue()
+    except Exception:
+        return pdf_bytes
+
+
 # ---------- SVG charts -------------------------------------------------------
 # All chart sizing is in CSS pixels (the template scales width to 100% so the
 # absolute width here doesn't really matter — what matters is the aspect ratio).
@@ -132,8 +177,8 @@ _BAR_GAP = 6
 _BAR_LBL_W = 200
 _BAR_VAL_W = 70
 
-def _bar_chart_svg(items, unit, color='#2563eb'):
-    """items: [(label, value)]. Returns an inline SVG string."""
+def _bar_chart_svg(items, fmt, color='#2563eb'):
+    """items: [(label, value)]. fmt(value) -> the value-label string. Returns SVG."""
     if not items:
         return '<p class="lede">No data.</p>'
     vmax = max(v for _, v in items) or 1
@@ -158,7 +203,7 @@ def _bar_chart_svg(items, unit, color='#2563eb'):
         # value label
         val_x = _BAR_LBL_W + bar_len + 6
         out.append(f'<text x="{val_x:.1f}" y="{y + _BAR_BAR_H * 0.7}" '
-                   f'font-size="10.5" fill="#475569">{value:.0f} {unit}</text>')
+                   f'font-size="10.5" fill="#475569">{_xml_escape(fmt(value))}</text>')
     out.append('</svg>')
     return ''.join(out)
 
@@ -332,8 +377,8 @@ def generate_pdf(payload, css_url, request_root):
         [(a['name'], float(a.get('dailyKwh') or 0)) for a in airports],
         key=lambda x: x[1], reverse=True,
     )
-    bar_chart_peak = _bar_chart_svg(peak_items, 'kW', '#2563eb')
-    bar_chart_energy = _bar_chart_svg(energy_items, 'kWh', '#10b981')
+    bar_chart_peak = _bar_chart_svg(peak_items, _fmt_power, '#2563eb')
+    bar_chart_energy = _bar_chart_svg(energy_items, _fmt_energy, '#10b981')
 
     # per-airport Gantts
     for a in airports:
@@ -373,7 +418,13 @@ def generate_pdf(payload, css_url, request_root):
     generated_at = payload.get('generatedAt') or datetime.now().strftime('%Y-%m-%d %H:%M')
 
     # ---- Render template + PDF ---------------------------------------------
-    html_str = current_app.jinja_env.get_template('report.html').render(
+    env = current_app.jinja_env
+    env.filters['fmt_energy'] = _fmt_energy   # kWh / MWh
+    env.filters['fmt_power'] = _fmt_power      # kW / MW
+    env.filters['fmt_money'] = _fmt_money      # € with thousands sep
+    charge_rate = payload.get('chargeRate')
+    charge_rate = float(charge_rate) if charge_rate is not None else 0.60
+    html_str = env.get_template('report.html').render(
         totals=totals,
         airports=airports,
         planes=planes,
@@ -384,7 +435,11 @@ def generate_pdf(payload, css_url, request_root):
         logo_data_uri=logo_data_uri,
         generated_at=generated_at,
         css_url=css_url,
+        focus_airport=payload.get('focusAirport'),
+        charge_rate=charge_rate,
     )
 
-    pdf_bytes = HTML(string=html_str, base_url=request_root).write_pdf()
+    # WeasyPrint → PDF, then append the NRG2fly onepager (if present) as the
+    # closing pages.
+    pdf_bytes = _append_onepager(HTML(string=html_str, base_url=request_root).write_pdf())
     return pdf_bytes

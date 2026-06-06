@@ -111,12 +111,37 @@ code { background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; font-si
     letter-spacing: .08em;
     opacity: .85;
 }
+.cover-overline {
+    font-size: 11pt;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin: 0 0 5mm 0;
+}
 .cover-meta {
     color: var(--ink-soft);
     font-size: 10pt;
     border-top: 1px solid var(--border);
     padding-top: 5mm;
 }
+
+/* ---------- About + advisory framing ---------- */
+.about-cols { display: flex; gap: 6mm; margin: 4mm 0 2mm 0; }
+.about-col { flex: 1; background: var(--bg-soft); border-radius: 8px; padding: 4mm; }
+.about-col-h { color: var(--primary); font-weight: 700; font-size: 11pt; margin-bottom: 2mm; }
+.about-col p { font-size: 9.5pt; color: var(--ink-soft); margin: 0; }
+
+.questions-box {
+    margin-top: 8mm;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+    color: #fff;
+    border-radius: 10px;
+    padding: 6mm 7mm;
+}
+.questions-h { font-size: 14pt; font-weight: 800; margin-bottom: 2mm; }
+.questions-box p { color: rgba(255,255,255,.92); margin: 1mm 0; }
+.questions-foot { font-size: 9pt; opacity: .8; }
 
 /* ---------- Charts ---------- */
 .bar-chart {

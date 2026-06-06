@@ -213,15 +213,37 @@ window.CNSReport = (function () {
         return Array.from(seen.values());
     }
 
+    // Does a flight touch this airport (as origin, destination, or a stop)?
+    function _touches(t, ident) {
+        if (t.originIdent === ident || t.destIdent === ident) return true;
+        if (Array.isArray(t.stops) && t.stops.some(s => s && s.ident === ident)) return true;
+        if (Array.isArray(t.charges) && t.charges.some(c => c && c.ident === ident)) return true;
+        return false;
+    }
+
     // ---------- assemble + send --------------------------------------------
     function buildPayload() {
         const flights = CNSDemand.loadFolder();
         const rawAirports = Object.values(CNSDemand.computeAirports());
-        const airports = rawAirports.map(_buildAirport);
+        let airports = rawAirports.map(_buildAirport);
+
+        // Per-airport mode: the Demand Calculator's "Show airport" filter
+        // (#airportFilter) scopes the WHOLE report to a single airport when it
+        // isn't "all" — its stats, its page, and only the flights touching it.
+        const filterEl = document.getElementById('airportFilter');
+        const focusIdent = (filterEl && filterEl.value && filterEl.value !== 'all') ? filterEl.value : null;
+        let focusAirport = null, scopedRaw = rawAirports;
+        if (focusIdent) {
+            airports = airports.filter(a => a.ident === focusIdent);
+            scopedRaw = rawAirports.filter(a => a.ident === focusIdent);
+            focusAirport = (airports[0] || {}).name || null;
+        }
+        const relevantFlights = focusIdent ? flights.filter(t => _touches(t, focusIdent)) : flights;
+
         const totals = {
             airportCount: airports.length,
-            flightCount: flights.length,
-            planeCount: new Set(flights.map(t => t.planeId)).size,
+            flightCount: relevantFlights.length,
+            planeCount: new Set(relevantFlights.map(t => t.planeId)).size,
             totalDailyKwh: airports.reduce((s, a) => s + a.dailyKwh, 0),
             peakKw: airports.reduce((m, a) => Math.max(m, a.peakKw), 0),
         };
@@ -229,15 +251,17 @@ window.CNSReport = (function () {
             generatedAt: new Date().toLocaleString('en-GB', {
                 year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
             }),
+            focusAirport,
+            chargeRate: (window.CNSSettings && CNSSettings.chargeRate) ? CNSSettings.chargeRate() : 0.60,
             totals,
             airports,
-            planes: _usedPlanes(flights),
-            chargers: _usedChargers(rawAirports),
-            flights: flights.map(t => ({
+            planes: _usedPlanes(relevantFlights),
+            chargers: _usedChargers(scopedRaw),
+            flights: relevantFlights.map(t => ({
                 originName: t.originName, destName: t.destName, planeName: t.planeName,
                 tripType: t.tripType, multiLeg: !!t.multiLeg,
             })),
-            routes: _routesFromFlights(flights),
+            routes: _routesFromFlights(relevantFlights),
         };
     }
 

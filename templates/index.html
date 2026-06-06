@@ -4,6 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Charging Network Simulator</title>
+
+    <!-- Favicon + Apple touch icon (fav.ico served via the /pics/ route) -->
+    <link rel="icon" href="/pics/logos/fav.ico">
+    <link rel="apple-touch-icon" href="/pics/logos/NRG2fly_logo_compact.png">
+
+    <!-- Open Graph (Facebook / LinkedIn / Slack link previews) -->
+    <meta property="og:title" content="NRG2fly Charging Network Simulator">
+    <meta property="og:description" content="Plan electric-aviation routes, size charging stops, and model fleet energy demand across Europe.">
+    <meta property="og:image" content="https://cns.ghettofaust.exposed/pics/logos/NRG2fly_logo_compact.png">
+    <meta property="og:url" content="https://cns.ghettofaust.exposed/">
+    <meta property="og:type" content="website">
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NRG2fly Charging Network Simulator">
+    <meta name="twitter:description" content="Plan electric-aviation routes, size charging stops, and model fleet energy demand across Europe.">
+    <meta name="twitter:image" content="https://cns.ghettofaust.exposed/pics/logos/NRG2fly_logo_compact.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -126,8 +143,64 @@
         /* =========================================================
            Topbar tools + Options dropdown
            ========================================================= */
-        .topbar-tools { display: flex; align-items: center; gap: 18px; }
+        .topbar-tools { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: flex-end; }
         .options-wrap { position: relative; }
+
+        /* B4 — NRG2fly platform buttons (onepager download + back-to-platform).
+           Outline/secondary by default; the CTA variant gets the brand-orange
+           gradient fill so it reads as the primary "return" action. Pill shape
+           + flex-wrap on .topbar-tools lets both stack gracefully on narrow nav. */
+        .cns-brand-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #fff; border: 1px solid var(--brand-orange-3); color: var(--brand-orange-3);
+            font-size: .82rem; font-weight: 600; line-height: 1; white-space: nowrap;
+            padding: 7px 13px; border-radius: 999px; cursor: pointer; text-decoration: none;
+            transition: background .15s, box-shadow .15s, border-color .15s, color .15s;
+        }
+        .cns-brand-btn:hover { background: rgba(229,120,80,.10); box-shadow: var(--shadow-sm); }
+        .cns-brand-btn-cta {
+            background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3));
+            border-color: var(--brand-orange-3); color: #fff;
+            box-shadow: 0 2px 6px rgba(229,120,80,.30);
+        }
+        .cns-brand-btn-cta:hover {
+            background: linear-gradient(180deg, var(--brand-orange-3), var(--primary-2));
+            color: #fff; box-shadow: 0 4px 10px rgba(229,120,80,.40);
+        }
+
+        /* B3 — brand news ticker. Black band FIXED directly under the 56px topbar
+           (height 28px → the rails start at 90px, leaving a gap). A static
+           "⚡ NEWS" label sits on the left; the headlines scroll past it. Pure-CSS
+           marquee: .cns-ticker-track holds TWO identical spans sliding 0 → -50%
+           for a seamless loop. Content is populated from static/ticker.json — edit
+           that file to update the news (read fresh on every load). */
+        .cns-ticker {
+            position: fixed; top: 56px; left: 0; right: 0; height: 28px; z-index: 25;
+            display: flex; align-items: stretch; overflow: hidden;
+            background: #0f1923; color: #e6e9ef;
+            font-size: .8rem; font-weight: 600; line-height: 1;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+        .cns-ticker-label {
+            flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+            padding: 0 14px; color: #ffd23f; font-weight: 800;
+            letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
+            border-right: 1px solid rgba(255,255,255,.14);
+        }
+        .cns-ticker-viewport { flex: 1 1 auto; min-width: 0; overflow: hidden; display: flex; align-items: center; }
+        .cns-ticker-track {
+            display: inline-flex; flex-wrap: nowrap; white-space: nowrap;
+            will-change: transform; animation: ticker-scroll 76s linear infinite;
+        }
+        .cns-ticker-text { padding: 0; display: inline-block; }
+        .cns-ticker:hover .cns-ticker-track { animation-play-state: paused; }
+        @keyframes ticker-scroll {
+            from { transform: translateX(0); }
+            to   { transform: translateX(-50%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .cns-ticker-track { animation: none; }
+        }
         .options-btn {
             display: inline-flex; align-items: center; gap: 7px;
             background: #fff; border: 1px solid var(--panel-border); color: var(--ink);
@@ -293,8 +366,8 @@
            Left rail (form + result)
            ========================================================= */
         .rail-left {
-            position: fixed; top: 72px; left: 16px; z-index: 10;
-            width: 360px; max-height: calc(100vh - 96px);
+            position: fixed; top: 90px; left: 16px; z-index: 10;
+            width: 360px; max-height: calc(100vh - 114px);
             overflow-y: auto; padding-right: 6px;
             display: flex; flex-direction: column; gap: 12px;
             pointer-events: none;       /* let map drags through gaps */
@@ -498,12 +571,45 @@
         .tag-dest     { background: #faecbe; color: #6b541a;        border-color: #ead993; }
         .tag-stop     { background: #e3e6f1; color: var(--brand-ink); border-color: #c9cee0; }
         .tag-training { background: #fde0e0; color: #a31818;        border-color: #f6c0c0; }
+        /* result-panel detail groups (F7): Route / Charging / Revenue. */
+        .tag-route    { background: #e3ecfb; color: #1c4e8a;        border-color: #cadcf4; }
+        .tag-charging { background: #e2f3ea; color: #1b6b43;        border-color: #c8e9d6; }
+        .tag-revenue  { background: #faf0d6; color: #6b541a;        border-color: #ecdba8; }
 
         .spec-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
         .spec-table td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
         .spec-table tr:last-child td { border-bottom: none; }
         .spec-table td:first-child { color: var(--muted); width: 42%; font-weight: 500; font-size: .78rem; }
         .spec-table td:last-child { color: var(--ink); font-weight: 500; }
+
+        /* result-panel grouped layout (F7) */
+        .result-group { margin-top: 14px; }
+        .result-aircraft { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+        .result-aircraft .ac-photo { width: 150px; height: 62px; margin-bottom: 0; flex: 0 0 auto; }
+        .result-ac-name { font-weight: 700; font-size: .95rem; color: var(--ink); margin-top: 0; }
+        .revenue-val { font-weight: 800 !important; color: var(--brand-gold) !important; }
+        /* route itinerary: one row per leg / charge */
+        .route-steps .step td { width: auto; color: var(--ink); font-size: .85rem; }
+        .step-main { font-weight: 600; color: var(--ink); font-size: .84rem; }
+        .step-sub { color: var(--muted); font-size: .76rem; margin-top: 1px; }
+        .step-ico { display: inline-block; width: 1.1em; margin-right: 5px; text-align: center; }
+        .step-fly { color: var(--brand-ink); }
+        .step-charge-ico { color: #10b981; }
+        .route-steps .step-total td { border-top: 1px solid #e2e8f0; padding-top: 7px; }
+        /* collapsible sections — clickable header bar with a large chevron */
+        .sec-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+        .sec-header .section-tag { margin-bottom: 6px; }
+        .sec-chev { font-size: 1.6rem; line-height: .5; color: var(--muted); transition: transform .15s; display: inline-block; padding: 0 4px 6px 4px; }
+        .sec-header:hover .sec-chev { color: var(--brand-ink); }
+        .result-group.collapsed .sec-chev { transform: rotate(-90deg); }
+        .result-group.collapsed .spec-table { display: none; }
+        /* return divider + destination (turnaround) highlight */
+        .step-return td { width: auto; font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--brand-ink); background: #eef1f8; border-radius: 4px; padding: 5px 8px !important; border-bottom: none; }
+        .ret-ico { margin-right: 6px; font-size: 1.05em; }
+        .step-dest { background: #fff7e6; }
+        .step-dest .step-main { color: #8a5a14; }
+        .dest-badge { margin-left: 7px; font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--brand-gold); color: #3a2e0a; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
+        .charge-note-row td { width: auto !important; color: var(--muted) !important; font-size: .72rem !important; font-style: italic; font-weight: 400 !important; padding-top: 2px !important; border-bottom: none; }
 
         .ac-photo {
             width: 100%; height: 130px; object-fit: cover; display: block;
@@ -520,15 +626,18 @@
         .ps-thumb { width: 100%; height: 96px; object-fit: cover; display: block; border-bottom: 1px solid var(--panel-border); }
         .ps-main { padding: 8px 10px; }
         .ps-name { font-weight: 600; font-size: .9rem; color: var(--ink); }
-        .ps-stats { display: flex; gap: 18px; margin-top: 4px; }
+        .ps-stats { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 6px; }
         .ps-stat { display: flex; flex-direction: column; line-height: 1.15; }
         .ps-stat strong { font-size: .9rem; color: var(--ink); }
         .ps-stat-l { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+        /* The available range is the main, editable variable — highlight it. */
+        .ps-stat-avail { background: rgba(255,122,0,.12); border: 1px solid rgba(255,122,0,.4); border-radius: 8px; padding: 3px 10px; margin: -3px 0; }
+        .ps-stat-avail strong { color: var(--brand-orange-3, #ff7a00); }
         .ps-override-toggle { margin-top: 8px; background: none; border: none; padding: 0; font-size: .76rem; color: var(--brand-ink); cursor: pointer; font-weight: 500; }
         .ps-override-toggle .chev { font-size: .7rem; }
         .plane-spec-card.overridden .ps-override-toggle::after { content: " · overridden"; color: var(--brand-ink); font-weight: 600; }
         .ps-override { padding: 2px 10px 10px; }
-        .ps-override-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+        .ps-override-grid { display: grid; grid-template-columns: 1fr; gap: 6px 8px; }
         .ps-override-grid label { font-size: .66rem; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
         .ps-override-grid .ps-u { color: var(--muted); font-weight: 400; }
         .ps-override-grid input { font-size: .82rem; }
@@ -546,8 +655,8 @@
            Right rail (result panel + error)
            ========================================================= */
         .rail-right {
-            position: fixed; top: 72px; right: 16px; z-index: 10;
-            width: 360px; max-height: calc(100vh - 96px);
+            position: fixed; top: 90px; right: 16px; z-index: 10;
+            width: 360px; max-height: calc(100vh - 114px);
             overflow-y: auto; padding-left: 6px;
             display: flex; flex-direction: column; gap: 12px;
             pointer-events: none;
@@ -720,10 +829,13 @@
             padding: 16px 20px; box-shadow: 0 6px 16px rgba(43,47,90,.22);
         }
         .agg-hero-row {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;
             padding-bottom: 14px; margin-bottom: 14px;
             border-bottom: 1px solid rgba(255,255,255,.18);
         }
+        .agg-hero-rev { cursor: pointer; border-radius: 8px; transition: background .12s; }
+        .agg-hero-rev:hover { background: rgba(255,255,255,.06); }
+        .agg-hero-rev .agg-hero-num { color: #6ee7a8; }   /* revenue reads as money, not load */
         .agg-hero {
             display: flex; flex-direction: column; gap: 4px;
         }
@@ -771,7 +883,7 @@
         .modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-lg); }
 
         /* Model-settings modal: one row per opt-in factor. */
-        .rs-row { padding: 12px 0; border-bottom: 1px solid var(--panel-border); }
+        .rs-row { padding: 9px 0; border-bottom: 1px solid var(--panel-border); }
         .rs-row:last-child { border-bottom: none; }
         .rs-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; font-size: .9rem; color: var(--ink); }
         .rs-toggle input[type=checkbox] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
@@ -781,6 +893,95 @@
         .rs-slider-row label { font-size: .8rem; color: var(--ink-soft); display: flex; justify-content: space-between; align-items: center; }
         .rs-val { color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; }
         .rs-help { font-size: .78rem; color: var(--muted); margin: 4px 0 0 0; line-height: 1.4; }
+        /* F8: 2-column grid + categories + hover [?] tooltips + full-width taper curve */
+        .rs-cat { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--primary); margin: 16px 0 7px; }
+        .rs-cat:first-of-type { margin-top: 4px; }
+        .rs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 24px; margin-bottom: 2px; }
+        .rs-cell-head { display: flex; align-items: center; gap: 6px; }
+        .rs-cell-head .rs-toggle { flex: 1; min-width: 0; font-size: .82rem; gap: 7px; }
+        .rs-cell-head .rs-toggle span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rs-static-label { flex: 1; min-width: 0; font-size: .82rem; font-weight: 600; color: var(--ink); }
+        .rs-cell-ctrl { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+        .rs-cell-ctrl .form-range { flex: 1; min-width: 0; height: 5px; padding: 0; }
+        .rs-cell-ctrl .rs-val { font-size: .74rem; min-width: 48px; text-align: right; }
+        .rs-cell:not(.on) .rs-cell-ctrl { opacity: .4; }
+        .rs-cell-static .rs-cell-ctrl { opacity: 1 !important; }
+        .rs-cell-wide { grid-column: 1 / -1; }
+        .rs-cell-wide .rs-cell-ctrl .form-range { flex: 0 1 230px; }
+        .rs-q { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #cbd5e1; background: #fff; color: var(--muted); font-size: .66rem; font-weight: 700; line-height: 15px; text-align: center; cursor: help; display: inline-block; user-select: none; }
+        .rs-q:hover, .rs-q:focus { background: var(--primary); color: #fff; border-color: var(--primary); outline: none; }
+        .rs-q-inline { width: 14px; height: 14px; line-height: 13px; font-size: .6rem; vertical-align: middle; }
+        .rs-curve { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--panel-border); }
+        .rs-curve:not(.on) .rs-curve-body { opacity: .4; }
+        .rs-curve-body { margin-top: 6px; }
+        .taper-curve { display: block; width: 100%; height: auto; background: #f8fafc; border: 1px solid var(--panel-border); border-radius: var(--radius-sm); margin-bottom: 6px; }
+        .rs-curve-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; }
+        .rs-curve-sliders .rs-cell-ctrl { margin-top: 0; }
+        .rs-mini-l { font-size: .72rem; color: var(--muted); min-width: 32px; }
+
+        /* F5: per-leg route pin — a route icon that smoothly expands into a brand
+           label (distance · time · energy) on hover. */
+        .leg-pin-wrap { background: none; border: none; }
+        .leg-pin {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            display: inline-flex;
+            align-items: center;
+            background: #fff;
+            border: 1px solid var(--panel-border);
+            border-radius: 9px;
+            box-shadow: 0 2px 6px rgba(15, 23, 41, .16);
+            padding: 4px;
+            cursor: pointer;
+            transition: padding .22s ease, border-color .22s ease, box-shadow .22s ease;
+        }
+        .leg-pin-ico { width: 20px; height: 20px; flex: 0 0 auto; display: block; }
+        .leg-pin-text {
+            max-width: 0;
+            overflow: hidden;
+            white-space: nowrap;
+            opacity: 0;
+            margin-left: 0;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--brand-ink);
+            transition: max-width .26s ease, opacity .2s ease .03s, margin-left .26s ease;
+        }
+        .leg-pin:hover {
+            border-color: var(--brand-orange-3);
+            box-shadow: 0 4px 12px rgba(255, 122, 0, .30);
+            padding: 4px 9px 4px 5px;
+        }
+        .leg-pin:hover .leg-pin-text { max-width: 220px; opacity: 1; margin-left: 6px; }
+
+        /* A1 Step 2: NRG2fly charger markers — favicon teardrop floated above the
+           airport dot so the dot's Dep/Dest/Stop popup stays clickable. */
+        .nrg-charger-wrap { background: none; border: none; }
+        .nrg-charger-pin {
+            position: absolute;
+            transform: translate(-50%, -100%) translateY(-6px);   /* tail tip ~6px above the airport dot */
+            display: flex; flex-direction: column; align-items: center;
+            cursor: pointer;
+            filter: drop-shadow(0 2px 3px rgba(15, 23, 41, .35));
+        }
+        .nrg-pin-head {
+            width: 34px; height: 34px; border-radius: 50%;
+            background: #fff; border: 2px solid var(--brand-orange-3, #ff7a00);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .nrg-pin-ico { width: 26px; height: 26px; object-fit: contain; }
+        .nrg-pin-tail {
+            width: 0; height: 0; margin-top: -1px;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 10px solid var(--brand-orange-3, #ff7a00);
+        }
+        .nrg-tip-sub { color: var(--ink-soft, #475569); font-size: .9em; }
+        /* Route variant — a blue copy of the teardrop drawn in routePane, directly
+           over the orange network teardrop, so a departure / destination / stop
+           dominates the charging-station marker it sits on. */
+        .nrg-charger-pin.route .nrg-pin-head { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .30); }
+        .nrg-charger-pin.route .nrg-pin-tail { border-top-color: #2563eb; }
 
         /* Badge on the trigger button — shows the count of active factors. */
         .model-badge {
@@ -920,7 +1121,14 @@
         .adv-field input, .adv-field select { width: 100%; font-size: .8rem; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
 
         .stops-section { margin-bottom: 12px; padding: 10px; background: rgba(229,120,80,.07); border-left: 3px solid var(--primary); border-radius: 8px; }
-        .stops-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+        .stops-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;
+            width: 100%; background: none; border: none; padding: 0; cursor: pointer; text-align: left; color: inherit; font: inherit; }
+        .stops-chev { margin-left: 8px; align-self: center; transition: transform .15s ease; opacity: .65; }
+        .stops-section.stops-collapsed .stops-chev { transform: rotate(-90deg); }
+        .stops-section.stops-collapsed .stops-head { margin-bottom: 0; }
+        .stops-section.stops-collapsed .stops-pref,
+        .stops-section.stops-collapsed #stopsList,
+        .stops-section.stops-collapsed #stopsHint { display: none; }
         .stops-title { font-size: .72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .04em; }
         .stops-summary { font-size: .74rem; color: var(--ink-soft); }
         .stops-list { list-style: none; margin: 0; padding: 0; }
@@ -961,6 +1169,10 @@
             .rail-left { left: 8px; right: 8px; width: auto; max-height: 60vh; }
             .map-controls { top: 64px; right: 8px; }
             .control-pill .pill-label { display: none; }
+            /* Tighter topbar gaps + compact brand buttons so the wrapped tools
+               row stays as shallow as possible when .topbar-tools flex-wraps. */
+            .topbar-tools { gap: 8px 10px; }
+            .cns-brand-btn { padding: 5px 10px; font-size: .76rem; }
         }
     </style>
 </head>
@@ -970,7 +1182,7 @@
 
     <!-- top bar -->
     <header class="topbar">
-        <a class="brand" href="/">
+        <a class="brand" href="https://nrg2fly.com" target="_blank" rel="noopener noreferrer">
             <img class="brand-wide" src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2FLY" onerror="this.style.display='none'">
             <span class="brand-tagline">Charging Network Simulator</span>
         </a>
@@ -982,7 +1194,7 @@
             </button>
             <div class="options-wrap">
                 <button id="optionsBtn" class="options-btn" type="button" aria-haspopup="true" aria-expanded="false">
-                    <span class="gear">⚙</span> <span>Options</span>
+                    <span class="gear">⚙</span> <span>Map Options</span>
                 </button>
                 <div id="optionsMenu" class="options-menu" role="menu">
                     <div class="opt-group">
@@ -990,6 +1202,14 @@
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
+                    </div>
+                    <div class="opt-group">
+                        <div class="opt-label">NRG2fly network</div>
+                        <label class="opt-check"><input type="checkbox" id="nrgChargerToggle" checked><span>Show charger sites</span></label>
+                    </div>
+                    <div class="opt-group">
+                        <div class="opt-label">Route</div>
+                        <label class="opt-check"><input type="checkbox" id="legLabelToggle" checked><span>Show flight labels</span></label>
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">Basemap</div>
@@ -1004,8 +1224,24 @@
                 <input type="checkbox" id="unitToggle">
                 <span>Nautical (nm / kn)</span>
             </label>
+            <!-- Onepager download (outline). Wraps on narrow nav widths. -->
+            <a class="cns-brand-btn" href="/static/NRG2fly_onepager.pdf" download>Download NRG2fly onepager</a>
         </div>
     </header>
+
+    <!-- B3 — brand news ticker, directly under the topbar. Pure-CSS marquee:
+         the text is duplicated and the track translates 0 → -50% so the loop
+         is seamless (no JS). position:relative so it never shifts the fixed
+         rails/map. -->
+    <div class="cns-ticker" aria-label="NRG2fly news ticker">
+        <span class="cns-ticker-label">⚡ NEWS</span>
+        <div class="cns-ticker-viewport">
+            <div class="cns-ticker-track" id="cnsTickerTrack">
+                <span class="cns-ticker-text">&nbsp;&nbsp;•••&nbsp;&nbsp;BETA Technologies concludes demo days in the Netherlands with E-Smart Avia&nbsp;&nbsp;•••&nbsp;&nbsp;NRG2fly now operates 8 charging stations across the Netherlands and Germany&nbsp;&nbsp;•••&nbsp;&nbsp;E-Flight Academy leads the world with the most electric flight movements and distances flown</span>
+                <span class="cns-ticker-text" aria-hidden="true">&nbsp;&nbsp;•••&nbsp;&nbsp;BETA Technologies concludes demo days in the Netherlands with E-Smart Avia&nbsp;&nbsp;•••&nbsp;&nbsp;NRG2fly now operates 8 charging stations across the Netherlands and Germany&nbsp;&nbsp;•••&nbsp;&nbsp;E-Flight Academy leads the world with the most electric flight movements and distances flown</span>
+            </div>
+        </div>
+    </div>
 
     <!-- left rail: plan-a-flight form + result -->
     <aside class="rail-left">
@@ -1052,7 +1288,7 @@
                     <label>Aircraft</label>
                     <select id="plane" class="form-select">
                         {% for p in planes %}
-                        <option value="{{ p.id }}">{{ p.name }} — {{ p.battery_kwh }} kWh</option>
+                        <option value="{{ p.id }}">{{ p.name }} — {% if p.battery_kwh >= 1000 %}{{ '%.2f'|format(p.battery_kwh / 1000) }} MWh{% else %}{{ p.battery_kwh }} kWh{% endif %}</option>
                         {% endfor %}
                         <option value="__custom__">➕ Add custom plane…</option>
                     </select>
@@ -1065,18 +1301,19 @@
                             <div class="ps-stats">
                                 <span class="ps-stat"><strong id="psRange"></strong><span class="ps-stat-l">range</span></span>
                                 <span class="ps-stat"><strong id="psBattery"></strong><span class="ps-stat-l">battery</span></span>
+                                <span class="ps-stat"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
+                                <span class="ps-stat"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
+                                <span class="ps-stat"><strong id="psUsage"></strong><span class="ps-stat-l">avg usage</span></span>
+                                <span class="ps-stat ps-stat-avail"><strong id="psAvail"></strong><span class="ps-stat-l">available range</span></span>
                             </div>
-                            <button type="button" id="psOverrideToggle" class="ps-override-toggle">Override for this flight <span class="chev">▾</span></button>
+                            <button type="button" id="psOverrideToggle" class="ps-override-toggle">Edit for this flight <span class="chev">▾</span></button>
                         </div>
                         <div id="psOverride" class="ps-override d-none">
                             <div class="ps-override-grid">
-                                <label>Battery <span class="ps-u">kWh</span><input type="number" id="psoBattery" min="1" step="any" class="form-control form-control-sm"></label>
-                                <label>Range <span class="ps-u">km</span><input type="number" id="psoRange" min="1" step="any" class="form-control form-control-sm"></label>
-                                <label>Cruise <span class="ps-u">km/h</span><input type="number" id="psoSpeed" min="1" step="any" class="form-control form-control-sm"></label>
-                                <label>C-rate <span class="ps-u">C</span><input type="number" id="psoCRate" min="0.1" step="any" class="form-control form-control-sm"></label>
+                                <label>Available range <span class="ps-u">km</span><input type="number" id="psoAvailRange" min="1" step="any" class="form-control form-control-sm" placeholder="auto"></label>
                             </div>
                             <div class="ps-override-foot">
-                                <span class="ps-override-note">Applies to this flight only.</span>
+                                <span class="ps-override-note">Sets the usable range for this flight only — press Enter to apply.</span>
                                 <button type="button" id="psoReset" class="ps-reset">↺ reset to catalog</button>
                             </div>
                         </div>
@@ -1099,10 +1336,11 @@
                     </button>
                 </div>
                 <div id="stopsSection" class="stops-section d-none">
-                    <div class="stops-head">
+                    <button type="button" id="stopsHeadBtn" class="stops-head" aria-expanded="true" title="Collapse / expand the route">
                         <span class="stops-title">Suggested route</span>
                         <span id="stopsSummary" class="stops-summary"></span>
-                    </div>
+                        <span class="stops-chev chev" aria-hidden="true">▾</span>
+                    </button>
                     <!-- Preference order moved out of Advanced. Inline at the
                          top of the Suggested route section because it directly
                          shapes what stops the planner picks. -->
@@ -1180,28 +1418,41 @@
                 </div>
             </div>
 
-            <div class="row">
-                <div class="col-12 mb-3">
-                    <span class="section-tag tag-aircraft">Aircraft Used</span>
+            <div class="result-groups">
+                <!-- Aircraft: photo + name side by side (name to the right). Full
+                     specs live on the in-form spec card under the selector (F6). -->
+                <div class="result-aircraft">
                     <img id="acPhoto" class="ac-photo d-none" alt="">
-                    <table class="spec-table">
-                        <tr><td>Model</td><td id="acName"></td></tr>
-                        <tr><td>Seats</td><td id="acSeats"></td></tr>
-                        <tr><td>Max load</td><td id="acLoad"></td></tr>
-                        <tr><td>Battery</td><td id="acBattery"></td></tr>
-                        <tr><td>Range</td><td id="acRange"></td></tr>
-                        <tr><td>Cruise speed</td><td id="acSpeed"></td></tr>
-                        <tr><td>Avg usage</td><td id="acUsage"></td></tr>
-                    </table>
+                    <div class="result-ac-name" id="acName"></div>
                 </div>
-                <div class="col-12">
-                    <span class="section-tag tag-trip">Trip Calculated</span>
+
+                <!-- Route: one row per action (leg / en-route charge) + a total,
+                     built dynamically in renderResult(). -->
+                <div class="result-group collapsed">
+                    <div class="sec-header" role="button" aria-expanded="false">
+                        <span class="section-tag tag-route">Route</span>
+                        <span class="sec-chev">▾</span>
+                    </div>
+                    <table class="spec-table route-steps" id="routeSteps"></table>
+                </div>
+
+                <!-- Charging: terminal top-up, one row per fact (built dynamically). -->
+                <div class="result-group collapsed">
+                    <div class="sec-header" role="button" aria-expanded="false">
+                        <span class="section-tag tag-charging">Charging</span>
+                        <span class="sec-chev">▾</span>
+                    </div>
+                    <table class="spec-table" id="chargeRows"></table>
+                </div>
+
+                <div class="result-group collapsed">
+                    <div class="sec-header" role="button" aria-expanded="false">
+                        <span class="section-tag tag-revenue">Revenue potential</span>
+                        <span class="sec-chev">▾</span>
+                    </div>
                     <table class="spec-table">
-                        <tr><td>Trip type</td><td id="trType"></td></tr>
-                        <tr><td>Total distance</td><td id="trTotal"></td></tr>
-                        <tr><td id="trFlightLabel">Total travel time</td><td id="trFlight"></td></tr>
-                        <tr id="trFinalRow"><td id="trFinalLabel">Final destination</td><td id="trFinal"></td></tr>
-                        <tr><td>Charger</td><td id="trCharger"></td></tr>
+                        <tr><td>Energy charged</td><td id="trEnergyCharged"></td></tr>
+                        <tr><td>Airport revenue</td><td id="trRevenue" class="revenue-val"></td></tr>
                     </table>
                 </div>
             </div>
@@ -1272,84 +1523,84 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="est-note mb-3">
-                        Each toggle layers an operational model factor on top of the simple physical model.
-                        When off, the model behaves exactly as before. When on, the factor cascades through
-                        the result panel, demand calculator, scheduler and PDF report.
+                    <p class="est-note mb-2">
+                        Operational model factors layered on the physical model — they cascade through the result
+                        panel, demand calculator, scheduler and PDF. Hover <span class="rs-q rs-q-inline">?</span> for detail.
                     </p>
 
-                    <!-- 1. Landing reserve -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsLandingReserve">
-                            <span>Account for landing reserve (minimum SoC)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Minimum landing SoC <span class="rs-val" id="rsMinSocVal">30%</span></label>
+                    <div class="rs-cat">Available range</div>
+                    <div class="rs-grid">
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsLandingReserve"><span>Landing reserve</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Minimum state of charge each aircraft must land with — applied uniformly across the fleet.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
                                 <input type="range" id="rsMinSoc" min="5" max="50" step="5" value="30" class="form-range">
+                                <span class="rs-val" id="rsMinSocVal">30%</span>
                             </div>
-                            <p class="rs-help">Each aircraft must land with at least this state of charge. Applied uniformly across the whole fleet.</p>
                         </div>
-                    </div>
-
-                    <!-- 2. Routing padding (SID/STAR + airways) -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsRouting">
-                            <span>Apply routing padding (SID/STAR + airways)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Distance multiplier <span class="rs-val" id="rsRoutingVal">×1.05</span></label>
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsRouting"><span>Routing padding</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Multiplier on great-circle distance for SID/STAR + airways. EUROCONTROL average is ~3–8% over GC.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
                                 <input type="range" id="rsRoutingSl" min="100" max="125" step="1" value="105" class="form-range">
+                                <span class="rs-val" id="rsRoutingVal">×1.05</span>
                             </div>
-                            <p class="rs-help">Multiplier on great-circle distance to approximate standardised departure/arrival procedures and airway constraints. EUROCONTROL average is ~3–8% over GC.</p>
                         </div>
                     </div>
 
-                    <!-- 3. Charger efficiency -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsChargerEff">
-                            <span>Apply charger efficiency (grid → cell losses)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Grid-to-cell efficiency <span class="rs-val" id="rsChargerEffVal">88%</span></label>
-                                <input type="range" id="rsChargerEffSl" min="50" max="100" step="1" value="88" class="form-range">
+                    <div class="rs-cat">Charging</div>
+                    <div class="rs-grid">
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsChargeTarget"><span>Charge target</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="SoC every aircraft charges to before departing; a per-airport target overrides it. Off = charge only the deficit for the next leg.">?</span>
                             </div>
-                            <p class="rs-help">AC→DC conversion + battery losses. Reported grid kWh = aircraft kWh / efficiency. Typical direct DC fast charging: ~88%; with a buffering BESS: ~80%.</p>
-                        </div>
-                    </div>
-
-                    <!-- 4. Charging curve (C-rate cap + CV taper) -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsTaper">
-                            <span>Apply charging curve (C-rate cap + taper above 70% SoC)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Default charge C-rate <span class="rs-val" id="rsTaperCRateVal">2.0C</span></label>
-                                <input type="range" id="rsTaperCRate" min="5" max="60" step="1" value="20" class="form-range">
-                            </div>
-                            <p class="rs-help">Models the real charging curve: power runs flat at min(charger kW, C-rate × battery kWh) up to ~70% SoC, then rolls off exponentially toward a low floor at 100% (a realistic CV taper). The C-rate cap means a small pack can't absorb an over-sized charger (e.g. a 3.75 MW MCS into a 22 kWh Pipistrel); the taper stretches the final top-up. Aircraft with a published <code>c_rate</code> use their own value; others use this default. Typical fast-charge C-rates: 1–3C.</p>
-                        </div>
-                    </div>
-
-                    <!-- 5. Default charge target (departure SoC) -->
-                    <div class="rs-row">
-                        <label class="rs-toggle">
-                            <input type="checkbox" id="rsChargeTarget">
-                            <span>Apply a default charge target (departure SoC)</span>
-                        </label>
-                        <div class="rs-detail">
-                            <div class="rs-slider-row">
-                                <label>Default charge target <span class="rs-val" id="rsChargeTargetVal">80%</span></label>
+                            <div class="rs-cell-ctrl">
                                 <input type="range" id="rsChargeTargetSl" min="50" max="100" step="5" value="80" class="form-range">
+                                <span class="rs-val" id="rsChargeTargetVal">80%</span>
                             </div>
-                            <p class="rs-help">The state of charge every aircraft charges to before departing, unless a specific airport overrides it in the demand calculator (a LOCAL target always wins over this GLOBAL default). When off, the model charges only the deficit needed for the next leg and tops the terminus to full — the original behaviour.</p>
+                        </div>
+                    </div>
+                    <!-- Charging curve (CC → CV taper) — full width with live chart (F9) -->
+                    <div class="rs-curve">
+                        <div class="rs-cell-head">
+                            <label class="rs-toggle"><input type="checkbox" id="rsTaper"><span>Charging curve (CC → CV taper)</span></label>
+                            <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Power runs flat to the knee SoC, then rolls off exponentially toward the floor at 100% — a realistic CV taper that stretches the final top-up. A battery C-rate cap (min of charger kW and C-rate × pack kWh) also rides on this toggle, but the default 5C is non-binding for the current fleet — a hook to re-enable per-aircraft acceptance limits later.">?</span>
+                        </div>
+                        <div class="rs-curve-body">
+                            <svg id="taperCurve" class="taper-curve" viewBox="0 0 320 72" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Charge power vs state of charge"></svg>
+                            <div class="rs-curve-sliders">
+                                <div class="rs-cell-ctrl"><label class="rs-mini-l">Knee</label><input type="range" id="rsTaperThr" min="40" max="95" step="5" value="70" class="form-range"><span class="rs-val" id="rsTaperThrVal">70%</span></div>
+                                <div class="rs-cell-ctrl"><label class="rs-mini-l">Floor</label><input type="range" id="rsTaperFloor" min="5" max="90" step="5" value="15" class="form-range"><span class="rs-val" id="rsTaperFloorVal">15%</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rs-cat">Revenue</div>
+                    <div class="rs-grid">
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsChargerEff"><span>Charger efficiency</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="AC→DC + battery losses. Grid kWh = aircraft kWh ÷ efficiency (~88% DC fast). Drives grid demand (cost), not the billed revenue.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <input type="range" id="rsChargerEffSl" min="50" max="100" step="1" value="88" class="form-range">
+                                <span class="rs-val" id="rsChargerEffVal">88%</span>
+                            </div>
+                        </div>
+                        <div class="rs-cell rs-cell-static">
+                            <div class="rs-cell-head">
+                                <label class="rs-static-label">Charging price</label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Tariff per kWh delivered to aircraft — drives the result panel's Airport revenue. Informational only; does not change energy or timing.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <input type="range" id="rsChargeRateSl" min="0" max="200" step="5" value="60" class="form-range">
+                                <span class="rs-val" id="rsChargeRateVal">€0.60/kWh</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1455,7 +1706,7 @@
         // Catalog chargers now carry the power in their name (e.g. "250 kW DC
         // charger"), so only append "(N kW)" when the name doesn't already state
         // a power — avoids redundant labels like "250 kW DC charger (250 kW)".
-        const chargerLabel = (c) => (/\d\s*[kM]W/i.test(c.name || '') ? c.name : `${c.name} (${c.power_kw} kW)`);
+        const chargerLabel = (c) => (/\d\s*[kM]W/i.test(c.name || '') ? c.name : `${c.name} (${fmtPower(c.power_kw)})`);
         const BUILTIN_PLANES = {{ planes|tojson }};              // client-side lookup for the routing planner
         const BUILTIN_PLANES_BY_ID = Object.fromEntries(BUILTIN_PLANES.map(p => [p.id, p]));
         // Expose the catalogs to other window-scoped modules (the PDF report
@@ -1470,6 +1721,17 @@
         // ---------- map ----------
         // Built-in +/- zoom buttons are hidden — pan with drag, zoom with scroll/pinch.
         const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([50.0, 10.0], 5);
+
+        // Dedicated pane for route airport markers, stacked ABOVE the markerPane
+        // (600) — where the NRG2fly teardrops live with a high zIndexOffset — so a
+        // blue route dot ALWAYS overlaps both the orange catalog dot and the
+        // network teardrop. An airport on the active route reads blue, not orange.
+        map.createPane('routePane');
+        map.getPane('routePane').style.zIndex = 650;
+        // Teardrops (network pins, blue halos, route pins) ride ABOVE the route dots
+        // so a dot never covers a teardrop's tail — the marker flows on top of the dot.
+        map.createPane('teardropPane');
+        map.getPane('teardropPane').style.zIndex = 660;
 
         // Swappable basemaps. Satellite is the default; the segmented control toggles to Carto Voyager.
         const BASEMAPS = {
@@ -1486,16 +1748,25 @@
         }
         setBasemap('satellite');
 
-        let routeLayers = [], startMarker = null, endMarker = null;
+        let routeLayers = [];                 // polylines, leg labels, training circle
+        let routeEndpointMarkers = [];        // origin / destination / stop markers (blue pin or blue-halo)
+        let _routeEndpoints = [];             // [{lat,lon,label}] of the active route's airports
+        let _routeChargerIdents = new Set();  // charger airports on the route → drawn blue, skipped by the orange layer
+        let _routeKey = '';                   // change-detection so the markers only rebuild when the route/toggle changes
+        let _showLegLabels = true;   // Map Options → Route → Show flight labels
         const clusters = {
             small_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
             medium_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
             large_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 })
         };
+        // A1 Step 2: reference layer of NRG2fly's real installed chargers (toggled
+        // independently of the airport-size filters via #nrgChargerToggle).
+        const nrgChargerLayer = L.layerGroup();
         // Only show the layers whose filter checkbox is ticked (Small is off by default).
         document.querySelectorAll('.airport-filter').forEach(cb => { if (cb.checked) map.addLayer(clusters[cb.value]); });
 
         let allAirports = [];
+        let nrgChargerDb = {};
         const airportByIdent = {};
         const selected = { origin: null, destination: null };
         let lastResult = null;
@@ -1564,26 +1835,36 @@
         function updateTrajectory() {
             const box = document.getElementById('trajInfo');
             if (selected.origin && selected.destination) {
-                const km = haversineKm(
-                    [selected.origin.latitude_deg, selected.origin.longitude_deg],
-                    [selected.destination.latitude_deg, selected.destination.longitude_deg]);
+                const hk = (a, b) => (window.CNSRouting ? CNSRouting.haversineKm(a, b) : haversineKm([a.lat, a.lon], [b.lat, b.lon]));
+                const O = { lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg };
+                const D = { lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
+                const stopsOn = document.getElementById('withStops')?.checked;
+                // Match the Suggested-route panel: with planned stops, show the actual
+                // routed distance (origin → stops → destination) via the SAME haversine
+                // the panel uses, not the direct great-circle — so the two never disagree.
+                const useStops = stopsOn && Array.isArray(plannedStops) && plannedStops.length;
+                let km;
+                if (useStops) {
+                    const chain = [O, ...plannedStops.map(s => ({ lat: s.lat, lon: s.lon })), D];
+                    km = 0; for (let i = 0; i < chain.length - 1; i++) km += hk(chain[i], chain[i + 1]);
+                } else {
+                    km = hk(O, D);
+                }
                 // Direct-flight range check against current Model settings —
                 // surfaces the over-range condition in the always-visible pill
-                // ONLY when "Plan with charging stops" is off. When the toggle
-                // is on, the Suggested route panel already shows over-range
-                // legs in red; doubling the warning here is noise.
+                // ONLY when "Plan with charging stops" is off (km is the direct leg then).
                 const plane = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
-                const stopsOn = document.getElementById('withStops')?.checked;
                 let warn = '';
                 if (!stopsOn && plane && plane.range_km) {
                     const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
                     const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                    const maxLeg = plane.range_km * usable / route;
+                    const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
                     if (km > maxLeg) {
-                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km - maxLeg)} over effective range (${fmtDist(maxLeg)})</span>`;
+                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
                 }
-                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${selected.origin.name} → ${selected.destination.name})</span>${warn}`;
+                const via = useStops ? ` <span class="text-muted">via ${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''}</span>` : '';
+                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${selected.origin.name} → ${selected.destination.name})</span>${via}${warn}`;
                 box.classList.toggle('traj-error', !!warn);
                 box.classList.remove('d-none');
             } else {
@@ -1629,6 +1910,7 @@
         // the catalog plane as-is. Temporary — it rides along on the simulate
         // payload (payload.plane) and is NEVER written back to planes.json.
         let _planeOverride = null;
+        let _availRangeOverride = null;   // per-flight "available range" override (km), or null = use the computed value
         function _basePlane() {
             const id = document.getElementById('plane').value;
             return customById[id] || BUILTIN_PLANES_BY_ID[id] || null;
@@ -1642,6 +1924,17 @@
             return _planeOverride ? { ...base, ..._planeOverride } : base;
         }
         function _selectedPlane() { return selectedPlaneSpec(); }
+        function _usableFrac(p) { return (window.CNSSettings && p) ? CNSSettings.usableFraction(p) : 1.0; }
+        // Practical/"available" range = effective range = range × usableFraction (usable
+        // battery after the landing reserve) ÷ routing padding (great-circle vs real path).
+        // This IS the planner's max straight-line leg, so the card value and the routing
+        // reach are always the same number. A per-flight override replaces it directly.
+        function _availableRangeKm(plane) {
+            const p = plane || selectedPlaneSpec();
+            if (!p || !p.range_km) return null;
+            const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+            return _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
+        }
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
             return {
@@ -1659,7 +1952,7 @@
             // when on; otherwise it's nameplate range (no advanced override).
             const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
             const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            const maxLeg = plane.range_km * usable / route;
+            const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
             const chain = [t.origin, ...plannedStops, t.dest];
             for (let i = 0; i < chain.length - 1; i++) {
                 const d = CNSRouting.haversineKm(chain[i], chain[i + 1]);
@@ -1710,7 +2003,9 @@
                     origin: chain[i], destination: chain[i + 1], plane,
                     allAirports: filteredAirports,
                     allowedTypes: _allowedTypes(),
-                    options: _routingOptions(),
+                    // The available range (reserve + route padding folded in, or the
+                    // per-flight override) IS the max straight-line leg the planner allows.
+                    options: { ..._routingOptions(), maxLegKm: _availableRangeKm(plane) },
                 });
                 if (segRes.error && manual.length === 0) {
                     // Pure auto path with no manual stops to anchor on: bubble up.
@@ -1757,6 +2052,7 @@
         const TYPE_TAG = { 'small_airport': ['SMALL','type-small'], 'medium_airport': ['MED','type-medium'], 'large_airport': ['LARGE','type-large'] };
 
         function renderStops() {
+            if (typeof updateTrajectory === 'function') updateTrajectory();   // keep the trajectory pill in sync with the planned stops
             const section  = document.getElementById('stopsSection');
             const summaryEl = document.getElementById('stopsSummary');
             const listEl   = document.getElementById('stopsList');
@@ -1933,6 +2229,12 @@
         // Changing the airport-size preference re-plans the route AND must redraw
         // the map — recomputeRoute only updates the stop chain + validation.
         document.getElementById('advBias').addEventListener('change', () => { smartReplan(); drawLiveRoute(); });
+        // Collapse / expand the Suggested-route window (the head acts as the toggle).
+        document.getElementById('stopsHeadBtn')?.addEventListener('click', (e) => {
+            const sec = document.getElementById('stopsSection');
+            const collapsed = sec.classList.toggle('stops-collapsed');
+            e.currentTarget.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        });
 
         // Results panel collapse: the ✕ (revealed on hover) minimises to just the
         // dark-blue summary; clicking the summary while collapsed re-expands it.
@@ -2110,12 +2412,12 @@
             document.getElementById('result').classList.add('d-none');
             lastResult = null;
             renderStops();
-            clearRoute();
+            clearRoute(); setRoute([]);   // route gone → revert any blue route teardrops to orange
         });
         // (advReserve was removed when the global Model settings took over reserve handling)
         // Switching planes re-plans the route (range changes auto-stops) AND must
         // redraw the map — recomputeRoute only updates the stop chain + validation.
-        document.getElementById('plane').addEventListener('change', () => { _planeOverride = null; renderPlaneSpecCard(); smartReplan(); drawLiveRoute(); });
+        document.getElementById('plane').addEventListener('change', () => { _planeOverride = null; _availRangeOverride = null; renderPlaneSpecCard(); smartReplan(); drawLiveRoute(); });
 
         // ---- Selected-aircraft spec card + per-flight override --------------
         function renderPlaneSpecCard() {
@@ -2131,47 +2433,45 @@
             else thumb.classList.add('d-none');
             document.getElementById('psName').textContent = spec.name;
             _refreshSpecStats(spec);
-            // Prefill the override inputs from the EFFECTIVE spec (metric units).
-            document.getElementById('psoBattery').value = spec.battery_kwh != null ? spec.battery_kwh : '';
-            document.getElementById('psoRange').value   = spec.range_km != null ? spec.range_km : '';
-            document.getElementById('psoSpeed').value   = spec.speed_kmh != null ? spec.speed_kmh : '';
-            document.getElementById('psoCRate').value   = spec.c_rate != null ? spec.c_rate : '';
-            card.classList.toggle('overridden', !!_planeOverride);
+            // Prefill the override with the current available range so the operator
+            // sees the value they're editing (blank = use the computed default).
+            const _av = _availableRangeKm(spec);
+            document.getElementById('psoAvailRange').value = _av != null ? Math.round(_av) : '';
+            card.classList.toggle('overridden', _availRangeOverride != null);
         }
         function _refreshSpecStats(spec) {
             document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
-            document.getElementById('psBattery').textContent = (spec.battery_kwh || 0) + ' kWh';
+            document.getElementById('psBattery').textContent = fmtEnergy(spec.battery_kwh || 0);
+            document.getElementById('psSpeed').textContent = (typeof fmtSpeed === 'function') ? fmtSpeed(spec.speed_kmh) : (spec.speed_kmh + ' km/h');
+            document.getElementById('psSeats').textContent = spec.seats != null ? spec.seats : '—';
+            // Catalog has no avg_usage field — derive it from battery / range.
+            const usage = spec.avg_usage_kwh_per_100km != null ? spec.avg_usage_kwh_per_100km
+                        : (spec.battery_kwh && spec.range_km ? spec.battery_kwh / spec.range_km * 100 : null);
+            document.getElementById('psUsage').textContent =
+                usage == null ? '—' : ((typeof fmtUsage === 'function') ? fmtUsage(usage) : (Math.round(usage) + ' kWh/100km'));
+            const avail = _availableRangeKm(spec);
+            const av = document.getElementById('psAvail');
+            if (av) av.textContent = avail == null ? '—' : ((typeof fmtDist === 'function') ? fmtDist(avail) : (Math.round(avail) + ' km'));
         }
         (function _wirePlaneOverride() {
             const toggle = document.getElementById('psOverrideToggle');
             const panel  = document.getElementById('psOverride');
             if (toggle && panel) toggle.addEventListener('click', () => panel.classList.toggle('d-none'));
-            function readOverride() {
-                const base = _basePlane(); if (!base) return null;
-                const map = [['battery_kwh','psoBattery'],['range_km','psoRange'],['speed_kmh','psoSpeed'],['c_rate','psoCRate']];
-                const o = {};
-                map.forEach(([k, eid]) => {
-                    const v = parseFloat(document.getElementById(eid).value);
-                    if (isFinite(v) && v > 0 && v !== +base[k]) o[k] = v;
-                });
-                return Object.keys(o).length ? o : null;
-            }
             function onEdit() {
-                _planeOverride = readOverride();
+                const v = parseFloat(document.getElementById('psoAvailRange').value);
+                _availRangeOverride = (isFinite(v) && v > 0) ? v : null;
                 const card = document.getElementById('planeSpecCard');
                 const spec = selectedPlaneSpec();
                 if (spec) _refreshSpecStats(spec);
-                if (card) card.classList.toggle('overridden', !!_planeOverride);
+                if (card) card.classList.toggle('overridden', _availRangeOverride != null);
                 if (typeof smartReplan === 'function') smartReplan();
                 if (typeof drawLiveRoute === 'function') drawLiveRoute();
             }
-            ['psoBattery','psoRange','psoSpeed','psoCRate'].forEach(eid => {
-                const el = document.getElementById(eid);
-                if (el) { el.addEventListener('input', onEdit); el.addEventListener('change', onEdit); }
-            });
+            const _avEl = document.getElementById('psoAvailRange');
+            if (_avEl) _avEl.addEventListener('change', onEdit);   // 'change' fires on Enter / blur
             const reset = document.getElementById('psoReset');
             if (reset) reset.addEventListener('click', () => {
-                _planeOverride = null; renderPlaneSpecCard();
+                _availRangeOverride = null; renderPlaneSpecCard();
                 if (typeof smartReplan === 'function') smartReplan();
                 if (typeof drawLiveRoute === 'function') drawLiveRoute();
             });
@@ -2214,30 +2514,117 @@
             input.addEventListener('blur', () => setTimeout(() => { list.classList.add('d-none'); syncUnset(field); }, 150));
         }
 
+        // One orange airport dot with the Dep/Dest/Stop hover popup. Shared by the
+        // size-cluster layers and the NRG2fly network layer.
+        // The airport hover popup (Set as Departure/Destination/Stop) closes a short
+        // moment after the pointer leaves BOTH the dot and the popup — the grace
+        // period lets the user travel from the dot onto the popup's buttons.
+        let _apPopupTimer = null;
+        function _apCancelClose() { if (_apPopupTimer) { clearTimeout(_apPopupTimer); _apPopupTimer = null; } }
+        function _apScheduleClose() { _apCancelClose(); _apPopupTimer = setTimeout(() => map.closePopup(), 240); }
+        function _airportDot(ap) {
+            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: 7, fillColor: "#ff7800", color: "#000", weight: 1, opacity: 1, fillOpacity: 0.85 });
+            m.on('mouseover', function (e) {
+                _apCancelClose();
+                const popup = L.popup({ closeButton: false }).setLatLng(e.latlng).setContent(`
+                    <strong>${ap.name}</strong><br>
+                    <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as Departure</button>
+                    <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>
+                    <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${ap.ident}')">Set as Stop</button>`).openOn(map);
+                const el = popup.getElement();
+                if (el) { el.addEventListener('mouseenter', _apCancelClose); el.addEventListener('mouseleave', _apScheduleClose); }
+            });
+            m.on('mouseout', _apScheduleClose);
+            return m;
+        }
         async function loadAirports() {
             try {
-                const res = await fetch('/api/airports');
-                allAirports = await res.json();
+                const [airports, chargerDb] = await Promise.all([
+                    fetch('/api/airports').then(r => r.json()),
+                    fetch('/api/airport-chargers').then(r => r.json()).catch(() => ({})),
+                ]);
+                allAirports = airports;
+                nrgChargerDb = chargerDb || {};
+                const chargerIdents = new Set(Object.keys(nrgChargerDb));
                 const buckets = { small_airport: [], medium_airport: [], large_airport: [] };
                 allAirports.forEach(ap => {
                     airportByIdent[ap.ident] = ap;
+                    // Charger airports are managed by refreshNrgChargerLayer() instead of
+                    // the size buckets, so their dot can follow (size-filter OR network)
+                    // from a single source — skip here to avoid a duplicate dot.
+                    if (chargerIdents.has(ap.ident)) return;
                     if (!ap.latitude_deg || !ap.longitude_deg || !buckets[ap.type]) return;
-                    const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: 7, fillColor: "#ff7800", color: "#000", weight: 1, opacity: 1, fillOpacity: 0.85 });
-                    m.on('mouseover', function (e) {
-                        L.popup().setLatLng(e.latlng).setContent(`
-                            <strong>${ap.name}</strong><br>
-                            <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as Departure</button>
-                            <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>
-                            <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${ap.ident}')">Set as Stop</button>`).openOn(map);
-                    });
-                    buckets[ap.type].push(m);
+                    buckets[ap.type].push(_airportDot(ap));
                 });
                 Object.keys(buckets).forEach(t => clusters[t].addLayers(buckets[t]));
+                map.addLayer(nrgChargerLayer);      // always on the map; its contents are managed
+                refreshNrgChargerLayer();           // A1 Step 2 — coords are loaded now
+                // If a route was drawn before the charger DB arrived, its charger
+                // membership (halos / orange-layer skips) was computed blind — re-derive.
+                if (_routeEndpoints.length) { _routeKey = ''; setRoute(_routeEndpoints); }
             } catch (err) { console.error("Error loading airports", err); }
         }
 
+        // A1 Step 2: NRG2fly charger reference markers. Coords come from the airports
+        // DB (by ICAO); the inventory from /api/airport-chargers. Reference only —
+        // nothing here touches the planner, demand calculator, scheduler or PDF.
+        function _nrgPlugSummary(plugs) {
+            const groups = {};
+            (plugs || []).forEach(p => { const k = `${p.power_kw} kW ${p.connector}`; groups[k] = (groups[k] || 0) + 1; });
+            return Object.entries(groups).map(([k, n]) => `${n}× ${k}`).join(' · ');
+        }
+        // Is the size-filter checkbox for this airport category currently ticked?
+        function _sizeFilterOn(type) {
+            const cb = document.querySelector(`.airport-filter[value="${type}"]`);
+            return !!(cb && cb.checked);
+        }
+        // Rebuild the NRG2fly layer. Visibility model (per spec — the two are OR'd
+        // and independent: show_airport = airport_size OR nrg2fly_network):
+        //   orange dot = size-filter(ap) OR network-toggle  → the network layer sits
+        //                ON TOP of the size layers; hiding the network never hides a
+        //                medium/large airport the size filter still wants shown.
+        //   teardrop   = network-toggle only                → the NRG2fly badge,
+        //                floated above the dot so its Dep/Dest/Stop popup stays reachable.
+        // Charger airports live ONLY here (skipped from the size clusters), so this is
+        // the single source of their dot — no duplicates and the OR is exact.
+        function refreshNrgChargerLayer() {
+            nrgChargerLayer.clearLayers();
+            const t = document.getElementById('nrgChargerToggle');
+            const netOn = !t || t.checked;
+            const pin = '<span class="nrg-pin-head"><img class="nrg-pin-ico" src="/pics/logos/NRG2fly_icon_circle.png" alt=""></span><span class="nrg-pin-tail"></span>';
+            Object.entries(nrgChargerDb || {}).forEach(([icao, info]) => {
+                const ap = airportByIdent[icao];
+                if (!ap || ap.latitude_deg == null || ap.longitude_deg == null) return;
+                if (_routeChargerIdents.has(icao)) return;   // dep/dest charger → shown as the blue halo instead
+                // Dot: size filter OR network. Teardrop badge: network only.
+                if (netOn || _sizeFilterOn(ap.type)) nrgChargerLayer.addLayer(_airportDot(ap));
+                if (!netOn) return;
+                const plugs = info.plugs || [];
+                const m = L.marker([ap.latitude_deg, ap.longitude_deg], {
+                    icon: L.divIcon({ className: 'nrg-charger-wrap', iconSize: null, html: `<div class="nrg-charger-pin">${pin}</div>` }),
+                    pane: 'teardropPane', riseOnHover: true, zIndexOffset: 1000,
+                });
+                m.bindTooltip(`<strong>NRG2fly</strong> · ${info.name || icao}<br><span class="nrg-tip-sub">${plugs.length} plug${plugs.length !== 1 ? 's' : ''} — ${_nrgPlugSummary(plugs)}</span>`,
+                    { direction: 'top', className: 'nrg-tip', offset: [0, -44] });
+                nrgChargerLayer.addLayer(m);
+            });
+        }
+
+        // A1 Step 2: NRG2fly network toggle. Adds the teardrop badges and forces the
+        // charger-airport dots on regardless of size filter (OR semantics).
+        const _nrgToggle = document.getElementById('nrgChargerToggle');
+        // Toggling the network swaps each route airport between halo (on) and plain
+        // blue pin (off), so force setRoute to re-evaluate (reset the change key).
+        if (_nrgToggle) _nrgToggle.addEventListener('change', () => { _routeKey = ''; setRoute(_routeEndpoints); });
+        // Map Options → Route → Show flight labels (per-leg distance/time/energy pins).
+        const _legToggle = document.getElementById('legLabelToggle');
+        if (_legToggle) _legToggle.addEventListener('change', (e) => {
+            _showLegLabels = e.target.checked;
+            if (typeof drawLiveRoute === 'function') drawLiveRoute();
+        });
         document.querySelectorAll('.airport-filter').forEach(cb => cb.addEventListener('change', () => {
             if (cb.checked) map.addLayer(clusters[cb.value]); else map.removeLayer(clusters[cb.value]);
+            refreshNrgChargerLayer();   // charger-airport dots follow the size filters too (OR)
             // Re-plan AND redraw the live polyline. The planner refresh
             // alone wasn't enough — the map stayed on the previous red
             // over-range polyline until the user toggled "Plan with
@@ -2283,17 +2670,132 @@
         }
 
         function clearRoute() {
+            // Only the path layers. Endpoint markers are managed by setRoute /
+            // refreshRouteEndpoints (change-detected), so a same-route redraw doesn't
+            // tear them down and rebuild them — that's what avoids a blue/orange flash.
             routeLayers.forEach(l => map.removeLayer(l)); routeLayers = [];
-            if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
-            if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
+        }
+        // F5: per-leg label (distance · time · energy) centred on each leg.
+        // Uses the backend leg metrics when present (after Simulate); otherwise
+        // estimates from geometry + the selected aircraft so the live preview
+        // labels too. Retour legs are labelled once (outbound only).
+        function _legLabelText(dist, timeH, energy) {
+            const parts = [];
+            if (dist != null)            parts.push(typeof fmtDist === 'function' ? fmtDist(dist) : Math.round(dist) + ' km');
+            if (timeH != null && timeH > 0)   parts.push(typeof fmtDuration === 'function' ? fmtDuration(timeH * 60) : Math.round(timeH * 60) + ' min');
+            if (energy != null && energy > 0) parts.push(typeof fmtEnergy === 'function' ? fmtEnergy(energy) : Math.round(energy) + ' kWh');
+            return parts.join(' · ');
+        }
+        function _legEst(a, b) {
+            const km = (window.CNSRouting ? CNSRouting.haversineKm({ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] }) : 0)
+                     * (window.CNSSettings ? CNSSettings.routingFactor() : 1);
+            const plane = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
+            return {
+                dist:   km,
+                timeH:  plane && plane.speed_kmh ? km / plane.speed_kmh : null,
+                energy: plane && plane.battery_kwh && plane.range_km ? km * plane.battery_kwh / plane.range_km : null,
+            };
+        }
+        function addLegLabel(a, b, leg) {
+            if (!_showLegLabels) return;   // hidden via Map Options → Route
+            const e = _legEst(a, b);
+            const dist   = leg && leg.distance_km   != null ? leg.distance_km   : e.dist;
+            const timeH  = leg && leg.flight_time_h != null ? leg.flight_time_h : e.timeH;
+            const energy = leg && leg.energy_kwh    != null ? leg.energy_kwh    : e.energy;
+            const txt = _legLabelText(dist, timeH, energy);
+            if (!txt) return;
+            // A small route icon at the leg midpoint that expands into a brand
+            // label with the leg data on hover.
+            const m = L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], {
+                icon: L.divIcon({
+                    className: 'leg-pin-wrap', iconSize: null,
+                    html: '<div class="leg-pin"><img class="leg-pin-ico" src="/pics/route-icon.svg" alt="leg">'
+                        + '<span class="leg-pin-text">' + txt + '</span></div>',
+                }),
+                keyboard: false, riseOnHover: true,
+            }).addTo(map);
+            routeLayers.push(m);
+        }
+        // ICAO of a charger airport sitting exactly at this coordinate, else null.
+        function _chargerAt(lat, lon) {
+            for (const icao in nrgChargerDb) {
+                const ap = airportByIdent[icao];
+                if (ap && Math.abs(ap.latitude_deg - lat) < 1e-4 && Math.abs(ap.longitude_deg - lon) < 1e-4) return icao;
+            }
+            return null;
+        }
+        // Marker for one airport on the active route. Per spec:
+        //   on the NRG2fly network AND the charger layer is on → the blue HALO teardrop
+        //   else (off-network, or charger sites toggled off)    → a standard blue pin
+        // Both live in routePane, above the orange catalog dots / network teardrops.
+        // A blue route dot — covers the orange catalog dot at a "used" airport, so a
+        // route airport always reads blue regardless of the charger DB (race-proof).
+        function _routeBlueDot(e, withTip) {
+            const m = L.circleMarker([e.lat, e.lon], {
+                radius: 9, fillColor: '#2563eb', color: '#fff', weight: 2.5, fillOpacity: 1, pane: 'routePane',
+            });
+            if (withTip) m.bindTooltip(e.label, { direction: 'top' });
+            return m;
+        }
+        // The departure/destination teardrop. Blue HALO when it's an active NRG2fly
+        // site (charger AND the network layer is on); otherwise a standard blue pin.
+        // Lives in teardropPane (above routePane) so it rides on top of the route dots.
+        function _routeTeardrop(e, netOn) {
+            const icao = _chargerAt(e.lat, e.lon);
+            if (icao && netOn) {
+                const html = '<div class="nrg-charger-pin route"><span class="nrg-pin-head"><img class="nrg-pin-ico" src="/pics/logos/NRG2fly_icon_circle.png" alt=""></span><span class="nrg-pin-tail"></span></div>';
+                const m = L.marker([e.lat, e.lon], {
+                    icon: L.divIcon({ className: 'nrg-charger-wrap', iconSize: null, html }),
+                    pane: 'teardropPane', zIndexOffset: 1000, riseOnHover: true,
+                });
+                const plugs = (nrgChargerDb[icao] || {}).plugs || [];
+                m.bindTooltip(`${e.label}<br><span class="nrg-tip-sub">NRG2fly · ${plugs.length} plug${plugs.length !== 1 ? 's' : ''}</span>`,
+                    { direction: 'top', offset: [0, -44], className: 'nrg-tip' });
+                return m;
+            }
+            const m = L.marker([e.lat, e.lon], { pane: 'teardropPane' });   // standard blue pin
+            m.bindTooltip(e.label, { direction: 'top' });
+            return m;
+        }
+        // Redraw the route markers from _routeEndpoints + the toggle. Per the model:
+        //   every route airport      → a blue dot (covers its orange catalog dot)
+        //   departure & destination  → always also a teardrop (halo if charger+on, else pin)
+        function refreshRouteEndpoints() {
+            routeEndpointMarkers.forEach(m => map.removeLayer(m)); routeEndpointMarkers = [];
+            const t = document.getElementById('nrgChargerToggle');
+            const netOn = !t || t.checked;
+            _routeEndpoints.forEach(e => {
+                const isEnd = e.role === 'dep' || e.role === 'dest';
+                routeEndpointMarkers.push(_routeBlueDot(e, !isEnd).addTo(map));   // dot carries the tip for stops
+                if (isEnd) routeEndpointMarkers.push(_routeTeardrop(e, netOn).addTo(map));
+            });
+        }
+        // Set the active route's airports (origin → stops → destination). The orange
+        // network layer skips these (they're drawn blue here instead) and the endpoint
+        // markers re-render. Change-detected (incl. toggle state) so a same-route
+        // redraw — the common live-preview case — neither rebuilds nor flickers.
+        function setRoute(endpoints) {
+            const t = document.getElementById('nrgChargerToggle');
+            const netOn = !t || t.checked;
+            const key = endpoints.map(e => `${e.lat.toFixed(4)},${e.lon.toFixed(4)}`).join('|') + '#' + (netOn ? 1 : 0);
+            if (key === _routeKey) return;
+            _routeKey = key;
+            _routeEndpoints = endpoints;
+            // Only dep/dest chargers are pulled from the orange layer (they become the
+            // blue HALO). A charger used as a STOP keeps its orange network teardrop —
+            // it still gets the blue "used" dot, but no halo (halo reads as endpoint).
+            _routeChargerIdents = new Set(
+                endpoints.filter(e => e.role === 'dep' || e.role === 'dest')
+                         .map(e => _chargerAt(e.lat, e.lon)).filter(Boolean));
+            refreshNrgChargerLayer();
+            refreshRouteEndpoints();
         }
         function drawRoute(data) {
             clearRoute();
             const p1 = [data.origin.lat, data.origin.lon];
             const p2 = [data.destination.lat, data.destination.lon];
-            startMarker = L.marker(p1, { title: 'Departure: ' + data.origin.name }).addTo(map);
-
             if (data.trip_type === 'training') {
+                setRoute([{ lat: p1[0], lon: p1[1], label: 'Departure: ' + data.origin.name, role: 'dep' }]);
                 // Training: red circle around the origin. Radius = half the published
                 // training_range_km (a typical pattern reach: fly out, circle, return).
                 const radiusM = ((data.training_range_km || 0) / 2) * 1000;
@@ -2308,7 +2810,14 @@
                 return;
             }
 
-            endMarker = L.marker(p2, { title: 'Arrival: ' + data.destination.name }).addTo(map);
+            // Origin → stops → destination. Endpoint markers are drawn by setRoute
+            // (standard blue pin, or the blue-halo teardrop for active NRG2fly sites);
+            // here we only draw the flight path.
+            const endpoints = [{ lat: p1[0], lon: p1[1], label: 'Departure: ' + data.origin.name, role: 'dep' }];
+            (data.multi_leg && Array.isArray(data.stops) ? data.stops : []).forEach(s =>
+                endpoints.push({ lat: s.lat, lon: s.lon, label: s.name, role: 'stop' }));
+            endpoints.push({ lat: p2[0], lon: p2[1], label: 'Arrival: ' + data.destination.name, role: 'dest' });
+            setRoute(endpoints);
 
             // Per-leg colouring: legs flagged in data.legIssues (live preview)
             // get a red dashed segment so the operator sees at a glance which
@@ -2345,6 +2854,7 @@
                         const seg = L.polyline([a, b], legStyle(i));
                         seg.addTo(map); routeLayers.push(seg);
                     }
+                    addLegLabel(a, b, (data.legs || [])[i]);   // F5: per-leg label (outbound only)
                 }
                 if (isRetour) {
                     // Return arcs — same per-leg pattern, bowed the other way,
@@ -2357,19 +2867,7 @@
                         back.addTo(map); routeLayers.push(back);
                     }
                 }
-                // stop markers
-                data.stops.forEach(s => {
-                    // Stop markers sit on top of the catalog airport markers
-                    // at the same coordinates — bigger radius + bringToFront
-                    // so they actually read as "this is a charging stop"
-                    // rather than being hidden behind the orange dot.
-                    const m = L.circleMarker([s.lat, s.lon], { radius: 9, fillColor: '#2563eb', color: '#fff', weight: 2.5, fillOpacity: 1 })
-                        .bindTooltip(`<strong>${s.name}</strong>`, { sticky: true })
-                        .addTo(map);
-                    if (m.bringToFront) m.bringToFront();
-                    routeLayers.push(m);
-                });
-                if (shouldFit) map.fitBounds(L.featureGroup(routeLayers.concat([startMarker, endMarker])).getBounds(), _fitPadding());
+                if (shouldFit) map.fitBounds(L.featureGroup(routeLayers).getBounds(), _fitPadding());
             } else {
                 // Single-leg: if the direct hop is over-range, draw a red
                 // dashed line instead of the blue/arc layer.
@@ -2380,6 +2878,7 @@
                 }
                 routeLayers.forEach(l => l.addTo(map));
                 if (shouldFit) map.fitBounds(L.featureGroup(routeLayers).getBounds(), _fitPadding());
+                addLegLabel(p1, p2, (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
             }
         }
         // Fit-bounds padding aware of the side rails (planner left, result
@@ -2403,7 +2902,7 @@
         // numbers — purely geometric. Once the user actually clicks Simulate,
         // drawRoute(data) replaces the preview with the full result.
         function drawLiveRoute() {
-            if (!selected.origin) { clearRoute(); return; }
+            if (!selected.origin) { clearRoute(); setRoute([]); return; }
             const tripType = document.getElementById('tripType').value;
             // Training: just the origin + a circle. Destination is irrelevant.
             if (tripType === 'training') {
@@ -2418,7 +2917,7 @@
                 });
                 return;
             }
-            if (!selected.destination) { clearRoute(); return; }
+            if (!selected.destination) { clearRoute(); setRoute([]); return; }
             // Any manual stops queued? Render as multi-leg chain.
             const stops = (plannedStops || []).map(s => ({ ident: s.ident, name: s.name, lat: s.lat, lon: s.lon }));
             // Compute which legs are over-range so drawRoute can colour them
@@ -2431,7 +2930,7 @@
                 if (plane && plane.range_km) {
                     const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
                     const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                    const maxLeg = plane.range_km * usable / route;
+                    const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
                     const chain = [
                         { lat: selected.origin.latitude_deg,      lon: selected.origin.longitude_deg },
                         ...stops,
@@ -2455,7 +2954,9 @@
         // (The map-options Reset was removed — Plan-a-flight's Reset button
         // now handles clearing the drawn route alongside the form fields.)
 
+        let _lastResultData = null;
         function renderResult(data) {
+            _lastResultData = data;   // remembered so Model-settings changes re-render live
             const p = data.plane;
             // Multi-leg result has totals in different fields; map them to a unified shape
             const isMulti = !!data.multi_leg;
@@ -2490,7 +2991,7 @@
             const travelMin    = bd.flightMin + bd.enRouteMin;
             const gridKwh      = rechargeKwh * gridMul;
             document.getElementById('hlUsed').textContent = num(usedKwh);
-            document.getElementById('hlFlight').textContent = fmtDuration(flightMin);
+            document.getElementById('hlFlight').textContent = fmtDuration(travelMin);
             document.getElementById('hlTime').textContent = fmtDuration(chargeMin);
             // Sub-labels adapt to the trip context AND active model flags.
             const flags = CNSSettings.activeFlags();
@@ -2500,56 +3001,98 @@
                 : 'Energy used';
             document.getElementById('hlFlightLabel').textContent =
                 isTraining ? 'Pattern duration'
-                : isRetour ? 'Flight time (round trip)'
-                : 'Flight time';
+                : isRetour ? 'Travel time (round trip)'
+                : 'Total travel time';
             let tSub;
             if (isTraining) {
-                tSub = 'at origin' + (flags.chargerEfficiency ? ` · ${Math.round(gridKwh)} kWh grid` : '');
+                tSub = 'at origin' + (flags.chargerEfficiency ? ` · ${fmtEnergy(gridKwh)} grid` : '');
             } else if (chargeMin === 0 && isRetour) {
                 tSub = flags.landingReserve ? 'battery + reserve cover it' : 'battery covers it';
             } else if (isMulti) {
                 tSub = 'all stops combined';
             } else if (flags.chargerEfficiency) {
-                tSub = `at destination · ${Math.round(gridKwh)} kWh grid`;
+                tSub = `at destination · ${fmtEnergy(gridKwh)} grid`;
             } else {
                 tSub = 'at destination';
             }
             document.getElementById('hlTimeSub').textContent = tSub;
 
             const photo = document.getElementById('acPhoto');
-            if (p.image) { photo.src = '/pics/' + p.image; photo.alt = p.name; photo.classList.remove('d-none'); } else photo.classList.add('d-none');
+            if (p.image) { photo.src = '/pics/' + p.image; photo.alt = p.name; photo.title = p.name; photo.classList.remove('d-none'); } else photo.classList.add('d-none');
 
+            // Aircraft specs now live on the in-form spec card (F6) — the result
+            // panel only echoes the model name beside the photo.
             document.getElementById('acName').textContent = p.name;
-            document.getElementById('acSeats').textContent = p.seats ?? '—';
-            document.getElementById('acLoad').textContent = p.load_kg ? p.load_kg + ' kg' : '—';
-            document.getElementById('acBattery').textContent = p.battery_kwh + ' kWh';
-            document.getElementById('acRange').textContent = fmtDist(p.range_km);
-            document.getElementById('acSpeed').textContent = fmtSpeed(p.speed_kmh);
-            document.getElementById('acUsage').textContent = fmtUsage(p.avg_usage_kwh_per_100km);
 
-            const legs = isMulti ? data.legs_count : data.legs;
-            document.getElementById('trType').textContent =
-                isTraining ? `Training pattern (${Math.round(flightMin)} min)`
-                : (data.trip_type === 'retour' ? 'Round Trip (Retour)' : 'One-Way')
+            // ---- Route: one row per action, driven by the SAME phases the headline
+            //      and DES use (taper- + charge-target-aware), so every per-stop time
+            //      and energy reconciles with the totals and updates live with Model
+            //      settings. The terminal top-up is NOT shown here — it happens after
+            //      arrival and belongs to the Charging section. ---------------------
+            const _esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const _legRow = (from, to, distKm, durMin, energyKwh) =>
+                `<tr class="step"><td colspan="2"><div class="step-main"><span class="step-ico step-fly">✈</span>${_esc(from)} → ${_esc(to)}</div>` +
+                `<div class="step-sub">${fmtDist(distKm)} · ${fmtDuration(durMin)} · ${fmtEnergy(energyKwh)}</div></td></tr>`;
+            const _chgRow = (name, min, energy, isDest) =>
+                `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico">⚡</span>Charge at ${_esc(name)}${isDest ? '<span class="dest-badge">turnaround</span>' : ''}</div>` +
+                `<div class="step-sub">+${fmtDuration(min)} · ${fmtEnergy(energy)}</div></td></tr>`;
+            const _typeLabel = isTraining ? `Training pattern (${Math.round(flightMin)} min)`
+                : (isRetour ? 'Round Trip (Retour)' : 'One-Way')
                   + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
-            document.getElementById('trTotal').textContent = isTraining
-                ? fmtDist(data.training_range_km) + ' loop'
-                : fmtDist(data.total_distance_km) + ` (${legs} leg${legs > 1 ? 's' : ''})`;
-            // "Total travel time" = flying + the en-route charging needed to reach
-            // the destination; the terminal top-up (after you arrive — the home
-            // recharge on a retour) gets its own row. Same shape for every trip.
-            document.getElementById('trFlightLabel').textContent = 'Total travel time';
-            document.getElementById('trFlight').textContent = enRouteMin > 0.5
-                ? `${fmtDuration(travelMin)} (${fmtDuration(flightMin)} flying + ${fmtDuration(enRouteMin)} charging)`
-                : fmtDuration(travelMin);
-            document.getElementById('trFinalLabel').textContent = isRetour ? 'Back at base' : 'Final destination';
-            document.getElementById('trFinalRow').classList.remove('d-none');
+            const _steps = [`<tr class="step-head"><td>Trip type</td><td>${_esc(_typeLabel)}</td></tr>`];
+            const _destNm = (data._dest && data._dest.name) || '', _originNm = (data._origin && data._origin.name) || '';
+            if (isTraining) {
+                _steps.push(`<tr class="step"><td colspan="2"><div class="step-main"><span class="step-ico step-fly">✈</span>Training pattern</div>` +
+                    `<div class="step-sub">${fmtDist(data.training_range_km)} loop · ${fmtDuration(flightMin)} · ${fmtEnergy(usedKwh)}</div></td></tr>`);
+            } else {
+                const _phases = bd.phases || [];
+                const _chg = _phases.filter(ph => ph.kind === 'charge');
+                const _terminal = _chg.length ? _chg[_chg.length - 1] : null;   // shown in Charging, not here
+                const _legMeta = ph => {
+                    if (isMulti && typeof ph.leg === 'number') {
+                        const l = (data.legs || [])[ph.leg] || {};
+                        return { from: l.from && l.from.name, to: l.to && l.to.name, dist: l.distance_km, energy: l.energy_kwh };
+                    }
+                    return ph.leg === 'back'
+                        ? { from: _destNm, to: _originNm, dist: data.leg_distance_km, energy: data.leg_energy_kwh }
+                        : { from: _originNm, to: _destNm, dist: data.leg_distance_km, energy: data.leg_energy_kwh };
+                };
+                let _ret = false;
+                _phases.forEach(ph => {
+                    if (ph.kind === 'fly') {
+                        const m = _legMeta(ph);
+                        if (isRetour && !_ret && m.from === _destNm) { _steps.push('<tr class="step-return"><td colspan="2"><span class="ret-ico">↩</span>Return</td></tr>'); _ret = true; }
+                        _steps.push(_legRow(m.from, m.to, m.dist, ph.dur, m.energy));
+                    } else if (ph.kind === 'charge' && ph !== _terminal) {
+                        _steps.push(_chgRow(ph.name, ph.dur, ph.energy, ph.at === 'dest'));
+                    }
+                });
+            }
+            if (!isTraining) _steps.push(`<tr class="step-total"><td>Total travel</td><td>${fmtDist(data.total_distance_km)} · ${fmtDuration(travelMin)}</td></tr>`);
+            document.getElementById('routeSteps').innerHTML = _steps.join('');
+
+            // ---- Charging: the terminal top-up. It happens AFTER you arrive, so it is
+            //      deliberately NOT part of travel time — one row per fact. ----------
             const _termTgt = (window.CNSDemand && CNSDemand.resolveTargetSoc) ? CNSDemand.resolveTargetSoc({}) : null;
-            const _tgtLabel = (_termTgt != null && _termTgt < 0.999) ? `to ${Math.round(_termTgt * 100)}%` : 'to full';
-            document.getElementById('trFinal').textContent = terminalMin > 0.5
-                ? `${terminalName} · ${Math.round(arrivalSoc * 100)}% on arrival, +${fmtDuration(terminalMin)} ${_tgtLabel}`
-                : `${terminalName} · no charge needed`;
-            document.getElementById('trCharger').textContent = chargerLabel(data.charger);
+            const _tgtLabel = (_termTgt != null && _termTgt < 0.999) ? `${Math.round(_termTgt * 100)}%` : 'full';
+            const _finalLabel = isRetour ? 'Back at base' : (isTraining ? 'Recharge at' : 'Final destination');
+            const _crows = [`<tr><td>${_finalLabel}</td><td>${_esc(terminalName)}</td></tr>`];
+            if (terminalMin > 0.5) {
+                _crows.push(`<tr><td>Arrival charge</td><td>${Math.round(arrivalSoc * 100)}%</td></tr>`);
+                _crows.push(`<tr><td>Charge to</td><td>${_tgtLabel}</td></tr>`);
+                _crows.push(`<tr><td>Top-up time</td><td>+${fmtDuration(terminalMin)}</td></tr>`);
+                _crows.push(`<tr class="charge-note-row"><td colspan="2">After the trip — separate from travel time.</td></tr>`);
+            } else {
+                _crows.push(`<tr><td>Top-up</td><td>no charge needed</td></tr>`);
+            }
+            _crows.push(`<tr><td>Charger</td><td>${_esc(chargerLabel(data.charger))}</td></tr>`);
+            if (flags.chargerEfficiency) _crows.push(`<tr><td>Grid demand</td><td>${fmtEnergy(gridKwh)}</td></tr>`);
+            document.getElementById('chargeRows').innerHTML = _crows.join('');
+
+            // ---- Revenue → the airport's charging income = €/kWh × energy charged
+            const _rate = (window.CNSSettings && CNSSettings.chargeRate) ? CNSSettings.chargeRate() : 0.60;
+            document.getElementById('trEnergyCharged').textContent = fmtEnergy(rechargeKwh);
+            document.getElementById('trRevenue').textContent = `€${(_rate * rechargeKwh).toFixed(2)}  ·  €${_rate.toFixed(2)}/kWh`;
 
             const common = [
                 `avg usage      = battery / range × 100`,
@@ -2616,6 +3159,28 @@
             document.getElementById('toggleCalc').textContent = hidden ? 'Show calculation' : 'Hide calculation';
         });
 
+        // Collapsible result sections: clicking a section header folds/unfolds its rows.
+        document.getElementById('result').addEventListener('click', (e) => {
+            const hdr = e.target.closest('.sec-header');
+            if (!hdr) return;
+            const grp = hdr.closest('.result-group');
+            if (grp) hdr.setAttribute('aria-expanded', String(!grp.classList.toggle('collapsed')));
+        });
+
+        // Live-refresh the result panel when Model settings change (charge target,
+        // taper, charger efficiency …) so the preview never goes stale — no re-sim.
+        if (window.CNSSettings && CNSSettings.subscribe) {
+            CNSSettings.subscribe(() => {
+                if (_lastResultData && !document.getElementById('result').classList.contains('d-none')) {
+                    try { renderResult(_lastResultData); } catch (err) { console.error(err); }
+                }
+                // Keep the card's available-range stat in step with the reserve/usable
+                // fraction (refresh stats only — don't clobber the override input).
+                const spec = (typeof selectedPlaneSpec === 'function') ? selectedPlaneSpec() : null;
+                if (spec && typeof _refreshSpecStats === 'function') _refreshSpecStats(spec);
+            });
+        }
+
         document.getElementById('simForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const errDiv = document.getElementById('error');
@@ -2636,7 +3201,7 @@
                 validateRoute();
                 if (plannedLegIssues.length) {
                     document.getElementById('result').classList.add('d-none');
-                    errDiv.innerHTML = `<strong>Cannot simulate:</strong> ${plannedError || 'one or more legs exceed the aircraft\'s effective range.'} Adjust the route, change aircraft, or relax Model settings.`;
+                    errDiv.innerHTML = `<strong>Cannot simulate:</strong> ${plannedError || 'one or more legs exceed the aircraft\'s available range.'} Adjust the route, change aircraft, or relax Model settings.`;
                     errDiv.classList.remove('d-none');
                     return;
                 }
@@ -2744,6 +3309,7 @@
         // UI wrapper: mutate via the data module, then re-render.
         function updateTrip(id, patch) { CNSDemand.updateTrip(id, patch); renderFolder(); }
 
+        let _dcRevenueYearly = false;   // Demand-calc revenue hero: false = per day, true = per year
         function renderFolder() {
             const el = document.getElementById('folder');
             const airports = computeAirports();
@@ -2779,6 +3345,7 @@
                 // toggle is off, so this matches the original behaviour exactly.
                 const route   = CNSSettings.routingFactor();
                 const gridMul = CNSSettings.gridDemandFactor();
+                const revRate = (CNSSettings.chargeRate ? CNSSettings.chargeRate() : 0.60);   // EUR per CHARGED kWh (aircraft-side)
                 const getTargetSoc = (id) => CNSDemand.resolveTargetSoc(cfgs[id]);
                 // Per-trip cache so each multi-leg trip recomputes its charges
                 // exactly once per render (cheap, but no point doing it once per contrib).
@@ -2925,6 +3492,11 @@
                                 <div class="agg-hero-num">${fmtEnergy(dailyEnergy * gridMul)}</div>
                                 <div class="agg-hero-sub">${gridMul > 1 ? `aircraft side ${fmtEnergy(dailyEnergy)}` : 'across all flights to/from here'}</div>
                             </div>
+                            <div class="agg-hero agg-hero-rev" role="button" tabindex="0" data-rev-toggle title="Click to switch daily / yearly">
+                                <div class="agg-hero-lbl">Potential revenue ⇄</div>
+                                <div class="agg-hero-num">€${Math.round((_dcRevenueYearly ? dailyEnergy * 365 : dailyEnergy) * revRate).toLocaleString('en-US')}</div>
+                                <div class="agg-hero-sub">${_dcRevenueYearly ? 'per year' : 'per day'} · €${revRate.toFixed(2)}/kWh charged</div>
+                            </div>
                         </div>
                         <div class="agg-small-row">
                             <div class="agg-small"><div class="agg-small-lbl">Monthly</div><div class="agg-small-num">${fmtEnergy(dailyEnergy * 30.44 * gridMul)}</div></div>
@@ -2947,6 +3519,7 @@
                 </div>`;
             }).join('');
 
+            el.querySelectorAll('[data-rev-toggle]').forEach(c => c.addEventListener('click', () => { _dcRevenueYearly = !_dcRevenueYearly; renderFolder(); }));
             el.querySelectorAll('[data-rm]').forEach(btn => btn.addEventListener('click', () => { saveFolder(loadFolder().filter(t => t.id !== btn.dataset.rm)); renderFolder(); }));
             el.querySelectorAll('.trip-freq-n').forEach(inp => inp.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqN: Math.max(1, parseInt(e.target.value || '1', 10)) })));
             el.querySelectorAll('.trip-freq-unit').forEach(s => s.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqUnit: e.target.value })));
@@ -3061,7 +3634,10 @@
             const map = {
                 landingReserve:    { check: 'rsLandingReserve', extras: { minLandingSoc: { input: 'rsMinSoc',     valEl: 'rsMinSocVal',     fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 chargerEfficiency: { check: 'rsChargerEff',    extras: { value:         { input: 'rsChargerEffSl', valEl: 'rsChargerEffVal', fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
-                chargeTaper:       { check: 'rsTaper',         extras: { cRate:         { input: 'rsTaperCRate',   valEl: 'rsTaperCRateVal', fmt: (v) => `${(v / 10).toFixed(1)}C`,             to: (v) => v / 10,  from: (v) => Math.round(v * 10) } } },
+                chargeTaper:       { check: 'rsTaper',         extras: {
+                    threshold:  { input: 'rsTaperThr',   valEl: 'rsTaperThrVal',   fmt: (v) => `${v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
+                    taperPower: { input: 'rsTaperFloor', valEl: 'rsTaperFloorVal', fmt: (v) => `${v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
+                } },
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 chargeTarget:      { check: 'rsChargeTarget',  extras: { value:         { input: 'rsChargeTargetSl', valEl: 'rsChargeTargetVal', fmt: (v) => `${v}%`,                              to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
@@ -3070,7 +3646,7 @@
                 const s = CNSSettings.loadAll();
                 Object.entries(map).forEach(([key, m]) => {
                     const cb = document.getElementById(m.check);
-                    const row = cb && cb.closest('.rs-row');
+                    const row = cb && cb.closest('.rs-cell, .rs-curve');
                     if (cb) cb.checked = !!s[key].enabled;
                     if (row) row.classList.toggle('on', !!s[key].enabled);
                     Object.entries(m.extras).forEach(([field, ex]) => {
@@ -3081,6 +3657,8 @@
                     });
                 });
                 updateBadge();
+                syncRate();
+                drawTaperCurve();
             }
             function commit(key, patch) {
                 CNSSettings.save({ [key]: patch });
@@ -3112,6 +3690,64 @@
                     }
                 });
             });
+
+            // C1a: charging price — no enable toggle, it always applies to revenue.
+            const rateSl = document.getElementById('rsChargeRateSl');
+            const rateVal = document.getElementById('rsChargeRateVal');
+            const fmtRate = (cents) => `€${(cents / 100).toFixed(2)}/kWh`;
+            function syncRate() {
+                const v = (CNSSettings.loadAll().chargeRate || {}).value;
+                const cents = Math.round((v != null ? v : 0.60) * 100);
+                if (rateSl) rateSl.value = cents;
+                if (rateVal) rateVal.textContent = fmtRate(cents);
+            }
+            if (rateSl) {
+                rateSl.addEventListener('input', () => { if (rateVal) rateVal.textContent = fmtRate(+rateSl.value); });
+                rateSl.addEventListener('change', () => CNSSettings.save({ chargeRate: { value: +rateSl.value / 100 } }));
+            }
+
+            // F9: live SoC -> effective-power curve, normalised to the C-rate-capped
+            // peak. Flat to the knee, then exponential roll-off to the floor at 100%
+            // SoC — the same shape the chargeTimeMin taper model uses.
+            function drawTaperCurve() {
+                const svg = document.getElementById('taperCurve');
+                if (!svg) return;
+                const thrEl = document.getElementById('rsTaperThr'), flEl = document.getElementById('rsTaperFloor');
+                const thr = thrEl ? Math.max(0.05, Math.min(0.95, +thrEl.value / 100)) : 0.70;
+                const floor = flEl ? Math.max(0.02, Math.min(0.95, +flEl.value / 100)) : 0.15;
+                const W = 320, H = 72, mL = 26, mR = 8, mT = 8, mB = 13;
+                const px = soc => mL + soc * (W - mL - mR);
+                const py = p => (H - mB) - p * (H - mT - mB);
+                const pts = [];
+                for (let i = 0; i <= 100; i++) {
+                    const soc = i / 100;
+                    const P = soc < thr ? 1 : Math.pow(floor, (soc - thr) / Math.max(1e-6, 1 - thr));
+                    pts.push(px(soc).toFixed(1) + ',' + py(P).toFixed(1));
+                }
+                let g = '';
+                [0, 0.5, 1].forEach(p => { g += `<line x1="${mL}" y1="${py(p)}" x2="${W - mR}" y2="${py(p)}" stroke="#e2e8f0"/><text x="${mL - 3}" y="${py(p) + 3}" font-size="7" text-anchor="end" fill="#94a3b8">${p * 100}</text>`; });
+                [0, 0.5, 1].forEach(s => { g += `<text x="${px(s)}" y="${H - 7}" font-size="7" text-anchor="middle" fill="#94a3b8">${s * 100}%</text>`; });
+                const knee = `<line x1="${px(thr)}" y1="${py(0)}" x2="${px(thr)}" y2="${py(1)}" stroke="#f59e0b" stroke-dasharray="3 2"/><text x="${px(thr)}" y="${mT + 5}" font-size="7" text-anchor="middle" fill="#d97706">knee</text>`;
+                const area = `M${px(0)},${py(0)} L${pts.join(' L')} L${px(1)},${py(0)} Z`;
+                svg.innerHTML = g + knee
+                    + `<path d="${area}" fill="rgba(37,99,235,.12)"/>`
+                    + `<polyline fill="none" stroke="#2563eb" stroke-width="2" points="${pts.join(' ')}"/>`
+                    + `<text x="2" y="9" font-size="7" fill="#64748b">power %</text>`;
+            }
+            ['rsTaperThr', 'rsTaperFloor'].forEach(id => {
+                const sl = document.getElementById(id);
+                if (sl) sl.addEventListener('input', drawTaperCurve);
+            });
+
+            // F8: hover tooltips on the [?] markers (Bootstrap, body-anchored so they
+            // don't clip inside the modal).
+            document.querySelectorAll('#modelSettingsModal .rs-q[data-bs-toggle="tooltip"]').forEach(el => {
+                try { new bootstrap.Tooltip(el, { container: 'body', trigger: 'hover focus', placement: 'top' }); } catch (e) {}
+            });
+
+            // Redraw the curve + refresh the price whenever the modal opens.
+            const _msModal = document.getElementById('modelSettingsModal');
+            if (_msModal) _msModal.addEventListener('shown.bs.modal', syncFromState);
 
             // Apply settings — explicitly fan out the current state through
             // every subscriber, even if the user didn't change any control
@@ -3204,7 +3840,7 @@
         function addPlaneOption(p) {
             const opt = document.createElement('option');
             opt.value = p.id;
-            opt.textContent = `${p.name} — ${p.battery_kwh} kWh (custom)`;
+            opt.textContent = `${p.name} — ${fmtEnergy(p.battery_kwh)} (custom)`;
             planeSelect.insertBefore(opt, planeSelect.querySelector('option[value="__custom__"]'));
         }
         function addChargerOption(c) {
@@ -3253,7 +3889,7 @@
             const el = document.getElementById('cpList');
             const rows = planes.length
                 ? '<ul>' + planes.map(p =>
-                    `<li><span><strong>${p.name}</strong> <small>— ${p.battery_kwh} kWh · ${p.range_km} km · ${p.speed_kmh} km/h</small></span>` +
+                    `<li><span><strong>${p.name}</strong> <small>— ${fmtEnergy(p.battery_kwh)} · ${fmtDist(p.range_km)} · ${fmtSpeed(p.speed_kmh)}</small></span>` +
                     `<button class="cl-rm" type="button" title="Remove" data-rm-plane="${p.id}">×</button></li>`).join('') + '</ul>'
                 : '<div class="cl-empty">No custom aircraft yet.</div>';
             el.innerHTML =
@@ -3274,7 +3910,7 @@
             const el = document.getElementById('ccList');
             const rows = chargers.length
                 ? '<ul>' + chargers.map(c =>
-                    `<li><span><strong>${c.name}</strong> <small>— ${c.power_kw} kW</small></span>` +
+                    `<li><span><strong>${c.name}</strong> <small>— ${fmtPower(c.power_kw)}</small></span>` +
                     `<button class="cl-rm" type="button" title="Remove" data-rm-charger="${c.id}">×</button></li>`).join('') + '</ul>'
                 : '<div class="cl-empty">No custom chargers yet.</div>';
             el.innerHTML =
@@ -3410,6 +4046,27 @@
             }
             renderPlaneSpecCard();
         }
+
+        // News ticker — populate the marquee from static/ticker.json (edit that
+        // file to update the headlines; it's read fresh on each load). Falls back
+        // to the default content baked into the HTML if the fetch fails.
+        (function initNewsTicker() {
+            const track = document.getElementById('cnsTickerTrack');
+            if (!track) return;
+            const SEP = '  •••  ';
+            const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            fetch('/static/ticker.json', { cache: 'no-store' })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((d) => {
+                    const items = d && Array.isArray(d.items) ? d.items.filter(Boolean) : null;
+                    if (!items || !items.length) return;
+                    const line = SEP + items.map(esc).join(SEP);
+                    track.innerHTML =
+                        '<span class="cns-ticker-text">' + line + '</span>' +
+                        '<span class="cns-ticker-text" aria-hidden="true">' + line + '</span>';
+                })
+                .catch(() => { /* keep the HTML default */ });
+        })();
     </script>
 </body>
 </html>
