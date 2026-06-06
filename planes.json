@@ -4,10 +4,9 @@
     "name": "Velis Electro",
     "seats": 2,
     "battery_kwh": 22,
-    "range_km": 50,
+    "range_km": 100,
     "speed_kmh": 150,
     "training_range_km": 100,
-    "c_rate": 0.9,
     "image": "pipistrel.jpg",
     "svg": "pepistrel.svg"
   },
@@ -17,7 +16,7 @@
     "seats": 6,
     "load_kg": 500,
     "battery_kwh": 225,
-    "range_km": 400,
+    "range_km": 600,
     "speed_kmh": 250,
     "image": "beta.png",
     "svg": "beta.svg"
@@ -41,7 +40,6 @@
     "battery_kwh": 14000,
     "range_km": 800,
     "speed_kmh": 720,
-    "c_rate": 1.0,
     "image": "elysian.jpg",
     "svg": "vaeridion.svg",
     "simultaneous_charging": { "enabled": true, "max": 2 }
