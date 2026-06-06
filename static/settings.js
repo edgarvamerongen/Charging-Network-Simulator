@@ -17,8 +17,12 @@
  *                              limited to min(charger kW, C-rate × battery kWh),
  *                              because a small pack can't physically absorb an
  *                              over-sized charger (e.g. a 3.75 MW MCS into a
- *                              22 kWh Pipistrel). Per-aircraft `c_rate` overrides
- *                              the global `cRate` default.
+ *                              22 kWh Pipistrel). The global `cRate` default is
+ *                              deliberately high (5C) so it does NOT bind for the
+ *                              current fleet — the cap is kept as a hook, not an
+ *                              active constraint. The catalog no longer ships a
+ *                              per-aircraft `c_rate`; if one is re-added it would
+ *                              override the global default (see BACKLOG `max_kw`).
  *                          (b) CV-phase taper — above `threshold` SoC power
  *                              rolls off exponentially toward `taperPower × peak`, stretching the
  *                              top-up to near-full.
@@ -37,14 +41,16 @@
  * Depends on: CNSState (load earlier).
  */
 window.CNSSettings = (function () {
-    // v2: the realistic model is now the default (reserve + padding + taper +
-    // charge target all ON). Bumping the key from v1 retires browsers' old
-    // all-off blobs so everyone picks up the new defaults on next load.
-    const KEY = 'cns_settings_v2';
+    // v3: the realistic model is the default (reserve + padding + taper +
+    // charge target all ON), and the C-rate acceptance cap is now a non-binding
+    // 5C hook (per-aircraft `c_rate` retired from the catalog). Bumping the key
+    // retires browsers' old blobs — including any persisted 2.0C cap — so
+    // everyone picks up the new defaults on next load.
+    const KEY = 'cns_settings_v3';
     const DEFAULTS = Object.freeze({
         landingReserve:    { enabled: true,  minLandingSoc: 0.30 },   // 0..1
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
-        chargeTaper:       { enabled: true,  threshold: 0.70, taperPower: 0.15, cRate: 2.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate (per-plane c_rate overrides)
+        chargeTaper:       { enabled: true,  threshold: 0.70, taperPower: 0.15, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
         routingPadding:    { enabled: true,  factor: 1.05 },          // ≥1
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
@@ -156,7 +162,7 @@ window.CNSSettings = (function () {
         if (!batt) return p;
         const cr = (planeCRate != null && isFinite(+planeCRate) && +planeCRate > 0)
             ? +planeCRate
-            : Math.max(0.1, Math.min(10, +s.cRate || 2.0));
+            : Math.max(0.1, Math.min(10, +s.cRate || 5.0));
         return Math.min(p, cr * batt);
     }
 

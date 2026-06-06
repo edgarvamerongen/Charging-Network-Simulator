@@ -1569,7 +1569,7 @@
                     <div class="rs-curve">
                         <div class="rs-cell-head">
                             <label class="rs-toggle"><input type="checkbox" id="rsTaper"><span>Charging curve (CC → CV taper)</span></label>
-                            <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Power runs flat to the knee SoC, then rolls off exponentially toward the floor at 100% — a realistic CV taper that stretches the final top-up.">?</span>
+                            <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Power runs flat to the knee SoC, then rolls off exponentially toward the floor at 100% — a realistic CV taper that stretches the final top-up. A battery C-rate cap (min of charger kW and C-rate × pack kWh) also rides on this toggle, but the default 5C is non-binding for the current fleet — a hook to re-enable per-aircraft acceptance limits later.">?</span>
                         </div>
                         <div class="rs-curve-body">
                             <svg id="taperCurve" class="taper-curve" viewBox="0 0 320 72" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Charge power vs state of charge"></svg>
