@@ -48,21 +48,21 @@ window.CNSTour = (function () {
     }
 
     // ---- demo-data seeding ----------------------------------------------------
-    // Seed a realistic Lelystad → Frankfurt retour with the Beta Alia CX300 so
+    // Seed a realistic Lelystad → Munich retour with the Beta Alia CX300 so
     // the tour's downstream steps (result panel, demand calc, scheduler) have
     // non-zero numbers to show. We don't simulate or save to the folder yet —
     // those happen mid-tour to demonstrate the buttons.
     async function _seedDemoForm() {
         const airports = await fetch('/api/airports').then(r => r.json());
-        const lelystad  = airports.find(a => a.ident === 'EHLE');
-        const frankfurt = airports.find(a => a.ident === 'EDDF');
-        if (!lelystad || !frankfurt) return;
+        const lelystad = airports.find(a => a.ident === 'EHLE');
+        const munich   = airports.find(a => a.ident === 'EDDM');
+        if (!lelystad || !munich) return;
 
-        // Beta Alia CX300: 400 km range, but with the realistic model factors on
+        // Beta Alia CX300: 600 km range, but with the realistic model factors on
         // by default (30% landing reserve + ~5% routing padding) its usable reach
-        // drops to ~280 km — so Lelystad→Frankfurt (~365 km) no longer fits in one
-        // hop and the auto-planner inserts a charging stop. That's exactly what we
-        // showcase at the Model-settings + Suggested-route steps.
+        // drops to ~400 km — so Lelystad→Munich (~636 km) no longer fits in one
+        // hop and the auto-planner inserts a charging stop (Siegerland). That's
+        // exactly what we showcase at the Model-settings + Suggested-route steps.
         //
         // Order matters: set plane FIRST, so that when pickAirport fires its
         // smartReplan + updateTrajectory the over-range warning in the trajectory
@@ -77,7 +77,7 @@ window.CNSTour = (function () {
         document.getElementById('freqN').value = 1;
         // "Plan with charging stops" must START OFF so the tour can reveal it at
         // its dedicated step — the operator then sees the natural progression:
-        // first the over-range warning (the Beta can't reach Frankfurt direct
+        // first the over-range warning (the Beta can't reach Munich direct
         // under the applied 30% reserve + padding), then the toggle flips on and
         // the planner adds the stop. The page's own _applyDefaultFlight() enables
         // the toggle on load and planReset does NOT clear it, so we explicitly
@@ -90,7 +90,7 @@ window.CNSTour = (function () {
         }
         if (typeof pickAirport === 'function') {
             pickAirport('origin', lelystad);
-            pickAirport('destination', frankfurt);
+            pickAirport('destination', munich);
         }
     }
 
@@ -150,13 +150,13 @@ window.CNSTour = (function () {
         const planeOf = (id) => (window.PLANES_BY_ID || {})[id];
         const chargerId = 'dc_250';
         const coord = (ap) => ({ ident: ap.ident, name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg });
-        // All out of Lelystad: local NL hops, a 2nd Frankfurt run (the demo flight
-        // already in the folder is the 1st), and a one-way into N. France.
+        // All out of Lelystad: local NL hops, a Frankfurt run (the Lelystad→Munich
+        // demo flight is already in the folder), and a one-way into N. France.
         const specs = [
             { dest: 'EHAM', plane: 'beta_plane', type: 'retour',  freqN: 4 },   // Schiphol (commuter)
             { dest: 'EHRD', plane: 'beta_plane', type: 'retour',  freqN: 3 },   // Rotterdam
             { dest: 'EHTE', plane: 'beta_plane', type: 'one-way', freqN: 2 },   // Teuge
-            { dest: 'EDDF', plane: 'vaeridion',  type: 'one-way', freqN: 1 },   // Frankfurt (2nd)
+            { dest: 'EDDF', plane: 'vaeridion',  type: 'one-way', freqN: 1 },   // Frankfurt (Vaeridion)
             { dest: 'LFQQ', plane: 'beta_plane', type: 'one-way', freqN: 1 },   // Lille, FR
         ];
         async function build(spec) {
@@ -187,7 +187,7 @@ window.CNSTour = (function () {
         }
         const entries = (await Promise.all(specs.map(build))).filter(Boolean);
         if (!entries.length) return;
-        const existing = CNSDemand.loadFolder();        // keep the demo Lelystad→Frankfurt flight
+        const existing = CNSDemand.loadFolder();        // keep the demo Lelystad→Munich flight
         CNSDemand.saveFolder(existing.concat(entries));
         if (typeof renderFolder === 'function') renderFolder();
     }
@@ -314,7 +314,7 @@ window.CNSTour = (function () {
                         '<p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — a defensible, client-ready sizing brief exported as a PDF, not a back-of-envelope guess. We advise starting with this demo tour, then running your own simulations.</p>' +
                         '<p>Got questions about your network? <strong>Merlijn van Vliet</strong> and <strong>Jacco Bink</strong> would love to hear from you.</p>' +
                         _leadershipCardsHTML() +
-                        '<p class="tour-foot">Pre-filled example: <strong>Beta Alia · Lelystad → Frankfurt</strong>. Press <kbd>Esc</kbd> to skip any time.</p>',
+                        '<p class="tour-foot">Pre-filled example: <strong>Beta Alia · Lelystad → Munich</strong>. Press <kbd>Esc</kbd> to skip any time.</p>',
                     side: 'over', align: 'center',
                     popoverClass: 'cns-tour-popover cns-tour-welcome',
                 },
@@ -365,19 +365,19 @@ window.CNSTour = (function () {
             // 8. Aircraft
             {
                 element: '#plane',
-                popover: { title: 'Aircraft', description: 'Pick a model — the card below shows its range, battery, cruise speed, seats and a photo. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
+                popover: { title: 'Aircraft', description: 'Pick a model — the card shows its catalog range and the model-adjusted <strong>available range</strong>, plus battery, cruise speed and seats. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
             },
             // 9. Model settings — surfaced BEFORE the route so the factors that
             // shape it (and force a stop) are understood first.
             {
                 element: '#planModelSettingsBtn',
-                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. It also holds the charging price (€/kWh) and charger efficiency behind the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are exactly why the Beta Alia\'s 400&nbsp;km range can\'t reach Frankfurt in one hop — so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
+                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. It also holds the charging price (€/kWh) and charger efficiency behind the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are exactly why the Beta Alia\'s 600&nbsp;km range can\'t reach Munich in one hop — so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
             },
             // 10. Plan with charging stops — toggle it ON here so the user watches
             // the suggested route appear in the next step.
             {
                 element: '.stops-toggle-row',
-                popover: { title: 'Plan with charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. Watch — we\'re turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Frankfurt run.', side: 'right' },
+                popover: { title: 'Plan with charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. Watch — we\'re turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Munich run.', side: 'right' },
                 onHighlightStarted: async () => { await _ensureStopsOn(); },
             },
             // 11. Suggested route — the stop the applied factors forced.
@@ -543,7 +543,7 @@ window.CNSTour = (function () {
             // playing, and pin the popover near the bottom of the viewport
             // so it doesn't cover the map.
             {
-                popover: { title: 'Overview', description: 'Above, every saved flight flies its real, routed trajectory — adjust the speed with the slider, and watch planes pause to charge. This is the demo network: a handful of real routes out of Lelystad — local hops to Schiphol, Rotterdam and Teuge, two runs to Frankfurt, and a one-way to Lille. Close the modal when you\'re done.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-bottom' },
+                popover: { title: 'Overview', description: 'Above, every saved flight flies its real, routed trajectory — adjust the speed with the slider, and watch planes pause to charge. This is the demo network: a handful of real routes out of Lelystad — local hops to Schiphol, Rotterdam and Teuge, longer runs to Munich and Frankfurt, and a one-way to Lille. Close the modal when you\'re done.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-bottom' },
                 onHighlightStarted: async () => {
                     // Drawer must be open momentarily so the View-flights-
                     // on-map button is available to click; then close it so
