@@ -68,3 +68,9 @@ before `airport-db`'s map layer.
   entirely (`settings.js effectiveChargePower`, the DEFAULT + accessor) — the C-rate slider
   was already pulled from Model settings as redundant; the model still uses the 2.0C default
   until `max_kw` replaces it.
+- **Available-range override → battery-used % (raised 2026-06-05, plane-card review):**
+  the per-flight "available range" override (Edit for this flight) currently only shrinks the
+  planner's reach. In reality a *smaller* edited range means a *smaller* slice of the battery is
+  used (more reserve left). Future: convert the edited available range into a "fraction of
+  battery used" and feed that into the charging calc (less energy delivered, shorter dwell) so
+  the demand/charging numbers stay realistic — not just the routing reach.
