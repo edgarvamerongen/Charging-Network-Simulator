@@ -77,3 +77,27 @@ Padding (×1.05) is the **flown path** overhead. It must be applied **exactly on
 4. Land `flight-model.js` **dark**; prove parity vs goldens (no view changes yet).
 5. Migrate views to read the engine, one green step at a time (map labels → trajectory/over-range → tripPhases/tripBreakdown + result rows → demand drawer + report.js).
 6. *(Deferred, separate sign-off each)* the four G4 behavior changes; then the mobile-gated steps 7–8.
+
+---
+
+## F. Resolved decisions (the engine is built to these) — ruled 2026-06-07
+
+**Interface (the engine's API/shape):**
+- **R1 · Waypoint expansion → engine owns it.** Caller passes `origin + stops + dest` only (NEVER pre-mirrored); engine derives the retour return + the training loop from `tripType`. Kills mirror drift; one expander.
+- **R2 · Per-node targets → resolver callback `getTargetSoc(ident)`** (mirrors `recomputeMultiLegCharges`; keys by ident so a twice-visited retour stop resolves correctly). The ONLY preview-vs-demand difference.
+- **R3 · Charge time → two-layer.** Engine emits energy + a preview/**template** charge time; the DES re-sizes per the charger actually claimed. Lowest dur-drift risk; the scheduler/report views are NOT math-free and the spec must say so.
+- **R4 · Saved trips → persist the full effective plane spec on save.** So a custom-plane trip rebuilds from coords even if that plane is later deleted / opened on another device. Additive `addFolder` schema change (range/speed/etc.). *(Catalog planes were never at risk; the per-flight range override never needed persisting — it only steers routing, not energy.)*
+
+**Behavior / thresholds (each can move a number → each ruled explicitly):**
+- **R5 · Over-range test → padded leg energy > usable battery.** One canonical definition (unifies the map's red leg with the walk's flag). Slightly STRICTER than `sim.py`'s raw-distance test → a few routes that simulate today may newly flag. Add the boundary golden.
+- **R6 · Over-range savability → flag only; the app still blocks saving.** Engine REPRESENTS over-range (arrival clamps to 0, `overRange` set) but Simulate/Add-to-demand still refuses to save one, matching today. "Can represent" ≠ "can save."
+- **R7 · Charge-time taper positioning → keep today's approximation.** Engine reproduces current charge times exactly; correct-SoC taper placement is a separate, signed-off follow-up. G4-consistent.
+- **R8 · Reserve basis → global `usableFraction` slider only.** Drop the dead per-aircraft `min_landing_soc` from the schema + fix the contradictory `settings.js` comments.
+
+**Confirmations:**
+- **R9 · Charge energy → NO `charge ≤ prev leg` clamp.** A charge exceeding its prior leg ("+13 after a 9 kWh leg") is correct physics (depart full + carry a deficit forward). Rewrite the spec's §6 wording that implies it's a bug. The engine fixes the raw-vs-padded display fork + missing SoC, not this energy.
+- **R10 · Elysian `simultaneous_charging` → scoped OUT.** Engine charges serially → Elysian times come out **known-pessimistic**; add a spec note + a backlog item. Wiring it is a separate project.
+- **R11 · Mobile → OK to break.** ⚠️ The engine may change the shared public signatures freely; the **mobile session must do a migration pass afterward.** `index_mobile.html` loads `settings/routing/demand/scheduler/charging.js` and `mobile.js` calls `CNSDemand.{computeAirports,loadFolder,loadCfg,saveFolder}`, `CNSScheduler.{summary,init}`, `CNSSettings.{loadAll,save,subscribe,reset}`, `CNSRouting.{planRoute,haversineKm}` — **these WILL break when the engine lands.** Flag the mobile session loudly (CLAUDE.md rule 2). *(This relaxes only the JS-compat half; `sim.py`/`/api/simulate` retention is still G3 unless separately revisited.)*
+- **R12 · Safety net → runtime kill-switch flag per step + bake period.** Each migration step ships behind a `CNSSettings` flag (instant disable on drift); legacy engines (`sim.py` energy, `_legEst`, the demand walks) are deleted in a FINAL PR after a bake, not eagerly.
+
+**Implementation details (applied per the audit — no further decision):** `phases[]` is a **superset** of today's phase objects (leg/at/atIdx/power/energy); `charges[]` is **position-indexed by `atIndex`** (never keyed by ident); the calc-panel "show your work" math STAYS (step 8's "zero math in index.html" excludes that transparency block); the origin node is **inert `billable:false` metadata** for #33 (charges[] stays billable-only); #33/#34/#35 stay OUT of the engine PRs; re-derive every consumer by **function name**, not the spec's drifted line numbers.
