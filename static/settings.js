@@ -54,6 +54,7 @@ window.CNSSettings = (function () {
         routingPadding:    { enabled: true,  factor: 1.05 },          // ≥1
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
+        flightEngine:      { enabled: false },                        // R12 kill-switch: when on, views read static/flight-model.js (CNSFlight) instead of the legacy per-view math; default OFF during the migration bake
     });
 
     // Cloned so call sites can't mutate the frozen defaults via the returned object.

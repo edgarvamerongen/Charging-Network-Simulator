@@ -1718,6 +1718,7 @@
     <script src="/static/chargers.js?v={{ asset_version }}"></script>
     <script src="/static/demand.js?v={{ asset_version }}"></script>
     <script src="/static/routing.js?v={{ asset_version }}"></script>
+    <script src="/static/flight-model.js?v={{ asset_version }}"></script>
     <!-- domain modules -->
     <script src="/static/charging.js?v={{ asset_version }}"></script>
     <script src="/static/scheduler.js?v={{ asset_version }}"></script>
@@ -2767,17 +2768,47 @@
                 energy: plane && plane.battery_kwh && plane.range_km ? flownKm * plane.battery_kwh / plane.range_km : null,  // flown
             };
         }
+        // ---- Flight engine (static/flight-model.js) bridge ------------------------
+        // R12 kill-switch: a view reads CNSFlight when the flag is on, else the legacy math.
+        function _flightEngineOn() {
+            return !!(window.CNSFlight && window.CNSSettings && (CNSSettings.loadAll().flightEngine || {}).enabled);
+        }
+        // Build the engine FlightProfile for the just-simulated trip. Waypoints are
+        // origin + planned stops + dest; the engine OWNS the retour mirror + training
+        // loop (R1). Preview target is the GLOBAL default (the flight isn't in the
+        // network yet) — matches CNSScheduler.tripBreakdown's preview context.
+        function _engineProfile(data) {
+            if (!window.CNSFlight || !data || !data._origin) return null;
+            try {
+                const o = data._origin, d = data._dest || data._origin;
+                const wp = (x) => ({ ident: x.ident, name: x.name, lat: x.lat, lon: x.lon });
+                const stops = (data.stops || []).map(wp);
+                const waypoints = (data.trip_type === 'training') ? [wp(o)] : [wp(o), ...stops, wp(d)];
+                return CNSFlight.simulateTrip(selectedPlaneSpec(), waypoints, {
+                    tripType: data.trip_type,
+                    getTargetSoc: () => (window.CNSDemand && CNSDemand.resolveTargetSoc ? CNSDemand.resolveTargetSoc({}) : null),
+                    getChargerKw: () => (data.charger && data.charger.power_kw) || 0,
+                    trainingRangeKm: data.training_range_km,
+                });
+            } catch (err) { console.warn('[CNSFlight] profile failed; legacy fallback:', err); return null; }
+        }
         function addLegLabel(a, b, leg) {
             if (!_showLegLabels) return;   // hidden via Map Options → Route
-            const e = _legEst(a, b);
-            // Routing padding is for the FLOWN path: it lifts TIME + ENERGY (the plane
-            // flies ~5% farther than the straight line) but NOT the geographic DISTANCE
-            // (fixed; matches the map line + the reach check — padding it too would
-            // double-count against the available range). sim.py legs are raw.
-            const _r = (window.CNSSettings ? CNSSettings.routingFactor() : 1);
-            const dist   = leg && leg.distance_km   != null ? leg.distance_km        : e.dist;
-            const timeH  = leg && leg.flight_time_h != null ? leg.flight_time_h * _r : e.timeH;
-            const energy = leg && leg.energy_kwh    != null ? leg.energy_kwh    * _r : e.energy;
+            let dist, timeH, energy;
+            if (leg && leg.distKm != null) {
+                // Engine leg (CNSFlight.legs[i]): final values — geographic distance,
+                // energy + time already on the flown path. No further padding here.
+                dist = leg.distKm; energy = leg.energyKwh; timeH = (leg.flightMin || 0) / 60;
+            } else {
+                // Legacy raw leg (sim.py): routing padding lifts the FLOWN path (TIME +
+                // ENERGY × routingFactor) but NOT the geographic DISTANCE (matches the map
+                // line + the reach check). The _legEst fallback is already padded.
+                const e = _legEst(a, b);
+                const _r = (window.CNSSettings ? CNSSettings.routingFactor() : 1);
+                dist   = leg && leg.distance_km   != null ? leg.distance_km        : e.dist;
+                timeH  = leg && leg.flight_time_h != null ? leg.flight_time_h * _r : e.timeH;
+                energy = leg && leg.energy_kwh    != null ? leg.energy_kwh    * _r : e.energy;
+            }
             const txt = _legLabelText(dist, timeH, energy);
             if (!txt) return;
             // A small route icon at the leg midpoint that expands into a brand
@@ -2868,6 +2899,7 @@
         }
         function drawRoute(data) {
             clearRoute();
+            const _prof = _flightEngineOn() ? _engineProfile(data) : null;   // R12: read engine legs when the flag is on
             const p1 = [data.origin.lat, data.origin.lon];
             const p2 = [data.destination.lat, data.destination.lon];
             if (data.trip_type === 'training') {
@@ -2930,7 +2962,7 @@
                         const seg = L.polyline([a, b], legStyle(i));
                         seg.addTo(map); routeLayers.push(seg);
                     }
-                    addLegLabel(a, b, (data.legs || [])[i]);   // F5: per-leg label (outbound only)
+                    addLegLabel(a, b, (_prof && _prof.legs[i]) || (data.legs || [])[i]);   // F5: per-leg label (outbound only)
                 }
                 if (isRetour) {
                     // Return arcs — same per-leg pattern, bowed the other way,
@@ -2954,7 +2986,11 @@
                 }
                 routeLayers.forEach(l => l.addTo(map));
                 if (shouldFit) map.fitBounds(L.featureGroup(routeLayers).getBounds(), _fitPadding());
-                addLegLabel(p1, p2, (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
+                // Single-leg retour stays on LEGACY: its label time is the ROUND-TRIP time
+                // (data.flight_time_h, a one-leg-label/round-trip-time quirk). The engine's
+                // one-leg time is correct but would halve the label on flag flip — deferred
+                // fix to keep this migration behaviour-neutral. One-way single-leg uses the engine.
+                addLegLabel(p1, p2, (_prof && data.trip_type !== 'retour' && _prof.legs[0]) || (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
             }
         }
         // Fit-bounds padding aware of the side rails (planner left, result
