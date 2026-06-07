@@ -46,7 +46,7 @@ export function loadStack() {
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const f of ['settings.js', 'routing.js', 'demand.js', 'scheduler.js']) {
+  for (const f of ['settings.js', 'routing.js', 'flight-model.js', 'demand.js', 'scheduler.js']) {
     vm.runInContext(fs.readFileSync(path.join(REPO, 'static', f), 'utf8'), sandbox);
   }
   return sandbox;
@@ -61,7 +61,7 @@ export const SETTINGS = {
 };
 
 // deterministic airports (coords lifted from tests/_helpers.py)
-const AP = {
+export const AP = {
   EHAM: { name: 'Amsterdam', lat: 52.308601, lon: 4.76389 },
   LFPG: { name: 'Paris',     lat: 49.00896,  lon: 2.554117 },
   EGLL: { name: 'London',    lat: 51.470748, lon: -0.459909 },
