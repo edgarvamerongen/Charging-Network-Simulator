@@ -67,4 +67,12 @@ CHARGER_400 = {"id": "ccs", "name": "CCS", "power_kw": 400}
 
 def make_sim():
     from sim import Simulator
-    return Simulator(base_dir=REPO_ROOT)
+    s = Simulator(base_dir=REPO_ROOT)
+    # The DC-charger catalog rework (chargers.json) dropped the legacy 172 kW
+    # "aircraft_charger" that these tests pin their charge-time assertions to.
+    # Re-inject it as a TEST fixture so the suite stays charger-stable; the
+    # production catalog is untouched.
+    for ref in (CHARGER_172, CHARGER_22, CHARGER_400):
+        if not any(c.get('id') == ref['id'] for c in s.chargers):
+            s.chargers.append(dict(ref))
+    return s
