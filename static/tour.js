@@ -19,18 +19,16 @@ window.CNSTour = (function () {
 
     // ---- leadership cards (welcome slide) ------------------------------------
     // Rendered inline in the welcome popover in the nrg2fly.com/about.html
-    // "Leadership" style: circular photo, name, role, bio, credential tag pills.
+    // "Leadership" style: circular photo, name, role, credential tag pills.
     // Data + photos come from the crew/ folder (photos served from pics/crew/).
     const _leadership = [
         {
             name: 'Jacco Bink', role: 'COO', photo: '/pics/crew/jacco.jpeg',
-            bio: 'A background at KLM and Alliander brings deep expertise in aviation and energy systems. As Consulting Director he leads the rollout of charging infrastructure at airports across the Netherlands and Europe.',
             tags: ['KLM', 'Alliander'],
             linkedin: 'https://www.linkedin.com/in/jacco-bink-ba6254/', email: 'jacco@nrg2fly.com',
         },
         {
             name: 'Merlijn van Vliet', role: 'CEO', photo: '/pics/crew/merlijn.jpeg',
-            bio: "Co-owner of Europe's first electric flight academy and board member of the Electric Flying Connection. Combines brand strategy with a passion for electric aviation; leads NRG2fly's European partnerships and ecosystem building.",
             tags: ['✈ Pilot', 'E-Flight Academy', 'Electric Flying Connection'],
             linkedin: 'https://www.linkedin.com/in/merlijnvanvliet/', email: 'merlijn@nrg2fly.com',
         },
@@ -41,7 +39,6 @@ window.CNSTour = (function () {
               `<img class="tlc-photo" src="${c.photo}" alt="${c.name}" onerror="this.style.visibility='hidden'">` +
               `<div class="tlc-name">${c.name}</div>` +
               `<div class="tlc-role">${c.role}</div>` +
-              `<p class="tlc-bio">${c.bio}</p>` +
               `<div class="tlc-tags">${c.tags.map((t) => `<span class="tlc-tag">${t}</span>`).join('')}</div>` +
               `<div class="tlc-links"><a href="${c.linkedin}" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:${c.email}">${c.email}</a></div>` +
             '</div>';
@@ -51,21 +48,21 @@ window.CNSTour = (function () {
     }
 
     // ---- demo-data seeding ----------------------------------------------------
-    // Seed a realistic Lelystad → Frankfurt retour with the Beta Alia CX300 so
+    // Seed a realistic Lelystad → Munich retour with the Beta Alia CX300 so
     // the tour's downstream steps (result panel, demand calc, scheduler) have
     // non-zero numbers to show. We don't simulate or save to the folder yet —
     // those happen mid-tour to demonstrate the buttons.
     async function _seedDemoForm() {
         const airports = await fetch('/api/airports').then(r => r.json());
-        const lelystad  = airports.find(a => a.ident === 'EHLE');
-        const frankfurt = airports.find(a => a.ident === 'EDDF');
-        if (!lelystad || !frankfurt) return;
+        const lelystad = airports.find(a => a.ident === 'EHLE');
+        const munich   = airports.find(a => a.ident === 'EDDM');
+        if (!lelystad || !munich) return;
 
-        // Beta Alia CX300: 400 km range, but with the realistic model factors on
+        // Beta Alia CX300: 600 km range, but with the realistic model factors on
         // by default (30% landing reserve + ~5% routing padding) its usable reach
-        // drops to ~280 km — so Lelystad→Frankfurt (~365 km) no longer fits in one
-        // hop and the auto-planner inserts a charging stop. That's exactly what we
-        // showcase at the Model-settings + Suggested-route steps.
+        // drops to ~400 km — so Lelystad→Munich (~636 km) no longer fits in one
+        // hop and the auto-planner inserts a charging stop (Siegerland). That's
+        // exactly what we showcase at the Model-settings + Suggested-route steps.
         //
         // Order matters: set plane FIRST, so that when pickAirport fires its
         // smartReplan + updateTrajectory the over-range warning in the trajectory
@@ -78,13 +75,22 @@ window.CNSTour = (function () {
         document.getElementById('charger').value = 'dc_250';
         document.getElementById('charger').dispatchEvent(new Event('change'));
         document.getElementById('freqN').value = 1;
-        // NOTE: "Plan with charging stops" is left OFF here on purpose. The tour
-        // enables it at the Suggested-route step so the operator sees the natural
-        // progression — first the warning that the Beta can't reach Frankfurt
-        // direct under the applied reserve, then the planner adding a stop.
+        // "Plan with charging stops" must START OFF so the tour can reveal it at
+        // its dedicated step — the operator then sees the natural progression:
+        // first the over-range warning (the Beta can't reach Munich direct
+        // under the applied 30% reserve + padding), then the toggle flips on and
+        // the planner adds the stop. The page's own _applyDefaultFlight() enables
+        // the toggle on load and planReset does NOT clear it, so we explicitly
+        // switch it back off here — otherwise the route is already split before
+        // the user reaches the toggle, and steps 6 + 10 read as stale.
+        const stopsToggle = document.getElementById('withStops');
+        if (stopsToggle && stopsToggle.checked) {
+            stopsToggle.checked = false;
+            stopsToggle.dispatchEvent(new Event('change'));
+        }
         if (typeof pickAirport === 'function') {
             pickAirport('origin', lelystad);
-            pickAirport('destination', frankfurt);
+            pickAirport('destination', munich);
         }
     }
 
@@ -144,13 +150,13 @@ window.CNSTour = (function () {
         const planeOf = (id) => (window.PLANES_BY_ID || {})[id];
         const chargerId = 'dc_250';
         const coord = (ap) => ({ ident: ap.ident, name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg });
-        // All out of Lelystad: local NL hops, a 2nd Frankfurt run (the demo flight
-        // already in the folder is the 1st), and a one-way into N. France.
+        // All out of Lelystad: local NL hops, a Frankfurt run (the Lelystad→Munich
+        // demo flight is already in the folder), and a one-way into N. France.
         const specs = [
             { dest: 'EHAM', plane: 'beta_plane', type: 'retour',  freqN: 4 },   // Schiphol (commuter)
             { dest: 'EHRD', plane: 'beta_plane', type: 'retour',  freqN: 3 },   // Rotterdam
             { dest: 'EHTE', plane: 'beta_plane', type: 'one-way', freqN: 2 },   // Teuge
-            { dest: 'EDDF', plane: 'vaeridion',  type: 'one-way', freqN: 1 },   // Frankfurt (2nd)
+            { dest: 'EDDF', plane: 'vaeridion',  type: 'one-way', freqN: 1 },   // Frankfurt (Vaeridion)
             { dest: 'LFQQ', plane: 'beta_plane', type: 'one-way', freqN: 1 },   // Lille, FR
         ];
         async function build(spec) {
@@ -181,7 +187,7 @@ window.CNSTour = (function () {
         }
         const entries = (await Promise.all(specs.map(build))).filter(Boolean);
         if (!entries.length) return;
-        const existing = CNSDemand.loadFolder();        // keep the demo Lelystad→Frankfurt flight
+        const existing = CNSDemand.loadFolder();        // keep the demo Lelystad→Munich flight
         CNSDemand.saveFolder(existing.concat(entries));
         if (typeof renderFolder === 'function') renderFolder();
     }
@@ -236,6 +242,21 @@ window.CNSTour = (function () {
         if (typeof lastResult === 'undefined' || !lastResult) return;
         if (typeof drawRoute === 'function') drawRoute({ ...lastResult, fitBounds: true });
     }
+    // Open one result-panel section (Route / Charging / Revenue) by id and collapse
+    // the others so the spotlight is clean, then scroll it into the rail's viewport.
+    // The sections render collapsed; the tour opens each as its dedicated slide arrives.
+    async function _expandResultSection(id) {
+        await _ensureSimulated();
+        document.querySelectorAll('.rail-right .result-group').forEach((g) => {
+            const open = (g.id === id);
+            g.classList.toggle('collapsed', !open);
+            const header = g.querySelector('.sec-header');
+            if (header) header.setAttribute('aria-expanded', String(open));
+        });
+        const el = document.getElementById(id);
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'auto' });
+        await _wait(350);
+    }
     async function _ensureInFolder() {
         const folder = (typeof CNSDemand !== 'undefined') ? CNSDemand.loadFolder() : [];
         if (folder.length === 0) {
@@ -281,13 +302,34 @@ window.CNSTour = (function () {
                 popover: {
                     title: 'NRG2fly Charging Network Simulator',
                     description:
+                        // Branded hero — the wide colour logo on a warm banner so
+                        // first-time users land on something welcoming, not a wall
+                        // of text. The logo carries the wordmark, so the popover's
+                        // text title is hidden for this slide (see cns-tour-welcome CSS).
+                        '<div class="tour-welcome-hero">' +
+                          '<img class="tour-welcome-logo" src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2fly" onerror="this.style.display=\'none\'">' +
+                          '<div class="tour-welcome-tag">Charging Network Simulator</div>' +
+                        '</div>' +
                         '<p>At NRG2fly we are rolling out a European charging network that makes point-to-point electric aviation possible. This tool helps airports and operators answer the strategic questions we keep coming back to: <strong>what kind of charging infrastructure, and how much power, do we need?</strong></p>' +
                         '<p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — a defensible, client-ready sizing brief exported as a PDF, not a back-of-envelope guess. We advise starting with this demo tour, then running your own simulations.</p>' +
                         '<p>Got questions about your network? <strong>Merlijn van Vliet</strong> and <strong>Jacco Bink</strong> would love to hear from you.</p>' +
                         _leadershipCardsHTML() +
-                        '<p class="tour-foot">Pre-filled example: <strong>Beta Alia · Lelystad → Frankfurt</strong>. Press <kbd>Esc</kbd> to skip any time.</p>',
+                        '<p class="tour-foot">Pre-filled example: <strong>Beta Alia · Lelystad → Munich</strong>. Press <kbd>Esc</kbd> to skip any time.</p>',
                     side: 'over', align: 'center',
                     popoverClass: 'cns-tour-popover cns-tour-welcome',
+                },
+                // On short screens the welcome popover scrolls its body. Driver
+                // auto-focuses the first leadership-card link on show, which
+                // scrolls the hero (logo) out of view — reset to the top so the
+                // logo greets the user, and park focus on Next (in the pinned
+                // footer, so focusing it doesn't re-scroll the body).
+                onHighlightStarted: async () => {
+                    await _wait(150);
+                    const d = document.querySelector('.cns-tour-welcome .driver-popover-description');
+                    if (d) d.scrollTop = 0;
+                    const next = document.querySelector('.cns-tour-welcome .driver-popover-next-btn');
+                    if (next && next.focus) next.focus({ preventScroll: true });
+                    if (d) d.scrollTop = 0;
                 },
             },
             // 2. Whole screen — the simulator at a glance.
@@ -323,25 +365,25 @@ window.CNSTour = (function () {
             // 8. Aircraft
             {
                 element: '#plane',
-                popover: { title: 'Aircraft', description: 'Pick a model — the card below shows its range, battery and a photo. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
+                popover: { title: 'Aircraft', description: 'Pick a model — the card shows its catalog range and the model-adjusted <strong>available range</strong>, plus battery, cruise speed and seats. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
             },
             // 9. Model settings — surfaced BEFORE the route so the factors that
             // shape it (and force a stop) are understood first.
             {
                 element: '#planModelSettingsBtn',
-                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. The reserve and padding are exactly why the Beta Alia\'s 400&nbsp;km range can\'t reach Frankfurt in one hop — so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
+                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. It also holds the charging price (€/kWh) and charger efficiency behind the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are exactly why the Beta Alia\'s 600&nbsp;km range can\'t reach Munich in one hop — so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
             },
             // 10. Plan with charging stops — toggle it ON here so the user watches
             // the suggested route appear in the next step.
             {
                 element: '.stops-toggle-row',
-                popover: { title: 'Plan with charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. Watch — we\'re turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Frankfurt run.', side: 'right' },
+                popover: { title: 'Plan with charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. Watch — we\'re turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Munich run.', side: 'right' },
                 onHighlightStarted: async () => { await _ensureStopsOn(); },
             },
             // 11. Suggested route — the stop the applied factors forced.
             {
                 element: '#stopsSection',
-                popover: { title: 'Suggested route', description: 'The planner split the trajectory into legs through an intermediate airport (shortest-path A*). Each row shows the leg distance; over-range legs would flag red. Drag the ≡ handle to reorder a manual stop; × removes one. More airport types are under Options, top-right.', side: 'right' },
+                popover: { title: 'Suggested route', description: 'The planner split the trajectory into legs through an intermediate airport (shortest-path A*). The <strong>Prefer</strong> dropdown biases which airport sizes it favours when picking stops. Each row shows the leg distance; over-range legs would flag red. Drag the ≡ handle to reorder a manual stop; × removes one. More airport types are under Options, top-right.', side: 'right' },
                 onHighlightStarted: async () => { await _ensureStopsOn(); },
             },
             // 12. Expected frequency
@@ -365,19 +407,43 @@ window.CNSTour = (function () {
             // pair: clicking Simulate produced this map view.
             {
                 element: '#map',
-                popover: { title: 'Your route on the map', description: 'The blue line is the outbound leg; the green dashed line (for retour trips) is the return. Each blue marker is an intermediate charging stop. The map zooms to fit the whole trip between the side panels.', side: 'bottom', align: 'center' },
+                popover: { title: 'Your route on the map', description: 'The blue line is the outbound leg; the green dashed line (for retour trips) is the return. Each blue marker is an intermediate charging stop, and every leg carries a label with its distance, time and energy. The map zooms to fit the whole trip between the side panels.', side: 'bottom', align: 'center' },
                 onHighlightStarted: async () => { await _ensureSimulated(); await _zoomToSimulatedRoute(); },
             },
             // 13. Result panel — scroll the panel to the TOP so the user sees
-            // the headline numbers first, not a mid-panel chunk.
+            // the headline numbers first, then we drill into each section below.
             {
                 element: '.rail-right .panel',
-                popover: { title: 'Result panel', description: 'Per-flight breakdown: energy used, flight duration, charge time. Below: the aircraft spec and the trip details (legs, total distance, charger). Click "+ Add to demand calculator" next to track this route in your network model.', side: 'left', align: 'start' },
+                popover: { title: 'Result panel', description: 'Headline per-flight numbers up top: energy used, flight time, charge time. Below are three expandable breakdowns — <strong>Route</strong>, <strong>Charging</strong> and <strong>Revenue potential</strong> — we\'ll open each in turn.', side: 'left', align: 'start' },
                 onHighlightStarted: async () => {
                     await _ensureSimulated();
+                    // Start clean: collapse every section so the headline reads first;
+                    // the next three slides open them one at a time.
+                    document.querySelectorAll('.rail-right .result-group').forEach((g) => {
+                        g.classList.add('collapsed');
+                        const h = g.querySelector('.sec-header'); if (h) h.setAttribute('aria-expanded', 'false');
+                    });
                     const r = document.querySelector('.rail-right');
                     if (r) r.scrollTop = 0;
                 },
+            },
+            // 13a. Route — the itinerary (one row per leg + en-route charge).
+            {
+                element: '#rgRoute',
+                popover: { title: 'Route', description: 'The trip itinerary, top to bottom: a row per <strong>flight leg</strong> (distance, time, energy) and per en-route charging stop, a Return divider on retour trips, and a Total travel row. The final-destination top-up sits in Charging, not here.', side: 'left', align: 'start' },
+                onHighlightStarted: async () => { await _expandResultSection('rgRoute'); },
+            },
+            // 13b. Charging — the terminal top-up, separate from travel time.
+            {
+                element: '#rgCharging',
+                popover: { title: 'Charging', description: 'The top-up at the trip\'s terminal airport, after arrival and <strong>separate from travel time</strong>: arrival state-of-charge, charge-to target, top-up minutes (or no charge needed), plus the charger model and, with efficiency on, grid demand in kWh.', side: 'left', align: 'start' },
+                onHighlightStarted: async () => { await _expandResultSection('rgCharging'); },
+            },
+            // 13c. Revenue potential — the airport's charging income.
+            {
+                element: '#rgRevenue',
+                popover: { title: 'Revenue potential', description: 'The airport\'s charging income: energy charged to the aircraft across the trip times the <strong>charging tariff</strong> (€/kWh, set in Model settings), giving airport revenue.', side: 'left', align: 'start' },
+                onHighlightStarted: async () => { await _expandResultSection('rgRevenue'); },
             },
             // 14. Add to demand — scroll the rail DOWN so the button is fully
             // visible (it sits below the trip-calculated table).
@@ -477,7 +543,7 @@ window.CNSTour = (function () {
             // playing, and pin the popover near the bottom of the viewport
             // so it doesn't cover the map.
             {
-                popover: { title: 'Overview', description: 'Above, every saved flight flies its real, routed trajectory — adjust the speed with the slider, and watch planes pause to charge. This is the demo network: a handful of real routes out of Lelystad — local hops to Schiphol, Rotterdam and Teuge, two runs to Frankfurt, and a one-way to Lille. Close the modal when you\'re done.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-bottom' },
+                popover: { title: 'Overview', description: 'Above, every saved flight flies its real, routed trajectory — adjust the speed with the slider, and watch planes pause to charge. This is the demo network: a handful of real routes out of Lelystad — local hops to Schiphol, Rotterdam and Teuge, longer runs to Munich and Frankfurt, and a one-way to Lille. Close the modal when you\'re done.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-bottom' },
                 onHighlightStarted: async () => {
                     // Drawer must be open momentarily so the View-flights-
                     // on-map button is available to click; then close it so
@@ -516,7 +582,15 @@ window.CNSTour = (function () {
                         }
                     } catch (e) { /* best-effort */ }
                 },
-                onDeselected: async () => { await _closeFlightsMap(); },
+                onDeselected: async () => {
+                    await _closeFlightsMap();
+                    // Undo the stacking overrides added in onHighlightStarted so
+                    // they don't linger after the tour ends (the other interaction
+                    // steps clean up their body classes the same way) — otherwise
+                    // the flights modal keeps a very high z-index for normal use.
+                    document.getElementById('flightsMapModal')?.classList.remove('tour-modal-front');
+                    document.body.classList.remove('tour-network-step');
+                },
             },
             // 24. Wrap up
             {
@@ -544,12 +618,23 @@ window.CNSTour = (function () {
             await _seedDemoForm();
         }
         const D = window.driver.js.driver;
+        // Esc must always exit the tour. Driver.js (v1.3.1) only honours Esc when
+        // allowClose is true — but we keep allowClose:false so outside-clicks
+        // don't end the tour (see below). So bind our own Esc handler. Capture
+        // phase fires it before the planner's autocomplete reads the key; it is
+        // removed in onDestroyed so it never outlives the tour.
+        const _onEsc = (e) => {
+            if (e.key === 'Escape' && _activeDriver) {
+                e.preventDefault();
+                try { _activeDriver.destroy(); } catch (err) {}
+            }
+        };
         _activeDriver = D({
             showProgress: true,
             // Don't close the tour when the user clicks outside the popover —
             // otherwise interacting with the page (e.g. dragging the speed slider
             // or panning the map on the Overview step) ends the tour unexpectedly.
-            // Deliberate exit is via the footer Close button or Esc.
+            // Deliberate exit is via the footer Close button or Esc (bound above).
             allowClose: false,
             showButtons: ['next', 'previous', 'close'],
             stagePadding: 6,
@@ -559,6 +644,7 @@ window.CNSTour = (function () {
             // the tour is open (no input blocking).
             disableActiveInteraction: false,
             onDestroyed: () => {
+                document.removeEventListener('keydown', _onEsc, true);
                 _activeDriver = null;
                 try { CNSState.setJSON(KEY_DONE, true); } catch (e) {}
             },
@@ -566,6 +652,7 @@ window.CNSTour = (function () {
         });
         _warnMissingAnchors();
         _activeDriver.drive();
+        document.addEventListener('keydown', _onEsc, true);
     }
 
     // ---- drift detection ------------------------------------------------------

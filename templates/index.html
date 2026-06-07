@@ -247,8 +247,34 @@
         .cns-tour-popover .driver-popover-description .role-home { background: #a44a23; }
         .cns-tour-popover .driver-popover-description .role-dest { background: #6b541a; }
         .cns-tour-popover .driver-popover-description .role-stop { background: var(--brand-ink); }
-        /* Welcome slide: wider, more spacious popover to host the Leadership cards. */
-        .cns-tour-popover.cns-tour-welcome.driver-popover { max-width: 640px; }
+        /* Welcome slide: wider, more spacious popover to host the Leadership cards.
+           Cap its height to the viewport and let the body scroll so the Next/Prev
+           footer stays reachable on shorter screens (the hero + cards run tall). */
+        .cns-tour-popover.cns-tour-welcome.driver-popover {
+            max-width: 640px; max-height: calc(100vh - 24px);
+            /* !important beats Driver.js's inline display:block so the flex column
+               applies; the scrollable description then keeps the footer pinned. */
+            display: flex !important; flex-direction: column; overflow: hidden;
+        }
+        .cns-tour-popover.cns-tour-welcome .driver-popover-description {
+            overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1 1 auto;
+        }
+        /* Welcome hero: the wide brand logo on a warm banner. The logo is the
+           wordmark, so the popover's text title is hidden for this slide. */
+        .cns-tour-popover.cns-tour-welcome .driver-popover-title { display: none !important; }
+        .tour-welcome-hero {
+            margin: 2px 0 18px; padding: 26px 22px 22px; text-align: center;
+            background:
+                radial-gradient(140% 130% at 50% -25%, rgba(245,176,116,.36), rgba(230,193,73,.10) 46%, rgba(255,251,244,0) 76%),
+                linear-gradient(180deg, var(--brand-cream), var(--panel-strong));
+            border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
+        }
+        .tour-welcome-logo { height: 50px; width: auto; max-width: 100%; display: inline-block; }
+        .tour-welcome-tag {
+            margin-top: 13px; font-size: .8rem; font-weight: 700; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--ink-soft);
+        }
         /* Leadership cards (nrg2fly.com/about.html style) embedded in the welcome slide. */
         .tour-lead { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--panel-border); }
         .tour-lead-overline { font-size: .64rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
@@ -260,9 +286,8 @@
         }
         .tlc-photo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; border: 3px solid var(--brand-ink); margin-bottom: 10px; }
         .tlc-name { font-weight: 700; color: var(--ink); font-size: .95rem; }
-        .tlc-role { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; }
-        .tlc-bio { font-size: .75rem; color: var(--ink-soft); line-height: 1.45; margin: 0 0 10px; }
-        .tlc-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 8px; }
+        .tlc-role { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 10px; }
+        .tlc-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 10px; }
         .tlc-tag { font-size: .62rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
                    color: var(--brand-ink); background: rgba(43,47,90,.06); border: 1px solid var(--panel-border);
                    border-radius: 999px; padding: 2px 9px; }
@@ -1428,7 +1453,7 @@
 
                 <!-- Route: one row per action (leg / en-route charge) + a total,
                      built dynamically in renderResult(). -->
-                <div class="result-group collapsed">
+                <div class="result-group collapsed" id="rgRoute">
                     <div class="sec-header" role="button" aria-expanded="false">
                         <span class="section-tag tag-route">Route</span>
                         <span class="sec-chev">▾</span>
@@ -1437,7 +1462,7 @@
                 </div>
 
                 <!-- Charging: terminal top-up, one row per fact (built dynamically). -->
-                <div class="result-group collapsed">
+                <div class="result-group collapsed" id="rgCharging">
                     <div class="sec-header" role="button" aria-expanded="false">
                         <span class="section-tag tag-charging">Charging</span>
                         <span class="sec-chev">▾</span>
@@ -1445,7 +1470,7 @@
                     <table class="spec-table" id="chargeRows"></table>
                 </div>
 
-                <div class="result-group collapsed">
+                <div class="result-group collapsed" id="rgRevenue">
                     <div class="sec-header" role="button" aria-expanded="false">
                         <span class="section-tag tag-revenue">Revenue potential</span>
                         <span class="sec-chev">▾</span>
