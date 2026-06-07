@@ -3943,13 +3943,21 @@
         }
 
         // Open the right modal when the picker hits the "add custom" sentinel.
+        // Also apply any per-aircraft charger default defined in the plane catalog.
         planeSelect.addEventListener('change', () => {
             if (planeSelect.value === '__custom__') {
                 planeSelect.value = prevPlaneValue;
                 ['cpName', 'cpBattery', 'cpRange', 'cpSpeed', 'cpSeats', 'cpLoad'].forEach(id => document.getElementById(id).value = '');
                 document.getElementById('cpError').classList.add('d-none');
                 customPlaneModal.show();
-            } else { prevPlaneValue = planeSelect.value; }
+            } else {
+                prevPlaneValue = planeSelect.value;
+                const planeDef = BUILTIN_PLANES_BY_ID[planeSelect.value];
+                if (planeDef && planeDef.default_charger_id) {
+                    const opt = chargerSelect.querySelector(`option[value="${CSS.escape(planeDef.default_charger_id)}"]`);
+                    if (opt) { chargerSelect.value = planeDef.default_charger_id; prevChargerValue = chargerSelect.value; }
+                }
+            }
         });
         chargerSelect.addEventListener('change', () => {
             if (chargerSelect.value === '__custom_charger__') {
