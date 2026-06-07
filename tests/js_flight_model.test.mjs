@@ -39,7 +39,14 @@ function engineSnapshot(c, vname) {
     trainingRangeKm: plane.training_range_km,
   });
   const t = prof.totals, term = prof.terminal || {};
-  return { energyUsedKwh: t.energyUsedKwh, flightMin: t.flightMin, chargeMin: t.chargeMin, enRouteMin: t.enRouteMin, terminalMin: t.terminalMin, terminalKwh: term.energyKwh, terminalName: term.name, arrivalSoc: term.arrivalSocFrac };
+  // replicate _breakdownFromProfile's phase mapping (the result-panel route rows)
+  let flyN = 0;
+  const phases = (prof.phases || []).map(ph => {
+    if (ph.kind === 'fly') return { kind: 'fly', leg: prof.multiLeg ? ph.legIndex : (flyN++ === 0 ? 'out' : 'back'), dur: ph.dur };
+    const cc = (prof.charges || [])[ph.chargeIndex] || {};
+    return { kind: 'charge', at: cc.role, dur: ph.dur, energy: cc.energyKwh };
+  });
+  return { energyUsedKwh: t.energyUsedKwh, flightMin: t.flightMin, chargeMin: t.chargeMin, enRouteMin: t.enRouteMin, terminalMin: t.terminalMin, terminalKwh: term.energyKwh, terminalName: term.name, arrivalSoc: term.arrivalSocFrac, phases };
 }
 
 const FIELDS = ['energyUsedKwh', 'flightMin', 'chargeMin', 'terminalKwh', 'arrivalSoc'];
@@ -62,6 +69,20 @@ for (const c of golden.cases) {
       const a = +got[f] || 0, b = +exp[f] || 0;
       const tol = (f === 'arrivalSoc') ? 0.005 : Math.max(0.05, Math.abs(b) * 0.01);
       if (Math.abs(a - b) > tol) diffs.push(`${f}: engine ${a.toFixed(3)} vs golden ${b.toFixed(3)} (Δ${(a - b).toFixed(3)})`);
+    }
+    // route-row phases parity (count, kind, fly leg, dur, charge energy + role).
+    // Skipped for training: the result panel renders training via its own branch (not phases),
+    // and the engine's 'training' charge role is correct vs tripBreakdown's 'dest' quirk.
+    const ep = c.input.trip === 'training' ? [] : (got.phases || []), gp = c.input.trip === 'training' ? [] : (exp.phases || []);
+    if (ep.length !== gp.length) diffs.push(`phase count: engine ${ep.length} vs golden ${gp.length}`);
+    else for (let i = 0; i < gp.length; i++) {
+      if (ep[i].kind !== gp[i].kind) { diffs.push(`phase ${i} kind: ${ep[i].kind} vs ${gp[i].kind}`); continue; }
+      if (Math.abs((+ep[i].dur || 0) - (+gp[i].dur || 0)) > Math.max(0.05, Math.abs(+gp[i].dur || 0) * 0.01)) diffs.push(`phase ${i} dur: ${ep[i].dur} vs ${gp[i].dur}`);
+      if (gp[i].kind === 'fly' && String(ep[i].leg) !== String(gp[i].leg)) diffs.push(`phase ${i} leg: ${ep[i].leg} vs ${gp[i].leg}`);
+      if (gp[i].kind === 'charge') {
+        if (Math.abs((+ep[i].energy || 0) - (+gp[i].energy || 0)) > Math.max(0.05, Math.abs(+gp[i].energy || 0) * 0.01)) diffs.push(`phase ${i} energy: ${ep[i].energy} vs ${gp[i].energy}`);
+        if ((ep[i].at || null) !== (gp[i].at || null)) diffs.push(`phase ${i} at: ${ep[i].at} vs ${gp[i].at}`);
+      }
     }
     const key = `${c.name}:${v}`;
     if (diffs.length) {

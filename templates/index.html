@@ -2792,6 +2792,30 @@
                 });
             } catch (err) { console.warn('[CNSFlight] profile failed; legacy fallback:', err); return null; }
         }
+        // Map a CNSFlight FlightProfile to the CNSScheduler.tripBreakdown shape the result
+        // panel reads, so renderResult is source-agnostic. Phases mirror the scheduler's:
+        // fly.leg is 'out'/'back' for a single-leg trip, the leg index for multi-leg; a charge
+        // carries at(role)/name/energy/dur. _legMeta keeps reading data.legs (already padded,
+        // matches the engine to sub-rounding) so leg distances/energies are unchanged.
+        function _breakdownFromProfile(prof) {
+            if (!prof) return null;
+            const T = prof.totals || {}, term = prof.terminal || {};
+            let flyN = 0;
+            const phases = (prof.phases || []).map(ph => {
+                if (ph.kind === 'fly') {
+                    const leg = prof.multiLeg ? ph.legIndex : (flyN++ === 0 ? 'out' : 'back');
+                    return { kind: 'fly', leg, dur: ph.dur };
+                }
+                const c = (prof.charges || [])[ph.chargeIndex] || {};
+                return { kind: 'charge', at: c.role, name: c.name, dur: ph.dur, energy: c.energyKwh };
+            });
+            const lastLeg = (prof.legs || [])[(prof.legs || []).length - 1] || {};
+            return {
+                energyUsedKwh: T.energyUsedKwh, flightMin: T.flightMin, chargeMin: T.chargeMin,
+                enRouteMin: T.enRouteMin, terminalMin: T.terminalMin, terminalKwh: term.energyKwh,
+                terminalName: term.name || lastLeg.toName || '', arrivalSoc: term.arrivalSocFrac, phases,
+            };
+        }
         function addLegLabel(a, b, leg) {
             if (!_showLegLabels) return;   // hidden via Map Options → Route
             let dist, timeH, energy;
@@ -3091,7 +3115,10 @@
                 flightTimeH: isMulti ? data.total_flight_time_h : data.flight_time_h,
                 legEnergy: data.leg_energy_kwh, legs: data.legs, charges: data.charges, stops: data.stops,
             };
-            const bd = CNSScheduler.tripBreakdown(previewTrip, data.charger.power_kw);
+            // R12: read the unified engine when on (retires tripBreakdown's preview math);
+            // graceful fallback to the scheduler breakdown if the engine is off/unavailable.
+            const _engineBd = _flightEngineOn() ? _breakdownFromProfile(_engineProfile(data)) : null;
+            const bd = _engineBd || CNSScheduler.tripBreakdown(previewTrip, data.charger.power_kw);
             const usedKwh      = bd.energyUsedKwh;
             const rechargeKwh  = bd.energyUsedKwh;        // recharged == consumed (energy conservation)
             const flightMin    = bd.flightMin;
