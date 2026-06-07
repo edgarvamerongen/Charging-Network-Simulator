@@ -1,4 +1,7 @@
-<!-- Status: DRAFT for review · 2026-06-05 · not yet implemented (design only). -->
+<!-- Status: DRAFT · reconciled to shipped PR#3 on 2026-06-07 (D6 CORRECTED — see G1). NOT yet
+     implementable: gates G1–G4, the 5 blockers, and ~33 open decisions live in
+     docs/unified-flight-model-decisions.md — resolve those before any engine code.
+     Items tagged [CORRECTED]/[OPEN]/[STALE] below are reconciled or still unsettled. -->
 
 # CNS Flight Engine — `simulateTrip()` Spec
 
@@ -6,7 +9,7 @@
 
 The same flight numbers (leg distance, leg/charge energy, SoC, flight/charge time) are computed in **four** independent sites — `sim.py` (raw great-circle, depart-full, linear charge), `scheduler.js`+`demand.js` (padded, SoC-walk, taper), `index.html` `_legEst` (own padded formula), and `report.js` (a duplicate demand walk) — with divergent conventions, so views disagree (a map label reads 41 km while the breakdown reads 39; a stop charges +13 kWh after a 9 kWh leg). Replace all four with one pure engine.
 
-**Locked decisions:** **D1** routing padding applied exactly once, at the engine. **D2** one engine in `static/flight-model.js`, layered on `settings.js`+`routing.js` (not in `index.html`). **D3** every view only reads engine output — zero energy/distance/SoC/time math in `index.html`. **D4** planner preview and demand calculator invoke the same function. **D5** retire `sim.py` energy/charge math (keep airport data + static serving). **D6** a one-way plane departs at its charge **target**, so destination recharge == leg consumed.
+**Locked decisions:** **D1** routing padding applied exactly **once**, at the engine, and only to the **flown path** — TIME + ENERGY (×routingFactor); geographic **DISTANCE** is never padded (it matches the map line and the available-range reach check — padding both double-counts). **D2** one engine in `static/flight-model.js`, layered on `settings.js`+`routing.js` (not in `index.html`). **D3** every view only reads engine output — zero energy/distance/SoC/time math in `index.html`. **D4** planner preview and demand calculator invoke the same function. **D5** *(deferred — G3)* retiring `sim.py` energy math is a later, **mobile-gated** phase; `sim.py` + `/api/simulate` stay until mobile migrates. **D6 [CORRECTED — was inverted]** a base/one-way **origin departs at 100% SoC**, and the **terminus** (one-way destination, retour home, training origin) always recharges to **100%**, both **ignoring** the charge target; the target governs **only** away-from-base **intermediate** stops (+ the retour DEST turnaround). This is the shipped PR#3 model; the old D6 ("departs at target") would regress bug #32.
 
 ## 2. Engine API
 
@@ -56,14 +59,14 @@ The engine **rebuilds geometry from coords only** — it ignores any persisted `
 
 Track SoC in kWh; `batt=battery_kwh`, `usable=batt·usableFraction(plane)`, `reserve=batt−usable`, `route=routingFactor()`, `ePerKm=batt/range_km`.
 
-1. **Training** (closed loop, no chain): `legE = min(ePerKm·trainingRangeKm·route, usable)`; emit one charge at origin, `role:'training'`, `isTerminal:true`. Return.
+1. **Training** (closed loop, no chain): `legE = min(ePerKm·trainingRangeKm·route, usable)` **[OPEN — G4(a)]** — shipped code does NOT pad training energy; the `·route` here adds ~5%. Reproduce today's (unpadded) number unless padding is adopted as a signed-off change. Emit one charge at origin, `role:'training'`, `isTerminal:true`. Return.
 2. **Build chain** from `waypoints` (one-way/retour already expanded). Per leg `i`: `rawKm=haversine(i,i+1)`, `distKm=rawKm·route` (**padding once, D1**), `energyKwh=ePerKm·distKm`, `flightMin=distKm/speed·60`. Flag `overRange` when `energyKwh>usable`; push to `errors[]` (don't absorb).
-3. **Origin departure:** `socKwh = min(batt, max((target0 ?? 1)·batt, legs[0]+reserve))`; record on `nodes[0]` (`role:'origin'`, `billable:false`). Multi-leg one-way bills **no** origin charge.
+3. **Origin departure [CORRECTED]:** the base always departs **full** — `socKwh = batt` — ignoring any (even per-airport) target. Record on `nodes[0]` (`role:'origin'`, `billable:false`). Multi-leg one-way bills **no** origin charge. *(Training origin recharges exactly what the session used, `min(legE,usable)`, which also leaves it full.)*
 4. **Walk** `i=0..n−1`: `arrival = max(0, socKwh − legs[i])` (**clamp to 0, not reserve** — reserve-floor would silently change billed energy).
-5. **Departure / charge-to-target-or-reach:** terminal → `(target ?? 1)·batt`; intermediate → `target!=null ? max(target·batt, legs[i+1]+reserve) : legs[i+1]+reserve` (task #34 toggle lives here later — default reach-floored-target, no "target wins"). Then `depart=min(depart,batt)`, `chargeE=max(0, depart−arrival)`, `socKwh=arrival+chargeE`.
-6. **Charge time:** `powerKw=effectiveChargePower(node.chargerKw,batt,c_rate)`; `chargeMin=chargeTimeMin(chargeE,powerKw,batt)` (taper, kept in `settings.js`). DES re-sizes per claimed charger later.
+5. **Departure / charge rule [CORRECTED]:** terminal (one-way dest, retour home, training origin) → **`batt`** (always full, ignores target); intermediate → `target!=null ? max(target·batt, legs[i+1]+reserve) : legs[i+1]+reserve` — the charge target applies **only here** (the #34 charge-to-reach toggle lives here later; default reach-floored-target). Then `depart=min(depart,batt)`, `chargeE=max(0, depart−arrival)`, `socKwh=arrival+chargeE`.
+6. **Charge time:** `powerKw=effectiveChargePower(node.chargerKw,batt,cRate)` **[STALE]** — per-aircraft `c_rate` is retired (catalog field gone; the hook is a non-binding global 5C); #35 replaces it with `max_kw`, held until **after** the engine ships. `chargeMin=chargeTimeMin(chargeE,powerKw,batt)` (taper, in `settings.js`) **must match the DES bit-for-bit** (blocker 3 — drop the `toFixed(2)`). DES re-sizes per claimed charger later.
 
-**Invariants:** `Σ legs.energyKwh == Σ charges.energyKwh`; retour `DEST+HOME == 2·leg` (deficit); one-way terminal `==leg` **when origin/dest share a target** (preview always; demand may legitimately differ per-airport targets — not a bug). D6 falls out: origin inits at target, terminal tops to target.
+**Invariants [CORRECTED]:** `Σ legs.energyKwh == Σ charges.energyKwh` (origin starts full, terminal ends full → closed walk). One-way terminal recharge `== leg` **always** (both ends fill to 100%, target-independent). Retour home arrival **does** depend on the target — correctly, via the target-governed DEST turnaround. **Arrival SoC is a forward-walk fact, never `target − topup`:** `arrival = batt − terminalKwh` exactly (already shipped as the committed arrival fix `7af3d97`). *(The old "origin inits at target, terminal tops to target" line is deleted — it encoded the inverted D6.)*
 
 ## 5. Consumer → reads map (no view computes)
 
