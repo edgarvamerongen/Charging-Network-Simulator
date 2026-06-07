@@ -30,6 +30,14 @@ for f in tests/js_settings.test.mjs tests/js_charging.test.mjs tests/js_demand.t
   echo
 done
 
+echo
+echo "=================================================================="
+echo "GOLDEN  (flight-engine parity baseline — skips if :5055 is down):"
+echo "=================================================================="
+echo "--- node tests/golden_capture.mjs --check ---"
+node tests/golden_capture.mjs --check || rc=1
+echo
+
 echo "=================================================================="
 if [ "$rc" -eq 0 ]; then echo "ALL LAYERS PASSED"; else echo "SOME TESTS FAILED (rc=$rc) — see output above"; fi
 echo "=================================================================="
