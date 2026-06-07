@@ -2733,21 +2733,26 @@
             return parts.join(' · ');
         }
         function _legEst(a, b) {
-            const km = (window.CNSRouting ? CNSRouting.haversineKm({ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] }) : 0)
-                     * (window.CNSSettings ? CNSSettings.routingFactor() : 1);
+            const rawKm = (window.CNSRouting ? CNSRouting.haversineKm({ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] }) : 0);
+            const flownKm = rawKm * (window.CNSSettings ? CNSSettings.routingFactor() : 1);
             const plane = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
             return {
-                dist:   km,
-                timeH:  plane && plane.speed_kmh ? km / plane.speed_kmh : null,
-                energy: plane && plane.battery_kwh && plane.range_km ? km * plane.battery_kwh / plane.range_km : null,
+                dist:   rawKm,                                                            // geographic (matches the map line + the reach check)
+                timeH:  plane && plane.speed_kmh ? flownKm / plane.speed_kmh : null,      // flown (routing padding lives here)
+                energy: plane && plane.battery_kwh && plane.range_km ? flownKm * plane.battery_kwh / plane.range_km : null,  // flown
             };
         }
         function addLegLabel(a, b, leg) {
             if (!_showLegLabels) return;   // hidden via Map Options → Route
             const e = _legEst(a, b);
-            const dist   = leg && leg.distance_km   != null ? leg.distance_km   : e.dist;
-            const timeH  = leg && leg.flight_time_h != null ? leg.flight_time_h : e.timeH;
-            const energy = leg && leg.energy_kwh    != null ? leg.energy_kwh    : e.energy;
+            // Routing padding is for the FLOWN path: it lifts TIME + ENERGY (the plane
+            // flies ~5% farther than the straight line) but NOT the geographic DISTANCE
+            // (fixed; matches the map line + the reach check — padding it too would
+            // double-count against the available range). sim.py legs are raw.
+            const _r = (window.CNSSettings ? CNSSettings.routingFactor() : 1);
+            const dist   = leg && leg.distance_km   != null ? leg.distance_km        : e.dist;
+            const timeH  = leg && leg.flight_time_h != null ? leg.flight_time_h * _r : e.timeH;
+            const energy = leg && leg.energy_kwh    != null ? leg.energy_kwh    * _r : e.energy;
             const txt = _legLabelText(dist, timeH, energy);
             if (!txt) return;
             // A small route icon at the leg midpoint that expands into a brand
@@ -3094,14 +3099,20 @@
                 const _phases = bd.phases || [];
                 const _chg = _phases.filter(ph => ph.kind === 'charge');
                 const _terminal = _chg.length ? _chg[_chg.length - 1] : null;   // shown in Charging, not here
+                // Routing padding lifts ENERGY (flown path) so the leg energy reconciles
+                // with the charge + headline; DISTANCE stays geographic (matches the map
+                // line + the reach check — padding it too would double-count against the
+                // available range). Leg TIME (ph.dur) is already padded. sim.py legs are raw.
+                const _rf = CNSSettings.routingFactor();
                 const _legMeta = ph => {
                     if (isMulti && typeof ph.leg === 'number') {
                         const l = (data.legs || [])[ph.leg] || {};
-                        return { from: l.from && l.from.name, to: l.to && l.to.name, dist: l.distance_km, energy: l.energy_kwh };
+                        return { from: l.from && l.from.name, to: l.to && l.to.name, dist: l.distance_km, energy: (l.energy_kwh || 0) * _rf };
                     }
+                    const _e = (data.leg_energy_kwh || 0) * _rf;
                     return ph.leg === 'back'
-                        ? { from: _destNm, to: _originNm, dist: data.leg_distance_km, energy: data.leg_energy_kwh }
-                        : { from: _originNm, to: _destNm, dist: data.leg_distance_km, energy: data.leg_energy_kwh };
+                        ? { from: _destNm, to: _originNm, dist: data.leg_distance_km, energy: _e }
+                        : { from: _originNm, to: _destNm, dist: data.leg_distance_km, energy: _e };
                 };
                 let _ret = false;
                 _phases.forEach(ph => {
