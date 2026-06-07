@@ -275,7 +275,6 @@ window.CNSScheduler = (function () {
         const ctx = { chargerAt: () => power, targetAt: () => previewTarget };
         const { ph } = tripPhases(trip, null, ctx);
         const batt = batteryOf(trip);
-        const usableBatt = _usableB(trip);
         const charges = ph.filter(p => p.kind === 'charge');
         const chargeMins = charges.map(p => p.dur);
         const flightMin   = ph.reduce((s, p) => s + (p.kind === 'fly' ? p.dur : 0), 0);
@@ -285,12 +284,16 @@ window.CNSScheduler = (function () {
         const terminalMin  = terminal ? terminal.dur : 0;
         const terminalKwh  = terminal ? terminal.energy : 0;
         const terminalName = terminal ? terminal.name : (trip.destName || '');
-        const reserveFrac  = batt > 0 ? Math.max(0, (batt - usableBatt) / batt) : 0;
-        // Arrival SoC at the terminus = its charge target minus the top-up taken
-        // there. Don't assume a charge-to-full — that over-states arrival SoC
-        // whenever a charge target below 100% is in effect.
-        const termTarget   = (previewTarget != null ? previewTarget : 1.0);
-        const arrivalSoc   = Math.max(0, Math.min(1, Math.max(reserveFrac, termTarget - terminalKwh / (batt || 1))));
+        // Arrival SoC is a FORWARD-WALK fact - never derived from the charge
+        // target. The terminus always recharges to full (a base/destination tops
+        // to 100%; a training session recharges exactly what it used), so the
+        // energy added there is precisely (full - arrival). Invert that:
+        //     arrival = full - terminalKwh
+        // Target-INDEPENDENT for a one-way (its terminal fills to 100% regardless
+        // of the target) and correctly target-DEPENDENT for a retour (home arrival
+        // reflects the target-governed turnaround departure upstream). No reserve
+        // floor: a genuine below-reserve arrival (over-range) must surface, not hide.
+        const arrivalSoc   = Math.max(0, Math.min(1, 1 - terminalKwh / (batt || 1)));
         const energyUsedKwh = charges.reduce((s, p) => s + (p.energy || 0), 0);
         // `phases` is the ordered fly/charge list (same objects the DES uses) so the
         // results panel can render a per-action itinerary whose times + energies are

@@ -3119,8 +3119,13 @@
 
             // ---- Charging: the terminal top-up. It happens AFTER you arrive, so it is
             //      deliberately NOT part of travel time — one row per fact. ----------
-            const _termTgt = (window.CNSDemand && CNSDemand.resolveTargetSoc) ? CNSDemand.resolveTargetSoc({}) : null;
-            const _tgtLabel = (_termTgt != null && _termTgt < 0.999) ? `${Math.round(_termTgt * 100)}%` : 'full';
+            // "Charge to" is the terminus fill level, re-derived from the SAME
+            // forward numbers as the arrival so the two can never disagree: a base
+            // / destination tops up to full, i.e. chargeTo = arrival + top-up = 100%.
+            // (Reading the global charge target here was the label-side half of the
+            // same bug - terminals ignore the target; it only governs en-route stops.)
+            const _chargeToFrac = Math.max(0, Math.min(1, arrivalSoc + (bd.terminalKwh || 0) / (p.battery_kwh || 1)));
+            const _tgtLabel = (_chargeToFrac < 0.999) ? `${Math.round(_chargeToFrac * 100)}%` : 'full';
             const _finalLabel = isRetour ? 'Back at base' : (isTraining ? 'Recharge at' : 'Final destination');
             const _crows = [`<tr><td>${_finalLabel}</td><td>${_esc(terminalName)}</td></tr>`];
             if (terminalMin > 0.5) {
