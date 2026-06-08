@@ -11,7 +11,10 @@ from sim import Simulator
 from report import generate_pdf
 
 app = Flask(__name__)
-simulator = Simulator()
+# Anchor catalog/data loading to this file's directory, not the process cwd —
+# otherwise planes.json/chargers.json/airports are read relative to wherever the
+# server happens to be launched from (e.g. a parent worktree), serving stale data.
+simulator = Simulator(base_dir=os.path.dirname(os.path.abspath(__file__)))
 
 
 def _compute_asset_version():

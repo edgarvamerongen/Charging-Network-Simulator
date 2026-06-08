@@ -1329,7 +1329,7 @@
                                 <span class="ps-stat"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
                                 <span class="ps-stat"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
                                 <span class="ps-stat"><strong id="psUsage"></strong><span class="ps-stat-l">avg usage</span></span>
-                                <span class="ps-stat ps-stat-avail"><strong id="psAvail"></strong><span class="ps-stat-l">available range</span></span>
+                                <span class="ps-stat ps-stat-avail"><strong id="psAvail"></strong><span class="ps-stat-l">available range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; SID/STAR and airways overhead (3–8% above great-circle, per EUROCONTROL). Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></span></span>
                             </div>
                             <button type="button" id="psOverrideToggle" class="ps-override-toggle">Edit for this flight <span class="chev">▾</span></button>
                         </div>
@@ -1599,8 +1599,8 @@
                         <div class="rs-curve-body">
                             <svg id="taperCurve" class="taper-curve" viewBox="0 0 320 72" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Charge power vs state of charge"></svg>
                             <div class="rs-curve-sliders">
-                                <div class="rs-cell-ctrl"><label class="rs-mini-l">Knee</label><input type="range" id="rsTaperThr" min="40" max="95" step="5" value="70" class="form-range"><span class="rs-val" id="rsTaperThrVal">70%</span></div>
-                                <div class="rs-cell-ctrl"><label class="rs-mini-l">Floor</label><input type="range" id="rsTaperFloor" min="5" max="90" step="5" value="15" class="form-range"><span class="rs-val" id="rsTaperFloorVal">15%</span></div>
+                                <div class="rs-cell-ctrl"><label class="rs-mini-l">Knee</label><input type="range" id="rsTaperThr" min="40" max="95" step="5" value="75" class="form-range"><span class="rs-val" id="rsTaperThrVal">75%</span></div>
+                                <div class="rs-cell-ctrl"><label class="rs-mini-l">Floor</label><input type="range" id="rsTaperFloor" min="5" max="90" step="5" value="30" class="form-range"><span class="rs-val" id="rsTaperFloorVal">30%</span></div>
                             </div>
                         </div>
                     </div>
@@ -3895,6 +3895,11 @@
                 try { new bootstrap.Tooltip(el, { container: 'body', trigger: 'hover focus', placement: 'top' }); } catch (e) {}
             });
 
+            // Plane card available-range [?] tooltip.
+            document.querySelectorAll('#planeSpecCard .rs-q[data-bs-toggle="tooltip"]').forEach(el => {
+                try { new bootstrap.Tooltip(el, { container: 'body', trigger: 'hover focus', placement: 'top' }); } catch (e) {}
+            });
+
             // Redraw the curve + refresh the price whenever the modal opens.
             const _msModal = document.getElementById('modelSettingsModal');
             if (_msModal) _msModal.addEventListener('shown.bs.modal', syncFromState);
@@ -4001,13 +4006,21 @@
         }
 
         // Open the right modal when the picker hits the "add custom" sentinel.
+        // Also apply any per-aircraft charger default defined in the plane catalog.
         planeSelect.addEventListener('change', () => {
             if (planeSelect.value === '__custom__') {
                 planeSelect.value = prevPlaneValue;
                 ['cpName', 'cpBattery', 'cpRange', 'cpSpeed', 'cpSeats', 'cpLoad'].forEach(id => document.getElementById(id).value = '');
                 document.getElementById('cpError').classList.add('d-none');
                 customPlaneModal.show();
-            } else { prevPlaneValue = planeSelect.value; }
+            } else {
+                prevPlaneValue = planeSelect.value;
+                const planeDef = BUILTIN_PLANES_BY_ID[planeSelect.value];
+                if (planeDef && planeDef.default_charger_id) {
+                    const opt = chargerSelect.querySelector(`option[value="${CSS.escape(planeDef.default_charger_id)}"]`);
+                    if (opt) { chargerSelect.value = planeDef.default_charger_id; prevChargerValue = chargerSelect.value; }
+                }
+            }
         });
         chargerSelect.addEventListener('change', () => {
             if (chargerSelect.value === '__custom_charger__') {

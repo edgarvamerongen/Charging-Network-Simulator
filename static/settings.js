@@ -50,7 +50,7 @@ window.CNSSettings = (function () {
     const DEFAULTS = Object.freeze({
         landingReserve:    { enabled: true,  minLandingSoc: 0.30 },   // 0..1
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
-        chargeTaper:       { enabled: true,  threshold: 0.70, taperPower: 0.15, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
+        chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
         routingPadding:    { enabled: true,  factor: 1.05 },          // ≥1
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
@@ -181,8 +181,8 @@ window.CNSSettings = (function () {
         if (e === 0) return 0;
         const s = loadAll().chargeTaper;
         if (!s.enabled || !batteryKwh) return 60 * e / p;
-        const thr   = Math.max(0.5, Math.min(0.95, +s.threshold || 0.70));
-        const floor = Math.max(0.05, Math.min(0.95, +s.taperPower || 0.15));
+        const thr   = Math.max(0.5, Math.min(0.95, +s.threshold || 0.75));
+        const floor = Math.max(0.05, Math.min(0.95, +s.taperPower || 0.30));
         const batt  = Math.max(1e-9, +batteryKwh);
         // Above `thr` SoC the accepted power decays EXPONENTIALLY from peak to
         // floor·peak at 100%:  P(SoC) = p · floor^((SoC-thr)/(1-thr)).  That
