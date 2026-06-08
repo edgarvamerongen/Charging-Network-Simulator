@@ -1142,6 +1142,14 @@
         .nrg-charger-pin.route .nrg-pin-head { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .30); }
         .nrg-charger-pin.route .nrg-pin-tail { border-top-color: #2563eb; }
 
+        /* Alternate airport overlay — permanent distance label on each dashed connector */
+        .alt-dist-label {
+            background: #fff; color: #7c3aed; border: 1px solid #7c3aed;
+            border-radius: 6px; font-size: .7rem; font-weight: 700;
+            padding: 1px 5px; box-shadow: var(--shadow-sm); white-space: nowrap;
+        }
+        .alt-dist-label::before { display: none; }   /* hide the tooltip caret */
+
         /* Badge on the trigger button — shows the count of active factors. */
         .model-badge {
             display: inline-block; min-width: 18px; text-align: center;
@@ -1369,6 +1377,7 @@
                     <div class="opt-group">
                         <div class="opt-label">Route</div>
                         <label class="opt-check"><input type="checkbox" id="legLabelToggle" checked><span>Show flight labels</span></label>
+                        <label class="opt-check"><input type="checkbox" id="fAlternates"><span>Alternates</span></label>
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">Basemap</div>
@@ -1718,6 +1727,15 @@
                                 <span class="rs-val" id="rsRoutingVal">×1.05</span>
                             </div>
                         </div>
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsAlternate"><span>Alternate reserve</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Every stop and the destination must arrive holding enough charge to divert to its nearest airport. The reserve is each airport's own distance to the nearest runway — no routing padding, since a short divert is flown direct. Remote fields cost more range than well-served ones.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <span class="rs-val">auto · per-airport</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="rs-cat">Charging</div>
@@ -2037,6 +2055,55 @@
 
         let routeLayers = [];                 // polylines, leg labels, training circle
         let routeEndpointMarkers = [];        // origin / destination / stop markers (blue pin or blue-halo)
+        let alternateLayers = [];     // purple dashed connectors + alt markers/labels
+        let lastRouteChain  = [];     // the chain currently on the map, for live re-toggling
+
+        function clearAlternates() {
+            alternateLayers.forEach(l => map.removeLayer(l));
+            alternateLayers = [];
+        }
+
+        // For every routed airport with a known nearest alternate, draw a purple
+        // dashed connector to that alternate, a marker on it, and a permanent
+        // distance label. Alternate coords resolve through airportByIdent (the
+        // alternate is always a loaded airport).
+        function drawAlternates(chain) {
+            clearAlternates();
+            (chain || []).forEach(n => {
+                const full = n && n.ident ? airportByIdent[n.ident] : null;
+                if (!full || !full.alternate_ident) return;
+                const alt = airportByIdent[full.alternate_ident];
+                if (!alt) return;
+                const from = [full.latitude_deg, full.longitude_deg];
+                const to   = [alt.latitude_deg, alt.longitude_deg];
+                const line = L.polyline([from, to], {
+                    color: '#7c3aed', weight: 2.5, dashArray: '5 6', opacity: 0.9,
+                });
+                const dot = L.circleMarker(to, {
+                    radius: 5, fillColor: '#7c3aed', color: '#fff',
+                    weight: 1.5, fillOpacity: 0.9,
+                });
+                const km = (full.alternate_km != null)
+                    ? full.alternate_km
+                    : CNSRouting.haversineKm({ lat: from[0], lon: from[1] },
+                                             { lat: to[0], lon: to[1] });
+                dot.bindTooltip(`${alt.ident} · ${fmtDist(km)}`, {
+                    permanent: true, direction: 'top', offset: [0, -4],
+                    className: 'alt-dist-label',
+                });
+                line.addTo(map); dot.addTo(map);
+                alternateLayers.push(line, dot);
+            });
+        }
+
+        // Re-evaluate the overlay for the current route (after a redraw, or when
+        // the toggle flips).
+        function refreshAlternates() {
+            const cb = document.getElementById('fAlternates');
+            if (cb && cb.checked) drawAlternates(lastRouteChain);
+            else clearAlternates();
+        }
+
         let _routeEndpoints = [];             // [{lat,lon,label}] of the active route's airports
         let _routeChargerIdents = new Set();  // charger airports on the route → drawn blue, skipped by the orange layer
         let _routeKey = '';                   // change-detection so the markers only rebuild when the route/toggle changes
@@ -2999,6 +3066,8 @@
             if (typeof smartReplan === 'function')    smartReplan();
             if (typeof drawLiveRoute === 'function')  drawLiveRoute();
         }));
+        const fAltCb = document.getElementById('fAlternates');
+        if (fAltCb) fAltCb.addEventListener('change', refreshAlternates);
         document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.addEventListener('click', () => setBasemap(btn.dataset.basemap)));
 
         // ---- header Options dropdown -------------------------------------
@@ -3230,6 +3299,8 @@
         }
         function drawRoute(data) {
             clearRoute();
+            clearAlternates();
+            lastRouteChain = [];   // reset; the routed branch below repopulates it (training returns early)
             const _prof = _engineProfile(data);   // unified engine legs
             const p1 = [data.origin.lat, data.origin.lon];
             const p2 = [data.destination.lat, data.destination.lon];
@@ -3323,6 +3394,8 @@
                 // fix to keep this migration behaviour-neutral. One-way single-leg uses the engine.
                 addLegLabel(p1, p2, (_prof && data.trip_type !== 'retour' && _prof.legs[0]) || (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
             }
+            lastRouteChain = [selected.origin, ...plannedStops, selected.destination].filter(p => p && p.ident);
+            refreshAlternates();
         }
         // Fit-bounds padding aware of the side rails (planner left, result
         // right). Measures rail widths at render-time so it adapts to the
@@ -4334,6 +4407,7 @@
                     taperPower: { input: 'rsTaperFloor', valEl: 'rsTaperFloorVal', fmt: (v) => `${v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
                 } },
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
+                alternateReserve:  { check: 'rsAlternate',     extras: {} },
                 chargeTarget:      { check: 'rsChargeTarget',  extras: { value:         { input: 'rsChargeTargetSl', valEl: 'rsChargeTargetVal', fmt: (v) => `${v}%`,                              to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
 

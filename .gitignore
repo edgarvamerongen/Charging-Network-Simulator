@@ -9,9 +9,11 @@ __pycache__/
 .claude/*
 !.claude/commands/
 
-# Raw source data — only used by prepare_data.py to (re)generate european_airports.csv.
-# The app serves european_airports.csv at runtime; the 12 MB raw file isn't needed to deploy.
+# Raw source data — only used by prepare_data.py / airport_alternates.py to (re)generate
+# european_airports.csv. The app serves european_airports.csv at runtime; these raw dumps
+# (airports.csv ~12 MB, runways.csv ~4 MB from OurAirports) aren't needed to deploy.
 airports.csv
+runways.csv
 
 # Server-side custom planes & chargers (user-generated; created at runtime).
 # Excluded so deploys never overwrite what users have added on the server.

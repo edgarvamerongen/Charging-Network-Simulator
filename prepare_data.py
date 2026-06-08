@@ -2,6 +2,7 @@ import random
 import numpy as np
 
 import pandas as pd
+from airport_alternates import compute_alternate_columns
 
 # Load datasets
 airports = pd.read_csv("airports.csv")
@@ -41,6 +42,16 @@ eu_airports = airports[
 eu_airports = eu_airports.dropna(
     subset=["latitude_deg", "longitude_deg"]
 )
+
+# -----------------------------------------
+# Pre-bake each airport's nearest *suitable* alternate (nearest airport with a
+# paved runway, from runways.csv) so the planner can reserve divert energy and
+# the map can draw the alternate, without any runtime search.
+# -----------------------------------------
+eu_airports = eu_airports.copy()
+runways = pd.read_csv("runways.csv", dtype=str)
+eu_airports["alternate_km"], eu_airports["alternate_ident"] = \
+    compute_alternate_columns(eu_airports, runways)
 
 # -----------------------------------------
 # Save result

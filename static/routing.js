@@ -72,6 +72,27 @@ window.CNSRouting = (function () {
         // Realism factors: reserves cap usable range, routing padding shrinks reach.
         const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
         const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+        const requireAlt = (window.CNSSettings && CNSSettings.alternateReserveEnabled)
+                         ? CNSSettings.alternateReserveEnabled() : false;
+        // Per-airport divert reserve. Every ARRIVAL node (each stop + the
+        // destination) must arrive holding enough charge to reach its nearest
+        // airport — that airport's pre-baked great-circle `alternate_km`. We
+        // divide by `route` so the short divert is NOT inflated by cruise
+        // airways padding (a divert is flown near-direct). Built once and only
+        // when the toggle is on, so the planner is identical when off.
+        const altByIdent = new Map();
+        if (requireAlt) {
+            for (const a of allAirports) {
+                if (a && a.ident != null) altByIdent.set(a.ident, +a.alternate_km || 0);
+            }
+        }
+        const altReserveKm = (n) => {
+            if (!requireAlt || !n) return 0;
+            const km = (n.ident != null && altByIdent.has(n.ident))
+                     ? altByIdent.get(n.ident)
+                     : (+n.alternate_km || 0);
+            return km / route;
+        };
         // Caller may pass an explicit max straight-line leg (the planner's "available
         // range", already incl. reserve + routing padding, or a per-flight override).
         const maxLeg = options.maxLegKm != null ? options.maxLegKm
@@ -81,7 +102,7 @@ window.CNSRouting = (function () {
         const O = { lat: origin.lat, lon: origin.lon };
         const D = { lat: destination.lat, lon: destination.lon };
         const direct = haversineKm(O, D);
-        if (direct <= maxLeg) return { stops: [], totalDistanceKm: direct, legCount: 1 };
+        if (direct <= maxLeg - altReserveKm(destination)) return { stops: [], totalDistanceKm: direct, legCount: 1 };
 
         const skip = new Set();
         if (origin.ident) skip.add(origin.ident);
@@ -93,7 +114,7 @@ window.CNSRouting = (function () {
             for (const a of allAirports) {
                 if (!allowedSet.has(a.type)) continue;
                 if (a.ident && skip.has(a.ident)) continue;
-                if (!a.latitude_deg || !a.longitude_deg) continue;
+                if (a.latitude_deg == null || a.longitude_deg == null) continue;
                 const ap = _ap(a);
                 if (haversineKm(O, ap) + haversineKm(ap, D) <= cap * direct) C.push({ a, ap });
             }
@@ -105,6 +126,7 @@ window.CNSRouting = (function () {
             const N = C.length, ORIG = 0, DEST = N + 1;
             const pos  = (i) => i === ORIG ? O : i === DEST ? D : C[i - 1].ap;
             const type = (i) => (i === ORIG || i === DEST) ? null : C[i - 1].a.type;
+            const obj  = (i) => i === ORIG ? origin : i === DEST ? destination : C[i - 1].a;
             const g    = new Array(N + 2).fill(Infinity);   // best cost origin→i
             const came = new Array(N + 2).fill(-1);
             const done = new Array(N + 2).fill(false);
@@ -120,7 +142,7 @@ window.CNSRouting = (function () {
                 const relax = (j) => {
                     if (done[j]) return;
                     const d = haversineKm(from, pos(j));
-                    if (d > maxLeg) return;                   // not flyable on one charge
+                    if (d + altReserveKm(obj(j)) > maxLeg) return;   // not flyable incl. divert reserve
                     const pen = (j === DEST) ? 0 : options.stopPenaltyKm + (typePen[type(j)] || 0);
                     const t = g[i] + d + pen;
                     if (t < g[j]) { g[j] = t; came[j] = i; open.push({ i: j, f: t + haversineKm(pos(j), D) }); }

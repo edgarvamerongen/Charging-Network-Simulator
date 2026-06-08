@@ -49,6 +49,7 @@ window.CNSSettings = (function () {
     const KEY = 'cns_settings_v3';
     const DEFAULTS = Object.freeze({
         landingReserve:    { enabled: true,  minLandingSoc: 0.30 },   // 0..1
+        alternateReserve:  { enabled: false },                       // divert-to-nearest-airport reserve; uses each airport's pre-baked alternate_km
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
         chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
         routingPadding:    { enabled: true,  factor: 1.05 },          // ≥1
@@ -122,6 +123,15 @@ window.CNSSettings = (function () {
         const s = loadAll().routingPadding;
         if (!s.enabled) return 1.0;
         return Math.max(1.0, Math.min(1.5, +s.factor || 1.05));
+    }
+
+    /** Whether the planner must reserve charge at every stop/destination to
+     *  divert to its nearest airport. Boolean toggle — the reserve magnitude is
+     *  each airport's own `alternate_km` (read by the planner), so there is no
+     *  slider here. Identity (false) by default so saved plans are unchanged. */
+    function alternateReserveEnabled() {
+        const s = loadAll().alternateReserve;
+        return !!(s && s.enabled);
     }
 
     /** Default state-of-charge every aircraft charges to at a terminus, unless a
@@ -211,9 +221,11 @@ window.CNSSettings = (function () {
             chargeTaper:       !!s.chargeTaper.enabled,
             routingPadding:    !!s.routingPadding.enabled,
             chargeTarget:      !!(s.chargeTarget && s.chargeTarget.enabled),
+            alternateReserve:  !!(s.alternateReserve && s.alternateReserve.enabled),
             anyOn: !!(s.landingReserve.enabled || s.chargerEfficiency.enabled ||
                       s.chargeTaper.enabled || s.routingPadding.enabled ||
-                      (s.chargeTarget && s.chargeTarget.enabled)),
+                      (s.chargeTarget && s.chargeTarget.enabled) ||
+                      (s.alternateReserve && s.alternateReserve.enabled)),
         };
     }
 
@@ -222,5 +234,6 @@ window.CNSSettings = (function () {
         loadAll, save, reset, subscribe,
         usableFraction, gridDemandFactor, routingFactor, chargeTimeMin,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
+        alternateReserveEnabled,
     };
 })();

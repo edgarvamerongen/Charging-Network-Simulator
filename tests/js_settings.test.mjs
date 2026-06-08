@@ -155,5 +155,23 @@ test('chargeTimeMin(0,...) == 0', () => {
   assert.equal(S.chargeTimeMin(0, 100, 100), 0);
 });
 
+// ---- alternateReserve ------------------------------------------------------
+test('defaults: alternateReserveEnabled() false when off', () => {
+  const { S } = loadSettings();
+  assert.equal(S.alternateReserveEnabled(), false);
+});
+test('alternateReserveEnabled() true once toggled on', () => {
+  const { S } = loadSettings();
+  S.save({ alternateReserve: { enabled: true } });
+  assert.equal(S.alternateReserveEnabled(), true);
+});
+test('activeFlags reports alternateReserve + anyOn', () => {
+  const { S } = loadSettings();
+  S.save({ alternateReserve: { enabled: true } });
+  const f = S.activeFlags();
+  assert.equal(f.alternateReserve, true);
+  assert.equal(f.anyOn, true);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
