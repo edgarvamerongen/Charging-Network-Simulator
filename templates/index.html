@@ -1603,6 +1603,15 @@
                                 <span class="rs-val" id="rsRoutingVal">×1.05</span>
                             </div>
                         </div>
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsAlternate"><span>Alternate reserve</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Every stop and the destination must arrive holding enough charge to divert to its nearest airport. The reserve is each airport's own distance to the nearest runway — no routing padding, since a short divert is flown direct. Remote fields cost more range than well-served ones.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <span class="rs-val">auto · per-airport</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="rs-cat">Charging</div>
@@ -3870,6 +3879,7 @@
                     taperPower: { input: 'rsTaperFloor', valEl: 'rsTaperFloorVal', fmt: (v) => `${v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
                 } },
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
+                alternateReserve:  { check: 'rsAlternate',     extras: {} },
                 chargeTarget:      { check: 'rsChargeTarget',  extras: { value:         { input: 'rsChargeTargetSl', valEl: 'rsChargeTargetVal', fmt: (v) => `${v}%`,                              to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
 
