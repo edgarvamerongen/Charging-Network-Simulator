@@ -185,5 +185,53 @@ window.CNSFlight = (function () {
         return profile;
     }
 
-    return { simulateTrip, _expandChain };
+    // ---- saved-trip adapters (shared by the demand drawer + the PDF report) -------
+    // The R12 kill-switch, read once here so every view asks the engine the same question.
+    function isEnabled() {
+        const s = window.CNSSettings;
+        return !!(s && s.loadAll && (s.loadAll().flightEngine || {}).enabled);
+    }
+    // Rebuild a FlightProfile for a SAVED folder trip: geometry from persisted coords,
+    // plane from the saved spec (R4) or the catalog (planeId), per-AIRPORT target via
+    // opts.getTargetSoc. Returns null (caller falls back to the legacy math) when the
+    // trip lacks coords or a resolvable plane spec.
+    function profileForTrip(trip, opts) {
+        opts = opts || {};
+        if (!trip || trip.originLat == null || trip.originLon == null) return null;
+        try {
+            const cat = (window.PLANES_BY_ID || {})[trip.planeId] || {};
+            const plane = {
+                battery_kwh: trip.battery != null ? trip.battery : cat.battery_kwh,
+                range_km: trip.range_km != null ? trip.range_km : cat.range_km,
+                speed_kmh: trip.speed_kmh != null ? trip.speed_kmh : cat.speed_kmh,
+                c_rate: trip.c_rate,
+                training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : cat.training_range_km,
+            };
+            if (!plane.range_km || !plane.battery_kwh) return null;
+            const wp = (x) => ({ ident: x.ident, name: x.name, lat: x.lat, lon: x.lon });
+            const o = { ident: trip.originIdent, name: trip.originName, lat: trip.originLat, lon: trip.originLon };
+            const d = { ident: trip.destIdent, name: trip.destName, lat: trip.destLat, lon: trip.destLon };
+            const stops = (trip.stops || []).map(wp);
+            const waypoints = (trip.tripType === 'training') ? [wp(o)] : [wp(o), ...stops, wp(d)];
+            return simulateTrip(plane, waypoints, {
+                tripType: trip.tripType,
+                getTargetSoc: opts.getTargetSoc,
+                getChargerKw: opts.getChargerKw || (() => 0),
+                trainingRangeKm: plane.training_range_km,
+            });
+        } catch (err) { if (window.console) console.warn('[CNSFlight] saved-trip profile failed; legacy fallback:', err); return null; }
+    }
+    // The charge energy (kWh) a demand contribution draws at its airport, off a profile
+    // from profileForTrip. Multi-leg maps by chargeIdx (position-indexed, so a retour stop
+    // visited twice resolves); single-leg by role. null -> caller uses the legacy math.
+    function chargeEnergyAt(profile, contrib) {
+        if (!profile || !contrib) return null;
+        const t = contrib.t || {};
+        const ch = t.multiLeg
+            ? (contrib.chargeIdx != null ? (profile.charges || [])[contrib.chargeIdx] : null)
+            : (profile.charges || []).find(x => x.role === contrib.role);
+        return ch ? ch.energyKwh : null;
+    }
+
+    return { simulateTrip, _expandChain, isEnabled, profileForTrip, chargeEnergyAt };
 })();

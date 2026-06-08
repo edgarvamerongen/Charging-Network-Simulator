@@ -54,25 +54,35 @@ window.CNSReport = (function () {
         const cfgs = CNSDemand.loadCfg();
         const getTargetSoc = (id) => CNSDemand.resolveTargetSoc(cfgs[id]);
         const multiCache = {};
+        // R12: when the engine flag is on, per-airport contribution energy comes from the
+        // SAME CNSFlight adapter the demand drawer uses — so the PDF agrees with the screen.
+        const engOn = !!(window.CNSFlight && CNSFlight.isEnabled());
+        const engCache = {};
         const aircraftList = a.contribs.map((c, i) => {
             const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
             const usable = window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0;
             const battery = c.t.battery ?? c.t.legEnergy * 2;
             const usableBattery = battery * usable;
             const legPadded = (c.t.legEnergy || 0) * route;
-            let energy;
-            if (c.t.multiLeg) {
-                const recomputed = multiCache[c.t.id]
-                    || (multiCache[c.t.id] = CNSDemand.recomputeMultiLegCharges(c.t, getTargetSoc, usableBattery));
-                const newC = (c.chargeIdx != null && recomputed[c.chargeIdx]) ? recomputed[c.chargeIdx] : null;
-                energy = newC ? newC.energy_kwh : c.base * route;
-            } else {
-                const targetThis = getTargetSoc(a.ident);
-                const otherIdent = c.role === 'home' ? c.t.destIdent
-                                 : c.role === 'dest' ? c.t.originIdent
-                                 : null;
-                const targetOther = otherIdent ? getTargetSoc(otherIdent) : null;
-                energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
+            let energy = null;
+            if (engOn) {
+                const prof = (c.t.id in engCache) ? engCache[c.t.id] : (engCache[c.t.id] = CNSFlight.profileForTrip(c.t, { getTargetSoc }));
+                energy = prof ? CNSFlight.chargeEnergyAt(prof, c) : null;
+            }
+            if (energy == null) {
+                if (c.t.multiLeg) {
+                    const recomputed = multiCache[c.t.id]
+                        || (multiCache[c.t.id] = CNSDemand.recomputeMultiLegCharges(c.t, getTargetSoc, usableBattery));
+                    const newC = (c.chargeIdx != null && recomputed[c.chargeIdx]) ? recomputed[c.chargeIdx] : null;
+                    energy = newC ? newC.energy_kwh : c.base * route;
+                } else {
+                    const targetThis = getTargetSoc(a.ident);
+                    const otherIdent = c.role === 'home' ? c.t.destIdent
+                                     : c.role === 'dest' ? c.t.originIdent
+                                     : null;
+                    const targetOther = otherIdent ? getTargetSoc(otherIdent) : null;
+                    energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
+                }
             }
             return { _i: i, name: c.t.planeName, energy, size: battery };
         });
