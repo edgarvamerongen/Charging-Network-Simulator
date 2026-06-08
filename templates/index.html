@@ -2889,7 +2889,7 @@
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
         // origin + planned stops + dest; the engine OWNS the retour mirror + training
         // loop (R1). Preview target is the GLOBAL default (the flight isn't in the
-        // network yet) — matches CNSScheduler.tripBreakdown's preview context.
+        // network yet, so no per-airport SoC overrides apply).
         function _engineProfile(data) {
             // The simulated result carries _origin/_dest; the LIVE PREVIEW (drawLiveRoute)
             // carries origin/destination (no underscore). Accept BOTH, else the preview map
@@ -2909,8 +2909,8 @@
                 });
             } catch (err) { console.warn('[CNSFlight] profile failed; legacy fallback:', err); return null; }
         }
-        // Map a CNSFlight FlightProfile to the CNSScheduler.tripBreakdown shape the result
-        // panel reads, so renderResult is source-agnostic. Phases mirror the scheduler's:
+        // Map a CNSFlight FlightProfile to the breakdown shape the result panel
+        // reads, so renderResult is source-agnostic. Phases mirror the scheduler's:
         // fly.leg is 'out'/'back' for a single-leg trip, the leg index for multi-leg; a charge
         // carries at(role)/name/energy/dur. _legMeta keeps reading data.legs (already padded,
         // matches the engine to sub-rounding) so leg distances/energies are unchanged.
