@@ -206,13 +206,12 @@ window.CNSScheduler = (function () {
         const ph = []; let off = 0;
         ph.push({ kind: 'fly', leg: 'out', start: off, dur: legMin, label: 'Fly to ' + trip.destName }); off += legMin;
 
-        // Charge energy at each end now comes from the engine (profile.charges by role);
-        // the legacy deliveredEnergy stays as the null-profile fallback for old saves.
-        // TRAINING stays on the legacy path: its energy is the deferred G4a change (engine
-        // is UNpadded vs legacy padded), so migrating it would shift the pattern recharge ~5%.
-        const prof = (trip.tripType === 'training') ? null : _tripProfile(trip);
+        // Charge energy at each end comes from the engine via energyAt(ident) — works for
+        // TRAINING too (its charge role is 'training', not 'dest'; engine trains UNpadded,
+        // the G4a model). Legacy deliveredEnergy stays only as the null-profile fallback.
+        const prof = _tripProfile(trip);
         const destEnergy = prof
-            ? ((prof.charges.find(c => c.role === 'dest') || {}).energyKwh || 0)
+            ? prof.energyAt(trip.destIdent)
             : (window.CNSDemand && CNSDemand.deliveredEnergy
                 ? CNSDemand.deliveredEnergy(trip, 'dest', leg, batt, usableBatt, destTarget, homeTarget)
                 : (trip.tripType === 'retour' ? Math.max(0, 2 * leg - usableBatt) : leg));
@@ -223,7 +222,7 @@ window.CNSScheduler = (function () {
         if (trip.tripType === 'retour') {
             ph.push({ kind: 'fly', leg: 'back', start: off, dur: legMin, label: 'Fly back to ' + trip.originName }); off += legMin;
             const homeEnergy = prof
-                ? ((prof.charges.find(c => c.role === 'home') || {}).energyKwh || 0)
+                ? prof.energyAt(trip.originIdent)
                 : (window.CNSDemand && CNSDemand.deliveredEnergy
                     ? CNSDemand.deliveredEnergy(trip, 'home', leg, batt, usableBatt, homeTarget, destTarget)
                     : Math.min(2 * leg, usableBatt));
