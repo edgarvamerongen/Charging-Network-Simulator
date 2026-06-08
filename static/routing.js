@@ -33,6 +33,13 @@ window.CNSRouting = (function () {
         const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
         return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
     }
+    // Routed (flown) distance = great-circle x routing padding. The pad scalar is applied
+    // HERE so display callers don't each re-apply it; haversineKm itself stays pure
+    // great-circle for the reach math (range/route) and the map arc.
+    function routedKm(a, b) {
+        const f = (window.CNSSettings && CNSSettings.routingFactor) ? CNSSettings.routingFactor() : 1.0;
+        return haversineKm(a, b) * f;
+    }
 
     // Defaults — tweakable via opts.options
     const DEFAULTS = {
@@ -162,5 +169,5 @@ window.CNSRouting = (function () {
         return { stops, totalDistanceKm: best.distKm, legCount: stops.length + 1 };
     }
 
-    return { planRoute, haversineKm };
+    return { planRoute, haversineKm, routedKm };
 })();

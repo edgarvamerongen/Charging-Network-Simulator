@@ -1933,7 +1933,7 @@
         function updateTrajectory() {
             const box = document.getElementById('trajInfo');
             if (selected.origin && selected.destination) {
-                const hk = (a, b) => (window.CNSRouting ? CNSRouting.haversineKm(a, b) : haversineKm([a.lat, a.lon], [b.lat, b.lon]));
+                const hk = _dispKm;   // routed when the engine is on, great-circle when off
                 const O = { lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg };
                 const D = { lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
                 const stopsOn = document.getElementById('withStops')?.checked;
@@ -1956,7 +1956,10 @@
                 if (!stopsOn && plane && plane.range_km) {
                     const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
                     const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                    const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
+                    // Reach verdict is identical either way (algebraically); we just match UNITS to the
+                    // shown distance — routed km vs FULL usable range when the engine is on, else
+                    // great-circle km vs the great-circle reach (range x usable / route).
+                    const maxLeg = _flightEngineOn() ? _availableRangeKm(plane) * route : _availableRangeKm(plane);
                     if (km > maxLeg) {
                         warn = ` <span class="traj-warn">⚠ ${fmtDist(km - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
@@ -2218,9 +2221,9 @@
             if (!plannedStops.length) {
                 section.classList.remove('d-none');
                 document.querySelector('.stops-title').textContent = 'Suggested route';
-                summaryEl.textContent = `Direct flight · ${fmtDist(CNSRouting.haversineKm(t.origin, t.dest))}`;
+                summaryEl.textContent = `Direct flight · ${fmtDist(_dispKm(t.origin, t.dest))}`;
                 listEl.innerHTML = `
-                    <li class="terminus"><span class="step">0</span><strong>${t.origin.name}</strong><span class="leg-dist">→ ${fmtDist(CNSRouting.haversineKm(t.origin, t.dest))}</span></li>
+                    <li class="terminus"><span class="step">0</span><strong>${t.origin.name}</strong><span class="leg-dist">→ ${fmtDist(_dispKm(t.origin, t.dest))}</span></li>
                     <li class="terminus"><span class="step">1</span><strong>${t.dest.name}</strong></li>`;
                 hintEl.innerHTML = `Direct leg fits the aircraft's range — no stops needed. Use <strong>+ Add stop</strong> in the form above to insert one manually.`;
                 _wireStopRowActions(t);
@@ -2228,7 +2231,7 @@
             }
 
             const chain = [t.origin, ...plannedStops, t.dest];
-            let totalDist = 0; for (let i = 0; i < chain.length - 1; i++) totalDist += CNSRouting.haversineKm(chain[i], chain[i + 1]);
+            let totalDist = 0; for (let i = 0; i < chain.length - 1; i++) totalDist += _dispKm(chain[i], chain[i + 1]);
 
             const lis = chain.map((wp, i) => {
                 const isTerm = (i === 0 || i === chain.length - 1);
@@ -2236,7 +2239,7 @@
                 const tagHtml = (!isTerm && tag) ? `<span class="type-tag ${tag[1]}">${tag[0]}</span>` : '';
                 let legDist = '';
                 if (i < chain.length - 1) {
-                    const d = CNSRouting.haversineKm(wp, chain[i + 1]);
+                    const d = _dispKm(wp, chain[i + 1]);
                     const bad = plannedLegIssues.includes(i);
                     legDist = `<span class="leg-dist${bad ? ' over-range' : ''}">→ ${fmtDist(d)}${bad ? ' ⚠' : ''}</span>`;
                 }
@@ -2844,6 +2847,14 @@
         // R12 kill-switch: a view reads CNSFlight when the flag is on, else the legacy math.
         function _flightEngineOn() {
             return !!(window.CNSFlight && CNSFlight.isEnabled());
+        }
+        // Distance to SHOW in the planning aids (trajectory pill + suggested route):
+        // routed (great-circle x padding) when the engine is on, great-circle when off —
+        // so these agree with the map labels in BOTH flag states. The reach math itself
+        // stays great-circle (see maxLeg below); only the displayed number changes.
+        function _dispKm(a, b) {
+            if (window.CNSRouting) return (_flightEngineOn() ? CNSRouting.routedKm : CNSRouting.haversineKm)(a, b);
+            return haversineKm([a.lat, a.lon], [b.lat, b.lon]);   // pre-CNSRouting fallback (great-circle)
         }
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
         // origin + planned stops + dest; the engine OWNS the retour mirror + training
