@@ -54,9 +54,9 @@ def _colinear(start, bearing_pts):
 
 
 class TestMultiLegBeta(unittest.TestCase):
-    """Beta (225 kWh / 500 km / 250 km/h): 45 kWh/100km.
+    """Beta (225 kWh / 600 km / 250 km/h): 37.5 kWh/100km.
     Route EHAM -> EHRD (stop) -> LFPG, one-way. EHRD (Rotterdam) is genuinely
-    on the great-circle south to Paris, so each leg stays inside the 500 km
+    on the great-circle south to Paris, so each leg stays inside the 600 km
     range (45 km then 354 km)."""
     def setUp(self):
         self.sim = make_sim()
@@ -64,7 +64,7 @@ class TestMultiLegBeta(unittest.TestCase):
             "beta_plane", _coord("EHAM"), _coord("LFPG"),
             "aircraft_charger", "one-way", stops=[_coord("EHRD")])
         self.assertTrue(self.r.get("success"), self.r)
-        self.avg = BETA["battery_kwh"] / BETA["range_km"] * 100  # 45
+        self.avg = BETA["battery_kwh"] / BETA["range_km"] * 100  # 37.5
 
     def test_legs_distances_match_haversine(self):
         legs = self.r["legs"]
@@ -173,8 +173,8 @@ class TestMultiLegRetourMirror(unittest.TestCase):
 
 
 class TestMultiLegForcedCharging(unittest.TestCase):
-    """Synthetic 3-leg route of ~400 km legs for the Beta (range 500, battery
-    225, 45 kWh/100km). Each leg burns ~180 kWh > half the battery, so the
+    """Synthetic 3-leg route of ~400 km legs for the Beta (range 600, battery
+    225, 37.5 kWh/100km). Each leg burns ~150 kWh > half the battery, so the
     plane MUST charge at every intermediate stop — exercising the deficit path
     that an on-map near-origin stop (EHRD) never triggers."""
     def setUp(self):

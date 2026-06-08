@@ -52,13 +52,18 @@ def coord(code, name=None):
     return {"name": name or code, "lat": lat, "lon": lon}
 
 
-# Reference catalog entries (mirror planes.json / chargers.json).
-VELIS = {"id": "pipistrel_velis", "name": "Pipistrel Velis Electro", "seats": 2,
-         "battery_kwh": 22, "range_km": 100, "speed_kmh": 150, "training_range_km": 70}
+# Reference catalog entries — an explicit mirror of planes.json. These are the
+# numbers the physics assertions derive their expected values from, so they MUST
+# be kept in lockstep with planes.json: when a headline number changes in the
+# catalog (e.g. Beta 500 km -> 600 km, Velis training_range 70 -> 100 km), bump
+# it here too. TestReferenceCatalogSync (test_sim_core.py) fails loudly if they
+# drift, naming the field, so a stale constant never masquerades as a sim.py bug.
+VELIS = {"id": "pipistrel_velis", "name": "Velis Electro", "seats": 2,
+         "battery_kwh": 22, "range_km": 100, "speed_kmh": 150, "training_range_km": 100}
 BETA = {"id": "beta_plane", "name": "Beta Alia CX300", "seats": 6, "load_kg": 500,
-        "battery_kwh": 225, "range_km": 500, "speed_kmh": 250}
-VAERIDION = {"id": "vaeridion", "name": "Vaeridion", "seats": 30, "load_kg": 3000,
-             "battery_kwh": 500, "range_km": 500, "speed_kmh": 400}
+        "battery_kwh": 225, "range_km": 600, "speed_kmh": 250}
+VAERIDION = {"id": "vaeridion", "name": "Vaeridion", "seats": 9, "load_kg": 1000,
+             "battery_kwh": 600, "range_km": 600, "speed_kmh": 400}
 
 CHARGER_172 = {"id": "aircraft_charger", "name": "Aircraft Charger", "power_kw": 172}
 CHARGER_22 = {"id": "mobile_aircraft", "name": "Mobile Aircraft Charger (GB/T)", "power_kw": 22}
