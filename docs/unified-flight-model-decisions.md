@@ -3,8 +3,10 @@
 
 # Unified Flight Engine — Decisions & Open Questions
 
-**Status:** pre-build. Spec (`unified-flight-model.md`) is stale and not yet implementable.
-Gates below are ruled on; blockers + open questions are NOT — nothing gets built until they are.
+**Status (2026-06-08): ✅ Phase 2 COMPLETE — the engine is the sole source of charge energy.**
+The unified engine (`static/flight-model.js`, `CNSFlight`) is fully integrated and the legacy
+per-view energy math is deleted. See **§ G. Phase 2 completion** at the bottom for what shipped.
+The original pre-build gates / blockers / decisions below are kept as the historical record.
 **Workspace:** worktree `../cns-engine`, branch `engine`, off the arrival-fix anchor `7af3d97`.
 
 ---
@@ -120,3 +122,47 @@ to *where* the padding lands; revisit if more fidelity is wanted.
 - **R12 · Safety net → runtime kill-switch flag per step + bake period.** Each migration step ships behind a `CNSSettings` flag (instant disable on drift); legacy engines (`sim.py` energy, `_legEst`, the demand walks) are deleted in a FINAL PR after a bake, not eagerly.
 
 **Implementation details (applied per the audit — no further decision):** `phases[]` is a **superset** of today's phase objects (leg/at/atIdx/power/energy); `charges[]` is **position-indexed by `atIndex`** (never keyed by ident); the calc-panel "show your work" math STAYS (step 8's "zero math in index.html" excludes that transparency block); the origin node is **inert `billable:false` metadata** for #33 (charges[] stays billable-only); #33/#34/#35 stay OUT of the engine PRs; re-derive every consumer by **function name**, not the spec's drifted line numbers.
+
+---
+
+## G. Phase 2 completion — shipped 2026-06-08
+
+The migration is **done**. The engine is unconditional; every charge-energy number in the
+desktop app comes from `CNSFlight`. Built on top of the Phase-1 view migration (map labels →
+trajectory/over-range → result panel → demand drawer + PDF), the closing phase shipped:
+
+- **Scheduler (the DES) reads the engine.** `CNSScheduler` derives charge energies from a cached
+  `_tripProfile(trip) → CNSFlight.profileForTrip` (`energyAt(ident)` / `charges`), keeping all its
+  OWN timing/queue logic. Because `report.js` + `animation.js` read `runGlobal`'s output, they are
+  engine-backed for free.
+- **R12 kill-switch removed.** The `flightEngine` flag, `_flightEngineOn()`, `CNSFlight.isEnabled()`,
+  and all on/off ternaries are gone — there is no legacy path to fall back to. *(This intentionally
+  supersedes R12's "delete after a bake" plan: the bake happened on `:5057`, the rollout was driven
+  by a zero-drift parity gate, so the flag was retired with the legacy rather than kept.)*
+- **Training migrated.** The scheduler reads training energy via `energyAt(ident)` (its charge role
+  is `'training'`, not `'dest'`). **G4(a) turned out to be a non-issue:** the engine's training
+  energy equals the legacy's exactly → ZERO behavior change, not the feared ~5% unpadded delta.
+- **Legacy energy math DELETED.** `CNSDemand.deliveredEnergy` + `recomputeMultiLegCharges` are
+  removed (the duplicated per-trip walks), along with the scheduler's local `energyAt` / `_usableB`
+  and every null-profile fallback. `CNSDemand` keeps only its structural surface (`computeAirports`,
+  `energyAt` for the per-airport charge sum, `roleAt`, `resolveTargetSoc`, folder/cfg storage).
+- **Old-save coord-rebuild.** `_rebuildSavedTripCoords` (index.html) backfills lat/lon on any
+  pre-coords saved trip from the airport DB on load, so `profileForTrip` always resolves and the
+  deleted fallback is unnecessary.
+
+**Deliberately kept:** the single-leg-retour leg-label fallback + `_legEst` (the deferred
+retour-time quirk, G4-adjacent); `sim.py` / `/api/simulate` (G3, mobile-gated).
+
+**How it was proven safe:**
+- **DES parity gate** `tests/sched_snapshot.mjs` — captures `runGlobal` (rotation phase
+  starts/durs + per-airport energy + peak) for a seeded 4-trip-type network; stayed
+  **byte-identical** through every scheduler / training / deletion commit (zero drift).
+- Node suite green (settings 15, charging, demand, flight-model, flight-padding, flight-adapter);
+  `js_flight_adapter` repurposed from legacy-parity to the adapter's own contract; `js_demand`
+  dropped the deleted-function cases.
+- **Adversarial review workflow** (cns-engine path-guarded) — found only dead vars + stale comments,
+  since cleaned.
+
+**Still open (separate, each signed-off):** the remaining G4 behavior changes (b single-leg retour
+home-charge cap, c training "usable" basis, d stricter over-range threshold); the mobile migration
+pass (R11); the mobile-gated `sim.py` retirement (steps 7–8).
