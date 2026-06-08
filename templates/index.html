@@ -1830,6 +1830,10 @@
         // so a dot never covers a teardrop's tail — the marker flows on top of the dot.
         map.createPane('teardropPane');
         map.getPane('teardropPane').style.zIndex = 660;
+        // Tooltips (charger info boxes) default to z-index 650 — i.e. BEHIND the
+        // teardrops (660). Lift the tooltip pane above every marker pane so the
+        // info box always reads on top, while staying under interactive popups (700).
+        map.getPane('tooltipPane').style.zIndex = 670;
 
         // Swappable basemaps. Satellite is the default; the segmented control toggles to Carto Voyager.
         const BASEMAPS = {
