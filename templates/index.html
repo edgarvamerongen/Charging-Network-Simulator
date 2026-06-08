@@ -2816,6 +2816,31 @@
                 terminalName: term.name || lastLeg.toName || '', arrivalSoc: term.arrivalSocFrac, phases,
             };
         }
+        // Build the engine FlightProfile for a SAVED folder trip (the demand drawer).
+        // Rebuilds geometry from the persisted coords; resolves the plane from the saved
+        // spec (R4) or the catalog (planeId); per-AIRPORT target resolver (LOCAL > GLOBAL).
+        // Returns null -> caller uses the legacy demand math.
+        function _engineProfileForTrip(trip, getTargetSoc) {
+            if (!window.CNSFlight || !trip || trip.originLat == null || trip.originLon == null) return null;
+            try {
+                const cat = (window.PLANES_BY_ID || {})[trip.planeId] || {};
+                const plane = {
+                    battery_kwh: trip.battery != null ? trip.battery : cat.battery_kwh,
+                    range_km: trip.range_km != null ? trip.range_km : cat.range_km,
+                    speed_kmh: trip.speed_kmh != null ? trip.speed_kmh : cat.speed_kmh,
+                    c_rate: trip.c_rate, training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : cat.training_range_km,
+                };
+                if (!plane.range_km || !plane.battery_kwh) return null;   // legacy/old save without a resolvable spec
+                const wp = (x) => ({ ident: x.ident, name: x.name, lat: x.lat, lon: x.lon });
+                const o = { ident: trip.originIdent, name: trip.originName, lat: trip.originLat, lon: trip.originLon };
+                const d = { ident: trip.destIdent, name: trip.destName, lat: trip.destLat, lon: trip.destLon };
+                const stops = (trip.stops || []).map(wp);
+                const waypoints = (trip.tripType === 'training') ? [wp(o)] : [wp(o), ...stops, wp(d)];
+                return CNSFlight.simulateTrip(plane, waypoints, {
+                    tripType: trip.tripType, getTargetSoc, getChargerKw: () => 0, trainingRangeKm: plane.training_range_km,
+                });
+            } catch (err) { console.warn('[CNSFlight] saved-trip profile failed; legacy fallback:', err); return null; }
+        }
         function addLegLabel(a, b, leg) {
             if (!_showLegLabels) return;   // hidden via Map Options → Route
             let dist, timeH, energy;
@@ -3500,28 +3525,42 @@
                 // Per-trip cache so each multi-leg trip recomputes its charges
                 // exactly once per render (cheap, but no point doing it once per contrib).
                 const multiCache = {};
+                const engCache = {};   // R12: per-trip engine FlightProfile (built once per render)
+                // Engine charge energy at this contribution's airport: multi-leg maps by chargeIdx
+                // (position-indexed, so a twice-visited retour stop resolves), single-leg by role.
+                const _engEnergyAt = (c) => {
+                    if (!_flightEngineOn()) return null;
+                    const prof = (c.t.id in engCache) ? engCache[c.t.id] : (engCache[c.t.id] = _engineProfileForTrip(c.t, getTargetSoc));
+                    if (!prof) return null;
+                    const ch = c.t.multiLeg
+                        ? (c.chargeIdx != null ? prof.charges[c.chargeIdx] : null)
+                        : prof.charges.find(x => x.role === c.role);
+                    return ch ? ch.energyKwh : null;
+                };
                 const aircraftList = a.contribs.map((c, i) => {
                     const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
                     const usable = CNSSettings.usableFraction(plane);
                     const battery = c.t.battery ?? c.t.legEnergy * 2;
                     const usableBattery = battery * usable;
                     const legPadded = (c.t.legEnergy || 0) * route;
-                    let energy;
-                    if (c.t.multiLeg) {
-                        // Recompute the whole chain so per-stop targets cascade.
-                        const recomputed = multiCache[c.t.id]
-                            || (multiCache[c.t.id] = CNSDemand.recomputeMultiLegCharges(c.t, getTargetSoc, usableBattery));
-                        // This contribution is one specific charge event — find it by chargeIdx.
-                        const newC = (c.chargeIdx != null && recomputed[c.chargeIdx]) ? recomputed[c.chargeIdx] : null;
-                        energy = newC ? newC.energy_kwh : c.base * route;
-                    } else {
-                        // Single-leg path: cross-airport SoC targets via deliveredEnergy.
-                        const targetThis = getTargetSoc(ident);
-                        const otherIdent = c.role === 'home' ? c.t.destIdent
-                                         : c.role === 'dest' ? c.t.originIdent
-                                         : null;
-                        const targetOther = otherIdent ? getTargetSoc(otherIdent) : null;
-                        energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
+                    let energy = _engEnergyAt(c);   // engine charge energy, or null -> legacy below
+                    if (energy == null) {
+                        if (c.t.multiLeg) {
+                            // Recompute the whole chain so per-stop targets cascade.
+                            const recomputed = multiCache[c.t.id]
+                                || (multiCache[c.t.id] = CNSDemand.recomputeMultiLegCharges(c.t, getTargetSoc, usableBattery));
+                            // This contribution is one specific charge event — find it by chargeIdx.
+                            const newC = (c.chargeIdx != null && recomputed[c.chargeIdx]) ? recomputed[c.chargeIdx] : null;
+                            energy = newC ? newC.energy_kwh : c.base * route;
+                        } else {
+                            // Single-leg path: cross-airport SoC targets via deliveredEnergy.
+                            const targetThis = getTargetSoc(ident);
+                            const otherIdent = c.role === 'home' ? c.t.destIdent
+                                             : c.role === 'dest' ? c.t.originIdent
+                                             : null;
+                            const targetOther = otherIdent ? getTargetSoc(otherIdent) : null;
+                            energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
+                        }
                     }
                     return { _i: i, name: c.t.planeName, energy, size: battery };
                 });
@@ -3737,6 +3776,7 @@
                 planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
                 chargerId: d._chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
                 legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
+                range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,   // R4: persist the effective plane spec so the engine can rebuild a custom-plane trip from coords (catalog planes also resolve via planeId)
                 freqN: d._freqN, freqUnit: d._freqUnit,
                 // 'shared' = one aircraft cycles N rotations; 'separate' = N
                 // distinct planes (a fleet). Only meaningful for retour/training
