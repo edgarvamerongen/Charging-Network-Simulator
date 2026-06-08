@@ -1357,6 +1357,7 @@
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
+                        <label class="opt-check"><input type="checkbox" id="hideAirportsOnRoute"><span>Hide when route is planned</span></label>
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">NRG2fly network</div>
@@ -2127,6 +2128,7 @@
         let _routeChargerIdents = new Set();  // charger airports on the route → drawn blue, skipped by the orange layer
         let _routeKey = '';                   // change-detection so the markers only rebuild when the route/toggle changes
         let _showLegLabels = true;   // Map Options → Route → Show flight labels
+        let _hideAirportsOnRoute = false;   // Map Options → hide the size-cluster airport dots while a route is drawn
         const clusters = {
             small_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
             medium_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
@@ -3056,6 +3058,18 @@
             const cb = document.querySelector(`.airport-filter[value="${type}"]`);
             return !!(cb && cb.checked);
         }
+        // Hide ONLY the size-cluster catalog airport dots/bubbles when the "Hide when
+        // route is planned" option is on AND a route is drawn, so only the route reads.
+        // The NRG2fly network layer and alternate-airport overlay are left untouched, so
+        // both stay visible; the route's own markers are drawn separately and stay too.
+        function _applyAirportVisibility() {
+            const hide = _hideAirportsOnRoute && _routeEndpoints.length > 0;
+            ['small_airport', 'medium_airport', 'large_airport'].forEach(type => {
+                const cb = document.querySelector(`.airport-filter[value="${type}"]`);
+                const show = !hide && cb && cb.checked;
+                if (show) map.addLayer(clusters[type]); else map.removeLayer(clusters[type]);
+            });
+        }
         // Rebuild the NRG2fly layer. Visibility model (per spec — the two are OR'd
         // and independent: show_airport = airport_size OR nrg2fly_network):
         //   orange dot = size-filter(ap) OR network-toggle  → the network layer sits
@@ -3100,8 +3114,14 @@
             _showLegLabels = e.target.checked;
             if (typeof drawLiveRoute === 'function') drawLiveRoute();
         });
+        // Map Options → hide the size-cluster airport dots the moment a route is drawn.
+        const _hideApToggle = document.getElementById('hideAirportsOnRoute');
+        if (_hideApToggle) _hideApToggle.addEventListener('change', (e) => {
+            _hideAirportsOnRoute = e.target.checked;
+            _applyAirportVisibility();
+        });
         document.querySelectorAll('.airport-filter').forEach(cb => cb.addEventListener('change', () => {
-            if (cb.checked) map.addLayer(clusters[cb.value]); else map.removeLayer(clusters[cb.value]);
+            _applyAirportVisibility();   // honour the size filter AND the hide-on-route option
             refreshNrgChargerLayer();   // charger-airport dots follow the size filters too (OR)
             // Re-plan AND redraw the live polyline. The planner refresh
             // alone wasn't enough — the map stayed on the previous red
@@ -3353,6 +3373,7 @@
                          .map(e => _chargerAt(e.lat, e.lon)).filter(Boolean));
             refreshNrgChargerLayer();
             refreshRouteEndpoints();
+            _applyAirportVisibility();   // hide/show the size-cluster dots per the route state + option
         }
         function drawRoute(data) {
             clearRoute();
