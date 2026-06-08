@@ -301,7 +301,7 @@ window.CNSTour = (function () {
             // 3. Departure
             {
                 element: '#origin',
-                popover: { title: 'Departure airport', description: 'Type to search by name, IATA, or municipality — or click any orange marker on the map and pick "Set as Departure".', side: 'right' },
+                popover: { title: 'Departure airport', description: 'Type to search by name, IATA, or municipality, or click any orange marker on the map and pick "Set as Departure".', side: 'right' },
             },
             // 4. + Add stop (the small button itself, not the whole row)
             {
@@ -316,7 +316,7 @@ window.CNSTour = (function () {
             // 6. Trajectory pill
             {
                 element: '#trajInfo',
-                popover: { title: 'Trajectory', description: 'The straight-line distance between Departure and Destination. If it\'s further than the chosen aircraft can fly on one charge, this turns into an over-range warning — your cue to plan charging stops.', side: 'right' },
+                popover: { title: 'Trajectory', description: 'The straight-line distance between Departure and Destination. If it\'s further than the chosen aircraft can fly on one charge, this turns into an over-range warning, your cue to plan charging stops.', side: 'right' },
             },
             // 7. Trip type
             {
@@ -326,13 +326,13 @@ window.CNSTour = (function () {
             // 8. Aircraft
             {
                 element: '#plane',
-                popover: { title: 'Aircraft', description: 'Pick a model — the card shows its catalog range and the model-adjusted <strong>available range</strong>, plus battery, cruise speed and seats. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
+                popover: { title: 'Aircraft', description: 'Pick a model. The card shows its catalog range and the model-adjusted <strong>available range</strong>, plus battery, cruise speed and seats. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
             },
             // 9. Model settings — surfaced BEFORE the route so the factors that
             // shape it (and force a stop) are understood first.
             {
                 element: '#planModelSettingsBtn',
-                popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. It also holds the charging price (€/kWh) and charger efficiency behind the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are exactly why the Beta Alia\'s 600&nbsp;km range can\'t reach Munich in one hop — so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
+                popover: { title: 'Model settings: applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. They also set the charging price (€/kWh) and charger efficiency used for the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are why the Beta Alia\'s 600&nbsp;km range cannot reach Munich in one hop, so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
             },
             // 9a. Model settings panel — open it and walk its three groups. Pinned
             // popover (top) with the modal lifted above the tour overlay, same
@@ -340,7 +340,7 @@ window.CNSTour = (function () {
             {
                 popover: {
                     title: 'Inside the model settings',
-                    description: 'Here\'s the panel itself — every factor cascades through the result panel, demand calculator, scheduler and PDF. Three groups: <strong>Available range</strong> — landing reserve + routing padding, what trims the aircraft\'s usable reach; <strong>Charging</strong> — the charge-target SoC plus the CC→CV taper curve that stretches the final top-up; and <strong>Revenue</strong> — charger efficiency (grid demand) and the €/kWh tariff behind Airport revenue. Flip any factor off or drag a slider and everything recomputes live.',
+                    description: 'This panel holds the operational assumptions behind the simulation; changing any of them updates the route, charge times, demand and revenue. Three groups: <strong>Available range</strong> sets the landing reserve and routing padding, which determine how far each aircraft can fly before it must charge; <strong>Charging</strong> sets how full each aircraft charges and how quickly it does so; <strong>Revenue</strong> sets the charging efficiency and the price per kWh that drive the energy and revenue figures.',
                     side: 'over', align: 'center',
                     // Bottom-pinned: the panel is tall (taper chart), so a top pin would
                     // cover its title — pinning low leaves the title + all three groups
@@ -354,7 +354,7 @@ window.CNSTour = (function () {
             // the suggested route appear in the next step.
             {
                 element: '.stops-toggle-row',
-                popover: { title: 'Plan with charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. Watch — we\'re turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Munich run.', side: 'right' },
+                popover: { title: 'Plan with charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. We are turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Munich run.', side: 'right' },
                 onHighlightStarted: async () => { await _ensureStopsOn(); },
             },
             // 11. Suggested route — the stop the applied factors forced.
@@ -366,7 +366,7 @@ window.CNSTour = (function () {
             // 12. Expected frequency
             {
                 element: '#freqField',
-                popover: { title: 'Expected frequency', description: 'How often this route runs. For retour or training flights you can also choose whether one aircraft cycles the rotations or a fleet of separate planes flies them — which changes how many chargers each airport needs.', side: 'right' },
+                popover: { title: 'Expected frequency', description: 'How often this route runs. For retour or training flights you can also choose whether one aircraft cycles the rotations or a fleet of separate planes flies them, which changes how many chargers each airport needs.', side: 'right' },
             },
             // 13. Charger
             {
@@ -391,7 +391,7 @@ window.CNSTour = (function () {
             // the headline numbers first, then we drill into each section below.
             {
                 element: '.rail-right .panel',
-                popover: { title: 'Result panel', description: 'Headline per-flight numbers up top: energy used, flight time, charge time, and the airport\'s <strong>revenue potential</strong>. Below are two expandable breakdowns — <strong>Route</strong> and <strong>Charging</strong> — we\'ll open each in turn.', side: 'left', align: 'start' },
+                popover: { title: 'Result panel', description: 'Headline per-flight numbers up top: energy used, flight time, charge time, and the airport\'s <strong>revenue potential</strong>. Below are two expandable breakdowns, <strong>Route</strong> and <strong>Charging</strong>, which we\'ll open in turn.', side: 'left', align: 'start' },
                 onHighlightStarted: async () => {
                     await _ensureSimulated();
                     // Start clean: collapse every section so the headline reads first;
@@ -420,7 +420,7 @@ window.CNSTour = (function () {
             // visible (it sits below the trip-calculated table).
             {
                 element: '#addFolder',
-                popover: { title: 'Add to demand calculator', description: 'Saves the flight to the network — the <strong>Demand Calculator</strong> pill at the bottom flashes a brief confirmation. Demand at each airport the trip touches (Departure, Destination, every stop) is attributed and aggregated across ALL saved flights.', side: 'left' },
+                popover: { title: 'Add to demand calculator', description: 'Saves the flight to the network. The <strong>Demand Calculator</strong> pill at the bottom briefly confirms it. Demand at each airport the trip touches (Departure, Destination, every stop) is attributed and aggregated across every saved flight.', side: 'left' },
                 onHighlightStarted: async () => {
                     await _ensureSimulated(); await _ensureInFolder();
                     // The Add button is the LAST element in the result panel, which
@@ -443,7 +443,7 @@ window.CNSTour = (function () {
             // A body class lifts the pill above the tour overlay so it
             // reads as a highlighted action target rather than dimmed UI.
             {
-                popover: { title: 'Demand Calculator', description: 'Look at the bottom of the screen — the <strong>Demand Calculator</strong> pill is the pull-up drawer with one card per airport your flights touch. Click it now (or just hit Next) and you\'ll see per-airport daily energy, peak power, charger config, and an embedded rotation scheduler.', side: 'over', align: 'center' },
+                popover: { title: 'Demand Calculator', description: 'Look at the bottom of the screen: the <strong>Demand Calculator</strong> pill is the pull-up drawer with one card per airport your flights touch. Click it now (or just hit Next) and you\'ll see per-airport daily energy, peak power, charger config, and an embedded rotation scheduler.', side: 'over', align: 'center' },
                 onHighlightStarted: async () => {
                     const d = document.getElementById('demandDrawer');
                     if (d && d.classList.contains('open')) {
@@ -459,7 +459,7 @@ window.CNSTour = (function () {
             // 16. Airport card overview
             {
                 element: '#folder [data-dest]',
-                popover: { title: 'Per-airport breakdown', description: 'Each airport touched by a flight gets its own card. Numbers shown — daily energy, peak power, charging time — are <strong>specific to this airport</strong>, not the whole network. Multiple flights through the same airport are aggregated.', side: 'top', align: 'center' },
+                popover: { title: 'Per-airport breakdown', description: 'Each airport touched by a flight gets its own card. Numbers shown (daily energy, peak power, charging time) are <strong>specific to this airport</strong>, not the whole network. Multiple flights through the same airport are aggregated.', side: 'top', align: 'center' },
                 onHighlightStarted: async () => { await _ensureDrawerOpen(); },
             },
             // 17. NEW — Role / route column
@@ -477,13 +477,13 @@ window.CNSTour = (function () {
             // 19. NEW — Charge target chip
             {
                 element: '#folder .soc-chip',
-                popover: { title: 'Charge target', description: '<strong>Auto</strong> inherits the global default charge target from Model settings (80% by default). Set a percentage here to override it for <em>this</em> airport — a LOCAL target always wins over the GLOBAL default. Higher targets give the plane more reserve but slow charging (lithium-ion tapers above ~80% SoC).', side: 'top' },
+                popover: { title: 'Charge target', description: '<strong>Auto</strong> inherits the global default charge target from Model settings (80% by default). Set a percentage here to override it for <em>this</em> airport; a LOCAL target always wins over the GLOBAL default. Higher targets give the plane more reserve but slow charging (lithium-ion tapers above ~80% SoC).', side: 'top' },
                 onHighlightStarted: async () => { await _ensureDrawerOpen(); },
             },
             // 19a. NEW — Edit / remove a saved flight (pencil + ×) on any row.
             {
                 element: '#folder [data-dest] [data-edit]',
-                popover: { title: 'Edit a saved flight', description: 'Plans change — the <strong>pencil</strong> on any row reopens that flight in an edit dialog to swap its trip type, aircraft or charger without re-planning from scratch. The red <strong>×</strong> beside it removes the flight from the network. Every figure recomputes the moment you save.', side: 'top' },
+                popover: { title: 'Edit a saved flight', description: 'The <strong>pencil</strong> on any row reopens that flight in an edit dialog, where its trip type, aircraft or charger can be changed without re-planning from scratch. The red <strong>×</strong> beside it removes the flight from the network. Saving updates every figure immediately.', side: 'top' },
                 onHighlightStarted: async () => { await _ensureDrawerOpen(); },
             },
             // 20. Rotation scheduler — lift the drawer above the tour overlay
@@ -491,7 +491,7 @@ window.CNSTour = (function () {
             // is brightly visible, and pin the popover to the TOP of the
             // viewport so it doesn't cover the chart.
             {
-                popover: { title: 'Rotation scheduler', description: 'Below is the time table (Gantt chart) of the airport\'s daily charging schedule. Each row is one aircraft; blue bars are flights, green bars are charging here, light-green are charges elsewhere, striped amber are queued (waiting for a charger). Drag bars to reschedule — the rest re-cascades to prevent overlap.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-top' },
+                popover: { title: 'Rotation scheduler', description: 'Below is the time table (Gantt chart) of the airport\'s daily charging schedule. Each row is one aircraft; blue bars are flights, green bars are charging here, light-green are charges elsewhere, striped amber are queued (waiting for a charger). Drag bars to reschedule; the rest reflows to prevent overlap.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-top' },
                 onHighlightStarted: async () => {
                     await _ensureDrawerOpen(); await _ensureSchedulerOpen();
                     document.body.classList.add('tour-scheduler-step');
@@ -511,7 +511,7 @@ window.CNSTour = (function () {
             // PDF report
             {
                 element: '#generateReport',
-                popover: { title: 'PDF report', description: 'Exports the whole plan as a print-ready PDF — cover with headline numbers, executive summary, network map, per-airport pages with rotation charts, methodology notes. Great for client deliverables.', side: 'top' },
+                popover: { title: 'PDF report', description: 'Exports the whole plan as a print-ready PDF: a cover with headline numbers, an executive summary, the network map, per-airport pages with rotation charts, and methodology notes. Great for client deliverables.', side: 'top' },
                 onHighlightStarted: async () => { await _ensureDrawerOpen(); },
             },
             // 23. NEW — Wow finish: seed a few more flights + open the animation
@@ -520,7 +520,7 @@ window.CNSTour = (function () {
             // playing, and pin the popover near the bottom of the viewport
             // so it doesn't cover the map.
             {
-                popover: { title: 'Overview', description: 'Above, every saved flight flies its real, routed trajectory — adjust the speed with the slider, and watch planes pause to charge. This is the demo network: a handful of real routes out of Lelystad — local hops to Schiphol, Rotterdam and Teuge, longer runs to Munich and Frankfurt, and a one-way to Lille. Close the modal when you\'re done.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-bottom' },
+                popover: { title: 'Overview', description: 'Above, every saved flight flies its real, routed trajectory. Adjust the speed with the slider, and watch planes pause to charge. This is the demo network: a handful of real routes out of Lelystad, with local hops to Schiphol, Rotterdam and Teuge, longer runs to Munich and Frankfurt, and a one-way to Lille. Close the modal when you\'re done.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-bottom' },
                 onHighlightStarted: async () => {
                     // Drawer must be open momentarily so the View-flights-
                     // on-map button is available to click; then close it so
