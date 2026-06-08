@@ -1313,6 +1313,8 @@
         .stops-list .stop-rm { margin-left: 4px; border: none; background: transparent; color: var(--danger); cursor: pointer; padding: 0 4px; border-radius: 4px; font-size: 1rem; line-height: 1; opacity: .65; }
         .stops-list .stop-rm:hover { background: rgba(239,68,68,.12); opacity: 1; }
         .stops-list .leg-dist.over-range { color: var(--danger); font-weight: 700; }
+        .stops-list .alt-divert { margin-left: 6px; color: #7c3aed; cursor: pointer; font-size: .82rem; opacity: .6; user-select: none; line-height: 1; }
+        .stops-list .alt-divert:hover, .stops-list .alt-divert:focus { opacity: 1; outline: none; }
         .stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
         .stops-list .stops-add { padding: 6px 0 0 0; position: relative; }
         .stops-list .stops-add input { width: 100%; padding: 5px 8px; font-size: .82rem; border: 1px solid #e2e8f0; border-radius: 6px; }
@@ -2108,6 +2110,29 @@
             else clearAlternates();
         }
 
+        // --- Route-list divert glyph (Option A): a per-stop "⤵" that reveals each ARRIVAL
+        // node's nearest alternate (native title) and pulses it on the map on hover/tap. Only
+        // arrival nodes carry it (the origin departs full — see routing.js), and only when the
+        // alternate-reserve setting is on, so it never clutters the default view.
+        function _altDivertHtml(wp) {
+            if (!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled())) return '';
+            const full = wp && wp.ident ? airportByIdent[wp.ident] : null;
+            if (!full || !full.alternate_ident) return '';
+            const km = (full.alternate_km != null) ? ' · ' + fmtDist(full.alternate_km) : '';
+            return ` <span class="alt-divert" tabindex="0" role="button" data-stop-ident="${full.ident}" data-alt-ident="${full.alternate_ident}" title="Divert → ${full.alternate_ident}${km}" aria-label="Nearest alternate ${full.alternate_ident}${km}">⤵</span>`;
+        }
+        let _altPulseLayers = [];
+        function clearAltPulse() { _altPulseLayers.forEach(l => map.removeLayer(l)); _altPulseLayers = []; }
+        function pulseAlternate(stopIdent, altIdent) {
+            clearAltPulse();
+            const stop = stopIdent ? airportByIdent[stopIdent] : null, alt = altIdent ? airportByIdent[altIdent] : null;
+            if (!stop || !alt) return;
+            const from = [stop.latitude_deg, stop.longitude_deg], to = [alt.latitude_deg, alt.longitude_deg];
+            const line = L.polyline([from, to], { color: '#7c3aed', weight: 3, dashArray: '4 5', opacity: 1 });
+            const ring = L.circleMarker(to, { radius: 9, color: '#7c3aed', weight: 3, fillColor: '#7c3aed', fillOpacity: 0.25 });
+            line.addTo(map); ring.addTo(map); _altPulseLayers.push(line, ring);
+        }
+
         let _routeEndpoints = [];             // [{lat,lon,label}] of the active route's airports
         let _routeChargerIdents = new Set();  // charger airports on the route → drawn blue, skipped by the orange layer
         let _routeKey = '';                   // change-detection so the markers only rebuild when the route/toggle changes
@@ -2493,7 +2518,7 @@
                 summaryEl.textContent = `Direct flight · ${fmtDist(_dispKm(t.origin, t.dest))}`;
                 listEl.innerHTML = `
                     <li class="terminus"><span class="step">0</span><strong>${t.origin.name}</strong><span class="leg-dist">→ ${fmtDist(_dispKm(t.origin, t.dest))}</span></li>
-                    <li class="terminus"><span class="step">1</span><strong>${t.dest.name}</strong></li>`;
+                    <li class="terminus"><span class="step">1</span><strong>${t.dest.name}</strong>${_altDivertHtml(t.dest)}</li>`;
                 hintEl.innerHTML = `Direct leg fits the aircraft's range — no stops needed. Use <strong>+ Add stop</strong> in the form above to insert one manually.`;
                 _wireStopRowActions(t);
                 return;
@@ -2513,7 +2538,8 @@
                     legDist = `<span class="leg-dist${bad ? ' over-range' : ''}">→ ${fmtDist(d)}${bad ? ' ⚠' : ''}</span>`;
                 }
                 const rm = !isTerm ? `<button class="stop-rm" type="button" data-stop="${i - 1}" title="Remove this stop">×</button>` : '';
-                return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span><strong>${wp.name}</strong>${tagHtml}${rm}${legDist}</li>`;
+                const altGlyph = i >= 1 ? _altDivertHtml(wp) : '';   // arrival nodes only (not the origin)
+                return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span><strong>${wp.name}</strong>${tagHtml}${rm}${legDist}${altGlyph}</li>`;
             }).join('');
 
             const sourceLabel = plannedSource === 'user' ? 'Edited route' : 'Suggested route';
@@ -3072,6 +3098,17 @@
         }));
         const fAltCb = document.getElementById('fAlternates');
         if (fAltCb) fAltCb.addEventListener('change', refreshAlternates);
+        // Route-list divert glyphs: delegated so it covers every dynamically-rendered ⤵.
+        // Hover (desktop) / tap (touch) pulses that stop's alternate on the map; the native
+        // title shows "Divert → IDENT · km". Clearing happens on mouse-out and on route teardown.
+        (function () {
+            const list = document.getElementById('stopsList');
+            if (!list) return;
+            const hit = (e) => e.target.closest && e.target.closest('.alt-divert');
+            list.addEventListener('mouseover', (e) => { const g = hit(e); if (g) pulseAlternate(g.dataset.stopIdent, g.dataset.altIdent); });
+            list.addEventListener('mouseout',  (e) => { if (hit(e)) clearAltPulse(); });
+            list.addEventListener('click',     (e) => { const g = hit(e); if (g) { e.stopPropagation(); pulseAlternate(g.dataset.stopIdent, g.dataset.altIdent); } });
+        })();
         document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.addEventListener('click', () => setBasemap(btn.dataset.basemap)));
 
         // ---- header Options dropdown -------------------------------------
@@ -3117,7 +3154,7 @@
             // The alternate overlay belongs to the route, so it must go too — otherwise a
             // reset/clear leaves stale purple connectors on the map, and toggling Alternates
             // afterwards would redraw them from a stale lastRouteChain.
-            clearAlternates(); lastRouteChain = [];
+            clearAlternates(); clearAltPulse(); lastRouteChain = [];
         }
         // F5: per-leg label (distance · time · energy) centred on each leg.
         // Uses the backend leg metrics when present (after Simulate); otherwise
