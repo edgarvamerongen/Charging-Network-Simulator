@@ -57,7 +57,10 @@ window.CNSCharging = (function () {
         aircraft.forEach((ac, i) => {
             const forced = ac && ac.forcedChargerId ? chargerById[ac.forcedChargerId] : null;
             if (forced) {
-                usedSlots.add(forced._slot);
+                // Same peak rule as the automatic path below: a pinned flight
+                // that needs no energy (pass-through / already charged) draws
+                // nothing, so its bay must NOT count toward peak.
+                if (ac.energy > 0) usedSlots.add(forced._slot);
                 const power = forced.power_kw;
                 assignments[i] = {
                     aircraft: ac, charger: forced, power, forced: true,
@@ -76,8 +79,17 @@ window.CNSCharging = (function () {
             .map(i => ({ ac: aircraft[i], i }))
             .sort((x, y) => y.ac.size - x.ac.size);
 
+        // Rotate auto flights over the bays NOT already claimed by a (real) pin,
+        // so an automatic flight never piles onto a pinned charger while another
+        // bay sits idle. If every bay is pinned, fall back to the full fleet and
+        // share (rule 3). With no pins, `rotation` === `sortedChargers` and the
+        // wrap-around below is unchanged.
+        const rotation = sortedChargers.filter(c => !usedSlots.has(c._slot));
+        const pool = rotation.length ? rotation : sortedChargers;
+        const m = pool.length;
+
         ranked.forEach((entry, rank) => {
-            const charger = n ? sortedChargers[rank % n] : null;
+            const charger = m ? pool[rank % m] : null;
             // Only a charger that actually delivers energy contributes to peak draw.
             // A pass-through aircraft (arrives with enough charge -> energy 0) is still
             // assigned a charger for ordering, but draws nothing, so its slot must NOT

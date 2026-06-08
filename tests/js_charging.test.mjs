@@ -169,5 +169,30 @@ test('peak counts a pinned charger once, even when also auto-assigned', () => {
   assert.equal(plan.peakPower, 400, 'shared charger counted once');
 });
 
+test('a pinned 0-energy pass-through does NOT contribute to peak', () => {
+  // Same invariant as contract #4, but for the manual-first path: a flight that
+  // pins a charger yet needs 0 kWh (arrives charged / merely passes through)
+  // draws nothing, so its bay must not show a phantom peak. The automatic path
+  // already guards this; the forced path must match it.
+  const plan = C.planCharging(
+    [{ id: 'only', power_kw: 400 }],
+    [{ name: 'pass', energy: 0, size: 80, forcedChargerId: 'only' }]);
+  assert.equal(plan.peakPower, 0, 'a pinned but non-charging flight draws nothing');
+});
+
+test('pinning the strongest charger leaves a free bay for the auto flight', () => {
+  // Pin the 400 kW; one auto flight remains and a 100 kW charger is idle. The
+  // auto flight must take that idle 100 kW (not pile onto the already-pinned
+  // 400 kW), so peak is the sum of BOTH distinct bays — matching what the DES
+  // does when it claims the fastest *free* bay.
+  const plan = C.planCharging(
+    [{ id: 'big', power_kw: 400 }, { id: 'small', power_kw: 100 }],
+    [{ name: 'pinned', energy: 50, size: 80,  forcedChargerId: 'big' },
+     { name: 'auto',   energy: 50, size: 900 }]);
+  assert.equal(plan.assignments[0].power, 400, 'pinned flight on its 400 kW');
+  assert.equal(plan.assignments[1].power, 100, 'auto flight on the idle 100 kW, not the pinned 400');
+  assert.equal(plan.peakPower, 500, 'both distinct bays in use → 400 + 100');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
