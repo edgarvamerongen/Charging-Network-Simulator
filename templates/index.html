@@ -4064,6 +4064,7 @@
                 planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
                 chargerId: prev.chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
                 legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
+                range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,
                 freqN: o.freqN, freqUnit: o.freqUnit, fleetMode: o.fleetMode,
                 chargerOverride: o.chargerOverride || undefined,
             };
@@ -4118,6 +4119,7 @@
             // round-trip; only an aircraft or flight-type change re-simulates.
             const needsSim = (newPlaneId !== prev.planeId) || (newTripType !== prev.tripType);
             if (!needsSim) {
+                err.classList.add('d-none');
                 trips[idx] = { ...prev, freqN, freqUnit, fleetMode, chargerOverride: chargerOverride || undefined };
                 saveFolder(trips); renderFolder(); _editFlightModal.hide();
                 return;
