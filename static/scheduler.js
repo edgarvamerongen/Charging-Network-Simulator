@@ -67,8 +67,8 @@ window.CNSScheduler = (function () {
 
     // Per-trip engine FlightProfile (CNSFlight), cached + busted on folder/cfg/settings
     // change. The scheduler reads charge ENERGIES from this; it keeps its OWN timing/queue
-    // logic. Returns null for old saves the engine can't rebuild -> callers fall back to
-    // the legacy demand math. Target-SoC resolver matches the per-airport context.
+    // logic. Returns null only for unresolvable old saves (no coords/spec) -> those contribute
+    // 0 charge energy. Target-SoC resolver matches the per-airport context.
     let _profStamp = null; const _profCache = {};
     function _tripProfile(trip) {
         if (!trip || !window.CNSFlight || !CNSFlight.profileForTrip) return null;
@@ -135,11 +135,6 @@ window.CNSScheduler = (function () {
     // ---------- model factors (cascade if CNSSettings is loaded) ----------
     const _rs = () => (window.CNSSettings || null);
     const _route   = () => _rs() ? CNSSettings.routingFactor() : 1.0;
-    const _usableB = (trip) => {
-        if (!_rs()) return batteryOf(trip);
-        const plane = (window.PLANES_BY_ID || {})[trip.planeId] || trip;
-        return batteryOf(trip) * CNSSettings.usableFraction(plane);
-    };
     const _chargeMin = (energy, power, batt) => {
         if (!_rs() || !power) return power ? energy / power * 60 : 0;
         return CNSSettings.chargeTimeMin(energy, power, batt);
@@ -173,19 +168,16 @@ window.CNSScheduler = (function () {
         const legs = trip.tripType === 'retour' ? 2 : 1;
         const route = _route();
         const legMin = num(trip, 'flightTimeH') * 60 / legs * route;
-        const leg = num(trip, 'legEnergy') * route;
         const batt = batteryOf(trip);
-        const usableBatt = _usableB(trip);
         const cRate = _cRateOf(trip);
-        const destTarget = ctx.targetAt(trip.destIdent);
-        const homeTarget = trip.tripType === 'retour' ? ctx.targetAt(trip.originIdent) : null;
 
         const ph = []; let off = 0;
         ph.push({ kind: 'fly', leg: 'out', start: off, dur: legMin, label: 'Fly to ' + trip.destName }); off += legMin;
 
-        // Charge energy at each end comes from the engine via energyAt(ident) — works for
-        // TRAINING too (its charge role is 'training', not 'dest'; engine trains UNpadded,
-        // the G4a model). Legacy deliveredEnergy stays only as the null-profile fallback.
+        // Charge energy at each end comes from the engine via energyAt(ident) — which also
+        // resolves TRAINING (its charge role is 'training', not 'dest'). An unresolvable trip
+        // (no profile) contributes 0; app-saved trips always carry coords + spec, so that's
+        // reachable only by pathological pre-migration localStorage the coord-rebuild missed.
         const prof = _tripProfile(trip);
         const destEnergy = prof ? prof.energyAt(trip.destIdent) : 0;
         const destPower = _effPower(ctx.chargerAt(trip.destIdent), batt, cRate);
@@ -214,7 +206,6 @@ window.CNSScheduler = (function () {
         const charges = Array.isArray(trip.charges) ? trip.charges : [];
         const route = _route();
         const batt = batteryOf(trip);
-        const usableBatt = _usableB(trip);
         const cRate = _cRateOf(trip);
         // Reserve-aware forward walk: each stop charges only what's needed for the
         // NEXT leg + landing reserve (or its SoC target); the terminal tops up to
