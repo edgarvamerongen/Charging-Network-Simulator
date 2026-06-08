@@ -121,7 +121,9 @@ window.CNSScheduler = (function () {
             const prof = _tripProfile(t);
             // Charger-independent per-airport energy from the engine (planCharging ranks by
             // size, so this only feeds charge time + peak). 0 for a rare unresolvable trip.
-            return { _i: i, energy: prof ? prof.energyAt(ident) : 0, size: batteryOf(t) };
+            // forcedChargerId → planCharging pins this flight to its chosen
+            // charger here (manual-first); the resulting power feeds powers[t.id].
+            return { _i: i, energy: prof ? prof.energyAt(ident) : 0, size: batteryOf(t), forcedChargerId: t.chargerOverride };
         });
         const powers = {};
         if (window.CNSCharging && fleet.length) {
@@ -153,6 +155,13 @@ window.CNSScheduler = (function () {
     const _cRateOf = (trip) => ((window.PLANES_BY_ID || {})[trip.planeId] || trip || {}).c_rate;
     const _effPower = (power, batt, cRate) =>
         (_rs() && CNSSettings.effectiveChargePower) ? CNSSettings.effectiveChargePower(power, batt, cRate) : (power || 0);
+    // Nameplate power of the charger a flight manually pinned (forcedChargerId),
+    // or 0 when it isn't pinned / the pinned charger isn't in the catalog. The
+    // global sim uses this to claim a bay of the pinned power (manual-first).
+    const _forcedPower = (trip) => {
+        const id = trip && trip.chargerOverride;
+        return (id && catalog[id]) ? (catalog[id].power_kw || 0) : 0;
+    };
 
     // ---------- rotation timeline (airport-driven charge times; viewIdent flags atX) ----------
     // tripPhases takes a `ctx` that resolves, per airport, the charger power and
@@ -216,7 +225,8 @@ window.CNSScheduler = (function () {
         const destArr = prof ? ((prof.charges.find(c => c.ident === trip.destIdent) || {}).arrivalSocFrac ?? null) : null;
         const destPower = _effPower(ctx.chargerAt(trip.destIdent), batt, cRate);
         const destMin = _chargeMin(destEnergy, destPower, batt, destArr);
-        if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', ident: trip.destIdent, name: trip.destName, atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, arrivalFrac: destArr, label: 'Charge @ ' + trip.destName }); off += destMin; }
+        const forcedPower = _forcedPower(trip);
+        if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', ident: trip.destIdent, name: trip.destName, atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, arrivalFrac: destArr, forcedPower, label: 'Charge @ ' + trip.destName }); off += destMin; }
 
         if (trip.tripType === 'retour') {
             ph.push({ kind: 'fly', leg: 'back', start: off, dur: legMin, label: 'Fly back to ' + trip.originName }); off += legMin;
@@ -224,7 +234,7 @@ window.CNSScheduler = (function () {
             const homeArr = prof ? ((prof.charges.find(c => c.ident === trip.originIdent && c.role === 'home') || {}).arrivalSocFrac ?? null) : null;
             const homePower = _effPower(ctx.chargerAt(trip.originIdent), batt, cRate);
             const homeMin = _chargeMin(homeEnergy, homePower, batt, homeArr);
-            if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', ident: trip.originIdent, name: trip.originName, atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, arrivalFrac: homeArr, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
+            if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', ident: trip.originIdent, name: trip.originName, atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, arrivalFrac: homeArr, forcedPower, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
         }
         return { ph, total: off, terminusDepartFrac: prof ? ((prof.charges.find(c => c.isTerminal) || {}).departSocFrac ?? null) : null };
     }
@@ -270,7 +280,7 @@ window.CNSScheduler = (function () {
                     kind: 'charge', at: c.role, ident: c.ident, name: c.name,
                     atX: viewIdent === c.ident,
                     atIdx: i + 1,                        // chain index — used by animation.js to position the plane
-                    start: off, dur, power, energy, arrivalFrac: arrFrac,
+                    start: off, dur, power, energy, arrivalFrac: arrFrac, forcedPower: _forcedPower(trip),
                     label: 'Charge @ ' + c.name
                 });
                 off += dur;
@@ -446,13 +456,27 @@ window.CNSScheduler = (function () {
         while (pq.length) {
             const e = pq.shift();
             const L = lanes[e.li], rot = L.rotations[e.k], pool = poolOf(rot.tpl.ph[e.ci].ident);
-            // Claim the MOST POWERFUL charger free at arrival (operators plug into
-            // the fastest open bay). pool is ordered power-desc, so the first free
-            // slot scanning from the top is the strongest one available now. If
-            // every charger is busy, wait for whichever frees earliest.
+            // MANUAL-FIRST: if this flight pinned a charger, claim a bay of that
+            // power (the earliest-free one), waiting for it if every matching bay
+            // is busy. A pin whose charger isn't in this airport's fleet leaves
+            // bi < 0 and falls through to the automatic rule, so it can never
+            // deadlock the sim.
             let bi = -1;
-            for (let i = 0; i < pool.length; i++) if (pool[i].freeAt <= e.arrival) { bi = i; break; }
-            if (bi < 0) { bi = 0; for (let i = 1; i < pool.length; i++) if (pool[i].freeAt < pool[bi].freeAt) bi = i; }
+            const forced = rot.tpl.ph[e.ci].forcedPower || 0;
+            if (forced) {
+                for (let i = 0; i < pool.length; i++) {
+                    if (pool[i].power !== forced) continue;
+                    if (bi < 0 || pool[i].freeAt < pool[bi].freeAt) bi = i;
+                }
+            }
+            // Otherwise claim the MOST POWERFUL charger free at arrival (operators
+            // plug into the fastest open bay). pool is ordered power-desc, so the
+            // first free slot scanning from the top is the strongest one available
+            // now. If every charger is busy, wait for whichever frees earliest.
+            if (bi < 0) {
+                for (let i = 0; i < pool.length; i++) if (pool[i].freeAt <= e.arrival) { bi = i; break; }
+                if (bi < 0) { bi = 0; for (let i = 1; i < pool.length; i++) if (pool[i].freeAt < pool[bi].freeAt) bi = i; }
+            }
             const start = Math.max(e.arrival, pool[bi].freeAt);
             // Size this charge by the PHYSICAL charger it claimed — not the
             // planCharging estimate. Power is the slot's nameplate, capped by the

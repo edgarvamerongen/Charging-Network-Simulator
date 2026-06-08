@@ -129,5 +129,70 @@ test('assignments preserve input order', () => {
   assert.equal(plan.assignments[0].power, 100);
 });
 
+// ---- manual-first override (forcedChargerId) --------------------------------
+
+test('forcedChargerId pins a flight to its chosen charger (overrides priority)', () => {
+  // Without a pin, the big aircraft (size 500) would take the 400 kW charger.
+  // Pinning it to the 100 kW charger must win, and the small one then takes 400.
+  const plan = C.planCharging(
+    [{ id: 'big', power_kw: 400 }, { id: 'small', power_kw: 100 }],
+    [{ name: 'pinned', energy: 50, size: 500, forcedChargerId: 'small' },
+     { name: 'auto',   energy: 20, size: 22 }]);
+  assert.equal(plan.assignments[0].power, 100, 'pinned flight forced onto 100 kW');
+  assert.equal(plan.assignments[0].forced, true, 'marked as a manual pin');
+  assert.equal(plan.assignments[1].power, 400, 'the auto flight takes the leftover 400 kW');
+});
+
+test('forced charge time uses the pinned charger power', () => {
+  const plan = C.planCharging(
+    [{ id: 'big', power_kw: 400 }, { id: 'small', power_kw: 100 }],
+    [{ name: 'pinned', energy: 50, size: 500, forcedChargerId: 'small' }]);
+  assert.ok(approx(plan.assignments[0].chargeTimeMin, 50 / 100 * 60));
+});
+
+test('a pin naming a charger not in the fleet falls back to automatic', () => {
+  // 'ghost' isn't in the fleet → the flight rejoins the auto pool and lands on
+  // the most powerful charger by the normal rule (no deadlock, no fighting).
+  const plan = C.planCharging(
+    [{ id: 'big', power_kw: 400 }, { id: 'small', power_kw: 100 }],
+    [{ name: 'pinned', energy: 50, size: 500, forcedChargerId: 'ghost' }]);
+  assert.equal(plan.assignments[0].power, 400);
+  assert.ok(!plan.assignments[0].forced, 'not treated as a manual pin');
+});
+
+test('peak counts a pinned charger once, even when also auto-assigned', () => {
+  // Two flights, both end up on the single 400 kW charger (one pinned, one auto).
+  const plan = C.planCharging(
+    [{ id: 'only', power_kw: 400 }],
+    [{ name: 'pinned', energy: 50, size: 80, forcedChargerId: 'only' },
+     { name: 'auto',   energy: 50, size: 900 }]);
+  assert.equal(plan.peakPower, 400, 'shared charger counted once');
+});
+
+test('a pinned 0-energy pass-through does NOT contribute to peak', () => {
+  // Same invariant as contract #4, but for the manual-first path: a flight that
+  // pins a charger yet needs 0 kWh (arrives charged / merely passes through)
+  // draws nothing, so its bay must not show a phantom peak. The automatic path
+  // already guards this; the forced path must match it.
+  const plan = C.planCharging(
+    [{ id: 'only', power_kw: 400 }],
+    [{ name: 'pass', energy: 0, size: 80, forcedChargerId: 'only' }]);
+  assert.equal(plan.peakPower, 0, 'a pinned but non-charging flight draws nothing');
+});
+
+test('pinning the strongest charger leaves a free bay for the auto flight', () => {
+  // Pin the 400 kW; one auto flight remains and a 100 kW charger is idle. The
+  // auto flight must take that idle 100 kW (not pile onto the already-pinned
+  // 400 kW), so peak is the sum of BOTH distinct bays — matching what the DES
+  // does when it claims the fastest *free* bay.
+  const plan = C.planCharging(
+    [{ id: 'big', power_kw: 400 }, { id: 'small', power_kw: 100 }],
+    [{ name: 'pinned', energy: 50, size: 80,  forcedChargerId: 'big' },
+     { name: 'auto',   energy: 50, size: 900 }]);
+  assert.equal(plan.assignments[0].power, 400, 'pinned flight on its 400 kW');
+  assert.equal(plan.assignments[1].power, 100, 'auto flight on the idle 100 kW, not the pinned 400');
+  assert.equal(plan.peakPower, 500, 'both distinct bays in use → 400 + 100');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

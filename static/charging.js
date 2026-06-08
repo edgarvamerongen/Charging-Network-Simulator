@@ -5,6 +5,11 @@
  * read and replace with something smarter later.
  *
  * Rules implemented here (per spec):
+ *   0. MANUAL-FIRST. A flight may pin the charger it uses (forcedChargerId).
+ *      Pinned flights are bolted to their charger BEFORE the automatic
+ *      heuristic runs, so a user's choice always wins and the two selection
+ *      paths never fight over a slot. A pin that names a charger this airport
+ *      doesn't have is ignored (the flight falls back to automatic).
  *   1. A charger charges ONE aircraft at a time, and fully
  *      (charge time = energy to add / charger power).
  *   2. Low-power chargers serve low-power (smaller) aircraft; high-power
@@ -18,6 +23,8 @@
  *   aircraft : [{ name, energy, size, ...extra }]  one entry per aircraft to charge
  *                - energy : kWh that must be delivered to this aircraft
  *                - size   : ranking key (e.g. battery kWh) — bigger = "higher power"
+ *                - forcedChargerId : optional id of a charger in the fleet this
+ *                                    flight MUST use (manual override; see rule 0)
  *
  * Output:
  *   {
@@ -35,18 +42,54 @@ window.CNSCharging = (function () {
             .map((c, i) => ({ ...c, _slot: i }))
             .sort((a, b) => b.power_kw - a.power_kw);
         const n = sortedChargers.length;
-
-        // Rank aircraft biggest-first, but remember their original order so the
-        // caller can line assignments back up with its rows.
-        const ranked = aircraft
-            .map((ac, i) => ({ ac, i }))
-            .sort((x, y) => y.ac.size - x.ac.size);
+        // First charger of each id, used to resolve a flight's manual pin.
+        const chargerById = {};
+        sortedChargers.forEach(c => { if (c.id != null && !(c.id in chargerById)) chargerById[c.id] = c; });
 
         const assignments = new Array(aircraft.length);
         const usedSlots = new Set();
 
+        // ---- Rule 0: MANUAL-FIRST. Pin flights to their chosen charger before
+        // the automatic heuristic touches a slot. A pin naming a charger this
+        // airport doesn't have is dropped here, so the flight rejoins the
+        // automatic pool below instead of fighting for a non-existent slot.
+        const autoOrder = [];
+        aircraft.forEach((ac, i) => {
+            const forced = ac && ac.forcedChargerId ? chargerById[ac.forcedChargerId] : null;
+            if (forced) {
+                // Same peak rule as the automatic path below: a pinned flight
+                // that needs no energy (pass-through / already charged) draws
+                // nothing, so its bay must NOT count toward peak.
+                if (ac.energy > 0) usedSlots.add(forced._slot);
+                const power = forced.power_kw;
+                assignments[i] = {
+                    aircraft: ac, charger: forced, power, forced: true,
+                    chargeTimeMin: power ? (ac.energy / power) * 60 : Infinity
+                };
+            } else {
+                autoOrder.push(i);
+            }
+        });
+
+        // ---- Rules 2 & 3: AUTOMATIC for everything not pinned. Rank the
+        // remaining aircraft biggest-first and pair them with the fleet
+        // (wrapping when there are more aircraft than chargers). Original order
+        // is remembered so the caller can line assignments back up with its rows.
+        const ranked = autoOrder
+            .map(i => ({ ac: aircraft[i], i }))
+            .sort((x, y) => y.ac.size - x.ac.size);
+
+        // Rotate auto flights over the bays NOT already claimed by a (real) pin,
+        // so an automatic flight never piles onto a pinned charger while another
+        // bay sits idle. If every bay is pinned, fall back to the full fleet and
+        // share (rule 3). With no pins, `rotation` === `sortedChargers` and the
+        // wrap-around below is unchanged.
+        const rotation = sortedChargers.filter(c => !usedSlots.has(c._slot));
+        const pool = rotation.length ? rotation : sortedChargers;
+        const m = pool.length;
+
         ranked.forEach((entry, rank) => {
-            const charger = n ? sortedChargers[rank % n] : null;
+            const charger = m ? pool[rank % m] : null;
             // Only a charger that actually delivers energy contributes to peak draw.
             // A pass-through aircraft (arrives with enough charge -> energy 0) is still
             // assigned a charger for ordering, but draws nothing, so its slot must NOT
