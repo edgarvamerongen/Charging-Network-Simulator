@@ -52,8 +52,8 @@ class TestOneWay(unittest.TestCase):
         d = 200.0
         r = self.sim.calculate_flight_by_distance("beta_plane", d, "aircraft_charger", "one-way")
         self.assertTrue(r.get("success"), r)
-        avg = BETA["battery_kwh"] / BETA["range_km"] * 100          # 45 kWh/100km
-        leg = avg * d / 100                                          # 90 kWh
+        avg = BETA["battery_kwh"] / BETA["range_km"] * 100          # 37.5 kWh/100km
+        leg = avg * d / 100                                          # 75 kWh
         self.assertAlmostEqual(r["avg_usage_kwh_per_100km"], avg, places=2)
         self.assertAlmostEqual(r["leg_energy_kwh"], leg, places=2)
         # one-way: recharge == leg (top the leg it just flew back to full)
@@ -74,8 +74,8 @@ class TestRetourDeficitBranch(unittest.TestCase):
         self.sim = make_sim()
 
     def test_both_legs_fit_dest_supplies_zero(self):
-        # Beta: 45 kWh/100km, 225 kWh battery. 2*leg <= battery <=> leg <= 112.5
-        # kWh <=> d <= 250 km. Use d = 200 (round trip 180 kWh < 225) -> 0.
+        # Beta: 37.5 kWh/100km, 225 kWh battery. 2*leg <= battery <=> leg <= 112.5
+        # kWh <=> d <= 300 km. Use d = 200 (round trip 150 kWh < 225) -> 0.
         r = self.sim.calculate_flight_by_distance("beta_plane", 200.0, "aircraft_charger", "retour")
         self.assertTrue(r.get("success"), r)
         self.assertEqual(r["legs"], 2)
@@ -83,7 +83,7 @@ class TestRetourDeficitBranch(unittest.TestCase):
         self.assertAlmostEqual(r["charge_time_h"], 0.0, places=3)
 
     def test_legs_dont_fit_dest_supplies_deficit(self):
-        # d = 400 km: leg = 180 kWh, 2*leg = 360, deficit = 360 - 225 = 135 kWh.
+        # d = 400 km: leg = 150 kWh, 2*leg = 300, deficit = 300 - 225 = 75 kWh.
         d = 400.0
         r = self.sim.calculate_flight_by_distance("beta_plane", d, "aircraft_charger", "retour")
         self.assertTrue(r.get("success"), r)
@@ -95,9 +95,9 @@ class TestRetourDeficitBranch(unittest.TestCase):
         self.assertAlmostEqual(r["total_distance_km"], 2 * d, places=2)
 
     def test_boundary_exactly_full(self):
-        # Vaeridion: 100 kWh/100km, 500 battery. leg == 250 kWh at d=250 -> 2*leg
-        # == 500 == battery exactly -> deficit 0.
-        r = self.sim.calculate_flight_by_distance("vaeridion", 250.0, "aircraft_charger", "retour")
+        # Vaeridion: 100 kWh/100km, 600 battery. leg == 300 kWh at d=300 -> 2*leg
+        # == 600 == battery exactly -> deficit 0.
+        r = self.sim.calculate_flight_by_distance("vaeridion", 300.0, "aircraft_charger", "retour")
         self.assertTrue(r.get("success"), r)
         self.assertAlmostEqual(r["recharge_energy_kwh"], 0.0, places=2)
 
@@ -110,7 +110,7 @@ class TestTraining(unittest.TestCase):
         r = self.sim.calculate_flight_by_distance("pipistrel_velis", 0, "aircraft_charger", "training")
         self.assertTrue(r.get("success"), r)
         avg = VELIS["battery_kwh"] / VELIS["range_km"] * 100         # 22 kWh/100km
-        raw = avg * VELIS["training_range_km"] / 100                 # 15.4 kWh
+        raw = avg * VELIS["training_range_km"] / 100                 # 22.0 kWh (training_range 100)
         # min_landing_soc absent -> 0 -> usable == full battery -> recharge == raw
         self.assertAlmostEqual(r["raw_pattern_energy_kwh"], raw, places=2)
         self.assertAlmostEqual(r["recharge_energy_kwh"], raw, places=2)
@@ -221,6 +221,36 @@ class TestSimulateByCoords(unittest.TestCase):
         avg = BETA["battery_kwh"] / BETA["range_km"] * 100
         self.assertAlmostEqual(r["leg_distance_km"], d, delta=0.05)
         self.assertAlmostEqual(r["leg_energy_kwh"], avg * d / 100, delta=0.05)
+
+
+class TestReferenceCatalogSync(unittest.TestCase):
+    """Guard against the drift that silently broke this suite once: the _helpers
+    reference constants are an explicit mirror of planes.json, and the physics
+    assertions derive their expected numbers from them. When a headline catalog
+    number changes (Beta 500->600 km, Velis training_range 70->100 km) but the
+    constant is not bumped, the energy assertions fail with cryptic '37.5 != 45'
+    deltas that LOOK like a sim.py regression. This test fails first and names
+    the exact field/plane, so the next drift is diagnosed in seconds."""
+    def setUp(self):
+        self.catalog = {p["id"]: p for p in make_sim().planes}
+
+    def _assert_in_sync(self, ref, fields):
+        live = self.catalog.get(ref["id"])
+        self.assertIsNotNone(live, f"planes.json has no plane id {ref['id']!r}")
+        for f in fields:
+            self.assertAlmostEqual(
+                float(ref[f]), float(live[f]), places=6,
+                msg=(f"_helpers {ref['id']}.{f}={ref[f]} drifted from planes.json "
+                     f"{f}={live[f]} — update tests/_helpers.py to match the catalog"))
+
+    def test_velis_in_sync(self):
+        self._assert_in_sync(VELIS, ("battery_kwh", "range_km", "speed_kmh", "training_range_km"))
+
+    def test_beta_in_sync(self):
+        self._assert_in_sync(BETA, ("battery_kwh", "range_km", "speed_kmh"))
+
+    def test_vaeridion_in_sync(self):
+        self._assert_in_sync(VAERIDION, ("battery_kwh", "range_km", "speed_kmh"))
 
 
 if __name__ == "__main__":
