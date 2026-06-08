@@ -36,7 +36,8 @@ class Simulator:
     def get_all_airports(self):
         # We'll return just enough data for the map + autocomplete to reduce payload size
         df = self.airports_df[['ident', 'name', 'municipality', 'iata_code', 'type',
-                               'latitude_deg', 'longitude_deg', 'iso_country']]
+                               'latitude_deg', 'longitude_deg', 'iso_country',
+                               'alternate_km', 'alternate_ident']]
         # Convert to list of dicts
         return df.to_dict('records')
 

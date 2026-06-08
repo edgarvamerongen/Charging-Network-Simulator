@@ -44,5 +44,15 @@ class TestNearestAlternate(unittest.TestCase):
             self.assertAlmostEqual(km[i], ref, delta=0.5)
 
 
+class TestApiPassthrough(unittest.TestCase):
+    def test_get_all_airports_includes_alternate_columns(self):
+        from _helpers import make_sim
+        rows = make_sim().get_all_airports()
+        self.assertTrue(rows, "expected at least one airport row")
+        self.assertIn("alternate_km", rows[0])
+        self.assertIn("alternate_ident", rows[0])
+        self.assertIsInstance(rows[0]["alternate_km"], (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()
