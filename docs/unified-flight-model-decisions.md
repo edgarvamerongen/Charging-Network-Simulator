@@ -22,21 +22,40 @@ Gates below are ruled on; blockers + open questions are NOT — nothing gets bui
 
 ---
 
-## B. Routing-padding model (resolved this session)
+## B. Routing-padding model (REVISED — "pad the route length")
 
-Padding (×1.05) is the **flown path** overhead. It must be applied **exactly once** (spec D1).
-**Decision: pad ENERGY + TIME (flown); keep DISTANCE geographic.** No double-count.
+Padding (×1.05) is the **flown-path** overhead from SID/STAR procedures + airways routing:
+the aircraft flies a longer PATH than the great-circle line. Applied **exactly once** (D1).
 
-- **Distance** = great-circle (matches the map line *and* the available-range reach check). NOT padded.
-- **Energy / time** = ×routingFactor (the plane flies ~5% farther → more energy + time). Matches charges + headline.
-- **Available range** stays `range × usable ÷ route` (geographic reach); over-range check compares geographic km vs it — **single-count**.
+**Decision (revised): pad the route LENGTH (`distKm`); energy, time and reach all DERIVE
+from the routed length.** Single-count. This **supersedes** the earlier "pad energy + time,
+keep distance geographic" call — rationale below.
+
+- **`distKm` = routed length** = `rawKm × routingFactor` — what every view shows.
+- **`rawKm` = great-circle** (geographic) is retained per leg/total for the map arc.
+- **Energy / time derive:** `energyKwh = ePerKm × distKm`, `flightMin = distKm ÷ speed`. So per
+  leg the three numbers RECONCILE. (The old model showed a geographic distance that silently
+  disagreed with the padded energy/time — the recurring "why don't these add up?" confusion.)
+- **Available range / over-range UNCHANGED:** still `range × usable ÷ route` (geographic reach)
+  and `padded energy > usable` — algebraically identical to "routed length > range". Moving the
+  padding to the display did not touch reachability or routing.
+
+**Why revised:** padding is *physically* a route-length effect; modelling it on the length (and
+deriving energy/time) is the faithful, internally-consistent choice. It is a pure PRESENTATION
+change — energy, time, charges, reachability are byte-identical; only the shown distance grows
+~5%. Engine: `static/flight-model.js` (behind R12). Verified: `tests/js_flight_padding.test.mjs`.
 
 | Surface | State |
 |---|---|
-| Result-panel leg rows, map leg labels, `_legEst` | ✅ done in worktree (energy/time padded, distance geographic) |
-| Trajectory pill + Suggested-route distances | geographic already + single-counts vs range → **no change needed** (verify) |
-| "Show calculation" breakdown | ⏳ **TODO** — weave the ×1.05 step into the formula so the padded energy is *explained* (raw → flown) |
-| Training legs | left raw — that's deferred change **G4(a)** |
+| Engine `distKm` (legs + totals) | ✅ routed (`rawKm × pad`); energy/time derive; `rawKm` kept geographic |
+| Map leg labels, result-panel rows | read engine `distKm` → routed (flag-on) |
+| Map ARC (drawn line) | great-circle (no procedure tracks) → ~5% shorter than the label → **signpost TBD** |
+| Available-range / over-range / routing | unchanged (energy-based, single-count) |
+| Training legs | left raw (`distKm == rawKm`) — deferred change **G4(a)** |
+
+**Deferred nuance:** the flat 5% is crude. Real padding ≈ a *fixed* terminal add (SID+STAR, per
+airport) **plus** an *airways* % — a flat % over-pads long hops, under-pads short ones. Orthogonal
+to *where* the padding lands; revisit if more fidelity is wanted.
 
 ---
 

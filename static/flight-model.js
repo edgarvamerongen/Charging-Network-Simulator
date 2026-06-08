@@ -20,8 +20,8 @@
  *   { tripType, multiLeg, training, battery_kwh, usable_kwh, reserve_kwh, availRangeKm,
  *     routingFactor, gridDemandFactor,
  *     nodes:   [{ ident,name,lat,lon, role, departSocFrac, billable }],   // role 'origin' billable:false
- *     legs:    [{ fromIdent,fromName,toIdent,toName, rawKm, distKm, flightMin, energyKwh,
- *                 socStartFrac, socEndFrac, overRange, legIndex }],
+ *     legs:    [{ fromIdent,fromName,toIdent,toName, rawKm, distKm, flightMin, energyKwh,   // rawKm=great-circle; distKm=ROUTED (rawKm*pad)
+ *                 socStartFrac, socEndFrac, overRange, legIndex }],   // routing padding lands on distKm, so energyKwh==ePerKm*distKm & flightMin==distKm/speed
  *     charges: [{ atIndex, ident,name,lat,lon, role, direction, arrivalSocFrac, targetSocFrac,
  *                 departSocFrac, energyKwh, gridKwh, powerKw, chargeMin, isTerminal }],
  *     phases:  [{ kind:'fly'|'charge', legIndex?, chargeIndex?, start, dur, ident?, label }],
@@ -111,15 +111,18 @@ window.CNSFlight = (function () {
         const nLegs = chain.length - 1;
         const origin = chain[0];
 
-        // legs: geographic distance; flown energy + time (R5)
+        // legs: rawKm = great-circle (geographic); distKm = ROUTED length (rawKm * pad).
+        // Routing padding lands on the LENGTH; energy + time + reach all derive from the
+        // flown distance (single-count), so distKm, energyKwh and flightMin reconcile. (R5)
         for (let i = 0; i < nLegs; i++) {
             const a = chain[i], b = chain[i + 1];
-            const rawKm = _haversineKm(_pt(a), _pt(b));
-            const energyKwh = ePerKm * rawKm * route;            // flown
-            const flightMin = speed > 0 ? (rawKm * route) / speed * 60 : 0;   // flown
+            const rawKm = _haversineKm(_pt(a), _pt(b));          // great-circle (geographic)
+            const distKm = rawKm * route;                        // ROUTED length (SID/STAR + airways)
+            const energyKwh = ePerKm * distKm;                   // flown — derives from the routed length
+            const flightMin = speed > 0 ? distKm / speed * 60 : 0;   // flown — derives from the routed length
             const overRange = energyKwh > usable + 1e-9;          // [R5] padded energy > usable
             if (overRange) errors.push({ kind: 'over-range', legIndex: i, energyKwh, usable });
-            profile.legs.push({ fromIdent: a.ident, fromName: a.name, toIdent: b.ident, toName: b.name, rawKm, distKm: rawKm, flightMin, energyKwh, socStartFrac: 0, socEndFrac: 0, overRange, legIndex: i });
+            profile.legs.push({ fromIdent: a.ident, fromName: a.name, toIdent: b.ident, toName: b.name, rawKm, distKm, flightMin, energyKwh, socStartFrac: 0, socEndFrac: 0, overRange, legIndex: i });
         }
         const retourMidIdx = (tripType === 'retour') ? (waypoints.length - 1) : -1;   // chain index of the turnaround (dest)
 
@@ -177,7 +180,7 @@ window.CNSFlight = (function () {
         T.travelMin = T.flightMin + T.enRouteMin;
         T.energyUsedKwh = profile.charges.reduce((s, c) => s + c.energyKwh, 0);
         T.gridKwh = T.energyUsedKwh * grid;
-        T.avgUsageKwhPer100km = T.distKm > 0 ? (T.energyUsedKwh) / (T.distKm * route) * 100 : 0;
+        T.avgUsageKwhPer100km = T.distKm > 0 ? (T.energyUsedKwh) / T.distKm * 100 : 0;   // distKm already routed -> no extra *route (value unchanged)
         profile.terminal = terminal ? { name: terminal.name, ident: terminal.ident, arrivalSocFrac: terminal.arrivalSocFrac, targetSocFrac: terminal.targetSocFrac, energyKwh: terminal.energyKwh, chargeMin: terminal.chargeMin } : null;
         return profile;
     }
