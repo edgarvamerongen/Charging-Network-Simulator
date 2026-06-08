@@ -1820,44 +1820,112 @@
     </div>
 
     <!-- Welcome / landing modal — the onboarding entry point, shown on every
-         load until the user ticks "don't show again". "Start demo" launches the
-         guided tour; "Explore on my own" just dismisses. Reuses the .tour-welcome-*
+         load until the user ticks “don't show again”. “Start demo” launches the
+         guided tour; “Explore on my own” just dismisses. Reuses the .tour-welcome-*
          / .tour-lead* visuals (the tour no longer carries a welcome step). -->
-    <div class="modal fade" id="welcomeModal" tabindex="-1" aria-labelledby="welcomeHeroTag" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered welcome-dialog">
-            <div class="modal-content welcome-content">
-                <button type="button" class="btn-close welcome-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                <div class="welcome-body">
-                    <div class="tour-welcome-hero">
-                        <img class="tour-welcome-logo" src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2fly" onerror="this.style.display='none'">
-                        <div class="tour-welcome-tag" id="welcomeHeroTag">Charging Network Simulator</div>
+    <div class=”modal fade” id=”welcomeModal” tabindex=”-1” aria-labelledby=”welcomeHeroTag” aria-hidden=”true”>
+        <div class=”modal-dialog modal-dialog-centered welcome-dialog”>
+            <div class=”modal-content welcome-content”>
+                <button type=”button” class=”btn-close welcome-close” data-bs-dismiss=”modal” aria-label=”Close”></button>
+                <div class=”welcome-body”>
+                    <div class=”tour-welcome-hero”>
+                        <img class=”tour-welcome-logo” src=”/pics/logos/NRG2fly_logo_kleur_wide.png” alt=”NRG2fly” onerror=”this.style.display='none'”>
+                        <div class=”tour-welcome-tag” id=”welcomeHeroTag”>Charging Network Simulator</div>
                     </div>
                     <p>At NRG2fly we are rolling out a European charging network that makes point-to-point electric aviation possible. This tool helps airports and operators answer the strategic questions we keep coming back to: <strong>what kind of charging infrastructure, and how much power, do we need?</strong></p>
                     <p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — a defensible, client-ready sizing brief exported as a PDF, not a back-of-envelope guess.</p>
                     <p>Got questions about your network? <strong>Merlijn van Vliet</strong> and <strong>Jacco Bink</strong> would love to hear from you.</p>
-                    <div class="tour-lead">
-                        <div class="tour-lead-grid">
-                            <div class="tour-lead-card">
-                                <img class="tlc-photo" src="/pics/crew/jacco.jpeg" alt="Jacco Bink" onerror="this.style.visibility='hidden'">
-                                <div class="tlc-name">Jacco Bink</div>
-                                <div class="tlc-role">COO</div>
-                                <div class="tlc-links"><a href="https://www.linkedin.com/in/jacco-bink-ba6254/" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:jacco@nrg2fly.com">jacco@nrg2fly.com</a></div>
+                    <div class=”tour-lead”>
+                        <div class=”tour-lead-grid”>
+                            <div class=”tour-lead-card”>
+                                <img class=”tlc-photo” src=”/pics/crew/jacco.jpeg” alt=”Jacco Bink” onerror=”this.style.visibility='hidden'”>
+                                <div class=”tlc-name”>Jacco Bink</div>
+                                <div class=”tlc-role”>COO</div>
+                                <div class=”tlc-links”><a href=”https://www.linkedin.com/in/jacco-bink-ba6254/” target=”_blank” rel=”noopener”>LinkedIn ↗</a> · <a href=”mailto:jacco@nrg2fly.com”>jacco@nrg2fly.com</a></div>
                             </div>
-                            <div class="tour-lead-card">
-                                <img class="tlc-photo" src="/pics/crew/merlijn.jpeg" alt="Merlijn van Vliet" onerror="this.style.visibility='hidden'">
-                                <div class="tlc-name">Merlijn van Vliet</div>
-                                <div class="tlc-role">CEO</div>
-                                <div class="tlc-links"><a href="https://www.linkedin.com/in/merlijnvanvliet/" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:merlijn@nrg2fly.com">merlijn@nrg2fly.com</a></div>
+                            <div class=”tour-lead-card”>
+                                <img class=”tlc-photo” src=”/pics/crew/merlijn.jpeg” alt=”Merlijn van Vliet” onerror=”this.style.visibility='hidden'”>
+                                <div class=”tlc-name”>Merlijn van Vliet</div>
+                                <div class=”tlc-role”>CEO</div>
+                                <div class=”tlc-links”><a href=”https://www.linkedin.com/in/merlijnvanvliet/” target=”_blank” rel=”noopener”>LinkedIn ↗</a> · <a href=”mailto:merlijn@nrg2fly.com”>merlijn@nrg2fly.com</a></div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="welcome-foot">
-                    <label class="welcome-dontshow"><input type="checkbox" id="welcomeDontShow"> Don't show this again</label>
-                    <div class="welcome-actions">
-                        <button type="button" class="welcome-skip" data-bs-dismiss="modal">Explore on my own</button>
-                        <button type="button" class="welcome-start" id="welcomeStartBtn">Start demo →</button>
+                <div class=”welcome-foot”>
+                    <label class=”welcome-dontshow”><input type=”checkbox” id=”welcomeDontShow”> Don't show this again</label>
+                    <div class=”welcome-actions”>
+                        <button type=”button” class=”welcome-skip” data-bs-dismiss=”modal”>Explore on my own</button>
+                        <button type=”button” class=”welcome-start” id=”welcomeStartBtn”>Start demo →</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit a saved flight (Demand Calculator → pencil icon). Lets the operator
+         change the flight type, aircraft, the charger it uses (manual override of
+         the automatic priority), frequency and fleet mode. Plane / flight-type
+         changes re-run the simulation so energy & timing stay consistent. -->
+    <div class=”modal fade” id=”editFlightModal” tabindex=”-1”>
+        <div class=”modal-dialog modal-dialog-centered”>
+            <div class=”modal-content”>
+                <div class=”modal-header”>
+                    <h5 class=”modal-title”>Edit flight</h5>
+                    <button type=”button” class=”btn-close” data-bs-dismiss=”modal”></button>
+                </div>
+                <div class=”modal-body”>
+                    <div class=”mb-2 text-muted small”>Route: <span id=”efRoute” class=”fw-semibold”></span></div>
+                    <div class=”row g-2”>
+                        <div class=”col-6 mb-2”>
+                            <label class=”form-label”>Flight type</label>
+                            <select id=”efTripType” class=”form-select”>
+                                <option value=”one-way”>One-way (A → B)</option>
+                                <option value=”retour”>Retour (A → B → A)</option>
+                                <option value=”training”>Training (loop at base)</option>
+                            </select>
+                        </div>
+                        <div class=”col-6 mb-2”>
+                            <label class=”form-label”>Charger it uses</label>
+                            <select id=”efCharger” class=”form-select”></select>
+                            <div class=”form-text”>Pick a charger at this airport to override the automatic priority, or “Auto”.</div>
+                        </div>
+                    </div>
+                    <div class=”mb-2”>
+                        <label class=”form-label”>Aircraft</label>
+                        <div class=”d-flex align-items-center gap-3”>
+                            <img id=”efThumb” class=”d-none” alt=”” style=”max-height:60px;max-width:120px;border-radius:6px;object-fit:contain;background:#f6f7f9”>
+                            <div class=”flex-grow-1”>
+                                <select id=”efPlane” class=”form-select”></select>
+                                <div id=”efPlaneSpec” class=”form-text”></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class=”row g-2”>
+                        <div class=”col-6 mb-2”>
+                            <label class=”form-label”>Frequency</label>
+                            <div class=”input-group”>
+                                <input id=”efFreqN” type=”number” min=”1” step=”1” class=”form-control”>
+                                <select id=”efFreqUnit” class=”form-select”>
+                                    <option value=”day”>/day</option>
+                                    <option value=”week”>/week</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class=”col-6 mb-2” id=”efFleetRow”>
+                            <label class=”form-label”>Fleet</label>
+                            <div class=”d-flex gap-3 pt-1”>
+                                <label class=”opt-check mb-0”><input type=”radio” name=”efFleetMode” value=”shared”><span>One aircraft</span></label>
+                                <label class=”opt-check mb-0”><input type=”radio” name=”efFleetMode” value=”separate”><span>Separate planes</span></label>
+                            </div>
+                        </div>
+                    </div>
+                    <div id=”efError” class=”text-danger small d-none”></div>
+                    <p class=”est-note mb-0 mt-2”>Changing the aircraft or flight type re-runs the simulation, so recharge energy and timings update automatically. To change the route, stops or departure/destination airports, remove this flight and add a new one.</p>
+                </div>
+                <div class=”modal-footer”>
+                    <button type=”button” class=”btn btn-secondary” data-bs-dismiss=”modal”>Cancel</button>
+                    <button type=”button” id=”efSave” class=”btn btn-primary”>Save changes</button>
                 </div>
             </div>
         </div>
@@ -3712,6 +3780,9 @@
                     _i: i, name: c.t.planeName,
                     energy: _engEnergyAt(c) ?? 0,                   // engine charge energy at this airport (0 if unresolvable)
                     size: c.t.battery ?? c.t.legEnergy * 2,
+                    // forcedChargerId pins this flight to a specific charger (manual-first);
+                    // planCharging honours it before its priority heuristic.
+                    forcedChargerId: c.t.chargerOverride,
                 }));
                 const plan = CNSCharging.planCharging(fleet, aircraftList);
 
@@ -3748,6 +3819,12 @@
                         c.role === 'stop'     ? `on ${c.other}` :
                                                 `from ${c.other}`;
                     const chargerName = asg.charger ? asg.charger.name : 'no charger';
+                    // A flight that pinned its charger (manual override) shows a
+                    // small "pinned" badge so it's clear why it ignored the
+                    // automatic biggest-with-biggest assignment.
+                    const pinned = asg && asg.forced;
+                    const chargerCell = `${fmtEnergy(energy)} <small class="text-muted">on ${chargerName}</small>`
+                        + (pinned ? ` <span class="charger-pin" title="Charger pinned by you — overrides the automatic priority">📌</span>` : '');
                     const tripLabel =
                         t.tripType === 'training' ? `Training · ${Math.round((+t.flightTimeH || 0) * 60)} min`
                         : (t.tripType === 'retour' ? 'Retour' : 'One-way') + (t.multiLeg ? ' · multi-leg' : '');
@@ -3761,8 +3838,13 @@
                                 <option value="day" ${t.freqUnit === 'day' ? 'selected' : ''}>/day</option>
                                 <option value="week" ${t.freqUnit === 'week' ? 'selected' : ''}>/week</option>
                             </select></div></td>
-                        <td>${fmtEnergy(energy)} <small class="text-muted">on ${chargerName}</small></td>
-                        <td><button class="btn btn-sm btn-outline-danger py-0" data-rm="${t.id}">×</button></td>
+                        <td>${chargerCell}</td>
+                        <td class="text-nowrap">
+                            <button class="btn btn-sm btn-outline-secondary py-0 me-1" data-edit="${t.id}" data-edit-ident="${ident}" title="Edit flight">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" style="vertical-align:-1px"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger py-0" data-rm="${t.id}" title="Remove flight">×</button>
+                        </td>
                     </tr>`;
                 }).join('');
 
@@ -3859,6 +3941,7 @@
 
             el.querySelectorAll('[data-rev-toggle]').forEach(c => c.addEventListener('click', () => { _dcRevenueYearly = !_dcRevenueYearly; renderFolder(); }));
             el.querySelectorAll('[data-rm]').forEach(btn => btn.addEventListener('click', () => { saveFolder(loadFolder().filter(t => t.id !== btn.dataset.rm)); renderFolder(); }));
+            el.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openFlightEdit(btn.dataset.edit, btn.dataset.editIdent)));
             el.querySelectorAll('.trip-freq-n').forEach(inp => inp.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqN: Math.max(1, parseInt(e.target.value || '1', 10)) })));
             el.querySelectorAll('.trip-freq-unit').forEach(s => s.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqUnit: e.target.value })));
             el.querySelectorAll('[data-dest]').forEach(card => {
@@ -4012,6 +4095,195 @@
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
         document.getElementById('generateReport').addEventListener('click', (e) => CNSReport.generate(e.currentTarget));
+
+        // ---------- edit a saved flight (the pencil icon on each row) ----------
+        // Lets the operator change a flight's TYPE, AIRCRAFT and the CHARGER it
+        // uses (a manual override of the automatic priority), plus FREQUENCY and
+        // FLEET mode. Aircraft / flight-type changes re-run /api/simulate so the
+        // recharge energy and timings stay consistent with the rest of the app.
+        let _editFlightModal = null;
+        let _editingFlight = null;   // { tripId, ident }
+
+        const _editPlaneSpec = (id) => customById[id] || BUILTIN_PLANES_BY_ID[id] || null;
+        const _editPlaneList = () => BUILTIN_PLANES.concat(window.CNSPlanes ? CNSPlanes.list() : []);
+
+        function _refreshEditThumb() {
+            const spec = _editPlaneSpec(document.getElementById('efPlane').value);
+            const thumb = document.getElementById('efThumb');
+            const specEl = document.getElementById('efPlaneSpec');
+            if (spec && spec.image) { thumb.src = '/pics/' + spec.image; thumb.alt = spec.name; thumb.classList.remove('d-none'); }
+            else { thumb.removeAttribute('src'); thumb.classList.add('d-none'); }
+            if (spec) {
+                const range = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
+                specEl.textContent = `${spec.battery_kwh || 0} kWh · ${range}${spec.seats ? ' · ' + spec.seats + ' seats' : ''}`;
+            } else specEl.textContent = '';
+        }
+        function _updateEditFleetVisibility() {
+            const tt = document.getElementById('efTripType').value;
+            document.getElementById('efFleetRow').classList.toggle('d-none', !(tt === 'retour' || tt === 'training'));
+        }
+
+        function openFlightEdit(tripId, ident) {
+            const t = loadFolder().find(x => x.id === tripId);
+            if (!t) return;
+            _editingFlight = { tripId, ident };
+            if (!_editFlightModal) _editFlightModal = new bootstrap.Modal(document.getElementById('editFlightModal'));
+
+            document.getElementById('efRoute').textContent =
+                t.tripType === 'training' ? `${t.originName} (training loop)` : `${t.originName} → ${t.destName}`;
+            document.getElementById('efTripType').value = t.tripType || 'one-way';
+
+            // Aircraft options (catalog + custom). Keep the trip's current plane in
+            // the list even if it has since been removed from the catalog/customs.
+            const planes = _editPlaneList();
+            if (t.planeId && !planes.some(p => p.id === t.planeId)) {
+                planes.push({ id: t.planeId, name: t.planeName || t.planeId, battery_kwh: t.battery });
+            }
+            const planeSel = document.getElementById('efPlane');
+            planeSel.innerHTML = planes.map(p =>
+                `<option value="${p.id}">${p.name} — ${p.battery_kwh || '?'} kWh${customById[p.id] ? ' (custom)' : ''}</option>`).join('');
+            planeSel.value = t.planeId;
+            _refreshEditThumb();
+
+            // Charger options = the chargers available AT THIS AIRPORT (+ Auto).
+            // Picking one pins the flight to it (manual-first). The current pin is
+            // shown even if it's no longer in the fleet, so the choice stays visible.
+            const cfg = loadCfg()[ident] || {};
+            const airports = computeAirports();
+            const contribs = airports[ident] ? airports[ident].contribs : [];
+            const fleetIds = (cfg.chargers && cfg.chargers.length) ? cfg.chargers : CNSDemand.defaultChargerFleet(contribs);
+            const seen = new Set();
+            let opts = '<option value="">Auto — automatic priority</option>';
+            fleetIds.forEach(id2 => {
+                const c = chargerById[id2];
+                if (!c || seen.has(c.id)) return;
+                seen.add(c.id);
+                opts += `<option value="${c.id}">${chargerLabel(c)}</option>`;
+            });
+            if (t.chargerOverride && !seen.has(t.chargerOverride) && chargerById[t.chargerOverride]) {
+                opts += `<option value="${t.chargerOverride}">${chargerLabel(chargerById[t.chargerOverride])} (not in fleet)</option>`;
+                seen.add(t.chargerOverride);
+            }
+            const chSel = document.getElementById('efCharger');
+            chSel.innerHTML = opts;
+            chSel.value = (t.chargerOverride && seen.has(t.chargerOverride)) ? t.chargerOverride : '';
+
+            document.getElementById('efFreqN').value = t.freqN || 1;
+            document.getElementById('efFreqUnit').value = t.freqUnit === 'week' ? 'week' : 'day';
+
+            // Fleet-mode default mirrors the scheduler's fleetSeparate() reading.
+            const fm = t.fleetMode || (t.tripType === 'training' ? 'shared' : 'separate');
+            document.querySelectorAll('input[name="efFleetMode"]').forEach(r => { r.checked = (r.value === fm); });
+            _updateEditFleetVisibility();
+
+            document.getElementById('efError').classList.add('d-none');
+            _editFlightModal.show();
+        }
+
+        // Rebuild a trip from a fresh /api/simulate result, mirroring the
+        // addFolder builder so an edited flight keeps the exact same shape.
+        // Preserves the id, the endpoints (collapsed to the base for training),
+        // and the operator's frequency / fleet / charger-pin choices.
+        function _rebuildEditedTrip(prev, d, o) {
+            const isTraining = d.trip_type === 'training';
+            const trip = {
+                id: prev.id,
+                destIdent: isTraining ? prev.originIdent : prev.destIdent,
+                destName:  isTraining ? prev.originName  : prev.destName,
+                destLat:   isTraining ? prev.originLat   : prev.destLat,
+                destLon:   isTraining ? prev.originLon   : prev.destLon,
+                originIdent: prev.originIdent, originName: prev.originName, originLat: prev.originLat, originLon: prev.originLon,
+                planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
+                chargerId: prev.chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
+                legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
+                range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,
+                freqN: o.freqN, freqUnit: o.freqUnit, fleetMode: o.fleetMode,
+                chargerOverride: o.chargerOverride || undefined,
+            };
+            if (d.multi_leg) {
+                Object.assign(trip, {
+                    multiLeg: true,
+                    flightTimeH: d.total_flight_time_h,
+                    rechargeEnergy: d.total_recharge_energy_kwh,
+                    stops: d.stops, charges: d.charges, legs: d.legs,
+                    totalDistanceKm: d.total_distance_km, totalFlightTimeH: d.total_flight_time_h,
+                    totalChargeMin: d.total_charge_time_min, totalRechargeKwh: d.total_recharge_energy_kwh,
+                });
+            } else if (d.trip_type === 'training') {
+                Object.assign(trip, {
+                    rechargeEnergy: d.recharge_energy_kwh, flightTimeH: d.flight_time_h,
+                    trainingRangeKm: d.training_range_km, rawPatternEnergyKwh: d.raw_pattern_energy_kwh,
+                });
+            } else {
+                Object.assign(trip, { rechargeEnergy: d.recharge_energy_kwh, flightTimeH: d.flight_time_h });
+            }
+            return trip;
+        }
+
+        document.getElementById('efPlane').addEventListener('change', _refreshEditThumb);
+        document.getElementById('efTripType').addEventListener('change', _updateEditFleetVisibility);
+        document.getElementById('efSave').addEventListener('click', async () => {
+            if (!_editingFlight) return;
+            const err = document.getElementById('efError');
+            err.classList.add('d-none');
+            const trips = loadFolder();
+            const idx = trips.findIndex(x => x.id === _editingFlight.tripId);
+            if (idx < 0) { _editFlightModal.hide(); return; }
+            const prev = trips[idx];
+
+            const newTripType = document.getElementById('efTripType').value;
+            const newPlaneId  = document.getElementById('efPlane').value;
+            const freqN    = Math.max(1, parseInt(document.getElementById('efFreqN').value || '1', 10));
+            const freqUnit = document.getElementById('efFreqUnit').value === 'week' ? 'week' : 'day';
+            const fleetMode = (document.querySelector('input[name="efFleetMode"]:checked') || {}).value
+                || prev.fleetMode || 'separate';
+            const chargerOverride = document.getElementById('efCharger').value || '';
+
+            // A training flight has no separate destination, so it can't become a
+            // one-way / retour route without choosing one — block with a message.
+            if (newTripType !== 'training' && (!prev.destIdent || prev.destIdent === prev.originIdent)) {
+                err.textContent = 'This flight loops around a single airport (no destination). Add a new flight to give it a route.';
+                err.classList.remove('d-none');
+                return;
+            }
+
+            // Pure-metadata changes (freq / fleet / charger pin) need no backend
+            // round-trip; only an aircraft or flight-type change re-simulates.
+            const needsSim = (newPlaneId !== prev.planeId) || (newTripType !== prev.tripType);
+            if (!needsSim) {
+                err.classList.add('d-none');
+                trips[idx] = { ...prev, freqN, freqUnit, fleetMode, chargerOverride: chargerOverride || undefined };
+                saveFolder(trips); renderFolder(); _editFlightModal.hide();
+                return;
+            }
+
+            const saveBtn = document.getElementById('efSave');
+            saveBtn.disabled = true;
+            try {
+                const isTraining = newTripType === 'training';
+                const origin = { ident: prev.originIdent, name: prev.originName, lat: prev.originLat, lon: prev.originLon };
+                const dest   = { ident: prev.destIdent,   name: prev.destName,   lat: prev.destLat,   lon: prev.destLon };
+                const payload = {
+                    origin, destination: isTraining ? origin : dest,
+                    plane_id: newPlaneId, charger_id: prev.chargerId, trip_type: newTripType,
+                };
+                if (customById[newPlaneId]) payload.plane = customById[newPlaneId];
+                if (chargerById[prev.chargerId]) payload.charger = chargerById[prev.chargerId];
+                if (!isTraining && prev.multiLeg && Array.isArray(prev.stops) && prev.stops.length) {
+                    payload.stops = prev.stops.map(s => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type }));
+                }
+                const resp = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const d = await resp.json();
+                if (d.error) { err.textContent = d.error; err.classList.remove('d-none'); return; }
+                trips[idx] = _rebuildEditedTrip(prev, d, { freqN, freqUnit, fleetMode, chargerOverride });
+                saveFolder(trips); renderFolder(); _editFlightModal.hide();
+            } catch (e) {
+                err.textContent = (e && e.message) || 'Could not update the flight.';
+                err.classList.remove('d-none');
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
 
         // ---- Model settings modal -------------------------------------------
         (function () {
