@@ -2036,6 +2036,15 @@
             const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
             return _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
         }
+        // The available range to DISPLAY/EDIT. Padding now lives in the trip LENGTH, not the
+        // reach — so when the engine is on we show the FULL usable range (undo the /route in
+        // _availableRangeKm). The router keeps using _availableRangeKm (the great-circle reach),
+        // so reachability stays single-count; only the shown number changes.
+        function _availRangeShownKm(plane) {
+            const a = _availableRangeKm(plane);
+            if (a == null) return null;
+            return _flightEngineOn() ? a * (window.CNSSettings ? CNSSettings.routingFactor() : 1.0) : a;
+        }
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
             return {
@@ -2582,7 +2591,7 @@
             _refreshSpecStats(spec);
             // Prefill the override with the current available range so the operator
             // sees the value they're editing (blank = use the computed default).
-            const _av = _availableRangeKm(spec);
+            const _av = _availRangeShownKm(spec);
             document.getElementById('psoAvailRange').value = _av != null ? Math.round(_av) : '';
             card.classList.toggle('overridden', _availRangeOverride != null);
         }
@@ -2596,7 +2605,7 @@
                         : (spec.battery_kwh && spec.range_km ? spec.battery_kwh / spec.range_km * 100 : null);
             document.getElementById('psUsage').textContent =
                 usage == null ? '—' : ((typeof fmtUsage === 'function') ? fmtUsage(usage) : (Math.round(usage) + ' kWh/100km'));
-            const avail = _availableRangeKm(spec);
+            const avail = _availRangeShownKm(spec);
             const av = document.getElementById('psAvail');
             if (av) av.textContent = avail == null ? '—' : ((typeof fmtDist === 'function') ? fmtDist(avail) : (Math.round(avail) + ' km'));
         }
@@ -2606,7 +2615,10 @@
             if (toggle && panel) toggle.addEventListener('click', () => panel.classList.toggle('d-none'));
             function onEdit() {
                 const v = parseFloat(document.getElementById('psoAvailRange').value);
-                _availRangeOverride = (isFinite(v) && v > 0) ? v : null;
+                // The field shows the FULL range when the engine is on; store the great-circle
+                // reach the router uses (/route) so reachability stays single-count.
+                const _r = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+                _availRangeOverride = (isFinite(v) && v > 0) ? (_flightEngineOn() ? v / _r : v) : null;
                 const card = document.getElementById('planeSpecCard');
                 const spec = selectedPlaneSpec();
                 if (spec) _refreshSpecStats(spec);
@@ -2861,9 +2873,13 @@
         // loop (R1). Preview target is the GLOBAL default (the flight isn't in the
         // network yet) — matches CNSScheduler.tripBreakdown's preview context.
         function _engineProfile(data) {
-            if (!window.CNSFlight || !data || !data._origin) return null;
+            // The simulated result carries _origin/_dest; the LIVE PREVIEW (drawLiveRoute)
+            // carries origin/destination (no underscore). Accept BOTH, else the preview map
+            // label silently falls back to the legacy leg (great-circle distance + padded energy).
+            const o = data && (data._origin || data.origin);
+            if (!window.CNSFlight || !o) return null;
             try {
-                const o = data._origin, d = data._dest || data._origin;
+                const d = data._dest || data.destination || o;
                 const wp = (x) => ({ ident: x.ident, name: x.name, lat: x.lat, lon: x.lon });
                 const stops = (data.stops || []).map(wp);
                 const waypoints = (data.trip_type === 'training') ? [wp(o)] : [wp(o), ...stops, wp(d)];
@@ -3421,6 +3437,11 @@
                 // fraction (refresh stats only — don't clobber the override input).
                 const spec = (typeof selectedPlaneSpec === 'function') ? selectedPlaneSpec() : null;
                 if (spec && typeof _refreshSpecStats === 'function') _refreshSpecStats(spec);
+                // The planning aids (trajectory pill + suggested route) now show ROUTED
+                // distances, which depend on the padding factor — refresh them on a
+                // model-settings change. renderStops re-renders the existing plannedStops
+                // (no replan, so it never clobbers manual edits) and re-syncs the trajectory.
+                try { if (typeof renderStops === 'function') renderStops(); } catch (err) { console.error(err); }
             });
         }
 
