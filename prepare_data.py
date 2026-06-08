@@ -2,6 +2,7 @@ import random
 import numpy as np
 
 import pandas as pd
+from airport_alternates import nearest_alternate
 
 # Load datasets
 airports = pd.read_csv("airports.csv")
@@ -41,6 +42,16 @@ eu_airports = airports[
 eu_airports = eu_airports.dropna(
     subset=["latitude_deg", "longitude_deg"]
 )
+
+# -----------------------------------------
+# Pre-bake each airport's nearest neighbour so the route planner can reserve
+# divert energy and the map can draw the alternate, without any runtime search.
+# -----------------------------------------
+eu_airports = eu_airports.copy()
+_alt_km, _alt_idx = nearest_alternate(eu_airports["latitude_deg"].to_numpy(),
+                                      eu_airports["longitude_deg"].to_numpy())
+eu_airports["alternate_km"] = np.round(_alt_km, 3)
+eu_airports["alternate_ident"] = eu_airports["ident"].to_numpy()[_alt_idx]
 
 # -----------------------------------------
 # Save result
