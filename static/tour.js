@@ -8,44 +8,20 @@
  * app's state between steps (clicking Simulate, opening the demand drawer,
  * opening the flights-map modal, etc.).
  *
- * First-visit auto-trigger via the `cns_tour_done` localStorage flag. Always
- * replayable from the ? Tour button in the topbar.
+ * The standalone welcome modal (#welcomeModal, in index.html) is the onboarding
+ * entry point — it shows on every load until the user opts out via the
+ * `cns_welcome_hide` flag, and its "Start demo" button calls start(). The tour
+ * itself is always replayable from the ? Tour button in the topbar.
  *
  * Assumes Driver.js is loaded globally as window.driver.
  */
 window.CNSTour = (function () {
     const KEY_DONE = 'cns_tour_done';
+    const KEY_WELCOME_HIDE = 'cns_welcome_hide';   // "don't show the welcome again"
     let _activeDriver = null;
 
-    // ---- leadership cards (welcome slide) ------------------------------------
-    // Rendered inline in the welcome popover in the nrg2fly.com/about.html
-    // "Leadership" style: circular photo, name, role, credential tag pills.
-    // Data + photos come from the crew/ folder (photos served from pics/crew/).
-    const _leadership = [
-        {
-            name: 'Jacco Bink', role: 'COO', photo: '/pics/crew/jacco.jpeg',
-            tags: ['KLM', 'Alliander'],
-            linkedin: 'https://www.linkedin.com/in/jacco-bink-ba6254/', email: 'jacco@nrg2fly.com',
-        },
-        {
-            name: 'Merlijn van Vliet', role: 'CEO', photo: '/pics/crew/merlijn.jpeg',
-            tags: ['✈ Pilot', 'E-Flight Academy', 'Electric Flying Connection'],
-            linkedin: 'https://www.linkedin.com/in/merlijnvanvliet/', email: 'merlijn@nrg2fly.com',
-        },
-    ];
-    function _leadershipCardsHTML() {
-        const card = (c) =>
-            '<div class="tour-lead-card">' +
-              `<img class="tlc-photo" src="${c.photo}" alt="${c.name}" onerror="this.style.visibility='hidden'">` +
-              `<div class="tlc-name">${c.name}</div>` +
-              `<div class="tlc-role">${c.role}</div>` +
-              `<div class="tlc-tags">${c.tags.map((t) => `<span class="tlc-tag">${t}</span>`).join('')}</div>` +
-              `<div class="tlc-links"><a href="${c.linkedin}" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:${c.email}">${c.email}</a></div>` +
-            '</div>';
-        return '<div class="tour-lead">' +
-                 `<div class="tour-lead-grid">${_leadership.map(card).join('')}</div>` +
-               '</div>';
-    }
+    // The welcome hero + leadership bios now live in the standalone welcome modal
+    // (#welcomeModal in index.html); the tour starts at the first UI step.
 
     // ---- demo-data seeding ----------------------------------------------------
     // Seed a realistic Lelystad → Munich retour with the Beta Alia CX300 so
@@ -297,42 +273,8 @@ window.CNSTour = (function () {
     // onHighlightStarted so they fire just before the popover appears.
     function _steps() {
         return [
-            // 1. Welcome — what is this tool and why does it exist?
-            {
-                popover: {
-                    title: 'NRG2fly Charging Network Simulator',
-                    description:
-                        // Branded hero — the wide colour logo on a warm banner so
-                        // first-time users land on something welcoming, not a wall
-                        // of text. The logo carries the wordmark, so the popover's
-                        // text title is hidden for this slide (see cns-tour-welcome CSS).
-                        '<div class="tour-welcome-hero">' +
-                          '<img class="tour-welcome-logo" src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2fly" onerror="this.style.display=\'none\'">' +
-                          '<div class="tour-welcome-tag">Charging Network Simulator</div>' +
-                        '</div>' +
-                        '<p>At NRG2fly we are rolling out a European charging network that makes point-to-point electric aviation possible. This tool helps airports and operators answer the strategic questions we keep coming back to: <strong>what kind of charging infrastructure, and how much power, do we need?</strong></p>' +
-                        '<p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — a defensible, client-ready sizing brief exported as a PDF, not a back-of-envelope guess. We advise starting with this demo tour, then running your own simulations.</p>' +
-                        '<p>Got questions about your network? <strong>Merlijn van Vliet</strong> and <strong>Jacco Bink</strong> would love to hear from you.</p>' +
-                        _leadershipCardsHTML() +
-                        '<p class="tour-foot">Pre-filled example: <strong>Beta Alia · Lelystad → Munich</strong>. Press <kbd>Esc</kbd> to skip any time.</p>',
-                    side: 'over', align: 'center',
-                    popoverClass: 'cns-tour-popover cns-tour-welcome',
-                },
-                // On short screens the welcome popover scrolls its body. Driver
-                // auto-focuses the first leadership-card link on show, which
-                // scrolls the hero (logo) out of view — reset to the top so the
-                // logo greets the user, and park focus on Next (in the pinned
-                // footer, so focusing it doesn't re-scroll the body).
-                onHighlightStarted: async () => {
-                    await _wait(150);
-                    const d = document.querySelector('.cns-tour-welcome .driver-popover-description');
-                    if (d) d.scrollTop = 0;
-                    const next = document.querySelector('.cns-tour-welcome .driver-popover-next-btn');
-                    if (next && next.focus) next.focus({ preventScroll: true });
-                    if (d) d.scrollTop = 0;
-                },
-            },
-            // 2. Whole screen — the simulator at a glance.
+            // 1. Whole screen — the simulator at a glance. (The welcome/intro is
+            // now the standalone #welcomeModal; the tour opens on the live app.)
             {
                 element: 'body',
                 popover: { title: 'Your simulator at a glance', description: 'Left: the route builder. Centre: the map. Bottom: the Demand Calculator drawer. Top-right: Options and this Tour. We\'ll walk the route builder top to bottom, then read the network it produces.', side: 'over', align: 'center' },
@@ -414,7 +356,7 @@ window.CNSTour = (function () {
             // the headline numbers first, then we drill into each section below.
             {
                 element: '.rail-right .panel',
-                popover: { title: 'Result panel', description: 'Headline per-flight numbers up top: energy used, flight time, charge time. Below are three expandable breakdowns — <strong>Route</strong>, <strong>Charging</strong> and <strong>Revenue potential</strong> — we\'ll open each in turn.', side: 'left', align: 'start' },
+                popover: { title: 'Result panel', description: 'Headline per-flight numbers up top: energy used, flight time, charge time, and the airport\'s <strong>revenue potential</strong>. Below are two expandable breakdowns — <strong>Route</strong> and <strong>Charging</strong> — we\'ll open each in turn.', side: 'left', align: 'start' },
                 onHighlightStarted: async () => {
                     await _ensureSimulated();
                     // Start clean: collapse every section so the headline reads first;
@@ -438,12 +380,6 @@ window.CNSTour = (function () {
                 element: '#rgCharging',
                 popover: { title: 'Charging', description: 'The top-up at the trip\'s terminal airport, after arrival and <strong>separate from travel time</strong>: arrival state-of-charge, charge-to target, top-up minutes (or no charge needed), plus the charger model and, with efficiency on, grid demand in kWh.', side: 'left', align: 'start' },
                 onHighlightStarted: async () => { await _expandResultSection('rgCharging'); },
-            },
-            // 13c. Revenue potential — the airport's charging income.
-            {
-                element: '#rgRevenue',
-                popover: { title: 'Revenue potential', description: 'The airport\'s charging income: energy charged to the aircraft across the trip times the <strong>charging tariff</strong> (€/kWh, set in Model settings), giving airport revenue.', side: 'left', align: 'start' },
-                onHighlightStarted: async () => { await _expandResultSection('rgRevenue'); },
             },
             // 14. Add to demand — scroll the rail DOWN so the button is fully
             // visible (it sits below the trip-calculated table).
@@ -680,24 +616,53 @@ window.CNSTour = (function () {
         } catch (e) { /* never block the tour on diagnostics */ }
     }
 
-    function autoStartIfFirstVisit() {
-        let done = false;
-        try { done = !!CNSState.getJSON(KEY_DONE, false); } catch (e) {}
-        if (done) return;
-        // Small delay so the page has time to render + airports load.
-        setTimeout(() => start(), 1200);
+    // Show the welcome modal (Bootstrap). Safe no-op if the markup or Bootstrap
+    // isn't present. Exposed so the topbar/tests can re-open it.
+    function showWelcome() {
+        const el = document.getElementById('welcomeModal');
+        if (!el || !(window.bootstrap && window.bootstrap.Modal)) return;
+        window.bootstrap.Modal.getOrCreateInstance(el).show();
     }
 
     function reset() {
         try { CNSState.setJSON(KEY_DONE, false); } catch (e) {}
+        try { CNSState.setJSON(KEY_WELCOME_HIDE, false); } catch (e) {}
     }
 
-    return { start, autoStartIfFirstVisit, reset, check };
+    return { start, showWelcome, reset, check };
 })();
 
-// Wire the topbar Tour button + first-visit auto-start.
+// Onboarding wiring: the welcome modal is the landing entry point; the topbar
+// ? Tour button replays the walkthrough directly.
 document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('tourBtn');
     if (btn) btn.addEventListener('click', () => CNSTour.start());
-    if (window.CNSTour) CNSTour.autoStartIfFirstVisit();
+
+    const wmEl = document.getElementById('welcomeModal');
+    const Modal = window.bootstrap && window.bootstrap.Modal;
+
+    // "Don't show again" — reflect the saved preference and persist on change.
+    const dontShow = document.getElementById('welcomeDontShow');
+    if (dontShow) {
+        try { dontShow.checked = !!CNSState.getJSON('cns_welcome_hide', false); } catch (e) {}
+        dontShow.addEventListener('change', () => {
+            try { CNSState.setJSON('cns_welcome_hide', dontShow.checked); } catch (e) {}
+        });
+    }
+
+    // "Start demo" — close the welcome, then launch the tour once it's fully
+    // hidden so Driver.js doesn't fight the closing backdrop.
+    const startBtn = document.getElementById('welcomeStartBtn');
+    if (startBtn && wmEl) {
+        startBtn.addEventListener('click', () => {
+            wmEl.addEventListener('hidden.bs.modal', () => CNSTour.start(), { once: true });
+            if (Modal) Modal.getOrCreateInstance(wmEl).hide();
+            else CNSTour.start();
+        });
+    }
+
+    // Show the landing modal on load unless the user opted out.
+    let optedOut = false;
+    try { optedOut = !!CNSState.getJSON('cns_welcome_hide', false); } catch (e) {}
+    if (wmEl && Modal && !optedOut) setTimeout(() => Modal.getOrCreateInstance(wmEl).show(), 300);
 });

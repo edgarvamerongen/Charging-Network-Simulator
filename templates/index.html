@@ -295,6 +295,30 @@
         .tlc-links a { color: var(--brand-ink); text-decoration: none; }
         .tlc-links a:hover { text-decoration: underline; }
         @media (max-width: 680px) { .cns-tour-popover.cns-tour-welcome.driver-popover { max-width: 92vw; } .tour-lead-grid { grid-template-columns: 1fr; } }
+        /* Welcome / landing modal — body scrolls, footer (CTA) stays pinned. */
+        .welcome-dialog { max-width: 640px; }
+        #welcomeModal .modal-content.welcome-content {
+            border: none; border-radius: var(--radius); padding: 0; overflow: hidden;
+            max-height: calc(100vh - 40px); display: flex; flex-direction: column; position: relative;
+        }
+        .welcome-close { position: absolute; top: 10px; right: 12px; z-index: 3; }
+        .welcome-body { padding: 22px 22px 8px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+        .welcome-body p { font-size: .9rem; color: var(--ink); line-height: 1.5; margin-bottom: 10px; }
+        .welcome-foot {
+            flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; flex-wrap: wrap; padding: 12px 22px;
+            background: var(--panel-strong); border-top: 1px solid var(--panel-border);
+        }
+        .welcome-dontshow { font-size: .78rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+        .welcome-actions { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; }
+        .welcome-skip { background: none; border: none; color: var(--muted); font-size: .85rem; font-weight: 600; padding: 8px 6px; cursor: pointer; }
+        .welcome-skip:hover { color: var(--ink); text-decoration: underline; }
+        .welcome-start {
+            background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3));
+            color: #fff; font-weight: 700; font-size: .95rem; padding: 10px 22px; border: none;
+            border-radius: var(--radius-sm); box-shadow: 0 6px 16px rgba(229,120,80,.35); cursor: pointer;
+        }
+        .welcome-start:hover { filter: brightness(1.06); color: #fff; }
         /* Network-animation tour step: lift the Bootstrap modal above the
            tour overlay so the map is visible (not darkened), and pin the
            popover to the bottom of the viewport so it doesn't cover the
@@ -571,6 +595,15 @@
         .headline-box .big { font-size: 1.55rem; font-weight: 800; line-height: 1.1; margin: 3px 0; letter-spacing: -.02em; color: var(--brand-gold); }
         .headline-box .unit { font-size: .65rem; opacity: .7; letter-spacing: .04em; }
         .headline-box .col-4 { padding: 0 4px; }
+        /* Revenue band — the headline business figure, larger than the stat tiles. */
+        .hl-revenue {
+            border-top: 1px solid rgba(255,255,255,.16);
+            margin: 10px 8px 0; padding-top: 9px;
+            display: flex; align-items: baseline; gap: 6px;
+        }
+        .hl-rev-label { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .04em; font-weight: 700; white-space: nowrap; }
+        .hl-rev-amt { flex: 1 1 auto; text-align: center; font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: #34d399; }  /* centred amount; brand green (matches the success / Add-to-demand button), distinct from the gold stat tiles */
+        .hl-rev-sub { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: .58rem; opacity: .7; letter-spacing: .03em; }   /* units pinned to the right; ellipsises if space is tight */
         .lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
 
         .section-tag {
@@ -596,10 +629,9 @@
         .tag-dest     { background: #faecbe; color: #6b541a;        border-color: #ead993; }
         .tag-stop     { background: #e3e6f1; color: var(--brand-ink); border-color: #c9cee0; }
         .tag-training { background: #fde0e0; color: #a31818;        border-color: #f6c0c0; }
-        /* result-panel detail groups (F7): Route / Charging / Revenue. */
+        /* result-panel detail groups (F7): Route / Charging. */
         .tag-route    { background: #e3ecfb; color: #1c4e8a;        border-color: #cadcf4; }
         .tag-charging { background: #e2f3ea; color: #1b6b43;        border-color: #c8e9d6; }
-        .tag-revenue  { background: #faf0d6; color: #6b541a;        border-color: #ecdba8; }
 
         .spec-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
         .spec-table td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
@@ -612,7 +644,6 @@
         .result-aircraft { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
         .result-aircraft .ac-photo { width: 150px; height: 62px; margin-bottom: 0; flex: 0 0 auto; }
         .result-ac-name { font-weight: 700; font-size: .95rem; color: var(--ink); margin-top: 0; }
-        .revenue-val { font-weight: 800 !important; color: var(--brand-gold) !important; }
         /* route itinerary: one row per leg / charge */
         .route-steps .step td { width: auto; color: var(--ink); font-size: .85rem; }
         .step-main { font-weight: 600; color: var(--ink); font-size: .84rem; }
@@ -1441,6 +1472,14 @@
                         <div class="unit" id="hlTimeSub">at destination</div>
                     </div>
                 </div>
+                <!-- Headline revenue band: the airport's charging income, surfaced
+                     prominently in the top block rather than buried in a collapsed
+                     breakdown. Largest figure in the panel — it's the business case. -->
+                <div class="hl-revenue">
+                    <span class="hl-rev-label">Revenue potential</span>
+                    <span class="hl-rev-amt" id="hlRevenue">—</span>
+                    <span class="hl-rev-sub" id="hlRevenueSub"></span>
+                </div>
             </div>
 
             <div class="result-groups">
@@ -1468,17 +1507,6 @@
                         <span class="sec-chev">▾</span>
                     </div>
                     <table class="spec-table" id="chargeRows"></table>
-                </div>
-
-                <div class="result-group collapsed" id="rgRevenue">
-                    <div class="sec-header" role="button" aria-expanded="false">
-                        <span class="section-tag tag-revenue">Revenue potential</span>
-                        <span class="sec-chev">▾</span>
-                    </div>
-                    <table class="spec-table">
-                        <tr><td>Energy charged</td><td id="trEnergyCharged"></td></tr>
-                        <tr><td>Airport revenue</td><td id="trRevenue" class="revenue-val"></td></tr>
-                    </table>
                 </div>
             </div>
 
@@ -1699,6 +1727,50 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="button" id="cpSave" class="btn btn-primary">Add aircraft</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Welcome / landing modal — the onboarding entry point, shown on every
+         load until the user ticks "don't show again". "Start demo" launches the
+         guided tour; "Explore on my own" just dismisses. Reuses the .tour-welcome-*
+         / .tour-lead* visuals (the tour no longer carries a welcome step). -->
+    <div class="modal fade" id="welcomeModal" tabindex="-1" aria-labelledby="welcomeHeroTag" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered welcome-dialog">
+            <div class="modal-content welcome-content">
+                <button type="button" class="btn-close welcome-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="welcome-body">
+                    <div class="tour-welcome-hero">
+                        <img class="tour-welcome-logo" src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2fly" onerror="this.style.display='none'">
+                        <div class="tour-welcome-tag" id="welcomeHeroTag">Charging Network Simulator</div>
+                    </div>
+                    <p>At NRG2fly we are rolling out a European charging network that makes point-to-point electric aviation possible. This tool helps airports and operators answer the strategic questions we keep coming back to: <strong>what kind of charging infrastructure, and how much power, do we need?</strong></p>
+                    <p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — a defensible, client-ready sizing brief exported as a PDF, not a back-of-envelope guess.</p>
+                    <p>Got questions about your network? <strong>Merlijn van Vliet</strong> and <strong>Jacco Bink</strong> would love to hear from you.</p>
+                    <div class="tour-lead">
+                        <div class="tour-lead-grid">
+                            <div class="tour-lead-card">
+                                <img class="tlc-photo" src="/pics/crew/jacco.jpeg" alt="Jacco Bink" onerror="this.style.visibility='hidden'">
+                                <div class="tlc-name">Jacco Bink</div>
+                                <div class="tlc-role">COO</div>
+                                <div class="tlc-links"><a href="https://www.linkedin.com/in/jacco-bink-ba6254/" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:jacco@nrg2fly.com">jacco@nrg2fly.com</a></div>
+                            </div>
+                            <div class="tour-lead-card">
+                                <img class="tlc-photo" src="/pics/crew/merlijn.jpeg" alt="Merlijn van Vliet" onerror="this.style.visibility='hidden'">
+                                <div class="tlc-name">Merlijn van Vliet</div>
+                                <div class="tlc-role">CEO</div>
+                                <div class="tlc-links"><a href="https://www.linkedin.com/in/merlijnvanvliet/" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:merlijn@nrg2fly.com">merlijn@nrg2fly.com</a></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="welcome-foot">
+                    <label class="welcome-dontshow"><input type="checkbox" id="welcomeDontShow"> Don't show this again</label>
+                    <div class="welcome-actions">
+                        <button type="button" class="welcome-skip" data-bs-dismiss="modal">Explore on my own</button>
+                        <button type="button" class="welcome-start" id="welcomeStartBtn">Start demo →</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3264,10 +3336,15 @@
             if (flags.chargerEfficiency) _crows.push(`<tr><td>Grid demand</td><td>${fmtEnergy(gridKwh)}</td></tr>`);
             document.getElementById('chargeRows').innerHTML = _crows.join('');
 
-            // ---- Revenue → the airport's charging income = €/kWh × energy charged
+            // ---- Revenue → the airport's charging income = €/kWh × energy charged,
+            // surfaced in the headline band (the separate breakdown group was
+            // removed once revenue moved up top).
             const _rate = (window.CNSSettings && CNSSettings.chargeRate) ? CNSSettings.chargeRate() : 0.60;
-            document.getElementById('trEnergyCharged').textContent = fmtEnergy(rechargeKwh);
-            document.getElementById('trRevenue').textContent = `€${(_rate * rechargeKwh).toFixed(2)}  ·  €${_rate.toFixed(2)}/kWh`;
+            const _rev = _rate * rechargeKwh;
+            document.getElementById('hlRevenue').textContent =
+                `€${_rev.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+            document.getElementById('hlRevenueSub').textContent =
+                `${fmtEnergy(rechargeKwh)} · €${_rate.toFixed(2)}/kWh`;
 
             const common = [
                 `avg usage      = battery / range × 100`,
