@@ -102,8 +102,9 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `./venv/bin/python -m unittest tests.test_alternates -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'airport_alternates'`.
+Run: `./venv/bin/python -m unittest discover -s tests -p "test_alternates.py"`
+Expected: FAIL — an import/load error: `No module named 'airport_alternates'`.
+(Always run these tests via `discover -s tests`, which puts `tests/` on `sys.path` for the shared `_helpers` import. The dotted `tests.test_alternates` form fails to import `_helpers`.)
 
 - [ ] **Step 3: Write the minimal implementation**
 
@@ -186,8 +187,8 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `./venv/bin/python -m unittest tests.test_alternates.TestNearestAlternate -v`
-Expected: PASS (4 tests).
+Run: `./venv/bin/python -m unittest discover -s tests -p "test_alternates.py"`
+Expected: PASS (4 tests — only `TestNearestAlternate` exists at this point).
 
 - [ ] **Step 5: Commit**
 
@@ -241,10 +242,10 @@ Note: this rewrites the full 1.2 MB CSV. The diff should be two appended columns
 Run: `./venv/bin/python -c "import pandas as pd; d=pd.read_csv('european_airports.csv'); print('alternate_km' in d.columns, 'alternate_ident' in d.columns, bool(d['alternate_km'].notna().all()), bool(d['alternate_ident'].isin(d['ident']).all()))"`
 Expected: `True True True True` (every alternate_ident is itself a real airport ident).
 
-- [ ] **Step 4: Confirm the existing suite is still green**
+- [ ] **Step 4: Confirm no NEW test failures**
 
 Run: `./venv/bin/python -m unittest discover -s tests -p "test_*.py"`
-Expected: OK (existing tests read only whitelisted columns, so the new columns are transparent).
+Expected: the SAME pre-existing failures as `main` — `FAILED (failures=8, errors=3)` in `test_sim_core` / `test_sim_multileg` / `test_api` (energy + charge-time formula drift, **unrelated to this feature**). Adding the two CSV columns is purely additive (all 19 original columns stay byte-identical), so the count must not increase. If you see MORE than 8 failures / 3 errors, STOP — you introduced a regression.
 
 - [ ] **Step 5: Commit**
 
@@ -280,8 +281,8 @@ class TestApiPassthrough(unittest.TestCase):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `./venv/bin/python -m unittest tests.test_alternates.TestApiPassthrough -v`
-Expected: FAIL — `assertIn("alternate_km", rows[0])` fails, because the whitelist omits the columns.
+Run: `./venv/bin/python -m unittest discover -s tests -p "test_alternates.py"`
+Expected: 5 tests run, 1 FAILURE — the new `TestApiPassthrough` fails on `assertIn("alternate_km", rows[0])` because the whitelist omits the columns. (The 4 `TestNearestAlternate` tests still pass.)
 
 - [ ] **Step 3: Add the columns to the whitelist**
 
@@ -302,7 +303,7 @@ to:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `./venv/bin/python -m unittest tests.test_alternates -v`
+Run: `./venv/bin/python -m unittest discover -s tests -p "test_alternates.py"`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
@@ -400,7 +401,7 @@ In `static/settings.js`:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `node tests/js_settings.test.mjs`
-Expected: PASS (all settings tests, including the 3 new ones).
+Expected: the 3 new `alternateReserve` tests PASS; the harness reports `11 passed, 6 failed`. Those 6 failures are PRE-EXISTING on `main` (stale `usableFraction==1.0 when off` / `routingFactor==1.0 when off` / taper-math tests that assume the old all-OFF defaults; the current `DEFAULTS` is realistic/all-ON). Confirm the count is exactly `11 passed, 6 failed` — your 3 pass and you added NO new failures. Do not fix the stale pre-existing tests (out of scope).
 
 - [ ] **Step 5: Commit**
 
@@ -883,7 +884,7 @@ for f in tests/js_settings.test.mjs tests/js_charging.test.mjs tests/js_demand.t
 - [ ] **Step 2: Run the whole suite**
 
 Run: `bash tests/run_all.sh`
-Expected: Python layer OK, every Node harness prints `0 failed`, final line `ALL LAYERS PASSED`. (The golden/API layers self-skip if `:5055` is down — that is fine.)
+Expected: every NODE harness prints `0 failed` (including the new `js_routing`), and `test_alternates` passes. The PYTHON layer shows the SAME pre-existing `FAILED (failures=8, errors=3)` as `main` (energy/charge-time drift in `test_sim_core` / `test_sim_multileg` / `test_api` — NOT caused by this feature), so `run_all.sh` ends with `SOME TESTS FAILED`. That is the expected baseline. Verify: (a) all Node harnesses green, (b) `test_alternates` passes, (c) the Python failure count is exactly 8 failures + 3 errors — no new ones. Do NOT try to fix the pre-existing energy-model failures; they are out of scope for this feature.
 
 - [ ] **Step 3: Commit**
 
