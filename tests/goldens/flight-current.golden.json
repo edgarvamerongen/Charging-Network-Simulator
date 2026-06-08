@@ -316,8 +316,8 @@
         "default": {
           "energyUsedKwh": 119.5533,
           "flightMin": 76.5141,
-          "chargeMin": 47.9441,
-          "enRouteMin": 10.1343,
+          "chargeMin": 41.709,
+          "enRouteMin": 3.8992,
           "terminalMin": 37.8098,
           "terminalKwh": 104.7767,
           "terminalName": "Amsterdam",
@@ -334,7 +334,7 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 10.1343,
+              "dur": 3.8992,
               "energy": 14.7767
             },
             {
@@ -751,8 +751,8 @@
         "default": {
           "energyUsedKwh": 304.4794,
           "flightMin": 194.8668,
-          "chargeMin": 111.0652,
-          "enRouteMin": 83.3477,
+          "chargeMin": 89.7472,
+          "enRouteMin": 62.0298,
           "terminalMin": 27.7175,
           "terminalKwh": 62.7254,
           "terminalName": "Amsterdam",
@@ -776,7 +776,7 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 43.6844,
+              "dur": 34.677,
               "energy": 129.2541
             },
             {
@@ -790,7 +790,7 @@
               "kind": "charge",
               "leg": null,
               "at": "stop",
-              "dur": 39.6634,
+              "dur": 27.3528,
               "energy": 112.5
             },
             {
@@ -880,8 +880,8 @@
         "target50": {
           "energyUsedKwh": 304.4794,
           "flightMin": 194.8668,
-          "chargeMin": 110.7124,
-          "enRouteMin": 66.7949,
+          "chargeMin": 89.3944,
+          "enRouteMin": 45.477,
           "terminalMin": 43.9175,
           "terminalKwh": 130.2254,
           "terminalName": "Amsterdam",
@@ -905,7 +905,7 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 43.6844,
+              "dur": 34.677,
               "energy": 129.2541
             },
             {
@@ -919,7 +919,7 @@
               "kind": "charge",
               "leg": null,
               "at": "stop",
-              "dur": 23.1106,
+              "dur": 10.8,
               "energy": 45
             },
             {
