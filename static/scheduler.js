@@ -156,13 +156,9 @@ window.CNSScheduler = (function () {
 
     // ---------- rotation timeline (airport-driven charge times; viewIdent flags atX) ----------
     // tripPhases takes a `ctx` that resolves, per airport, the charger power and
-    // the SoC target to charge to. Two contexts exist:
-    //   • DES (default, _desContext): each airport's assigned charger from
-    //     planCharging + its saved SoC target.
-    //   • preview (built by tripBreakdown for the results panel): one explicit
-    //     charger + no saved targets.
-    // Same one function for both; the only difference is the context, so the
-    // panel and the scheduler can never disagree.
+    // the SoC target to charge to. It defaults to the DES context (_desContext):
+    // each airport's assigned charger from planCharging + its saved SoC target.
+    // (The results-panel preview now builds its breakdown from CNSFlight, not here.)
     function _desContext(trip) {
         return {
             chargerAt: (id) => getContext(id).powers[trip.id] || 0,
@@ -263,53 +259,6 @@ window.CNSScheduler = (function () {
             }
         });
         return { ph, total: off, terminusDepartFrac: prof ? ((prof.charges.find(c => c.isTerminal) || {}).departSocFrac ?? null) : null };
-    }
-    // Pure per-trip time/energy breakdown for the results-panel preview. Builds
-    // the SAME phases the DES uses (via tripPhases) for ONE explicit charger, so
-    // the panel can never drift from the scheduler. No DOM, no folder/network
-    // reads. `chargerKw` = the charger the operator picked in the planner.
-    //   flightMin    — total flying time
-    //   chargeMin     — total charging time (all stops, per-stop taper)
-    //   enRouteMin    — charging done DURING the trip (all charges but the last)
-    //   terminalMin   — top-up charge at the final stop (after arrival)
-    //   terminalName  — name of that final stop
-    //   arrivalSoc    — SoC on arrival there (clamped to the landing-reserve floor)
-    //   energyUsedKwh — energy the aircraft consumes (== what it recharges)
-    function tripBreakdown(trip, chargerKw) {
-        const power = Math.max(0, +chargerKw || 0);
-        // Preview context: the operator's single chosen charger at every airport.
-        // No per-airport SoC targets yet (the flight isn't in the network), so
-        // every terminus uses the GLOBAL default charge target — the same value
-        // the DES will apply once the flight is added, keeping panel == DES.
-        const previewTarget = (window.CNSDemand && CNSDemand.resolveTargetSoc)
-            ? CNSDemand.resolveTargetSoc({}) : null;
-        const ctx = { chargerAt: () => power, targetAt: () => previewTarget };
-        const { ph } = tripPhases(trip, null, ctx);
-        const batt = batteryOf(trip);
-        const charges = ph.filter(p => p.kind === 'charge');
-        const chargeMins = charges.map(p => p.dur);
-        const flightMin   = ph.reduce((s, p) => s + (p.kind === 'fly' ? p.dur : 0), 0);
-        const chargeMin    = chargeMins.reduce((s, m) => s + m, 0);
-        const enRouteMin   = chargeMins.slice(0, -1).reduce((s, m) => s + m, 0);
-        const terminal     = charges.length ? charges[charges.length - 1] : null;
-        const terminalMin  = terminal ? terminal.dur : 0;
-        const terminalKwh  = terminal ? terminal.energy : 0;
-        const terminalName = terminal ? terminal.name : (trip.destName || '');
-        // Arrival SoC is a FORWARD-WALK fact - never derived from the charge
-        // target. The terminus always recharges to full (a base/destination tops
-        // to 100%; a training session recharges exactly what it used), so the
-        // energy added there is precisely (full - arrival). Invert that:
-        //     arrival = full - terminalKwh
-        // Target-INDEPENDENT for a one-way (its terminal fills to 100% regardless
-        // of the target) and correctly target-DEPENDENT for a retour (home arrival
-        // reflects the target-governed turnaround departure upstream). No reserve
-        // floor: a genuine below-reserve arrival (over-range) must surface, not hide.
-        const arrivalSoc   = Math.max(0, Math.min(1, 1 - terminalKwh / (batt || 1)));
-        const energyUsedKwh = charges.reduce((s, p) => s + (p.energy || 0), 0);
-        // `phases` is the ordered fly/charge list (same objects the DES uses) so the
-        // results panel can render a per-action itinerary whose times + energies are
-        // guaranteed to match these aggregates (and the scheduler).
-        return { flightMin, chargeMin, enRouteMin, terminalMin, terminalKwh, terminalName, arrivalSoc, energyUsedKwh, phases: ph };
     }
     function phasesAnim(trip) { return tripPhases(trip, null); }
     function rotationLength(trip) { return tripPhases(trip, null).total || 30; }
@@ -755,5 +704,5 @@ window.CNSScheduler = (function () {
         _stamp = null; _ctx = {}; _globalStamp = null; _globalCache = null;
     }
 
-    return { init, renderInto, peakPowerKw, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, tripBreakdown, DAY_START, DAY_END, SPAN };
+    return { init, renderInto, peakPowerKw, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, DAY_START, DAY_END, SPAN };
 })();
