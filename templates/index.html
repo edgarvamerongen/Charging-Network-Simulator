@@ -1061,6 +1061,8 @@
         .taper-curve { display: block; width: 100%; height: auto; background: #f8fafc; border: 1px solid var(--panel-border); border-radius: var(--radius-sm); margin-bottom: 6px; }
         .rs-curve-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; }
         .rs-curve-sliders .rs-cell-ctrl { margin-top: 0; }
+        /* Neutral ink for the curve's value chips — brand orange here reads as a warning, not a current value (scoped to this panel only). */
+        .rs-curve-sliders .rs-val { color: var(--ink); }
         .rs-mini-l { font-size: .72rem; color: var(--muted); min-width: 32px; }
 
         /* F5: per-leg route pin — a route icon that smoothly expands into a brand
@@ -1727,6 +1729,16 @@
                                 <span class="rs-val">auto · per-airport</span>
                             </div>
                         </div>
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsSidStar"><span>SID/STAR padding</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Fixed distance added to every leg for SID departure + STAR arrival track miles — terminal-area routing that isn't on the great circle. Adds on top of routing padding.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <input type="range" id="rsSidStarSl" min="5" max="50" step="5" value="10" class="form-range">
+                                <span class="rs-val" id="rsSidStarVal">+10 km</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="rs-cat">Charging</div>
@@ -2232,12 +2244,12 @@
                 const plane = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
                 let warn = '';
                 if (!stopsOn && plane && plane.range_km) {
-                    const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
-                    const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                    // Reach verdict is identical either way (algebraically); we just match UNITS to the
-                    // shown distance — routed km vs FULL usable range when the engine is on, else
-                    // great-circle km vs the great-circle reach (range x usable / route).
-                    const maxLeg = _availableRangeKm(plane) * route;   // routed reach (km of routed path that fits the usable range)
+                    // `km` is the SHOWN routed leg (via _dispKm): great-circle × routing padding
+                    // + the fixed SID/STAR pad. Compare it against the FULL available range
+                    // (_availRangeShownKm, routed) so the pad counts ONCE — the pad is already in
+                    // km, so using the pad-carved reach here would double-count it. Equivalent to
+                    // the planner's rawKm·route + sid ≤ full range, just in routed units.
+                    const maxLeg = _availRangeShownKm(plane);   // full available range (routed km)
                     // Divert reserve (when on): the destination must also reach its nearest alternate.
                     // km + maxLeg are in routed (padded) units, so the raw alternate_km adds directly
                     // (the unpadded /route cancels against the padded scale) — matches validateRoute.
@@ -2310,24 +2322,29 @@
         }
         function _selectedPlane() { return selectedPlaneSpec(); }
         function _usableFrac(p) { return (window.CNSSettings && p) ? CNSSettings.usableFraction(p) : 1.0; }
-        // Practical/"available" range = effective range = range × usableFraction (usable
-        // battery after the landing reserve) ÷ routing padding (great-circle vs real path).
-        // This IS the planner's max straight-line leg, so the card value and the routing
-        // reach are always the same number. A per-flight override replaces it directly.
+        // Great-circle reach the planner + range checks enforce: range × usableFraction
+        // (usable battery after the landing reserve), MINUS the fixed SID/STAR terminal km,
+        // ÷ routing padding. So a leg fits iff rawKm·route + sidStar ≤ the full available
+        // range — the pad counts against the plane's max range (the leg carries the pad).
+        // The DISPLAYED available range (_availRangeShownKm) stays the FULL figure, so the
+        // headline max range doesn't shrink; only the routing reach reserves the pad.
         function _availableRangeKm(plane) {
             const p = plane || selectedPlaneSpec();
             if (!p || !p.range_km) return null;
             const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            return _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
+            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
+            const base = _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
+            return Math.max(0, base - sid / route);   // carve out the SID/STAR pad (great-circle equivalent)
         }
-        // The available range to DISPLAY/EDIT. Padding now lives in the trip LENGTH, not the
-        // reach — so when the engine is on we show the FULL usable range (undo the /route in
-        // _availableRangeKm). The router keeps using _availableRangeKm (the great-circle reach),
-        // so reachability stays single-count; only the shown number changes.
+        // The available range to DISPLAY/EDIT: the FULL usable range — undo the /route AND add
+        // back the SID/STAR pad carved out of the reach, so the headline max range stays whole.
+        // The pad shows up in the LEG distance, not here; the router uses _availableRangeKm.
         function _availRangeShownKm(plane) {
             const a = _availableRangeKm(plane);
             if (a == null) return null;
-            return a * (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);   // full usable range (padding lives in the trip length, not the reach)
+            const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
+            return a * route + sid;   // = base·route = the full available range, pad-independent
         }
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
@@ -3194,11 +3211,15 @@
         }
         // ---- Flight engine (static/flight-model.js) bridge ------------------------
         // Distance to SHOW in the planning aids (trajectory pill + suggested route): the
-        // ROUTED distance (great-circle x padding), matching the map labels + result panel.
-        // The reach math itself stays great-circle (see maxLeg); only the shown number is routed.
+        // ROUTED leg length = great-circle × routing padding + the fixed SID/STAR pad,
+        // so it equals the engine's per-leg distKm and moves with BOTH distance factors
+        // (the result panel reads the same profile). Called once per leg, so the fixed pad
+        // lands on each leg. The reach math itself stays great-circle and pad-free (see
+        // maxLeg) — only the shown number carries the padding.
         function _dispKm(a, b) {
-            if (window.CNSRouting) return CNSRouting.routedKm(a, b);   // routed distance (engine is the only path)
-            return haversineKm([a.lat, a.lon], [b.lat, b.lon]);   // pre-CNSRouting fallback (great-circle)
+            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
+            if (window.CNSRouting) return CNSRouting.routedKm(a, b) + sid;   // routed (great-circle × padding) + SID/STAR terminal km
+            return haversineKm([a.lat, a.lon], [b.lat, b.lon]) + sid;   // pre-CNSRouting fallback (great-circle) + pad
         }
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
         // origin + planned stops + dest; the engine OWNS the retour mirror + training
@@ -3234,15 +3255,17 @@
             let flyN = 0;
             const phases = (prof.phases || []).map(ph => {
                 if (ph.kind === 'fly') {
-                    const leg = prof.multiLeg ? ph.legIndex : (flyN++ === 0 ? 'out' : 'back');
-                    return { kind: 'fly', leg, dur: ph.dur };
+                    const li = prof.multiLeg ? ph.legIndex : flyN++;       // index into prof.legs
+                    const leg = prof.multiLeg ? li : (li === 0 ? 'out' : 'back');
+                    const L = (prof.legs || [])[li] || {};                 // engine leg: distKm + energyKwh carry BOTH paddings (routing × + SID/STAR)
+                    return { kind: 'fly', leg, dur: ph.dur, distKm: L.distKm, energyKwh: L.energyKwh, fromName: L.fromName, toName: L.toName };
                 }
                 const c = (prof.charges || [])[ph.chargeIndex] || {};
                 return { kind: 'charge', at: c.role, name: c.name, dur: ph.dur, energy: c.energyKwh };
             });
             const lastLeg = (prof.legs || [])[(prof.legs || []).length - 1] || {};
             return {
-                energyUsedKwh: T.energyUsedKwh, flightMin: T.flightMin, chargeMin: T.chargeMin,
+                energyUsedKwh: T.energyUsedKwh, distKm: T.distKm, flightMin: T.flightMin, chargeMin: T.chargeMin,
                 enRouteMin: T.enRouteMin, terminalMin: T.terminalMin, terminalKwh: term.energyKwh,
                 terminalName: term.name || lastLeg.toName || '', arrivalSoc: term.arrivalSocFrac, phases,
             };
@@ -3612,20 +3635,20 @@
                 const _phases = bd.phases || [];
                 const _chg = _phases.filter(ph => ph.kind === 'charge');
                 const _terminal = _chg.length ? _chg[_chg.length - 1] : null;   // shown in Charging, not here
-                // Routing padding lifts ENERGY (flown path) so the leg energy reconciles
-                // with the charge + headline; DISTANCE stays geographic (matches the map
-                // line + the reach check — padding it too would double-count against the
-                // available range). Leg TIME (ph.dur) is already padded. sim.py legs are raw.
-                const _rf = CNSSettings.routingFactor();
+                // Distance, energy AND time all come from the engine leg (ph.distKm /
+                // ph.energyKwh / ph.dur): the routed length = great-circle × routing padding
+                // + the fixed SID/STAR pad, with energy + time derived from it. So every row
+                // reconciles with the headline, the trajectory pill and the charge rows, and
+                // moves live with BOTH distance factors. (sim.py's data.* legs are raw — unused
+                // here now; names still come from data when the engine omits them.)
                 const _legMeta = ph => {
                     if (isMulti && typeof ph.leg === 'number') {
                         const l = (data.legs || [])[ph.leg] || {};
-                        return { from: l.from && l.from.name, to: l.to && l.to.name, dist: l.distance_km, energy: (l.energy_kwh || 0) * _rf };
+                        return { from: ph.fromName || (l.from && l.from.name), to: ph.toName || (l.to && l.to.name), dist: ph.distKm, energy: ph.energyKwh };
                     }
-                    const _e = (data.leg_energy_kwh || 0) * _rf;
                     return ph.leg === 'back'
-                        ? { from: _destNm, to: _originNm, dist: data.leg_distance_km, energy: _e }
-                        : { from: _originNm, to: _destNm, dist: data.leg_distance_km, energy: _e };
+                        ? { from: ph.fromName || _destNm, to: ph.toName || _originNm, dist: ph.distKm, energy: ph.energyKwh }
+                        : { from: ph.fromName || _originNm, to: ph.toName || _destNm, dist: ph.distKm, energy: ph.energyKwh };
                 };
                 let _ret = false;
                 _phases.forEach(ph => {
@@ -3638,7 +3661,7 @@
                     }
                 });
             }
-            if (!isTraining) _steps.push(`<tr class="step-total"><td>Total travel</td><td>${fmtDist(data.total_distance_km)} · ${fmtDuration(travelMin)}</td></tr>`);
+            if (!isTraining) _steps.push(`<tr class="step-total"><td>Total travel</td><td>${fmtDist(bd.distKm)} · ${fmtDuration(travelMin)}</td></tr>`);
             document.getElementById('routeSteps').innerHTML = _steps.join('');
 
             // ---- Charging: the terminal top-up. It happens AFTER you arrive, so it is
@@ -4477,6 +4500,7 @@
                 } },
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 alternateReserve:  { check: 'rsAlternate',     extras: {} },
+                sidStarPadding:    { check: 'rsSidStar',       extras: { km:            { input: 'rsSidStarSl',    valEl: 'rsSidStarVal',    fmt: (v) => `+${v} km`,                          to: (v) => v,       from: (v) => v } } },
                 chargeTarget:      { check: 'rsChargeTarget',  extras: { value:         { input: 'rsChargeTargetSl', valEl: 'rsChargeTargetVal', fmt: (v) => `${v}%`,                              to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
 
@@ -4553,7 +4577,7 @@
                 const thrEl = document.getElementById('rsTaperThr'), flEl = document.getElementById('rsTaperFloor');
                 const thr = thrEl ? Math.max(0.05, Math.min(0.95, +thrEl.value / 100)) : 0.70;
                 const floor = flEl ? Math.max(0.02, Math.min(0.95, +flEl.value / 100)) : 0.15;
-                const W = 320, H = 72, mL = 26, mR = 8, mT = 8, mB = 13;
+                const W = 320, H = 72, mL = 26, mR = 8, mT = 16, mB = 13;
                 const px = soc => mL + soc * (W - mL - mR);
                 const py = p => (H - mB) - p * (H - mT - mB);
                 const pts = [];
@@ -4565,12 +4589,12 @@
                 let g = '';
                 [0, 0.5, 1].forEach(p => { g += `<line x1="${mL}" y1="${py(p)}" x2="${W - mR}" y2="${py(p)}" stroke="#e2e8f0"/><text x="${mL - 3}" y="${py(p) + 3}" font-size="7" text-anchor="end" fill="#94a3b8">${p * 100}</text>`; });
                 [0, 0.5, 1].forEach(s => { g += `<text x="${px(s)}" y="${H - 7}" font-size="7" text-anchor="middle" fill="#94a3b8">${s * 100}%</text>`; });
-                const knee = `<line x1="${px(thr)}" y1="${py(0)}" x2="${px(thr)}" y2="${py(1)}" stroke="#f59e0b" stroke-dasharray="3 2"/><text x="${px(thr)}" y="${mT + 5}" font-size="7" text-anchor="middle" fill="#d97706">knee</text>`;
+                const knee = `<line x1="${px(thr)}" y1="${py(0)}" x2="${px(thr)}" y2="${py(1)}" stroke="#f59e0b" stroke-dasharray="3 2"/><text x="${px(thr)}" y="${mT - 6}" font-size="7" text-anchor="middle" fill="#d97706">knee</text>`;
                 const area = `M${px(0)},${py(0)} L${pts.join(' L')} L${px(1)},${py(0)} Z`;
                 svg.innerHTML = g + knee
                     + `<path d="${area}" fill="rgba(37,99,235,.12)"/>`
                     + `<polyline fill="none" stroke="#2563eb" stroke-width="2" points="${pts.join(' ')}"/>`
-                    + `<text x="2" y="9" font-size="7" fill="#64748b">power %</text>`;
+                    + `<text x="2" y="${mT - 6}" font-size="7" fill="#64748b">power %</text>`;
             }
             ['rsTaperThr', 'rsTaperFloor'].forEach(id => {
                 const sl = document.getElementById(id);
