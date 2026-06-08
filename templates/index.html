@@ -602,8 +602,8 @@
             display: flex; align-items: baseline; gap: 6px;
         }
         .hl-rev-label { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .04em; font-weight: 700; white-space: nowrap; }
-        .hl-rev-sub { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .58rem; opacity: .7; letter-spacing: .03em; }   /* sits to the right of the label; ellipsises rather than wrapping so the band stays a single line */
-        .hl-rev-amt { font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: #34d399; margin-left: auto; }  /* brand green (matches the success / Add-to-demand button) — revenue reads green, distinct from the gold stat tiles */
+        .hl-rev-amt { flex: 1 1 auto; text-align: center; font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: #34d399; }  /* centred amount; brand green (matches the success / Add-to-demand button), distinct from the gold stat tiles */
+        .hl-rev-sub { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: .58rem; opacity: .7; letter-spacing: .03em; }   /* units pinned to the right; ellipsises if space is tight */
         .lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
 
         .section-tag {
@@ -1477,8 +1477,8 @@
                      breakdown. Largest figure in the panel — it's the business case. -->
                 <div class="hl-revenue">
                     <span class="hl-rev-label">Revenue potential</span>
-                    <span class="hl-rev-sub" id="hlRevenueSub"></span>
                     <span class="hl-rev-amt" id="hlRevenue">—</span>
+                    <span class="hl-rev-sub" id="hlRevenueSub"></span>
                 </div>
             </div>
 
