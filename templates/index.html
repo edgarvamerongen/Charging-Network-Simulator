@@ -1959,7 +1959,7 @@
                     // Reach verdict is identical either way (algebraically); we just match UNITS to the
                     // shown distance — routed km vs FULL usable range when the engine is on, else
                     // great-circle km vs the great-circle reach (range x usable / route).
-                    const maxLeg = _flightEngineOn() ? _availableRangeKm(plane) * route : _availableRangeKm(plane);
+                    const maxLeg = _availableRangeKm(plane) * route;   // routed reach (km of routed path that fits the usable range)
                     if (km > maxLeg) {
                         warn = ` <span class="traj-warn">⚠ ${fmtDist(km - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
@@ -2043,7 +2043,7 @@
         function _availRangeShownKm(plane) {
             const a = _availableRangeKm(plane);
             if (a == null) return null;
-            return _flightEngineOn() ? a * (window.CNSSettings ? CNSSettings.routingFactor() : 1.0) : a;
+            return a * (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);   // full usable range (padding lives in the trip length, not the reach)
         }
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
@@ -2618,7 +2618,7 @@
                 // The field shows the FULL range when the engine is on; store the great-circle
                 // reach the router uses (/route) so reachability stays single-count.
                 const _r = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                _availRangeOverride = (isFinite(v) && v > 0) ? (_flightEngineOn() ? v / _r : v) : null;
+                _availRangeOverride = (isFinite(v) && v > 0) ? (v / _r) : null;   // field shows the full range; store the great-circle reach the router uses
                 const card = document.getElementById('planeSpecCard');
                 const spec = selectedPlaneSpec();
                 if (spec) _refreshSpecStats(spec);
@@ -2856,16 +2856,11 @@
             };
         }
         // ---- Flight engine (static/flight-model.js) bridge ------------------------
-        // R12 kill-switch: a view reads CNSFlight when the flag is on, else the legacy math.
-        function _flightEngineOn() {
-            return !!(window.CNSFlight && CNSFlight.isEnabled());
-        }
-        // Distance to SHOW in the planning aids (trajectory pill + suggested route):
-        // routed (great-circle x padding) when the engine is on, great-circle when off —
-        // so these agree with the map labels in BOTH flag states. The reach math itself
-        // stays great-circle (see maxLeg below); only the displayed number changes.
+        // Distance to SHOW in the planning aids (trajectory pill + suggested route): the
+        // ROUTED distance (great-circle x padding), matching the map labels + result panel.
+        // The reach math itself stays great-circle (see maxLeg); only the shown number is routed.
         function _dispKm(a, b) {
-            if (window.CNSRouting) return (_flightEngineOn() ? CNSRouting.routedKm : CNSRouting.haversineKm)(a, b);
+            if (window.CNSRouting) return CNSRouting.routedKm(a, b);   // routed distance (engine is the only path)
             return haversineKm([a.lat, a.lon], [b.lat, b.lon]);   // pre-CNSRouting fallback (great-circle)
         }
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
@@ -3027,7 +3022,7 @@
         }
         function drawRoute(data) {
             clearRoute();
-            const _prof = _flightEngineOn() ? _engineProfile(data) : null;   // R12: read engine legs when the flag is on
+            const _prof = _engineProfile(data);   // unified engine legs
             const p1 = [data.origin.lat, data.origin.lon];
             const p2 = [data.destination.lat, data.destination.lon];
             if (data.trip_type === 'training') {
@@ -3090,7 +3085,7 @@
                         const seg = L.polyline([a, b], legStyle(i));
                         seg.addTo(map); routeLayers.push(seg);
                     }
-                    addLegLabel(a, b, (_prof && _prof.legs[i]) || (data.legs || [])[i]);   // F5: per-leg label (outbound only)
+                    addLegLabel(a, b, _prof.legs[i]);   // F5: per-leg label (outbound only) — engine leg
                 }
                 if (isRetour) {
                     // Return arcs — same per-leg pattern, bowed the other way,
@@ -3205,24 +3200,9 @@
             // Charger-efficiency factor (1/eff) — still feeds the grid-demand sub-label.
             const gridMul = CNSSettings.gridDemandFactor();
 
-            // Every per-trip number now comes from ONE place: the scheduler's pure
-            // CNSScheduler.tripBreakdown(). The panel just shapes the trip from the
-            // simulate response and reads back the SAME flight/charge times the DES
-            // uses, so the two can never drift — an independent recompute here was
-            // exactly what made the headline charge time disagree with the
-            // scheduler. All the math lives in the logic layer (scheduler.js).
-            const previewTrip = {
-                id: 'preview', tripType: data.trip_type, multiLeg: isMulti,
-                originIdent: data._origin && data._origin.ident, originName: data._origin && data._origin.name,
-                destIdent:   data._dest   && data._dest.ident,   destName:   data._dest   && data._dest.name,
-                planeId: p.id, c_rate: p.c_rate, battery: p.battery_kwh,
-                flightTimeH: isMulti ? data.total_flight_time_h : data.flight_time_h,
-                legEnergy: data.leg_energy_kwh, legs: data.legs, charges: data.charges, stops: data.stops,
-            };
-            // R12: read the unified engine when on (retires tripBreakdown's preview math);
-            // graceful fallback to the scheduler breakdown if the engine is off/unavailable.
-            const _engineBd = _flightEngineOn() ? _breakdownFromProfile(_engineProfile(data)) : null;
-            const bd = _engineBd || CNSScheduler.tripBreakdown(previewTrip, data.charger.power_kw);
+            // Every per-trip number comes from ONE place: the unified engine. _breakdownFromProfile
+            // maps the FlightProfile to the shape this panel reads, so the panel == the DES (both engine).
+            const bd = _breakdownFromProfile(_engineProfile(data));
             const usedKwh      = bd.energyUsedKwh;
             const rechargeKwh  = bd.energyUsedKwh;        // recharged == consumed (energy conservation)
             const flightMin    = bd.flightMin;
@@ -3618,7 +3598,6 @@
                 // Engine charge energy at this contribution's airport: multi-leg maps by chargeIdx
                 // (position-indexed, so a twice-visited retour stop resolves), single-leg by role.
                 const _engEnergyAt = (c) => {
-                    if (!_flightEngineOn()) return null;
                     const prof = (c.t.id in engCache) ? engCache[c.t.id] : (engCache[c.t.id] = _engineProfileForTrip(c.t, getTargetSoc));
                     return prof ? CNSFlight.chargeEnergyAt(prof, c) : null;
                 };

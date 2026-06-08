@@ -186,11 +186,6 @@ window.CNSFlight = (function () {
     }
 
     // ---- saved-trip adapters (shared by the demand drawer + the PDF report) -------
-    // The R12 kill-switch, read once here so every view asks the engine the same question.
-    function isEnabled() {
-        const s = window.CNSSettings;
-        return !!(s && s.loadAll && (s.loadAll().flightEngine || {}).enabled);
-    }
     // Rebuild a FlightProfile for a SAVED folder trip: geometry from persisted coords,
     // plane from the saved spec (R4) or the catalog (planeId), per-AIRPORT target via
     // opts.getTargetSoc. Returns null (caller falls back to the legacy math) when the
@@ -233,5 +228,5 @@ window.CNSFlight = (function () {
         return ch ? ch.energyKwh : null;
     }
 
-    return { simulateTrip, _expandChain, isEnabled, profileForTrip, chargeEnergyAt };
+    return { simulateTrip, _expandChain, profileForTrip, chargeEnergyAt };
 })();

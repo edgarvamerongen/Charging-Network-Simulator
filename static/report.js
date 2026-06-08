@@ -54,9 +54,9 @@ window.CNSReport = (function () {
         const cfgs = CNSDemand.loadCfg();
         const getTargetSoc = (id) => CNSDemand.resolveTargetSoc(cfgs[id]);
         const multiCache = {};
-        // R12: when the engine flag is on, per-airport contribution energy comes from the
-        // SAME CNSFlight adapter the demand drawer uses — so the PDF agrees with the screen.
-        const engOn = !!(window.CNSFlight && CNSFlight.isEnabled());
+        // Per-airport contribution energy comes from the SAME CNSFlight adapter the demand
+        // drawer uses, so the PDF agrees with the screen. The legacy recompute/deliveredEnergy
+        // below is the null-profile fallback for old saves the engine can't rebuild.
         const engCache = {};
         const aircraftList = a.contribs.map((c, i) => {
             const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
@@ -65,7 +65,7 @@ window.CNSReport = (function () {
             const usableBattery = battery * usable;
             const legPadded = (c.t.legEnergy || 0) * route;
             let energy = null;
-            if (engOn) {
+            if (window.CNSFlight && CNSFlight.profileForTrip) {
                 const prof = (c.t.id in engCache) ? engCache[c.t.id] : (engCache[c.t.id] = CNSFlight.profileForTrip(c.t, { getTargetSoc }));
                 energy = prof ? CNSFlight.chargeEnergyAt(prof, c) : null;
             }
