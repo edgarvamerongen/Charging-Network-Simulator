@@ -177,6 +177,24 @@ window.CNSScheduler = (function () {
         return { first, interim, last };
     }
 
+    // Daily charging MINUTES a trip needs at `ident` — the reporting figure (demand drawer + PDF).
+    // Shared >1x/day lane: sum the per-rotation charge minutes (first + (N-2)*interim + last) from the
+    // rotation templates (SoC-aware via R7, same planCharging charger as ctx.chargerAt). Else: the
+    // single-rotation minutes * flightsPerDay (fractional — weekly trips stay amortised, NOT integer
+    // instancesPerDay). Daily kWh is conserved and stays on flightsPerDay at the call sites.
+    function dailyChargeMinutesAt(trip, ident) {
+        if (!trip) return 0;
+        const minsAt = (tpl) => (tpl && tpl.ph ? tpl.ph : []).reduce((s, p) => (p.kind === 'charge' && p.ident === ident) ? s + (p.dur || 0) : s, 0);
+        const N = instanceStarts(trip).length;
+        if (!fleetSeparate(trip) && N > 1) {
+            const { first, interim, last } = _rotationTemplates(trip);
+            return minsAt(first) + Math.max(0, N - 2) * minsAt(interim) + minsAt(last);
+        }
+        const fpd = (window.CNSDemand && CNSDemand.flightsPerDay) ? CNSDemand.flightsPerDay(trip)
+            : (trip.freqUnit === 'week' ? (num(trip, 'freqN')) / 7 : num(trip, 'freqN'));
+        return minsAt(tripPhases(trip, null)) * fpd;
+    }
+
     function tripPhases(trip, viewIdent, ctx, rotOpts) {
         if (trip.multiLeg) return _multiLegPhases(trip, viewIdent, ctx, rotOpts);
         ctx = ctx || _desContext(trip);
@@ -704,5 +722,5 @@ window.CNSScheduler = (function () {
         _stamp = null; _ctx = {}; _globalStamp = null; _globalCache = null;
     }
 
-    return { init, renderInto, peakPowerKw, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, DAY_START, DAY_END, SPAN };
+    return { init, renderInto, peakPowerKw, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, dailyChargeMinutesAt, DAY_START, DAY_END, SPAN };
 })();

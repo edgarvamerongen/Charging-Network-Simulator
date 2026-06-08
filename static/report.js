@@ -83,7 +83,6 @@ window.CNSReport = (function () {
                 : asg.chargeTimeMin;
             const fpd = _flightsPerDay(t);
             dailyKwh += energy * fpd;
-            if (isFinite(chargeMin)) dailyChargingHours += (chargeMin / 60) * fpd;
             return {
                 planeName: t.planeName,
                 tripType: t.tripType,
@@ -98,6 +97,16 @@ window.CNSReport = (function () {
                 chargeMin: isFinite(chargeMin) ? chargeMin : 0,
                 chargerName: asg.charger ? asg.charger.name : 'no charger',
             };
+        });
+
+        // Daily charging hours — per-rotation + SoC-aware via CNSScheduler.dailyChargeMinutesAt
+        // (interim-deficit: a shared >1x/day lane charges less between rotations). Summed ONCE per
+        // trip touching this airport (a twice-visited stop is already covered inside the helper).
+        const _seenHrs = new Set();
+        a.contribs.forEach(c => {
+            if (_seenHrs.has(c.t.id) || !(window.CNSScheduler && CNSScheduler.dailyChargeMinutesAt)) return;
+            _seenHrs.add(c.t.id);
+            dailyChargingHours += CNSScheduler.dailyChargeMinutesAt(c.t, a.ident) / 60;
         });
 
         const sInfo = CNSScheduler.summary(ident);

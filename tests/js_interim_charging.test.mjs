@@ -58,12 +58,15 @@ function totals(S, trip) {
     rot.phases.forEach(ph => { if (ph.kind === 'charge') { e += ph.energy || 0; m += ph.dur || 0; } });
     byRot.push(+e.toFixed(2)); energy += e; minutes += m;
   }));
-  return { energy: +energy.toFixed(2), minutes: +minutes.toFixed(2), byRot };
+  const dcm = (S.CNSScheduler.dailyChargeMinutesAt) ? +S.CNSScheduler.dailyChargeMinutesAt(trip, 'EHAM').toFixed(2) : null;   // base daily charge minutes = the reporting figure
+  return { energy: +energy.toFixed(2), minutes: +minutes.toFixed(2), byRot, dcm };
 }
 
 console.log('Interim-deficit charging (last-flight-full) — node harness\n');
 
-const data = await sim('EHAM', 'EHGG', 'beta_plane', 'dc_250');   // short retour: round-trip drains << battery
+let data;
+try { data = await sim('EHAM', 'EHGG', 'beta_plane', 'dc_250'); }   // short retour: round-trip drains << battery
+catch { console.log(`SKIP: server at ${BASE} not reachable.`); process.exit(0); }
 if (data.error) { console.log('SKIP (sim error):', data.error); process.exit(0); }
 
 const S = loadStack(); S.CNSSettings.reset();
@@ -93,6 +96,11 @@ test('final rotation tops up the most (its base charge reaches 100%)', () => {
 test('parity: a 1x/day shared retour is a single unchanged rotation', () => {
   assert.equal(shared1.byRot.length, 1, `expected 1 rotation, got ${shared1.byRot.length}`);
 });
+test('reporting: dailyChargeMinutesAt @ base is LOWER for shared than the all-to-full reference', () => {
+  assert.ok(shared3.dcm != null && separate3.dcm != null, 'dailyChargeMinutesAt unavailable');
+  assert.ok(shared3.dcm < separate3.dcm - 0.5, `base daily charge min: shared ${shared3.dcm} not < reference ${separate3.dcm}`);
+});
 
+console.log(`  reporting dailyChargeMinutesAt @ base: shared=${shared3.dcm}  separate=${separate3.dcm}`);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -3629,6 +3629,14 @@
                 const plan = CNSCharging.planCharging(fleet, aircraftList);
 
                 let dailyEnergy = 0, dailyHours = 0;
+                // Daily charging hours — per-rotation + SoC-aware via CNSScheduler.dailyChargeMinutesAt
+                // (interim-deficit: a shared >1x/day lane charges less between rotations). Once per trip.
+                const _seenHrs = new Set();
+                a.contribs.forEach(c => {
+                    if (_seenHrs.has(c.t.id) || !(window.CNSScheduler && CNSScheduler.dailyChargeMinutesAt)) return;
+                    _seenHrs.add(c.t.id);
+                    dailyHours += CNSScheduler.dailyChargeMinutesAt(c.t, a.ident) / 60;
+                });
                 const rows = a.contribs.map((c, i) => {
                     const t = c.t;
                     const asg = plan.assignments[i];
@@ -3641,7 +3649,6 @@
                     const power = CNSSettings.effectiveChargePower(nameplate, battery, cRate);
                     const chargeMin = power ? CNSSettings.chargeTimeMin(energy, power, battery) : Infinity;
                     dailyEnergy += energy * flightsPerDay(t);
-                    if (isFinite(chargeMin)) dailyHours += (chargeMin / 60) * flightsPerDay(t);
                     // Role labels use consistent aviation terminology:
                     // DEPARTURE — where the trip starts (and ends for retour)
                     // DESTINATION — the terminal/turn-around point of the trip

@@ -4,7 +4,7 @@ import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath }
 import { loadStack, AP } from './golden_capture.mjs';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO,'planes.json'),'utf8')).map(p=>[p.id,p]));
-const BASE = process.env.CNS_BASE_URL || 'http://127.0.0.1:5057';
+const BASE = process.env.CNS_BASE_URL || 'http://127.0.0.1:5055';
 const SNAP = path.join(REPO, 'tests', 'goldens', 'sched-snapshot.json');
 const co = k => ({ident:k, name:AP[k].name, lat:AP[k].lat, lon:AP[k].lon});
 const round = (x,n=2) => (x==null||!isFinite(+x)) ? (x??null) : +(+x).toFixed(n);
@@ -27,6 +27,8 @@ async function capture(){
   const airports={}; for(const id of ['EHAM','LFPG','EHGG','EGLL','EHRD']){ const s=S.CNSScheduler.summary(id); airports[id]={peakKw:round(s.peakKw),latestEnd:round(s.latestEnd)}; }
   return {laneCount:lanes.length, lanes, airports};
 }
+async function _serverUp() { try { return (await fetch(BASE + '/')).ok; } catch { return false; } }
+if (!(await _serverUp())) { console.log(`SKIP sched snapshot: server at ${BASE} not reachable.`); process.exit(0); }
 const snap=await capture();
 if(process.argv[2]==='--capture'){ fs.writeFileSync(SNAP,JSON.stringify(snap,null,2)+'\n'); console.log(`captured baseline (${snap.laneCount} lanes) -> ${SNAP}`); console.log('airports:',JSON.stringify(snap.airports)); }
 else { const base=JSON.parse(fs.readFileSync(SNAP,'utf8')); if(JSON.stringify(snap)===JSON.stringify(base)) console.log(`OK: runGlobal IDENTICAL to baseline (${snap.laneCount} lanes, zero DES drift)`); else { console.log('DRIFT vs baseline:'); for(let i=0;i<Math.max(snap.lanes.length,base.lanes.length);i++){ if(JSON.stringify(snap.lanes[i])!==JSON.stringify(base.lanes[i])){console.log('lane',i,'A',JSON.stringify(snap.lanes[i]));console.log('lane',i,'B',JSON.stringify(base.lanes[i]));break;} } if(JSON.stringify(snap.airports)!==JSON.stringify(base.airports)){console.log('airports A',JSON.stringify(snap.airports));console.log('airports B',JSON.stringify(base.airports));} process.exit(1);} }
