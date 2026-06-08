@@ -3,9 +3,9 @@
  *
  * These two functions are the SHARED adapter the demand drawer (index.html) and the
  * PDF report (report.js) both build per-airport contribution energy from. This test
- * rebuilds each golden saved-trip from its coords and checks the engine's per-charge
- * energy matches the legacy demand math (recomputeMultiLegCharges / deliveredEnergy),
- * so both surfaces are covered by one parity check. Server-free (reads the golden).
+ * rebuilds each golden saved-trip from its coords and locks the adapter's own contract:
+ * chargeEnergyAt resolves every charge and energyAt(ident) sums them. Charge VALUES are
+ * golden-verified in js_flight_model. Server-free (reads the golden).
  *
  * Run:  node tests/js_flight_adapter.test.mjs
  */
@@ -55,31 +55,29 @@ test('chargeEnergyAt: multi-leg maps by chargeIdx, single-leg by role; null-safe
   assert.equal(S.CNSFlight.chargeEnergyAt(null, { t: {}, role: 'dest' }), null);
 });
 
-test('profileForTrip returns null for an old save without coords (-> legacy fallback)', () => {
+test('profileForTrip returns null for an old save without coords (caller handles null)', () => {
   assert.equal(S.CNSFlight.profileForTrip({ planeId: 'beta_plane', battery: 225, range_km: 600 }, { getTargetSoc: getT }), null);
 });
 
+// The adapter rebuilds a FlightProfile from a saved trip's coords/stops and maps each
+// per-airport contribution back to its charge. Legacy demand-math parity is retired (the
+// engine is the only path now); the charge VALUES are golden-verified in js_flight_model.
+// Here we lock the adapter's own contract: chargeEnergyAt resolves every charge (multi-leg
+// by position, single-leg by role), and energyAt(ident) == the sum of that airport's charges.
 for (const c of golden.cases) {
-  if (c.input.trip === 'training') continue;   // training padding is a deferred (G4a) special case
-  test(`adapter charges == legacy demand math: ${c.name}`, () => {
+  test(`adapter rebuilds + maps charges self-consistently: ${c.name}`, () => {
     const t = savedTrip(c);
     const prof = S.CNSFlight.profileForTrip(t, { getTargetSoc: getT });
     assert.ok(prof, 'profileForTrip should resolve from coords + catalog');
-    const usable = t.battery * S.CNSSettings.usableFraction({});
-    if (t.multiLeg) {
-      const rec = S.CNSDemand.recomputeMultiLegCharges(t, getT, usable);
-      for (let i = 0; i < rec.length; i++) {
-        const e = S.CNSFlight.chargeEnergyAt(prof, { t, chargeIdx: i });
-        assert.ok(near(e, rec[i].energy_kwh), `charge ${i} (${prof.charges[i].role}): engine ${(+e).toFixed(2)} vs recompute ${(+rec[i].energy_kwh).toFixed(2)}`);
-      }
-    } else {
-      const legP = (t.legEnergy || 0) * S.CNSSettings.routingFactor();
-      const roles = c.input.trip === 'retour' ? ['dest', 'home'] : ['dest'];
-      for (const role of roles) {
-        const e = S.CNSFlight.chargeEnergyAt(prof, { t, role });
-        const r = S.CNSDemand.deliveredEnergy(t, role, legP, t.battery, usable, getT(), getT());
-        assert.ok(near(e, r), `${role}: engine ${(+e).toFixed(2)} vs delivered ${(+r).toFixed(2)}`);
-      }
+    const byIdent = {};
+    prof.charges.forEach((ch, i) => {
+      const e = t.multiLeg ? S.CNSFlight.chargeEnergyAt(prof, { t, chargeIdx: i })
+                           : S.CNSFlight.chargeEnergyAt(prof, { t, role: ch.role });
+      assert.ok(near(e, ch.energyKwh), `charge ${i} (${ch.role}) maps to ${(+e).toFixed(2)} vs ${(+ch.energyKwh).toFixed(2)}`);
+      byIdent[ch.ident] = (byIdent[ch.ident] || 0) + ch.energyKwh;
+    });
+    for (const ident in byIdent) {
+      assert.ok(near(prof.energyAt(ident), byIdent[ident]), `energyAt(${ident}) ${(+prof.energyAt(ident)).toFixed(2)} == sum ${(+byIdent[ident]).toFixed(2)}`);
     }
   });
 }

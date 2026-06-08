@@ -2718,10 +2718,29 @@
                 Object.keys(buckets).forEach(t => clusters[t].addLayers(buckets[t]));
                 map.addLayer(nrgChargerLayer);      // always on the map; its contents are managed
                 refreshNrgChargerLayer();           // A1 Step 2 — coords are loaded now
+                _rebuildSavedTripCoords();          // backfill coords on pre-coords saved trips so the engine can always profile them
                 // If a route was drawn before the charger DB arrived, its charger
                 // membership (halos / orange-layer skips) was computed blind — re-derive.
                 if (_routeEndpoints.length) { _routeKey = ''; setRoute(_routeEndpoints); }
             } catch (err) { console.error("Error loading airports", err); }
+        }
+
+        // One-time migration: trips saved before coords were persisted lack originLat/Lon etc.
+        // Backfill them from the airport DB by ident so CNSFlight.profileForTrip never returns
+        // null for a known airport (the legacy energy fallback has been removed).
+        function _rebuildSavedTripCoords() {
+            if (!window.CNSDemand || !CNSDemand.loadFolder) return;
+            const trips = CNSDemand.loadFolder(); let changed = false;
+            const fill = (o, latK, lonK, idK) => {
+                const ap = o && o[latK] == null && o[idK] && airportByIdent[o[idK]];
+                if (ap) { o[latK] = ap.latitude_deg; o[lonK] = ap.longitude_deg; changed = true; }
+            };
+            trips.forEach(t => {
+                fill(t, 'originLat', 'originLon', 'originIdent');
+                fill(t, 'destLat', 'destLon', 'destIdent');
+                if (Array.isArray(t.stops)) t.stops.forEach(s => fill(s, 'lat', 'lon', 'ident'));
+            });
+            if (changed) CNSDemand.saveFolder(trips);
         }
 
         // A1 Step 2: NRG2fly charger reference markers. Coords come from the airports
@@ -3591,43 +3610,18 @@
                 const gridMul = CNSSettings.gridDemandFactor();
                 const revRate = (CNSSettings.chargeRate ? CNSSettings.chargeRate() : 0.60);   // EUR per CHARGED kWh (aircraft-side)
                 const getTargetSoc = (id) => CNSDemand.resolveTargetSoc(cfgs[id]);
-                // Per-trip cache so each multi-leg trip recomputes its charges
-                // exactly once per render (cheap, but no point doing it once per contrib).
-                const multiCache = {};
-                const engCache = {};   // R12: per-trip engine FlightProfile (built once per render)
+                const engCache = {};   // per-trip engine FlightProfile (built once per render)
                 // Engine charge energy at this contribution's airport: multi-leg maps by chargeIdx
                 // (position-indexed, so a twice-visited retour stop resolves), single-leg by role.
                 const _engEnergyAt = (c) => {
                     const prof = (c.t.id in engCache) ? engCache[c.t.id] : (engCache[c.t.id] = _engineProfileForTrip(c.t, getTargetSoc));
                     return prof ? CNSFlight.chargeEnergyAt(prof, c) : null;
                 };
-                const aircraftList = a.contribs.map((c, i) => {
-                    const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
-                    const usable = CNSSettings.usableFraction(plane);
-                    const battery = c.t.battery ?? c.t.legEnergy * 2;
-                    const usableBattery = battery * usable;
-                    const legPadded = (c.t.legEnergy || 0) * route;
-                    let energy = _engEnergyAt(c);   // engine charge energy, or null -> legacy below
-                    if (energy == null) {
-                        if (c.t.multiLeg) {
-                            // Recompute the whole chain so per-stop targets cascade.
-                            const recomputed = multiCache[c.t.id]
-                                || (multiCache[c.t.id] = CNSDemand.recomputeMultiLegCharges(c.t, getTargetSoc, usableBattery));
-                            // This contribution is one specific charge event — find it by chargeIdx.
-                            const newC = (c.chargeIdx != null && recomputed[c.chargeIdx]) ? recomputed[c.chargeIdx] : null;
-                            energy = newC ? newC.energy_kwh : c.base * route;
-                        } else {
-                            // Single-leg path: cross-airport SoC targets via deliveredEnergy.
-                            const targetThis = getTargetSoc(ident);
-                            const otherIdent = c.role === 'home' ? c.t.destIdent
-                                             : c.role === 'dest' ? c.t.originIdent
-                                             : null;
-                            const targetOther = otherIdent ? getTargetSoc(otherIdent) : null;
-                            energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
-                        }
-                    }
-                    return { _i: i, name: c.t.planeName, energy, size: battery };
-                });
+                const aircraftList = a.contribs.map((c, i) => ({
+                    _i: i, name: c.t.planeName,
+                    energy: _engEnergyAt(c) ?? 0,                   // engine charge energy at this airport (0 if unresolvable)
+                    size: c.t.battery ?? c.t.legEnergy * 2,
+                }));
                 const plan = CNSCharging.planCharging(fleet, aircraftList);
 
                 let dailyEnergy = 0, dailyHours = 0;
