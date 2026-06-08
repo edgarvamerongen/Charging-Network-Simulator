@@ -45,21 +45,33 @@ const approx = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 
 console.log('CNSSettings (static/settings.js) — node harness\n');
 
-// ---- defaults (all toggles off -> identity) --------------------------------
-test('defaults: usableFraction == 1.0 when reserve off', () => {
+// ---- v3 defaults: the realistic model is ON by default ----------------------
+test('v3 defaults: reserve+padding+taper ON, efficiency OFF', () => {
   const { S } = loadSettings();
+  assert.ok(approx(S.usableFraction({}), 0.70), 'reserve default 30% -> usable 0.70');
+  assert.ok(approx(S.routingFactor(), 1.05), 'padding default 1.05');
+  assert.equal(S.gridDemandFactor(), 1.0, 'efficiency off by default -> identity');
+  assert.ok(S.chargeTimeMin(100, 100, 225) > 60, 'taper on -> slower than the 60min linear');
+});
+
+// ---- identity when a toggle is explicitly OFF (accessor returns the no-op) ---
+test('identity: usableFraction == 1.0 when reserve off', () => {
+  const { S } = loadSettings();
+  S.save({ landingReserve: { enabled: false } });
   assert.equal(S.usableFraction({}), 1.0);
 });
-test('defaults: gridDemandFactor == 1.0 when efficiency off', () => {
+test('identity: gridDemandFactor == 1.0 when efficiency off', () => {
   const { S } = loadSettings();
   assert.equal(S.gridDemandFactor(), 1.0);
 });
-test('defaults: routingFactor == 1.0 when padding off', () => {
+test('identity: routingFactor == 1.0 when padding off', () => {
   const { S } = loadSettings();
+  S.save({ routingPadding: { enabled: false } });
   assert.equal(S.routingFactor(), 1.0);
 });
-test('defaults: chargeTimeMin linear when taper off (100kWh/100kW -> 60min)', () => {
+test('identity: chargeTimeMin linear when taper off (100kWh/100kW -> 60min)', () => {
   const { S } = loadSettings();
+  S.save({ chargeTaper: { enabled: false } });
   assert.ok(approx(S.chargeTimeMin(100, 100, 225), 60));
 });
 
@@ -97,30 +109,41 @@ test('routingFactor == 1.05 default when on', () => {
   assert.ok(approx(S.routingFactor(), 1.05));
 });
 
-// ---- chargeTaper -----------------------------------------------------------
+// ---- chargeTaper (EXPONENTIAL CV-phase roll-off) ---------------------------
+// Above the threshold SoC, accepted power decays P(soc) = peak · floor^((soc-thr)/(1-thr)),
+// floor = taperPower. Time over the tapered top slice is the closed-form integral of dE/P.
+// expTaper mirrors static/settings.js so these lock that exact model (thr 0.80, floor 0.40).
+const expTaper = (e, p, batt, thr, floor) => {
+  const topSlice = batt * (1 - thr), b = -Math.log(floor);
+  if (e <= topSlice) {
+    const u0 = (1 - e / batt - thr) / (1 - thr);
+    return 60 * topSlice / (p * b) * (Math.exp(b) - Math.exp(u0 * b));
+  }
+  return 60 * ((e - topSlice) / p + topSlice / (p * b) * (Math.exp(b) - 1));
+};
 test('taper SLOWS charging above threshold vs linear', () => {
   const { S } = loadSettings();
-  const linear = S.chargeTimeMin(20, 100, 100);          // taper off: 12 min
+  S.save({ chargeTaper: { enabled: false } });
+  const linear = S.chargeTimeMin(20, 100, 100);          // 12 min (taper explicitly off)
   S.save({ chargeTaper: { enabled: true, threshold: 0.80, taperPower: 0.40 } });
   const tapered = S.chargeTimeMin(20, 100, 100);
   assert.ok(tapered > linear, `tapered ${tapered} should exceed linear ${linear}`);
 });
-test('taper math: 20kWh into the top slice of a 100kWh batt @100kW', () => {
-  // batt 100, thr 0.80 -> topSliceCap = 20 kWh. Deliver exactly 20 kWh -> all
-  // of it is in the tapered slice. avgTaperPower = 100*(1+0.4)/2 = 70 kW.
-  // time = 60 * (0/100 + 20/70) = 17.142857 min.
+test('taper math: 20kWh = the whole top slice of a 100kWh batt @100kW (exp curve)', () => {
+  // batt 100, thr 0.80 -> topSlice 20 kWh; e == topSlice -> all in the taper band,
+  // ending at 100%. Exponential closed-form ~= 19.64 min (vs 12 linear).
   const { S } = loadSettings();
   S.save({ chargeTaper: { enabled: true, threshold: 0.80, taperPower: 0.40 } });
   const t = S.chargeTimeMin(20, 100, 100);
-  assert.ok(approx(t, 60 * (20 / 70), 1e-4), `got ${t}`);
+  assert.ok(approx(t, expTaper(20, 100, 100, 0.80, 0.40), 1e-4), `got ${t}`);
 });
-test('taper math: energy split across fast + tapered slices', () => {
-  // batt 100, thr 0.80 -> topSliceCap 20. Deliver 50 kWh: 30 fast @100kW,
-  // 20 tapered @70kW. time = 60*(30/100 + 20/70) = 18 + 17.142857 = 35.142857.
+test('taper math: energy split across fast + tapered slices (exp curve)', () => {
+  // batt 100, thr 0.80 -> topSlice 20. Deliver 50: 30 fast @100kW + 20 in the
+  // exponential taper band -> ~= 37.64 min.
   const { S } = loadSettings();
   S.save({ chargeTaper: { enabled: true, threshold: 0.80, taperPower: 0.40 } });
   const t = S.chargeTimeMin(50, 100, 100);
-  assert.ok(approx(t, 60 * (30 / 100 + 20 / 70), 1e-4), `got ${t}`);
+  assert.ok(approx(t, expTaper(50, 100, 100, 0.80, 0.40), 1e-4), `got ${t}`);
 });
 test('taper without battery falls back to linear', () => {
   const { S } = loadSettings();

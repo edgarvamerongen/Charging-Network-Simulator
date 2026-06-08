@@ -53,28 +53,17 @@ window.CNSReport = (function () {
         const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
         const cfgs = CNSDemand.loadCfg();
         const getTargetSoc = (id) => CNSDemand.resolveTargetSoc(cfgs[id]);
-        const multiCache = {};
+        // Per-airport contribution energy comes from the SAME CNSFlight adapter the demand
+        // drawer uses, so the PDF agrees with the screen.
+        const engCache = {};
         const aircraftList = a.contribs.map((c, i) => {
-            const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
-            const usable = window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0;
-            const battery = c.t.battery ?? c.t.legEnergy * 2;
-            const usableBattery = battery * usable;
-            const legPadded = (c.t.legEnergy || 0) * route;
-            let energy;
-            if (c.t.multiLeg) {
-                const recomputed = multiCache[c.t.id]
-                    || (multiCache[c.t.id] = CNSDemand.recomputeMultiLegCharges(c.t, getTargetSoc, usableBattery));
-                const newC = (c.chargeIdx != null && recomputed[c.chargeIdx]) ? recomputed[c.chargeIdx] : null;
-                energy = newC ? newC.energy_kwh : c.base * route;
-            } else {
-                const targetThis = getTargetSoc(a.ident);
-                const otherIdent = c.role === 'home' ? c.t.destIdent
-                                 : c.role === 'dest' ? c.t.originIdent
-                                 : null;
-                const targetOther = otherIdent ? getTargetSoc(otherIdent) : null;
-                energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
-            }
-            return { _i: i, name: c.t.planeName, energy, size: battery };
+            const prof = (c.t.id in engCache) ? engCache[c.t.id]
+                : (engCache[c.t.id] = (window.CNSFlight && CNSFlight.profileForTrip) ? CNSFlight.profileForTrip(c.t, { getTargetSoc }) : null);
+            return {
+                _i: i, name: c.t.planeName,
+                energy: prof ? (CNSFlight.chargeEnergyAt(prof, c) ?? 0) : 0,   // engine charge energy (0 if unresolvable)
+                size: c.t.battery ?? c.t.legEnergy * 2,
+            };
         });
         const plan = CNSCharging.planCharging(fleet, aircraftList);
 
@@ -94,7 +83,6 @@ window.CNSReport = (function () {
                 : asg.chargeTimeMin;
             const fpd = _flightsPerDay(t);
             dailyKwh += energy * fpd;
-            if (isFinite(chargeMin)) dailyChargingHours += (chargeMin / 60) * fpd;
             return {
                 planeName: t.planeName,
                 tripType: t.tripType,
@@ -109,6 +97,16 @@ window.CNSReport = (function () {
                 chargeMin: isFinite(chargeMin) ? chargeMin : 0,
                 chargerName: asg.charger ? asg.charger.name : 'no charger',
             };
+        });
+
+        // Daily charging hours — per-rotation + SoC-aware via CNSScheduler.dailyChargeMinutesAt
+        // (interim-deficit: a shared >1x/day lane charges less between rotations). Summed ONCE per
+        // trip touching this airport (a twice-visited stop is already covered inside the helper).
+        const _seenHrs = new Set();
+        a.contribs.forEach(c => {
+            if (_seenHrs.has(c.t.id) || !(window.CNSScheduler && CNSScheduler.dailyChargeMinutesAt)) return;
+            _seenHrs.add(c.t.id);
+            dailyChargingHours += CNSScheduler.dailyChargeMinutesAt(c.t, a.ident) / 60;
         });
 
         const sInfo = CNSScheduler.summary(ident);

@@ -780,12 +780,53 @@
             border: 1px solid var(--panel-border); box-shadow: var(--shadow);
             border-radius: 999px; padding: 10px 22px;
             font-size: .92rem; font-weight: 600; color: var(--ink); cursor: pointer;
-            white-space: nowrap; transition: background .15s, box-shadow .15s;
+            white-space: nowrap;
+            transition: background .28s ease, box-shadow .28s ease, color .22s ease, border-color .22s ease;
         }
         .drawer-handle:hover { background: #fff; box-shadow: var(--shadow-lg); }
-        .drawer-handle .chevron { display: inline-block; transition: transform .25s; font-size: .8em; }
+        .drawer-handle .chevron { display: inline-block; transition: transform .25s, opacity .22s; font-size: .8em; }
         .drawer.open .drawer-handle .chevron { transform: rotate(180deg); }
         .drawer-handle .handle-sub { font-weight: 400; color: var(--muted); font-size: .82rem; }
+
+        /* The handle hosts three overlaid states — normal / hover-action /
+           added-confirmation — stacked in one grid cell. The pill sizes to the
+           widest state (the normal label), so the others simply CROSS-FADE in
+           place: this is what lets the DC handle "morph" into the success bar
+           without a second element that could sit on top of it. */
+        .drawer-handle .handle-stack { display: grid; align-items: center; }
+        .drawer-handle .handle-layer {
+            grid-area: 1 / 1; display: flex; align-items: center; gap: 8px;
+            white-space: nowrap; transition: opacity .22s ease;
+        }
+        .drawer-handle .handle-title { font-weight: 600; }
+        .drawer-handle .handle-action,
+        .drawer-handle .handle-confirm { opacity: 0; pointer-events: none; }
+        .drawer-handle .handle-confirm { justify-content: center; }
+
+        /* Hover swaps the label to an explicit action verb. */
+        .drawer-handle .act-close { display: none; }
+        .drawer.open .drawer-handle .act-open { display: none; }
+        .drawer.open .drawer-handle .act-close { display: inline; }
+        .drawer-handle:hover .handle-normal { opacity: 0; }
+        .drawer-handle:hover .handle-action { opacity: 1; }
+
+        /* Confirmation: the pill morphs into the navy "added" bar — white text,
+           a green check — then morphs back (toggled by JS for ~1.5s). It wins
+           over :hover so a hover mid-confirm doesn't flip it back. */
+        .drawer-handle.confirming,
+        .drawer-handle.confirming:hover {
+            background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+            border-color: transparent; color: #fff; box-shadow: var(--shadow-lg);
+        }
+        .drawer-handle.confirming .chevron { opacity: 0; }
+        .drawer-handle.confirming .handle-normal,
+        .drawer-handle.confirming .handle-action { opacity: 0; }
+        .drawer-handle.confirming .handle-confirm { opacity: 1; }
+        .drawer-handle .hc-check {
+            flex-shrink: 0; display: inline-grid; place-items: center;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: var(--success); color: #fff; font-size: .72rem; font-weight: 700;
+        }
 
         .drawer-body {
             position: absolute; left: 16px; right: 16px; bottom: 70px;
@@ -930,6 +971,40 @@
         #folder .alert-warning {
             background: #fffbeb; color: #92400e;
             border-left: 3px solid var(--warn);
+        }
+
+        /* =========================================================
+           "Route added" success feedback
+           The bottom-centre Demand-Calculator handle itself morphs into a
+           success bar (see the .drawer-handle rules + the #addFolder
+           handler) so the confirmation never collides with the open-the-
+           drawer affordance. Two companion cues live here: a highlight-fade
+           on the airport card(s) the new flight touched, and a small pulse
+           on the Add button. Motion is suppressed under prefers-reduced-motion.
+           ========================================================= */
+        /* Highlight-fade ("yellow fade technique", 37signals): briefly washes
+           the touched card with a green glow + tint, then recedes so it doesn't
+           linger as visual noise. Uses box-shadow only (inc. a large-spread
+           inset for the fill) so it never fights the !important border/bg rules
+           on #folder [data-dest]. */
+        .cns-card-flash { animation: cns-card-flash 1.6s ease-out both; }
+        @keyframes cns-card-flash {
+            0%   { box-shadow: 0 0 0 3px rgba(16,185,129,.55), inset 0 0 0 999px rgba(16,185,129,.13); }
+            60%  { box-shadow: 0 0 0 2px rgba(16,185,129,.30), inset 0 0 0 999px rgba(16,185,129,.06); }
+            100% { box-shadow: 0 0 0 0 rgba(16,185,129,0),     inset 0 0 0 999px rgba(16,185,129,0); }
+        }
+
+        /* Button micro-interaction: a brief confirming pop on "Added". */
+        .btn-cns-success.is-added { animation: cns-btn-pop .42s cubic-bezier(.2,.9,.25,1); }
+        @keyframes cns-btn-pop { 0% { transform: none; } 42% { transform: scale(1.045); } 100% { transform: none; } }
+
+        /* Keep the confirmation, drop the movement. animation-duration is kept
+           non-zero so the JS animationend cleanup still fires; the handle morph
+           falls back to an instant state swap. */
+        @media (prefers-reduced-motion: reduce) {
+            .cns-card-flash { animation-duration: 1ms; }
+            .btn-cns-success.is-added { animation: none; }
+            .drawer-handle, .drawer-handle .handle-layer, .drawer-handle .chevron { transition: none; }
         }
 
         /* =========================================================
@@ -1532,8 +1607,20 @@
     <section class="drawer" id="demandDrawer">
         <button class="drawer-handle" id="drawerToggle" type="button">
             <span class="chevron">▴</span>
-            <span>Demand Calculator</span>
-            <span class="handle-sub" id="drawerSub">— add flights to project the charging load</span>
+            <span class="handle-stack">
+                <span class="handle-layer handle-normal">
+                    <span class="handle-title">Demand Calculator</span>
+                    <span class="handle-sub" id="drawerSub">— add flights to project the charging load</span>
+                </span>
+                <span class="handle-layer handle-action" aria-hidden="true">
+                    <span class="act-open">Open Demand Calculator</span>
+                    <span class="act-close">Close Demand Calculator</span>
+                </span>
+                <span class="handle-layer handle-confirm" aria-hidden="true">
+                    <span class="hc-check">✓</span> Route added
+                </span>
+            </span>
+            <span id="addLive" class="visually-hidden" role="status" aria-live="polite"></span>
         </button>
         <div class="drawer-body">
             <button type="button" id="drawerClose" class="drawer-close" title="Close" aria-label="Close demand calculator">×</button>
@@ -1628,7 +1715,7 @@
                         <div class="rs-cell">
                             <div class="rs-cell-head">
                                 <label class="rs-toggle"><input type="checkbox" id="rsChargeTarget"><span>Charge target</span></label>
-                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="SoC every aircraft charges to before departing; a per-airport target overrides it. Home-base departures and one-way arrivals always fill to 100%, regardless of this target. Off = charge only the deficit for the next leg.">?</span>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="SoC every aircraft charges to before departing; a per-airport target overrides it. One-way arrivals and the day's final base recharge fill to 100%; a shared aircraft's interim rotations charge only to this target. Off = charge only the next leg's deficit.">?</span>
                             </div>
                             <div class="rs-cell-ctrl">
                                 <input type="range" id="rsChargeTargetSl" min="50" max="100" step="5" value="80" class="form-range">
@@ -2004,7 +2091,7 @@
         function updateTrajectory() {
             const box = document.getElementById('trajInfo');
             if (selected.origin && selected.destination) {
-                const hk = (a, b) => (window.CNSRouting ? CNSRouting.haversineKm(a, b) : haversineKm([a.lat, a.lon], [b.lat, b.lon]));
+                const hk = _dispKm;   // routed when the engine is on, great-circle when off
                 const O = { lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg };
                 const D = { lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
                 const stopsOn = document.getElementById('withStops')?.checked;
@@ -2027,7 +2114,10 @@
                 if (!stopsOn && plane && plane.range_km) {
                     const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
                     const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                    const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
+                    // Reach verdict is identical either way (algebraically); we just match UNITS to the
+                    // shown distance — routed km vs FULL usable range when the engine is on, else
+                    // great-circle km vs the great-circle reach (range x usable / route).
+                    const maxLeg = _availableRangeKm(plane) * route;   // routed reach (km of routed path that fits the usable range)
                     if (km > maxLeg) {
                         warn = ` <span class="traj-warn">⚠ ${fmtDist(km - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
@@ -2103,6 +2193,15 @@
             if (!p || !p.range_km) return null;
             const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
             return _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
+        }
+        // The available range to DISPLAY/EDIT. Padding now lives in the trip LENGTH, not the
+        // reach — so when the engine is on we show the FULL usable range (undo the /route in
+        // _availableRangeKm). The router keeps using _availableRangeKm (the great-circle reach),
+        // so reachability stays single-count; only the shown number changes.
+        function _availRangeShownKm(plane) {
+            const a = _availableRangeKm(plane);
+            if (a == null) return null;
+            return a * (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);   // full usable range (padding lives in the trip length, not the reach)
         }
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
@@ -2289,9 +2388,9 @@
             if (!plannedStops.length) {
                 section.classList.remove('d-none');
                 document.querySelector('.stops-title').textContent = 'Suggested route';
-                summaryEl.textContent = `Direct flight · ${fmtDist(CNSRouting.haversineKm(t.origin, t.dest))}`;
+                summaryEl.textContent = `Direct flight · ${fmtDist(_dispKm(t.origin, t.dest))}`;
                 listEl.innerHTML = `
-                    <li class="terminus"><span class="step">0</span><strong>${t.origin.name}</strong><span class="leg-dist">→ ${fmtDist(CNSRouting.haversineKm(t.origin, t.dest))}</span></li>
+                    <li class="terminus"><span class="step">0</span><strong>${t.origin.name}</strong><span class="leg-dist">→ ${fmtDist(_dispKm(t.origin, t.dest))}</span></li>
                     <li class="terminus"><span class="step">1</span><strong>${t.dest.name}</strong></li>`;
                 hintEl.innerHTML = `Direct leg fits the aircraft's range — no stops needed. Use <strong>+ Add stop</strong> in the form above to insert one manually.`;
                 _wireStopRowActions(t);
@@ -2299,7 +2398,7 @@
             }
 
             const chain = [t.origin, ...plannedStops, t.dest];
-            let totalDist = 0; for (let i = 0; i < chain.length - 1; i++) totalDist += CNSRouting.haversineKm(chain[i], chain[i + 1]);
+            let totalDist = 0; for (let i = 0; i < chain.length - 1; i++) totalDist += _dispKm(chain[i], chain[i + 1]);
 
             const lis = chain.map((wp, i) => {
                 const isTerm = (i === 0 || i === chain.length - 1);
@@ -2307,7 +2406,7 @@
                 const tagHtml = (!isTerm && tag) ? `<span class="type-tag ${tag[1]}">${tag[0]}</span>` : '';
                 let legDist = '';
                 if (i < chain.length - 1) {
-                    const d = CNSRouting.haversineKm(wp, chain[i + 1]);
+                    const d = _dispKm(wp, chain[i + 1]);
                     const bad = plannedLegIssues.includes(i);
                     legDist = `<span class="leg-dist${bad ? ' over-range' : ''}">→ ${fmtDist(d)}${bad ? ' ⚠' : ''}</span>`;
                 }
@@ -2650,7 +2749,7 @@
             _refreshSpecStats(spec);
             // Prefill the override with the current available range so the operator
             // sees the value they're editing (blank = use the computed default).
-            const _av = _availableRangeKm(spec);
+            const _av = _availRangeShownKm(spec);
             document.getElementById('psoAvailRange').value = _av != null ? Math.round(_av) : '';
             card.classList.toggle('overridden', _availRangeOverride != null);
         }
@@ -2664,7 +2763,7 @@
                         : (spec.battery_kwh && spec.range_km ? spec.battery_kwh / spec.range_km * 100 : null);
             document.getElementById('psUsage').textContent =
                 usage == null ? '—' : ((typeof fmtUsage === 'function') ? fmtUsage(usage) : (Math.round(usage) + ' kWh/100km'));
-            const avail = _availableRangeKm(spec);
+            const avail = _availRangeShownKm(spec);
             const av = document.getElementById('psAvail');
             if (av) av.textContent = avail == null ? '—' : ((typeof fmtDist === 'function') ? fmtDist(avail) : (Math.round(avail) + ' km'));
         }
@@ -2674,7 +2773,10 @@
             if (toggle && panel) toggle.addEventListener('click', () => panel.classList.toggle('d-none'));
             function onEdit() {
                 const v = parseFloat(document.getElementById('psoAvailRange').value);
-                _availRangeOverride = (isFinite(v) && v > 0) ? v : null;
+                // The field shows the FULL range when the engine is on; store the great-circle
+                // reach the router uses (/route) so reachability stays single-count.
+                const _r = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+                _availRangeOverride = (isFinite(v) && v > 0) ? (v / _r) : null;   // field shows the full range; store the great-circle reach the router uses
                 const card = document.getElementById('planeSpecCard');
                 const spec = selectedPlaneSpec();
                 if (spec) _refreshSpecStats(spec);
@@ -2774,10 +2876,29 @@
                 Object.keys(buckets).forEach(t => clusters[t].addLayers(buckets[t]));
                 map.addLayer(nrgChargerLayer);      // always on the map; its contents are managed
                 refreshNrgChargerLayer();           // A1 Step 2 — coords are loaded now
+                _rebuildSavedTripCoords();          // backfill coords on pre-coords saved trips so the engine can always profile them
                 // If a route was drawn before the charger DB arrived, its charger
                 // membership (halos / orange-layer skips) was computed blind — re-derive.
                 if (_routeEndpoints.length) { _routeKey = ''; setRoute(_routeEndpoints); }
             } catch (err) { console.error("Error loading airports", err); }
+        }
+
+        // One-time migration: trips saved before coords were persisted lack originLat/Lon etc.
+        // Backfill them from the airport DB by ident so CNSFlight.profileForTrip never returns
+        // null for a known airport (the legacy energy fallback has been removed).
+        function _rebuildSavedTripCoords() {
+            if (!window.CNSDemand || !CNSDemand.loadFolder) return;
+            const trips = CNSDemand.loadFolder(); let changed = false;
+            const fill = (o, latK, lonK, idK) => {
+                const ap = o && o[latK] == null && o[idK] && airportByIdent[o[idK]];
+                if (ap) { o[latK] = ap.latitude_deg; o[lonK] = ap.longitude_deg; changed = true; }
+            };
+            trips.forEach(t => {
+                fill(t, 'originLat', 'originLon', 'originIdent');
+                fill(t, 'destLat', 'destLon', 'destIdent');
+                if (Array.isArray(t.stops)) t.stops.forEach(s => fill(s, 'lat', 'lon', 'ident'));
+            });
+            if (changed) CNSDemand.saveFolder(trips);
         }
 
         // A1 Step 2: NRG2fly charger reference markers. Coords come from the airports
@@ -2914,18 +3035,25 @@
             };
         }
         // ---- Flight engine (static/flight-model.js) bridge ------------------------
-        // R12 kill-switch: a view reads CNSFlight when the flag is on, else the legacy math.
-        function _flightEngineOn() {
-            return !!(window.CNSFlight && window.CNSSettings && (CNSSettings.loadAll().flightEngine || {}).enabled);
+        // Distance to SHOW in the planning aids (trajectory pill + suggested route): the
+        // ROUTED distance (great-circle x padding), matching the map labels + result panel.
+        // The reach math itself stays great-circle (see maxLeg); only the shown number is routed.
+        function _dispKm(a, b) {
+            if (window.CNSRouting) return CNSRouting.routedKm(a, b);   // routed distance (engine is the only path)
+            return haversineKm([a.lat, a.lon], [b.lat, b.lon]);   // pre-CNSRouting fallback (great-circle)
         }
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
         // origin + planned stops + dest; the engine OWNS the retour mirror + training
         // loop (R1). Preview target is the GLOBAL default (the flight isn't in the
-        // network yet) — matches CNSScheduler.tripBreakdown's preview context.
+        // network yet, so no per-airport SoC overrides apply).
         function _engineProfile(data) {
-            if (!window.CNSFlight || !data || !data._origin) return null;
+            // The simulated result carries _origin/_dest; the LIVE PREVIEW (drawLiveRoute)
+            // carries origin/destination (no underscore). Accept BOTH, else the preview map
+            // label silently falls back to the legacy leg (great-circle distance + padded energy).
+            const o = data && (data._origin || data.origin);
+            if (!window.CNSFlight || !o) return null;
             try {
-                const o = data._origin, d = data._dest || data._origin;
+                const d = data._dest || data.destination || o;
                 const wp = (x) => ({ ident: x.ident, name: x.name, lat: x.lat, lon: x.lon });
                 const stops = (data.stops || []).map(wp);
                 const waypoints = (data.trip_type === 'training') ? [wp(o)] : [wp(o), ...stops, wp(d)];
@@ -2937,8 +3065,8 @@
                 });
             } catch (err) { console.warn('[CNSFlight] profile failed; legacy fallback:', err); return null; }
         }
-        // Map a CNSFlight FlightProfile to the CNSScheduler.tripBreakdown shape the result
-        // panel reads, so renderResult is source-agnostic. Phases mirror the scheduler's:
+        // Map a CNSFlight FlightProfile to the breakdown shape the result panel
+        // reads, so renderResult is source-agnostic. Phases mirror the scheduler's:
         // fly.leg is 'out'/'back' for a single-leg trip, the leg index for multi-leg; a charge
         // carries at(role)/name/energy/dur. _legMeta keeps reading data.legs (already padded,
         // matches the engine to sub-rounding) so leg distances/energies are unchanged.
@@ -2960,6 +3088,11 @@
                 enRouteMin: T.enRouteMin, terminalMin: T.terminalMin, terminalKwh: term.energyKwh,
                 terminalName: term.name || lastLeg.toName || '', arrivalSoc: term.arrivalSocFrac, phases,
             };
+        }
+        // Saved-trip FlightProfile via the shared engine adapter (CNSFlight.profileForTrip);
+        // the demand drawer AND the PDF report build their per-airport energy off the same one.
+        function _engineProfileForTrip(trip, getTargetSoc) {
+            return (window.CNSFlight && CNSFlight.profileForTrip) ? CNSFlight.profileForTrip(trip, { getTargetSoc }) : null;
         }
         function addLegLabel(a, b, leg) {
             if (!_showLegLabels) return;   // hidden via Map Options → Route
@@ -3070,7 +3203,7 @@
             clearRoute();
             clearAlternates();
             lastRouteChain = [];   // reset; the routed branch below repopulates it (training returns early)
-            const _prof = _flightEngineOn() ? _engineProfile(data) : null;   // R12: read engine legs when the flag is on
+            const _prof = _engineProfile(data);   // unified engine legs
             const p1 = [data.origin.lat, data.origin.lon];
             const p2 = [data.destination.lat, data.destination.lon];
             if (data.trip_type === 'training') {
@@ -3133,7 +3266,7 @@
                         const seg = L.polyline([a, b], legStyle(i));
                         seg.addTo(map); routeLayers.push(seg);
                     }
-                    addLegLabel(a, b, (_prof && _prof.legs[i]) || (data.legs || [])[i]);   // F5: per-leg label (outbound only)
+                    addLegLabel(a, b, _prof.legs[i]);   // F5: per-leg label (outbound only) — engine leg
                 }
                 if (isRetour) {
                     // Return arcs — same per-leg pattern, bowed the other way,
@@ -3250,24 +3383,9 @@
             // Charger-efficiency factor (1/eff) — still feeds the grid-demand sub-label.
             const gridMul = CNSSettings.gridDemandFactor();
 
-            // Every per-trip number now comes from ONE place: the scheduler's pure
-            // CNSScheduler.tripBreakdown(). The panel just shapes the trip from the
-            // simulate response and reads back the SAME flight/charge times the DES
-            // uses, so the two can never drift — an independent recompute here was
-            // exactly what made the headline charge time disagree with the
-            // scheduler. All the math lives in the logic layer (scheduler.js).
-            const previewTrip = {
-                id: 'preview', tripType: data.trip_type, multiLeg: isMulti,
-                originIdent: data._origin && data._origin.ident, originName: data._origin && data._origin.name,
-                destIdent:   data._dest   && data._dest.ident,   destName:   data._dest   && data._dest.name,
-                planeId: p.id, c_rate: p.c_rate, battery: p.battery_kwh,
-                flightTimeH: isMulti ? data.total_flight_time_h : data.flight_time_h,
-                legEnergy: data.leg_energy_kwh, legs: data.legs, charges: data.charges, stops: data.stops,
-            };
-            // R12: read the unified engine when on (retires tripBreakdown's preview math);
-            // graceful fallback to the scheduler breakdown if the engine is off/unavailable.
-            const _engineBd = _flightEngineOn() ? _breakdownFromProfile(_engineProfile(data)) : null;
-            const bd = _engineBd || CNSScheduler.tripBreakdown(previewTrip, data.charger.power_kw);
+            // Every per-trip number comes from ONE place: the unified engine. _breakdownFromProfile
+            // maps the FlightProfile to the shape this panel reads, so the panel == the DES (both engine).
+            const bd = _breakdownFromProfile(_engineProfile(data));
             const usedKwh      = bd.energyUsedKwh;
             const rechargeKwh  = bd.energyUsedKwh;        // recharged == consumed (energy conservation)
             const flightMin    = bd.flightMin;
@@ -3482,6 +3600,11 @@
                 // fraction (refresh stats only — don't clobber the override input).
                 const spec = (typeof selectedPlaneSpec === 'function') ? selectedPlaneSpec() : null;
                 if (spec && typeof _refreshSpecStats === 'function') _refreshSpecStats(spec);
+                // The planning aids (trajectory pill + suggested route) now show ROUTED
+                // distances, which depend on the padding factor — refresh them on a
+                // model-settings change. renderStops re-renders the existing plannedStops
+                // (no replan, so it never clobbers manual edits) and re-syncs the trajectory.
+                try { if (typeof renderStops === 'function') renderStops(); } catch (err) { console.error(err); }
             });
         }
 
@@ -3651,37 +3774,29 @@
                 const gridMul = CNSSettings.gridDemandFactor();
                 const revRate = (CNSSettings.chargeRate ? CNSSettings.chargeRate() : 0.60);   // EUR per CHARGED kWh (aircraft-side)
                 const getTargetSoc = (id) => CNSDemand.resolveTargetSoc(cfgs[id]);
-                // Per-trip cache so each multi-leg trip recomputes its charges
-                // exactly once per render (cheap, but no point doing it once per contrib).
-                const multiCache = {};
-                const aircraftList = a.contribs.map((c, i) => {
-                    const plane = (window.PLANES_BY_ID || {})[c.t.planeId] || c.t;
-                    const usable = CNSSettings.usableFraction(plane);
-                    const battery = c.t.battery ?? c.t.legEnergy * 2;
-                    const usableBattery = battery * usable;
-                    const legPadded = (c.t.legEnergy || 0) * route;
-                    let energy;
-                    if (c.t.multiLeg) {
-                        // Recompute the whole chain so per-stop targets cascade.
-                        const recomputed = multiCache[c.t.id]
-                            || (multiCache[c.t.id] = CNSDemand.recomputeMultiLegCharges(c.t, getTargetSoc, usableBattery));
-                        // This contribution is one specific charge event — find it by chargeIdx.
-                        const newC = (c.chargeIdx != null && recomputed[c.chargeIdx]) ? recomputed[c.chargeIdx] : null;
-                        energy = newC ? newC.energy_kwh : c.base * route;
-                    } else {
-                        // Single-leg path: cross-airport SoC targets via deliveredEnergy.
-                        const targetThis = getTargetSoc(ident);
-                        const otherIdent = c.role === 'home' ? c.t.destIdent
-                                         : c.role === 'dest' ? c.t.originIdent
-                                         : null;
-                        const targetOther = otherIdent ? getTargetSoc(otherIdent) : null;
-                        energy = CNSDemand.deliveredEnergy(c.t, c.role, legPadded, battery, usableBattery, targetThis, targetOther);
-                    }
-                    return { _i: i, name: c.t.planeName, energy, size: battery };
-                });
+                const engCache = {};   // per-trip engine FlightProfile (built once per render)
+                // Engine charge energy at this contribution's airport: multi-leg maps by chargeIdx
+                // (position-indexed, so a twice-visited retour stop resolves), single-leg by role.
+                const _engEnergyAt = (c) => {
+                    const prof = (c.t.id in engCache) ? engCache[c.t.id] : (engCache[c.t.id] = _engineProfileForTrip(c.t, getTargetSoc));
+                    return prof ? CNSFlight.chargeEnergyAt(prof, c) : null;
+                };
+                const aircraftList = a.contribs.map((c, i) => ({
+                    _i: i, name: c.t.planeName,
+                    energy: _engEnergyAt(c) ?? 0,                   // engine charge energy at this airport (0 if unresolvable)
+                    size: c.t.battery ?? c.t.legEnergy * 2,
+                }));
                 const plan = CNSCharging.planCharging(fleet, aircraftList);
 
                 let dailyEnergy = 0, dailyHours = 0;
+                // Daily charging hours — per-rotation + SoC-aware via CNSScheduler.dailyChargeMinutesAt
+                // (interim-deficit: a shared >1x/day lane charges less between rotations). Once per trip.
+                const _seenHrs = new Set();
+                a.contribs.forEach(c => {
+                    if (_seenHrs.has(c.t.id) || !(window.CNSScheduler && CNSScheduler.dailyChargeMinutesAt)) return;
+                    _seenHrs.add(c.t.id);
+                    dailyHours += CNSScheduler.dailyChargeMinutesAt(c.t, a.ident) / 60;
+                });
                 const rows = a.contribs.map((c, i) => {
                     const t = c.t;
                     const asg = plan.assignments[i];
@@ -3694,7 +3809,6 @@
                     const power = CNSSettings.effectiveChargePower(nameplate, battery, cRate);
                     const chargeMin = power ? CNSSettings.chargeTimeMin(energy, power, battery) : Infinity;
                     dailyEnergy += energy * flightsPerDay(t);
-                    if (isFinite(chargeMin)) dailyHours += (chargeMin / 60) * flightsPerDay(t);
                     // Role labels use consistent aviation terminology:
                     // DEPARTURE — where the trip starts (and ends for retour)
                     // DESTINATION — the terminal/turn-around point of the trip
@@ -3881,6 +3995,42 @@
 
         document.getElementById('airportFilter').addEventListener('change', e => { calcFilter = e.target.value; renderFolder(); });
 
+        // ---- "Route added" success feedback ----------------------------------
+        // HCI rationale: the demand-calculator list lives in a drawer that is
+        // usually closed when the user clicks "Add to demand calculator", so a
+        // silent state change has poor "visibility of system status" (Nielsen #1).
+        // Rather than overlay a separate toast (which sat on top of the open-the-
+        // drawer handle), the handle pill itself briefly MORPHS into a success bar
+        // and back — one element, so it can never block the affordance it shares a
+        // spot with. It's a pure ~1.5s visual confirmation (no Undo: a stray add
+        // is one click to remove via the × on its row). The route name is pushed
+        // to a visually-hidden aria-live region so assistive tech still hears it.
+        const confirmRouteAdded = (function () {
+            let timer;
+            return function (label) {
+                const live = document.getElementById('addLive');
+                if (live) { live.textContent = ''; live.textContent = `Route added to Demand Calculator${label ? ': ' + label : ''}`; }
+                const h = document.getElementById('drawerToggle');
+                if (!h) return;
+                h.classList.add('confirming');
+                clearTimeout(timer);
+                timer = setTimeout(() => h.classList.remove('confirming'), 1500);
+            };
+        })();
+
+        // Briefly highlight the airport card(s) a freshly-added flight touched,
+        // so the eye is drawn to *where* it landed in the demand calculator.
+        function flashFolderCards(idents) {
+            const want = new Set(idents.filter(Boolean));
+            document.querySelectorAll('#folder [data-dest]').forEach(card => {
+                if (!want.has(card.dataset.dest)) return;
+                card.classList.remove('cns-card-flash');
+                void card.offsetWidth;                       // restart the animation if mid-flight
+                card.classList.add('cns-card-flash');
+                card.addEventListener('animationend', () => card.classList.remove('cns-card-flash'), { once: true });
+            });
+        }
+
         document.getElementById('addFolder').addEventListener('click', () => {
             if (!lastResult) return;
             const d = lastResult, trips = loadFolder();
@@ -3891,6 +4041,7 @@
                 planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
                 chargerId: d._chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
                 legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
+                range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,   // R4: persist the effective plane spec so the engine can rebuild a custom-plane trip from coords (catalog planes also resolve via planeId)
                 freqN: d._freqN, freqUnit: d._freqUnit,
                 // 'shared' = one aircraft cycles N rotations; 'separate' = N
                 // distinct planes (a fleet). Only meaningful for retour/training
@@ -3927,8 +4078,17 @@
             }
             trips.push(trip);
             saveFolder(trips); renderFolder();
+
+            // Confirm the add with three layered signals: button pulse (at the
+            // cursor) → the DC handle morphs into the "Route added" bar → a
+            // highlight-fade on the airport card(s) the flight touched.
             const btn = document.getElementById('addFolder');
-            btn.textContent = '✓ Added'; setTimeout(() => { btn.textContent = '+ Add to demand calculator'; }, 1200);
+            btn.classList.remove('is-added'); void btn.offsetWidth; btn.classList.add('is-added');
+            btn.textContent = '✓ Added';
+            setTimeout(() => { btn.classList.remove('is-added'); btn.textContent = '+ Add to demand calculator'; }, 1400);
+
+            flashFolderCards([trip.originIdent, trip.destIdent]);
+            confirmRouteAdded(`${d._origin.name} → ${d._dest.name}`);
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
         document.getElementById('generateReport').addEventListener('click', (e) => CNSReport.generate(e.currentTarget));

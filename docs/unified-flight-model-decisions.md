@@ -3,8 +3,10 @@
 
 # Unified Flight Engine — Decisions & Open Questions
 
-**Status:** pre-build. Spec (`unified-flight-model.md`) is stale and not yet implementable.
-Gates below are ruled on; blockers + open questions are NOT — nothing gets built until they are.
+**Status (2026-06-08): ✅ Phase 2 COMPLETE — the engine is the sole source of charge energy.**
+The unified engine (`static/flight-model.js`, `CNSFlight`) is fully integrated and the legacy
+per-view energy math is deleted. See **§ G. Phase 2 completion** at the bottom for what shipped.
+The original pre-build gates / blockers / decisions below are kept as the historical record.
 **Workspace:** worktree `../cns-engine`, branch `engine`, off the arrival-fix anchor `7af3d97`.
 
 ---
@@ -22,21 +24,40 @@ Gates below are ruled on; blockers + open questions are NOT — nothing gets bui
 
 ---
 
-## B. Routing-padding model (resolved this session)
+## B. Routing-padding model (REVISED — "pad the route length")
 
-Padding (×1.05) is the **flown path** overhead. It must be applied **exactly once** (spec D1).
-**Decision: pad ENERGY + TIME (flown); keep DISTANCE geographic.** No double-count.
+Padding (×1.05) is the **flown-path** overhead from SID/STAR procedures + airways routing:
+the aircraft flies a longer PATH than the great-circle line. Applied **exactly once** (D1).
 
-- **Distance** = great-circle (matches the map line *and* the available-range reach check). NOT padded.
-- **Energy / time** = ×routingFactor (the plane flies ~5% farther → more energy + time). Matches charges + headline.
-- **Available range** stays `range × usable ÷ route` (geographic reach); over-range check compares geographic km vs it — **single-count**.
+**Decision (revised): pad the route LENGTH (`distKm`); energy, time and reach all DERIVE
+from the routed length.** Single-count. This **supersedes** the earlier "pad energy + time,
+keep distance geographic" call — rationale below.
+
+- **`distKm` = routed length** = `rawKm × routingFactor` — what every view shows.
+- **`rawKm` = great-circle** (geographic) is retained per leg/total for the map arc.
+- **Energy / time derive:** `energyKwh = ePerKm × distKm`, `flightMin = distKm ÷ speed`. So per
+  leg the three numbers RECONCILE. (The old model showed a geographic distance that silently
+  disagreed with the padded energy/time — the recurring "why don't these add up?" confusion.)
+- **Available range / over-range UNCHANGED:** still `range × usable ÷ route` (geographic reach)
+  and `padded energy > usable` — algebraically identical to "routed length > range". Moving the
+  padding to the display did not touch reachability or routing.
+
+**Why revised:** padding is *physically* a route-length effect; modelling it on the length (and
+deriving energy/time) is the faithful, internally-consistent choice. It is a pure PRESENTATION
+change — energy, time, charges, reachability are byte-identical; only the shown distance grows
+~5%. Engine: `static/flight-model.js` (behind R12). Verified: `tests/js_flight_padding.test.mjs`.
 
 | Surface | State |
 |---|---|
-| Result-panel leg rows, map leg labels, `_legEst` | ✅ done in worktree (energy/time padded, distance geographic) |
-| Trajectory pill + Suggested-route distances | geographic already + single-counts vs range → **no change needed** (verify) |
-| "Show calculation" breakdown | ⏳ **TODO** — weave the ×1.05 step into the formula so the padded energy is *explained* (raw → flown) |
-| Training legs | left raw — that's deferred change **G4(a)** |
+| Engine `distKm` (legs + totals) | ✅ routed (`rawKm × pad`); energy/time derive; `rawKm` kept geographic |
+| Map leg labels, result-panel rows | read engine `distKm` → routed (flag-on) |
+| Map ARC (drawn line) | great-circle (no procedure tracks) → ~5% shorter than the label → **signpost TBD** |
+| Available-range / over-range / routing | unchanged (energy-based, single-count) |
+| Training legs | left raw (`distKm == rawKm`) — deferred change **G4(a)** |
+
+**Deferred nuance:** the flat 5% is crude. Real padding ≈ a *fixed* terminal add (SID+STAR, per
+airport) **plus** an *airways* % — a flat % over-pads long hops, under-pads short ones. Orthogonal
+to *where* the padding lands; revisit if more fidelity is wanted.
 
 ---
 
@@ -101,3 +122,47 @@ Padding (×1.05) is the **flown path** overhead. It must be applied **exactly on
 - **R12 · Safety net → runtime kill-switch flag per step + bake period.** Each migration step ships behind a `CNSSettings` flag (instant disable on drift); legacy engines (`sim.py` energy, `_legEst`, the demand walks) are deleted in a FINAL PR after a bake, not eagerly.
 
 **Implementation details (applied per the audit — no further decision):** `phases[]` is a **superset** of today's phase objects (leg/at/atIdx/power/energy); `charges[]` is **position-indexed by `atIndex`** (never keyed by ident); the calc-panel "show your work" math STAYS (step 8's "zero math in index.html" excludes that transparency block); the origin node is **inert `billable:false` metadata** for #33 (charges[] stays billable-only); #33/#34/#35 stay OUT of the engine PRs; re-derive every consumer by **function name**, not the spec's drifted line numbers.
+
+---
+
+## G. Phase 2 completion — shipped 2026-06-08
+
+The migration is **done**. The engine is unconditional; every charge-energy number in the
+desktop app comes from `CNSFlight`. Built on top of the Phase-1 view migration (map labels →
+trajectory/over-range → result panel → demand drawer + PDF), the closing phase shipped:
+
+- **Scheduler (the DES) reads the engine.** `CNSScheduler` derives charge energies from a cached
+  `_tripProfile(trip) → CNSFlight.profileForTrip` (`energyAt(ident)` / `charges`), keeping all its
+  OWN timing/queue logic. Because `report.js` + `animation.js` read `runGlobal`'s output, they are
+  engine-backed for free.
+- **R12 kill-switch removed.** The `flightEngine` flag, `_flightEngineOn()`, `CNSFlight.isEnabled()`,
+  and all on/off ternaries are gone — there is no legacy path to fall back to. *(This intentionally
+  supersedes R12's "delete after a bake" plan: the bake happened on `:5057`, the rollout was driven
+  by a zero-drift parity gate, so the flag was retired with the legacy rather than kept.)*
+- **Training migrated.** The scheduler reads training energy via `energyAt(ident)` (its charge role
+  is `'training'`, not `'dest'`). **G4(a) turned out to be a non-issue:** the engine's training
+  energy equals the legacy's exactly → ZERO behavior change, not the feared ~5% unpadded delta.
+- **Legacy energy math DELETED.** `CNSDemand.deliveredEnergy` + `recomputeMultiLegCharges` are
+  removed (the duplicated per-trip walks), along with the scheduler's local `energyAt` / `_usableB`
+  and every null-profile fallback. `CNSDemand` keeps only its structural surface (`computeAirports`,
+  `energyAt` for the per-airport charge sum, `roleAt`, `resolveTargetSoc`, folder/cfg storage).
+- **Old-save coord-rebuild.** `_rebuildSavedTripCoords` (index.html) backfills lat/lon on any
+  pre-coords saved trip from the airport DB on load, so `profileForTrip` always resolves and the
+  deleted fallback is unnecessary.
+
+**Deliberately kept:** the single-leg-retour leg-label fallback + `_legEst` (the deferred
+retour-time quirk, G4-adjacent); `sim.py` / `/api/simulate` (G3, mobile-gated).
+
+**How it was proven safe:**
+- **DES parity gate** `tests/sched_snapshot.mjs` — captures `runGlobal` (rotation phase
+  starts/durs + per-airport energy + peak) for a seeded 4-trip-type network; stayed
+  **byte-identical** through every scheduler / training / deletion commit (zero drift).
+- Node suite green (settings 15, charging, demand, flight-model, flight-padding, flight-adapter);
+  `js_flight_adapter` repurposed from legacy-parity to the adapter's own contract; `js_demand`
+  dropped the deleted-function cases.
+- **Adversarial review workflow** (cns-engine path-guarded) — found only dead vars + stale comments,
+  since cleaned.
+
+**Still open (separate, each signed-off):** the remaining G4 behavior changes (b single-leg retour
+home-charge cap, c training "usable" basis, d stricter over-range threshold); the mobile migration
+pass (R11); the mobile-gated `sim.py` retirement (steps 7–8).

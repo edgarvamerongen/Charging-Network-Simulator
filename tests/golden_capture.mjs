@@ -1,11 +1,11 @@
 /*
  * Golden capture for the unified flight engine (decisions-doc blocker #2 / G2).
  * --------------------------------------------------------------------------
- * Loads the REAL calc stack (static/settings|routing|demand|scheduler.js) into
- * one Node `vm` context with browser-global shims (window === global, in-memory
+ * Loads the REAL calc stack (static/settings|routing|flight-model|demand|scheduler.js)
+ * into one Node `vm` context with browser-global shims (window === global, in-memory
  * CNSState + localStorage), drives a representative trip matrix through sim.py
- * (/api/simulate) + CNSScheduler.tripBreakdown + CNSDemand, and snapshots the
- * numbers the future static/flight-model.js must reproduce EXACTLY (gate G4).
+ * (/api/simulate) + the CNSFlight engine (the SAME path the result panel uses), and
+ * snapshots the numbers static/flight-model.js must reproduce EXACTLY (gate G4).
  *
  * The captured `input.sim` (sim.py legs/charges) is saved alongside the expected
  * outputs, so the comparison test (js_flight_model.test.mjs) needs NO server.
@@ -89,17 +89,45 @@ async function sim(c) {
   return r.json();
 }
 
-export function previewTrip(data, c) {
+// Build the engine FlightProfile for a case — the SAME path the result panel takes
+// (index.html _engineProfile -> CNSFlight.simulateTrip), so the golden tracks the live
+// engine, not the deleted CNSScheduler.tripBreakdown. Geometry from the deterministic AP
+// coords; preview target = the global default (no per-airport override, so
+// chargeTargetDefault() == the result panel's CNSDemand.resolveTargetSoc({})); the matrix
+// always simulates charger_id 'dc_250' -> 250 kW.
+export function engineProfile(S, c) {
+  const plane = PLANES[c.plane];
   const dest = c.trip === 'training' ? c.o : c.d;
+  const stops = (c.stops || []).map(co);
+  const waypoints = c.trip === 'training' ? [co(c.o)] : [co(c.o), ...stops, co(dest)];
+  return S.CNSFlight.simulateTrip(plane, waypoints, {
+    tripType: c.trip,
+    getTargetSoc: () => S.CNSSettings.chargeTargetDefault(),
+    getChargerKw: () => 250,
+    trainingRangeKm: plane.training_range_km,
+  });
+}
+
+// Map a CNSFlight FlightProfile to the tripBreakdown-shaped object breakdownSnapshot()
+// reads — a faithful copy of index.html's _breakdownFromProfile (the result-panel rows):
+// fly.leg is 'out'/'back' single-leg or the leg index multi-leg; a charge carries its role.
+export function breakdownFromProfile(prof) {
+  if (!prof) return {};
+  const T = prof.totals || {}, term = prof.terminal || {};
+  let flyN = 0;
+  const phases = (prof.phases || []).map(ph => {
+    if (ph.kind === 'fly') {
+      const leg = prof.multiLeg ? ph.legIndex : (flyN++ === 0 ? 'out' : 'back');
+      return { kind: 'fly', leg, dur: ph.dur };
+    }
+    const ch = (prof.charges || [])[ph.chargeIndex] || {};
+    return { kind: 'charge', at: ch.role, name: ch.name, dur: ph.dur, energy: ch.energyKwh };
+  });
+  const lastLeg = (prof.legs || [])[(prof.legs || []).length - 1] || {};
   return {
-    id: 'preview', tripType: data.trip_type, multiLeg: !!data.multi_leg,
-    originIdent: c.o, originName: AP[c.o].name, destIdent: dest, destName: AP[dest].name,
-    planeId: c.plane, battery: (PLANES[c.plane] || {}).battery_kwh,
-    flightTimeH: data.multi_leg ? data.total_flight_time_h : data.flight_time_h,
-    legEnergy: data.leg_energy_kwh,
-    legs: Array.isArray(data.legs) ? data.legs : undefined,        // sim.py: int count for single-leg, array for multi
-    charges: Array.isArray(data.charges) ? data.charges : undefined,
-    stops: data.stops,
+    energyUsedKwh: T.energyUsedKwh, flightMin: T.flightMin, chargeMin: T.chargeMin,
+    enRouteMin: T.enRouteMin, terminalMin: T.terminalMin, terminalKwh: term.energyKwh,
+    terminalName: term.name || lastLeg.toName || '', arrivalSoc: term.arrivalSocFrac, phases,
   };
 }
 
@@ -119,7 +147,7 @@ export async function captureCase(c) {
   for (const [vname, apply] of Object.entries(SETTINGS)) {
     const S = loadStack();
     apply(S.CNSSettings);
-    const bd = S.CNSScheduler.tripBreakdown(previewTrip(data, c), (data.charger || {}).power_kw || 250);
+    const bd = breakdownFromProfile(engineProfile(S, c));
     variants[vname] = breakdownSnapshot(bd);
   }
   return {
@@ -164,7 +192,7 @@ async function main() {
       const g = byName[cs.name];
       if (!g) { console.log(`  NEW   ${cs.name} (not in golden — run without --check to add)`); fails++; continue; }
       if (JSON.stringify(cs.variants) === JSON.stringify(g.variants)) { console.log(`  ok    ${cs.name}`); }
-      else { console.log(`  FAIL  ${cs.name} — tripBreakdown drifted from the golden`); fails++; }
+      else { console.log(`  FAIL  ${cs.name} — engine breakdown drifted from the golden`); fails++; }
     }
     console.log(fails
       ? `\nGOLDEN DRIFT: ${fails}/${captured.length} case(s) differ. If intended, re-run without --check to update.`
@@ -172,7 +200,7 @@ async function main() {
     process.exit(fails ? 1 : 0);
   }
 
-  const golden = { _meta: { base: BASE, cases: captured.length, settings: Object.keys(SETTINGS), note: 'Current-stack baseline for static/flight-model.js parity (G2/G4). Regenerate: node tests/golden_capture.mjs. Verify: node tests/golden_capture.mjs --check.' }, cases: captured };
+  const golden = { _meta: { base: BASE, cases: captured.length, settings: Object.keys(SETTINGS), note: 'CNSFlight-engine breakdown baseline for static/flight-model.js parity (G2/G4). Regenerate: node tests/golden_capture.mjs. Verify: node tests/golden_capture.mjs --check.' }, cases: captured };
   fs.mkdirSync(path.dirname(GOLDEN_PATH), { recursive: true });
   fs.writeFileSync(GOLDEN_PATH, JSON.stringify(golden, null, 2) + '\n');
   console.log(`captured ${captured.length} cases x ${Object.keys(SETTINGS).length} settings -> tests/goldens/flight-current.golden.json\n`);
