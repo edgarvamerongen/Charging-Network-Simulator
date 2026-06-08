@@ -17,7 +17,7 @@
     "seats": 6,
     "load_kg": 500,
     "battery_kwh": 225,
-    "range_km": 600,
+    "range_km": 571,
     "speed_kmh": 250,
     "image": "beta.png",
     "svg": "beta.svg"
@@ -28,7 +28,7 @@
     "seats": 9,
     "load_kg": 1000,
     "battery_kwh": 600,
-    "range_km": 600,
+    "range_km": 571,
     "speed_kmh": 400,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg"
@@ -39,7 +39,7 @@
     "seats": 4,
     "load_kg": 600,
     "battery_kwh": 600,
-    "range_km": 825,
+    "range_km": 786,
     "speed_kmh": 400,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg"
@@ -50,7 +50,7 @@
     "seats": 90,
     "load_kg": 9000,
     "battery_kwh": 14000,
-    "range_km": 1200,
+    "range_km": 1143,
     "speed_kmh": 720,
     "image": "elysian.jpg",
     "svg": "vaeridion.svg",

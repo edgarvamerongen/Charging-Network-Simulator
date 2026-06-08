@@ -431,24 +431,6 @@
         .rail-left > * { pointer-events: auto; }
         .rail-left::-webkit-scrollbar { width: 6px; }
         .rail-left::-webkit-scrollbar-thumb { background: rgba(43,47,90,.18); border-radius: 999px; }
-        /* Soft cream halo behind the rail — suppresses the busy satellite
-           texture under the panels. Only paints when the rail has at least
-           one VISIBLE panel (uses `:has` to skip when every child is .d-none),
-           so the halo doesn't bleed into empty space. */
-        .rail-left:has(> :not(.d-none))::before,
-        .rail-right:has(> :not(.d-none))::before {
-            content: ''; position: fixed; top: 56px; bottom: 0;
-            width: 420px; pointer-events: none; z-index: -1;
-            background: radial-gradient(ellipse at center,
-                rgba(246,239,222,.55) 0%,
-                rgba(246,239,222,.30) 40%,
-                rgba(246,239,222,0) 80%);
-        }
-        .rail-left:has(> :not(.d-none))::before  { left: -30px; }
-        .rail-right:has(> :not(.d-none))::before { right: -30px; }
-        /* When the result is collapsed to its summary, drop the cream halo — the
-           dark summary card is opaque, and a full-height glow behind a tiny card looks off. */
-        .rail-right:has(> #result.minimized)::before { display: none; }
 
         /* =========================================================
            Glass panel
