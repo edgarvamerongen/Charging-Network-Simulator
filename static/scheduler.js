@@ -70,15 +70,22 @@ window.CNSScheduler = (function () {
     // logic. Returns null only for unresolvable old saves (no coords/spec) -> those contribute
     // 0 charge energy. Target-SoC resolver matches the per-airport context.
     let _profStamp = null; const _profCache = {};
-    function _tripProfile(trip) {
+    function _tripProfile(trip, rotOpts) {
         if (!trip || !window.CNSFlight || !CNSFlight.profileForTrip) return null;
         const stamp = (localStorage.getItem(FOLDER_KEY) || '') + '¦' + (localStorage.getItem(CFG_KEY) || '') + '¦' + _settingsStamp();
         if (stamp !== _profStamp) { _profStamp = stamp; for (const k in _profCache) delete _profCache[k]; }
-        if (!(trip.id in _profCache)) {
+        // Default key === trip.id (existing callers unchanged + cached). Per-rotation variants
+        // (interim-deficit charging) fold the engine opts into the key so each is cached distinctly.
+        const key = rotOpts ? (trip.id + '¦' + (rotOpts.departSocFrac != null ? rotOpts.departSocFrac : 1) + '¦' + (rotOpts.terminusToFull === false ? 0 : 1)) : trip.id;
+        if (!(key in _profCache)) {
             const getTargetSoc = (id) => (window.CNSDemand && CNSDemand.resolveTargetSoc) ? CNSDemand.resolveTargetSoc(loadCfg()[id] || null) : null;
-            _profCache[trip.id] = CNSFlight.profileForTrip(trip, { getTargetSoc });
+            _profCache[key] = CNSFlight.profileForTrip(trip, {
+                getTargetSoc,
+                departSocFrac: rotOpts ? rotOpts.departSocFrac : undefined,
+                terminusToFull: rotOpts ? rotOpts.terminusToFull : undefined,
+            });
         }
-        return _profCache[trip.id];
+        return _profCache[key];
     }
 
     // ---------- per-airport charger context (memoised on folder + cfg + model settings) ----------
@@ -135,9 +142,9 @@ window.CNSScheduler = (function () {
     // ---------- model factors (cascade if CNSSettings is loaded) ----------
     const _rs = () => (window.CNSSettings || null);
     const _route   = () => _rs() ? CNSSettings.routingFactor() : 1.0;
-    const _chargeMin = (energy, power, batt) => {
+    const _chargeMin = (energy, power, batt, soc) => {
         if (!_rs() || !power) return power ? energy / power * 60 : 0;
-        return CNSSettings.chargeTimeMin(energy, power, batt);
+        return CNSSettings.chargeTimeMin(energy, power, batt, soc);
     };
     // Battery acceptance cap: a small pack can't absorb an over-sized charger.
     // `power` here must already be the charger's nameplate; the result is the
@@ -162,8 +169,20 @@ window.CNSScheduler = (function () {
             targetAt:  (id) => getContext(id).targetSoc,
         };
     }
-    function tripPhases(trip, viewIdent, ctx) {
-        if (trip.multiLeg) return _multiLegPhases(trip, viewIdent, ctx);
+    // Interim-deficit charging: a shared aircraft flying a route >1x/day tops the base to 100% only
+    // on the day's FINAL rotation; interim rotations charge to the away-stop target. Build the <=3
+    // distinct rotation phase-templates — first departs full, interim departs the previous terminus
+    // SoC, last departs that SoC but tops to full. (Default opts keep non-shared lanes on one template.)
+    function _rotationTemplates(trip) {
+        const first = tripPhases(trip, null, null, { departSocFrac: 1, terminusToFull: false });
+        const frac = (first.terminusDepartFrac != null) ? first.terminusDepartFrac : 1;
+        const interim = tripPhases(trip, null, null, { departSocFrac: frac, terminusToFull: false });
+        const last = tripPhases(trip, null, null, { departSocFrac: frac, terminusToFull: true });
+        return { first, interim, last };
+    }
+
+    function tripPhases(trip, viewIdent, ctx, rotOpts) {
+        if (trip.multiLeg) return _multiLegPhases(trip, viewIdent, ctx, rotOpts);
         ctx = ctx || _desContext(trip);
         const legs = trip.tripType === 'retour' ? 2 : 1;
         const route = _route();
@@ -178,20 +197,22 @@ window.CNSScheduler = (function () {
         // resolves TRAINING (its charge role is 'training', not 'dest'). An unresolvable trip
         // (no profile) contributes 0; app-saved trips always carry coords + spec, so that's
         // reachable only by pathological pre-migration localStorage the coord-rebuild missed.
-        const prof = _tripProfile(trip);
+        const prof = _tripProfile(trip, rotOpts);
         const destEnergy = prof ? prof.energyAt(trip.destIdent) : 0;
+        const destArr = prof ? ((prof.charges.find(c => c.ident === trip.destIdent) || {}).arrivalSocFrac ?? null) : null;
         const destPower = _effPower(ctx.chargerAt(trip.destIdent), batt, cRate);
-        const destMin = _chargeMin(destEnergy, destPower, batt);
-        if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', ident: trip.destIdent, name: trip.destName, atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, label: 'Charge @ ' + trip.destName }); off += destMin; }
+        const destMin = _chargeMin(destEnergy, destPower, batt, destArr);
+        if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', ident: trip.destIdent, name: trip.destName, atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, arrivalFrac: destArr, label: 'Charge @ ' + trip.destName }); off += destMin; }
 
         if (trip.tripType === 'retour') {
             ph.push({ kind: 'fly', leg: 'back', start: off, dur: legMin, label: 'Fly back to ' + trip.originName }); off += legMin;
             const homeEnergy = prof ? prof.energyAt(trip.originIdent) : 0;
+            const homeArr = prof ? ((prof.charges.find(c => c.ident === trip.originIdent && c.role === 'home') || {}).arrivalSocFrac ?? null) : null;
             const homePower = _effPower(ctx.chargerAt(trip.originIdent), batt, cRate);
-            const homeMin = _chargeMin(homeEnergy, homePower, batt);
-            if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', ident: trip.originIdent, name: trip.originName, atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
+            const homeMin = _chargeMin(homeEnergy, homePower, batt, homeArr);
+            if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', ident: trip.originIdent, name: trip.originName, atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, arrivalFrac: homeArr, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
         }
-        return { ph, total: off };
+        return { ph, total: off, terminusDepartFrac: prof ? ((prof.charges.find(c => c.isTerminal) || {}).departSocFrac ?? null) : null };
     }
 
     // Multi-leg trip: walk the backend-precomputed legs[] and charges[]. Each
@@ -199,7 +220,7 @@ window.CNSScheduler = (function () {
     // Charge POWER is the per-airport assigned charger (so toggling the airport's
     // fleet updates the rotation live), but the energy is what _simulate_multi
     // computed when the trip was added.
-    function _multiLegPhases(trip, viewIdent, ctx) {
+    function _multiLegPhases(trip, viewIdent, ctx, rotOpts) {
         ctx = ctx || _desContext(trip);
         const ph = []; let off = 0;
         const legs = Array.isArray(trip.legs) ? trip.legs : [];
@@ -215,9 +236,9 @@ window.CNSScheduler = (function () {
         // destination, collapsing its travel time to flight-only.)
         // Charge energies come from the engine profile (charger-independent forward-SoC walk
         // with per-airport targets); recompute stays only as the null-profile fallback (old saves).
-        const prof = _tripProfile(trip);
+        const prof = _tripProfile(trip, rotOpts);
         const liveCharges = prof
-            ? prof.charges.map(c => ({ ident: c.ident, name: c.name, role: c.role, energy_kwh: c.energyKwh }))
+            ? prof.charges.map(c => ({ ident: c.ident, name: c.name, role: c.role, energy_kwh: c.energyKwh, arrival_frac: c.arrivalSocFrac }))
             : [];
         legs.forEach((leg, i) => {
             const legMin = (Number(leg.flight_time_h) || 0) * 60 * route;
@@ -228,19 +249,20 @@ window.CNSScheduler = (function () {
             if (!c) return;
             const power = _effPower(ctx.chargerAt(c.ident), batt, cRate);
             const energy = Number(c.energy_kwh) || 0;     // recompute already applied routing padding
-            const dur = _chargeMin(energy, power, batt);
+            const arrFrac = (c.arrival_frac != null) ? c.arrival_frac : null;
+            const dur = _chargeMin(energy, power, batt, arrFrac);
             if (dur > 0) {
                 ph.push({
                     kind: 'charge', at: c.role, ident: c.ident, name: c.name,
                     atX: viewIdent === c.ident,
                     atIdx: i + 1,                        // chain index — used by animation.js to position the plane
-                    start: off, dur, power, energy,
+                    start: off, dur, power, energy, arrivalFrac: arrFrac,
                     label: 'Charge @ ' + c.name
                 });
                 off += dur;
             }
         });
-        return { ph, total: off };
+        return { ph, total: off, terminusDepartFrac: prof ? ((prof.charges.find(c => c.isTerminal) || {}).departSocFrac ?? null) : null };
     }
     // Pure per-trip time/energy breakdown for the results-panel preview. Builds
     // the SAME phases the DES uses (via tripPhases) for ONE explicit charger, so
@@ -371,8 +393,11 @@ window.CNSScheduler = (function () {
                 // Separate aircraft (fleet) → one lane each, can fly in parallel.
                 starts.forEach((d, k) => lanes.push({ ...base, desired: [d], planeIdx: k + 1, planeTotal: starts.length, schedSlot: k }));
             } else {
-                // One aircraft doing sequential rotations → a single lane.
-                lanes.push({ ...base, desired: starts });
+                // One shared aircraft doing sequential rotations → a single lane. When it flies >1x/day,
+                // only the FINAL rotation tops the base to 100% (interim-deficit); rotTpl carries the
+                // <=3 per-rotation phase-templates, else null (single template == today).
+                const rotTpl = (starts.length > 1) ? _rotationTemplates(t) : null;
+                lanes.push({ ...base, desired: starts, rotTpl });
             }
         });
 
@@ -392,17 +417,29 @@ window.CNSScheduler = (function () {
 
         // 3. Per-lane runtime state: rotation records with mutable actual times.
         lanes.forEach(L => {
-            L._chargeSeg = [];                              // ph indices that are real charges
-            L.ph.forEach((p, i) => { if (p.kind === 'charge' && p.dur > 0) L._chargeSeg.push(i); });
-            L.rotations = L.desired.map(d => ({
-                takeoff: d, end: d, cumShift: 0, nextC: 0,
-                // actual-timed copy of every phase (start filled in as we go)
-                phases: L.ph.map(p => ({
-                    kind: p.kind, ident: p.ident || null, atRole: p.at,
-                    start: 0, dur: p.dur, power: p.power || 0, energy: p.energy || 0,
-                    atIdx: p.atIdx, label: p.label, wait: 0,
-                })),
-            }));
+            const N = L.desired.length;
+            // Per-rotation phase template: non-shared lanes reuse the single base template (== today);
+            // a shared >1x/day lane assigns first/interim/last so interim rotations charge less.
+            const tplFor = (k) => {
+                if (!L.rotTpl) return { ph: L.ph, total: L.total };
+                if (k === 0) return L.rotTpl.first;
+                if (k === N - 1) return L.rotTpl.last;
+                return L.rotTpl.interim;
+            };
+            L.rotations = L.desired.map((d, k) => {
+                const tpl = tplFor(k);
+                const seg = [];                            // ph indices that are real charges (per template)
+                tpl.ph.forEach((p, i) => { if (p.kind === 'charge' && p.dur > 0) seg.push(i); });
+                return {
+                    takeoff: d, end: d, cumShift: 0, nextC: 0, tpl, _chargeSeg: seg,
+                    // actual-timed copy of every phase (start filled in as we go)
+                    phases: tpl.ph.map(p => ({
+                        kind: p.kind, ident: p.ident || null, atRole: p.at,
+                        start: 0, dur: p.dur, power: p.power || 0, energy: p.energy || 0,
+                        atIdx: p.atIdx, label: p.label, wait: 0,
+                    })),
+                };
+            });
         });
 
         // 4. Event queue ordered by arrival time. Each event = the next
@@ -419,8 +456,8 @@ window.CNSScheduler = (function () {
         // lane's next rotation when no charges remain).
         function advance(li, k) {
             const L = lanes[li], rot = L.rotations[k];
-            if (rot.nextC >= L._chargeSeg.length) {
-                rot.end = rot.takeoff + L.total + rot.cumShift;
+            if (rot.nextC >= rot._chargeSeg.length) {
+                rot.end = rot.takeoff + rot.tpl.total + rot.cumShift;
                 if (k + 1 < L.desired.length) {
                     const next = L.rotations[k + 1];
                     next.takeoff = Math.max(L.desired[k + 1], rot.end);   // no self-overlap
@@ -428,11 +465,11 @@ window.CNSScheduler = (function () {
                 }
                 return;
             }
-            const ci = L._chargeSeg[rot.nextC];
+            const ci = rot._chargeSeg[rot.nextC];
             // cumShift = waits + (actual charger dur − baked dur) accumulated so
             // far this rotation, so a later charge's arrival reflects how long
             // the actual chargers really took, not the planCharging estimate.
-            const arrival = rot.takeoff + L.ph[ci].start + rot.cumShift;
+            const arrival = rot.takeoff + rot.tpl.ph[ci].start + rot.cumShift;
             pushEv({ li, k, ci, arrival });
         }
         lanes.forEach((L, li) => advance(li, 0));
@@ -441,7 +478,7 @@ window.CNSScheduler = (function () {
         //    charger, record the wait, push the rotation's next charge.
         while (pq.length) {
             const e = pq.shift();
-            const L = lanes[e.li], rot = L.rotations[e.k], pool = poolOf(L.ph[e.ci].ident);
+            const L = lanes[e.li], rot = L.rotations[e.k], pool = poolOf(rot.tpl.ph[e.ci].ident);
             // Claim the MOST POWERFUL charger free at arrival (operators plug into
             // the fastest open bay). pool is ordered power-desc, so the first free
             // slot scanning from the top is the strongest one available now. If
@@ -455,7 +492,7 @@ window.CNSScheduler = (function () {
             // battery's acceptance (C-rate) so the recorded draw and duration are
             // both physical. The bay is still occupied for the (capped) duration.
             const power = _effPower(pool[bi].power, L.cap, L.cRate);
-            const dur = _chargeMin(L.ph[e.ci].energy, power, L.cap);
+            const dur = _chargeMin(rot.tpl.ph[e.ci].energy, power, L.cap, rot.tpl.ph[e.ci].arrivalFrac);
             pool[bi].freeAt = start + dur;
             const phase = rot.phases[e.ci];
             phase.start = start;                 // ACTUAL charge start (queue wait already in)
@@ -464,7 +501,7 @@ window.CNSScheduler = (function () {
             phase.wait = start - e.arrival;       // queue wait at THIS airport
             // Shift the rest of the rotation by the wait AND by any difference
             // between the actual charger duration and the baked estimate.
-            rot.cumShift += phase.wait + (dur - L.ph[e.ci].dur);
+            rot.cumShift += phase.wait + (dur - rot.tpl.ph[e.ci].dur);
             rot.nextC += 1;
             advance(e.li, e.k);
         }
@@ -475,7 +512,7 @@ window.CNSScheduler = (function () {
         //    queue wait) is captured in phase.wait for the renderer.
         lanes.forEach(L => L.rotations.forEach(rot => {
             let t = rot.takeoff;
-            L.ph.forEach((p, i) => {
+            rot.tpl.ph.forEach((p, i) => {
                 const ph = rot.phases[i];
                 if (ph.kind === 'charge' && ph.dur > 0) {
                     t = ph.start + ph.dur;        // charge body already placed at actual start

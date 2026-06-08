@@ -166,15 +166,15 @@ window.CNSSettings = (function () {
         return Math.min(p, cr * batt);
     }
 
-    /** Minutes to deliver `energyKwh` from a charger rated `powerKw`, against
-     *  a battery of size `batteryKwh`. Linear when the taper toggle is off.
-     *  When on: full power up to `threshold` SoC, then an EXPONENTIAL roll-off
-     *  to `taperPower × powerKw` at 100% (a realistic CV-phase taper). We don't
-     *  know absolute start-SoC at this layer, so we treat the charge as
-     *  occupying the "top slice" of the battery — energy beyond the top-slice
-     *  capacity `batt × (1 - thr)` sits below the threshold and charges at full
-     *  power; the top slice itself rolls off along the exponential curve. */
-    function chargeTimeMin(energyKwh, powerKw, batteryKwh) {
+    /** Minutes to deliver `energyKwh` from a charger rated `powerKw`, against a battery
+     *  of size `batteryKwh`, starting at `startSocFrac` (0..1). Linear when the taper toggle
+     *  is off. When on: full power up to `threshold` SoC, then an EXPONENTIAL roll-off to
+     *  `taperPower × powerKw` at 100% (a realistic CV-phase taper); time is the closed-form
+     *  integral of dE/P(SoC) over the charge's actual [start, end] band.
+     *  [R7] Pass `startSocFrac` so a charge that ends BELOW the knee pays no taper. When it's
+     *  omitted, fall back to the legacy "top slice" assumption (charge ends at 100%,
+     *  start = 1 − e/batt) — pre-R7 callers stay byte-identical until they opt in. */
+    function chargeTimeMin(energyKwh, powerKw, batteryKwh, startSocFrac) {
         const e = Math.max(0, +energyKwh || 0);
         const p = Math.max(1e-9, +powerKw || 0);
         if (e === 0) return 0;
@@ -183,20 +183,23 @@ window.CNSSettings = (function () {
         const thr   = Math.max(0.5, Math.min(0.95, +s.threshold || 0.75));
         const floor = Math.max(0.05, Math.min(0.95, +s.taperPower || 0.30));
         const batt  = Math.max(1e-9, +batteryKwh);
-        // Above `thr` SoC the accepted power decays EXPONENTIALLY from peak to
-        // floor·peak at 100%:  P(SoC) = p · floor^((SoC-thr)/(1-thr)).  That
-        // constant-fraction roll-off mirrors a real CV-phase current taper far
-        // better than a straight line. Time over the tapered top slice is the
-        // closed-form integral of dE / P(SoC); below `thr` it's just full power.
-        const topSlice = batt * (1 - thr);          // capacity above the CC→CV knee
         const b = -Math.log(floor);                 // decay constant (> 0)
-        if (e <= topSlice) {                         // whole charge sits in the taper band, ending at 100%
-            const u0 = (1 - e / batt - thr) / (1 - thr);             // 0..1 up from the knee
-            return 60 * topSlice / (p * b) * (Math.exp(b) - Math.exp(u0 * b));
+        // Above `thr` SoC the accepted power decays EXPONENTIALLY to floor·peak at 100%:
+        // P(SoC) = p · floor^((SoC−thr)/(1−thr)) — a CV-phase current taper. Place the charge
+        // at its true SoC range when known (R7), else the legacy top-slice (ends at 100%).
+        const start = (startSocFrac != null && isFinite(+startSocFrac))
+            ? Math.max(0, Math.min(1, +startSocFrac))
+            : Math.max(0, 1 - e / batt);
+        const end = Math.min(1, start + e / batt);
+        let hours = 0;
+        const flatEnd = Math.min(end, thr);          // below the knee → full power
+        if (flatEnd > start) hours += batt * (flatEnd - start) / p;
+        if (end > thr) {                             // above the knee → exponential roll-off (closed form)
+            const u0 = Math.max(0, (start - thr) / (1 - thr));
+            const u1 = (end - thr) / (1 - thr);
+            hours += batt * (1 - thr) / (p * b) * (Math.exp(u1 * b) - Math.exp(u0 * b));
         }
-        const fastKwh = e - topSlice;                               // below the knee → full power
-        const taperHr = topSlice / (p * b) * (Math.exp(b) - 1);     // tapered top slice (hours)
-        return 60 * (fastKwh / p + taperHr);
+        return 60 * hours;
     }
 
     /** Convenience: state-of-the-world flags for UI badges / explanations. */
