@@ -13,9 +13,16 @@ import unittest
 import urllib.error
 import urllib.request
 
-from _helpers import (AIRPORTS, BETA, CHARGER_172, dist, coord)
+from _helpers import (AIRPORTS, BETA, VELIS, CHARGER_172, dist, coord)
 
 BASE = os.environ.get("CNS_BASE_URL", "http://localhost:5055")
+
+# The legacy 172 kW "aircraft_charger" was dropped from chargers.json in the
+# DC-charger rework. The in-process suite re-injects it as a fixture, but these
+# tests hit the LIVE server's catalog, so they post a real charger id. None of
+# the assertions below pin an absolute charge TIME, so any valid DC charger
+# works — dc_400 just needs to exist in chargers.json.
+LIVE_CHARGER = "dc_400"
 
 
 def _post(path, payload, timeout=10):
@@ -41,7 +48,7 @@ class TestSimulateAPI(unittest.TestCase):
     def test_oneway_icao_strings(self):
         st, r = _post("/api/simulate", {
             "origin": "EHAM", "destination": "LFPG",
-            "plane_id": "beta_plane", "charger_id": "aircraft_charger",
+            "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
             "trip_type": "one-way"})
         self.assertEqual(st, 200, r)
         self.assertTrue(r.get("success"), r)
@@ -53,7 +60,7 @@ class TestSimulateAPI(unittest.TestCase):
     def test_oneway_coords_match_inprocess(self):
         st, r = _post("/api/simulate", {
             "origin": coord("EHAM"), "destination": coord("LFPG"),
-            "plane_id": "beta_plane", "charger_id": "aircraft_charger",
+            "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
             "trip_type": "one-way"})
         self.assertEqual(st, 200, r)
         d = dist("EHAM", "LFPG")
@@ -62,7 +69,7 @@ class TestSimulateAPI(unittest.TestCase):
     def test_retour_deficit_branch(self):
         st, r = _post("/api/simulate", {
             "origin": coord("EHAM"), "destination": coord("LFPG"),
-            "plane_id": "beta_plane", "charger_id": "aircraft_charger",
+            "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
             "trip_type": "retour"})
         self.assertEqual(st, 200, r)
         d = r["leg_distance_km"]
@@ -74,7 +81,7 @@ class TestSimulateAPI(unittest.TestCase):
     def test_charge_time_min_consistency(self):
         st, r = _post("/api/simulate", {
             "origin": coord("EHAM"), "destination": coord("LFPG"),
-            "plane_id": "beta_plane", "charger_id": "aircraft_charger",
+            "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
             "trip_type": "one-way"})
         self.assertAlmostEqual(r["charge_time_min"], r["charge_time_h"] * 60, delta=0.15)
 
@@ -114,17 +121,19 @@ class TestSimulateAPI(unittest.TestCase):
     def test_training_via_api(self):
         st, r = _post("/api/simulate", {
             "origin": coord("EHAM", "Base"), "destination": coord("EHAM", "Base"),
-            "plane_id": "pipistrel_velis", "charger_id": "aircraft_charger",
+            "plane_id": "pipistrel_velis", "charger_id": LIVE_CHARGER,
             "trip_type": "training"})
         self.assertEqual(st, 200, r)
         self.assertTrue(r.get("success"), r)
-        avg = 22 / 100 * 100
-        self.assertAlmostEqual(r["raw_pattern_energy_kwh"], avg * 70 / 100, delta=0.05)
+        avg = VELIS["battery_kwh"] / VELIS["range_km"] * 100
+        self.assertAlmostEqual(
+            r["raw_pattern_energy_kwh"],
+            avg * VELIS["training_range_km"] / 100, delta=0.05)
 
     def test_multileg_via_api(self):
         st, r = _post("/api/simulate", {
             "origin": coord("EHAM"), "destination": coord("LFPG"),
-            "plane_id": "beta_plane", "charger_id": "aircraft_charger",
+            "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
             "trip_type": "one-way",
             "stops": [dict(coord("EHRD"), ident="EHRD")]})
         self.assertEqual(st, 200, r)
@@ -138,7 +147,7 @@ class TestSimulateAPI(unittest.TestCase):
     def test_over_range_rejected(self):
         st, r = _post("/api/simulate", {
             "origin": coord("EHAM"), "destination": coord("LFPG"),
-            "plane_id": "pipistrel_velis", "charger_id": "aircraft_charger",
+            "plane_id": "pipistrel_velis", "charger_id": LIVE_CHARGER,
             "trip_type": "one-way"})
         # sim returns {"error": ...} with HTTP 200 (no exception raised)
         self.assertIn("error", r)
@@ -147,7 +156,7 @@ class TestSimulateAPI(unittest.TestCase):
         try:
             st, r = _post("/api/simulate", {
                 "origin": "EHAM", "destination": "EHAM",
-                "plane_id": "beta_plane", "charger_id": "aircraft_charger",
+                "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
                 "trip_type": "one-way"})
         except urllib.error.HTTPError as e:
             self.assertEqual(e.code, 400)

@@ -51,11 +51,11 @@ function engineSnapshot(c, vname) {
 
 const FIELDS = ['energyUsedKwh', 'flightMin', 'chargeMin', 'terminalKwh', 'arrivalSoc'];
 
-// INTENDED deltas — the engine deliberately CORRECTS a current-stack artifact (per R9 + audit T1.4):
-// in a retour at a LOW charge target, deliveredEnergy makes the plane 'discharge' to the target at
-// the turnaround then over-recharges at home, so Σcharges > Σlegs (energy NOT conserved). The engine's
-// forward walk conserves (Σcharges == Σlegs == 2·leg). The golden's inflated value here is the bug.
-const KNOWN_DELTA = new Set(['retour-beta:target50']);
+// No intended deltas: the golden is now ENGINE-derived (the engine-capture harness), so every case
+// reproduces it exactly. The former 'retour-beta:target50' delta — the engine correcting the old
+// deliveredEnergy over-recharge that broke energy conservation (R9 / audit T1.4) — is now absorbed
+// into the regenerated golden (it carries the conserved value, so no diff remains to flag).
+const KNOWN_DELTA = new Set([]);
 
 let pass = 0, fail = 0, deltas = 0;
 
