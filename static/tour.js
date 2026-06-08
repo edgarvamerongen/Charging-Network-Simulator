@@ -356,7 +356,7 @@ window.CNSTour = (function () {
             // the headline numbers first, then we drill into each section below.
             {
                 element: '.rail-right .panel',
-                popover: { title: 'Result panel', description: 'Headline per-flight numbers up top: energy used, flight time, charge time. Below are three expandable breakdowns — <strong>Route</strong>, <strong>Charging</strong> and <strong>Revenue potential</strong> — we\'ll open each in turn.', side: 'left', align: 'start' },
+                popover: { title: 'Result panel', description: 'Headline per-flight numbers up top: energy used, flight time, charge time, and the airport\'s <strong>revenue potential</strong>. Below are two expandable breakdowns — <strong>Route</strong> and <strong>Charging</strong> — we\'ll open each in turn.', side: 'left', align: 'start' },
                 onHighlightStarted: async () => {
                     await _ensureSimulated();
                     // Start clean: collapse every section so the headline reads first;
@@ -380,12 +380,6 @@ window.CNSTour = (function () {
                 element: '#rgCharging',
                 popover: { title: 'Charging', description: 'The top-up at the trip\'s terminal airport, after arrival and <strong>separate from travel time</strong>: arrival state-of-charge, charge-to target, top-up minutes (or no charge needed), plus the charger model and, with efficiency on, grid demand in kWh.', side: 'left', align: 'start' },
                 onHighlightStarted: async () => { await _expandResultSection('rgCharging'); },
-            },
-            // 13c. Revenue potential — the airport's charging income.
-            {
-                element: '#rgRevenue',
-                popover: { title: 'Revenue potential', description: 'The airport\'s charging income: energy charged to the aircraft across the trip times the <strong>charging tariff</strong> (€/kWh, set in Model settings), giving airport revenue.', side: 'left', align: 'start' },
-                onHighlightStarted: async () => { await _expandResultSection('rgRevenue'); },
             },
             // 14. Add to demand — scroll the rail DOWN so the button is fully
             // visible (it sits below the trip-calculated table).
