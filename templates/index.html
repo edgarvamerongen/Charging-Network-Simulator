@@ -2069,7 +2069,11 @@
         // alternate is always a loaded airport).
         function drawAlternates(chain) {
             clearAlternates();
-            (chain || []).forEach(n => {
+            // Skip the origin (chain[0]): it departs full, so no arrival/divert reserve
+            // applies there — matching routing.js, which reserves only at each stop + the
+            // destination. Drawing a departure connector would imply a reserve that isn't there.
+            (chain || []).forEach((n, i) => {
+                if (i === 0) return;
                 const full = n && n.ident ? airportByIdent[n.ident] : null;
                 if (!full || !full.alternate_ident) return;
                 const alt = airportByIdent[full.alternate_ident];
