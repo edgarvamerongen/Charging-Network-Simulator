@@ -11,7 +11,9 @@
  *   3. more aircraft than chargers -> they wrap (queue); `queued` counts them.
  *   4. peakPower = sum of the DISTINCT in-use chargers (never double-counts a
  *      charger even if two aircraft share it) — this is the invariant the
- *      scheduler comment flags as historically broken.
+ *      scheduler comment flags as historically broken. A charger serving only a
+ *      0-energy pass-through aircraft is NOT in use (draws nothing) and must not
+ *      contribute to peak.
  *
  * Run:  node tests/js_charging.test.mjs
  */
@@ -75,6 +77,27 @@ test('two aircraft sharing ONE charger do not double-count peak', () => {
   assert.equal(plan.numChargers, 1);
   assert.equal(plan.queued, 1, 'one aircraft is queued behind the other');
   assert.equal(plan.peakPower, 400, 'shared charger counted once');
+});
+
+test('zero-energy pass-through aircraft draws no peak power', () => {
+  // A flight that overflies an airport WITHOUT charging (arrives with enough) is
+  // still assigned a charger for ordering, but delivers 0 kWh, so it must NOT add
+  // to peak. Regression: the demand card showed a phantom 60 kW peak at such an
+  // airport (0 kWh / 0 min, yet "60 kW") because the 0-energy slot counted as in-use.
+  const plan = C.planCharging(
+    [{ id: 'dc60', power_kw: 60 }],
+    [{ name: 'beta', energy: 0, size: 225 }]);
+  assert.equal(plan.peakPower, 0, '0 kWh delivered -> 0 kW peak');
+  assert.equal(plan.assignments[0].chargeTimeMin, 0, '0-energy charge takes 0 min');
+});
+
+test('mixed energies: only actually-charging aircraft count toward peak', () => {
+  const plan = C.planCharging(
+    [{ id: 'big', power_kw: 400 }, { id: 'small', power_kw: 60 }],
+    [{ name: 'charges', energy: 100, size: 500 },   // ranked 1st -> 400 kW, draws
+     { name: 'passes',  energy: 0,   size: 225 }]); // ranked 2nd -> 60 kW, draws nothing
+  assert.equal(plan.peakPower, 400, 'only the charging aircraft contributes to peak');
+  assert.equal(plan.queued, 0, 'two chargers, two aircraft -> none queued');
 });
 
 test('more aircraft than chargers -> wrap-around assignment', () => {

@@ -22,7 +22,9 @@
  * Output:
  *   {
  *     assignments: [{ aircraft, charger, power, chargeTimeMin }],  // same order as input aircraft
- *     peakPower,   // kW drawn if every in-use charger runs at once
+ *     peakPower,   // kW drawn if every in-use charger runs at once. A charger
+ *                  // assigned only to a 0-energy aircraft (one that passes through
+ *                  // an airport without charging) is NOT "in use" — it draws nothing.
  *     queued,      // how many aircraft exceed the number of chargers
  *     numChargers
  *   }
@@ -45,7 +47,12 @@ window.CNSCharging = (function () {
 
         ranked.forEach((entry, rank) => {
             const charger = n ? sortedChargers[rank % n] : null;
-            if (charger) usedSlots.add(charger._slot);
+            // Only a charger that actually delivers energy contributes to peak draw.
+            // A pass-through aircraft (arrives with enough charge -> energy 0) is still
+            // assigned a charger for ordering, but draws nothing, so its slot must NOT
+            // count toward peakPower — otherwise an airport a flight merely overflies
+            // shows a phantom peak equal to its charger's nameplate (0 kWh but 60 kW).
+            if (charger && entry.ac.energy > 0) usedSlots.add(charger._slot);
             const power = charger ? charger.power_kw : 0;
             assignments[entry.i] = {
                 aircraft: entry.ac,
