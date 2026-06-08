@@ -3114,6 +3114,10 @@
             // refreshRouteEndpoints (change-detected), so a same-route redraw doesn't
             // tear them down and rebuild them — that's what avoids a blue/orange flash.
             routeLayers.forEach(l => map.removeLayer(l)); routeLayers = [];
+            // The alternate overlay belongs to the route, so it must go too — otherwise a
+            // reset/clear leaves stale purple connectors on the map, and toggling Alternates
+            // afterwards would redraw them from a stale lastRouteChain.
+            clearAlternates(); lastRouteChain = [];
         }
         // F5: per-leg label (distance · time · energy) centred on each leg.
         // Uses the backend leg metrics when present (after Simulate); otherwise

@@ -156,5 +156,111 @@ test('alternate ON: non-airport destination (no alternate_km) imposes no reserve
   assert.equal(res.legCount, 1);
 });
 
+// ============================================================================
+//  Edge cases · different planes · multiple routes — alternate-reserve planning.
+//  These lean on a direct INVARIANT: with the reserve ON, every arrival node
+//  (each stop + the destination) must satisfy  leg(prev->node) + alt/route <= maxLeg.
+//  Asserting it on the produced chain catches a reserve dropped at ANY hop.
+// ============================================================================
+const HAV = loadRouting({}).haversineKm;
+const xy = (p) => ({ lat: p.lat ?? p.latitude_deg, lon: p.lon ?? p.longitude_deg });
+function assertReserveRespected(chain, maxLeg, route = 1.0) {
+  for (let i = 1; i < chain.length; i++) {
+    const leg = HAV(xy(chain[i - 1]), xy(chain[i]));
+    const reserve = (chain[i].alternate_km || 0) / route;
+    assert.ok(leg + reserve <= maxLeg + 1e-6,
+      `arrival ${chain[i].ident}: leg ${leg.toFixed(1)} + reserve ${reserve.toFixed(1)} = ${(leg + reserve).toFixed(1)} > maxLeg ${maxLeg}`);
+  }
+}
+
+// 8. Different planes, same geography: a short-range aircraft needs alternate-respecting
+//    stops where a long-range one flies direct — both respecting every node's reserve.
+test('different planes: short-range needs stops where long-range flies direct (both respect reserve)', () => {
+  const O = node('O', 0, 0), D = node('D', 4.0, 8);                 // D ~444.8 km from O, alt 8
+  const all = [O, ap('S1', 1.0, 8), ap('S2', 2.0, 8), ap('S3', 3.0, 8), D];
+  const plan = (range) => loadRouting({ requireAlt: true }).planRoute({
+    origin: O, destination: D, plane: PLANE(range),
+    allowedTypes: ['medium_airport'], allAirports: all, options: {} });
+  const small = plan(135), big = plan(460);
+  assert.equal(small.error, undefined, small.error);
+  assert.equal(big.error, undefined, big.error);
+  assert.ok(small.stops.length >= 1, 'short-range needs at least one stop');
+  assert.equal(big.stops.length, 0, 'long-range flies direct (444.8 + 8 = 452.8 <= 460)');
+  assert.ok(small.stops.length > big.stops.length, 'short-range needs more stops than long-range');
+  assertReserveRespected([O, ...small.stops, D], 135);
+  assertReserveRespected([O, ...big.stops, D], 460);
+});
+
+// 9. Long multi-stop route: a 3+ stop chain where EVERY arrival node carries its own
+//    divert reserve. Confirms the reserve is enforced at each hop, not just first/last.
+test('multi-stop route: every one of several arrival nodes respects its reserve', () => {
+  const O = node('O', 0, 0), D = node('D', 5.0, 12);               // ~555.95 km
+  const cands = [ap('A', 1.2, 10), ap('B', 2.4, 15), ap('C', 3.6, 6), ap('E', 4.6, 20)];
+  const res = loadRouting({ requireAlt: true }).planRoute({
+    origin: O, destination: D, plane: PLANE(160),
+    allowedTypes: ['medium_airport'], allAirports: [O, ...cands, D], options: {} });
+  assert.equal(res.error, undefined, res.error);
+  assert.ok(res.stops.length >= 3, `expected a multi-stop chain, got ${res.stops.length}`);
+  assertReserveRespected([O, ...res.stops, D], 160);
+});
+
+// 10. Mixed coverage: at the same waypoint the planner must skip a closer-but-remote field
+//     for a well-covered one (divert fits) — the route-substitution case, mid-chain verified.
+test('mixed alternates: planner skips a remote field for a well-covered co-located one', () => {
+  const O = node('O', 0, 0), D = node('D', 3.0, 5);               // ~333.6 km; leg O->stop 166.79
+  const REMOTE = ap('REMOTE', 1.5, 60), NEAR = ap('NEAR', 1.5, 8);
+  const res = loadRouting({ requireAlt: true }).planRoute({
+    origin: O, destination: D, plane: PLANE(200),                  // 166.79 + 60 > 200; + 8 <= 200
+    allowedTypes: ['medium_airport'], allAirports: [O, REMOTE, NEAR, D], options: {} });
+  assert.equal(res.error, undefined, res.error);
+  assert.deepEqual(idents(res), ['NEAR']);
+  assertReserveRespected([O, ...res.stops, D], 200);
+});
+
+// 11. A second, independent geography (longer route) — the reserve logic isn't tuned
+//     to one layout. Uneven alternate distances per node.
+test('second geography: a longer route still respects every node reserve', () => {
+  const O = node('O', 0, 0), D = node('D', 6.0, 18);              // ~667 km
+  const cands = [ap('P', 1.3, 12), ap('Q', 2.7, 9), ap('R2', 4.0, 14), ap('T2', 5.3, 7)];
+  const res = loadRouting({ requireAlt: true }).planRoute({
+    origin: O, destination: D, plane: PLANE(175),
+    allowedTypes: ['medium_airport'], allAirports: [O, ...cands, D], options: {} });
+  assert.equal(res.error, undefined, res.error);
+  assert.ok(res.stops.length >= 3, `expected multiple stops, got ${res.stops.length}`);
+  assertReserveRespected([O, ...res.stops, D], 175);
+});
+
+// 12. An explicit per-flight maxLegKm override still has the divert reserve deducted from it.
+test('maxLegKm override: reserve is deducted from the override too', () => {
+  const O = node('O', 0, 0), D = node('D', 1.0, 40);             // O->D 111.19 km, dest alt 40
+  const call = (maxLegKm) => loadRouting({ requireAlt: true }).planRoute({
+    origin: O, destination: D, plane: PLANE(999),
+    allowedTypes: ['medium_airport'], allAirports: [O, D], options: { maxLegKm } });
+  assert.ok(call(130).error, 'direct 111.19 + 40 = 151.19 > 130 override -> blocked');
+  const ok = call(160);
+  assert.equal(ok.error, undefined, ok.error);                   // 151.19 <= 160
+  assert.equal(ok.legCount, 1);
+});
+
+// 13. Range too short to fit even the first leg once the reserve is added -> no route.
+test('range too short for any reserved leg yields no route', () => {
+  const O = node('O', 0, 0), D = node('D', 2.0, 30), A = ap('A', 1.0, 30);
+  const res = loadRouting({ requireAlt: true }).planRoute({
+    origin: O, destination: D, plane: PLANE(120),                 // O->A 111.19 + 30 = 141.19 > 120
+    allowedTypes: ['medium_airport'], allAirports: [O, A, D], options: {} });
+  assert.ok(res.error, 'no candidate fits within maxLeg once the reserve is added');
+  assert.equal(res.legCount, 0);
+});
+
+// 14. Toggle OFF ignores alternate_km entirely — even absurd values (pure parity guard).
+test('toggle OFF ignores alternate_km entirely (even huge values)', () => {
+  const O = node('O', 0, 0), D = node('D', 2.0, 9999), A = ap('A', 1.0, 9999);
+  const res = loadRouting({ requireAlt: false }).planRoute({
+    origin: O, destination: D, plane: PLANE(150),
+    allowedTypes: ['medium_airport'], allAirports: [O, A, D], options: {} });
+  assert.equal(res.error, undefined, res.error);
+  assert.deepEqual(idents(res), ['A']);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
