@@ -1,0 +1,148 @@
+{
+  "laneCount": 4,
+  "lanes": [
+    {
+      "trip": "t-ow",
+      "rotations": [
+        {
+          "takeoff": 420,
+          "end": 570.5,
+          "phases": [
+            {
+              "kind": "fly",
+              "ident": null,
+              "start": 420,
+              "dur": 100.17,
+              "energy": 0
+            },
+            {
+              "kind": "charge",
+              "ident": "LFPG",
+              "start": 520.17,
+              "dur": 50.33,
+              "energy": 156.93
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trip": "t-ret",
+      "rotations": [
+        {
+          "takeoff": 420,
+          "end": 544.17,
+          "phases": [
+            {
+              "kind": "fly",
+              "ident": null,
+              "start": 420,
+              "dur": 38.12,
+              "energy": 0
+            },
+            {
+              "kind": "charge",
+              "ident": "EHGG",
+              "start": 458.12,
+              "dur": 10.13,
+              "energy": 14.78
+            },
+            {
+              "kind": "fly",
+              "ident": null,
+              "start": 468.25,
+              "dur": 38.12,
+              "energy": 0
+            },
+            {
+              "kind": "charge",
+              "ident": "EHAM",
+              "start": 506.36,
+              "dur": 37.81,
+              "energy": 104.78
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trip": "t-multi",
+      "rotations": [
+        {
+          "takeoff": 420,
+          "end": 566.6,
+          "phases": [
+            {
+              "kind": "fly",
+              "ident": null,
+              "start": 420,
+              "dur": 11.34,
+              "energy": 0
+            },
+            {
+              "kind": "fly",
+              "ident": null,
+              "start": 431.34,
+              "dur": 86.06,
+              "energy": 0
+            },
+            {
+              "kind": "charge",
+              "ident": "EGLL",
+              "start": 517.4,
+              "dur": 49.2,
+              "energy": 152.24
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trip": "t-train",
+      "rotations": [
+        {
+          "takeoff": 420,
+          "end": 473.42,
+          "phases": [
+            {
+              "kind": "fly",
+              "ident": null,
+              "start": 420,
+              "dur": 42.21,
+              "energy": 0
+            },
+            {
+              "kind": "charge",
+              "ident": "EHAM",
+              "start": 462.21,
+              "dur": 11.21,
+              "energy": 15.4
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "airports": {
+    "EHAM": {
+      "peakKw": 250,
+      "latestEnd": 544.17
+    },
+    "LFPG": {
+      "peakKw": 250,
+      "latestEnd": 570.5
+    },
+    "EHGG": {
+      "peakKw": 250,
+      "latestEnd": 544.17
+    },
+    "EGLL": {
+      "peakKw": 250,
+      "latestEnd": 566.6
+    },
+    "EHRD": {
+      "peakKw": 0,
+      "latestEnd": 566.6
+    }
+  }
+}

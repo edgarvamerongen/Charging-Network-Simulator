@@ -73,6 +73,22 @@ window.CNSScheduler = (function () {
         return fullCharge ? leg : Math.max(0, 2 * leg - batt);
     }
 
+    // Per-trip engine FlightProfile (CNSFlight), cached + busted on folder/cfg/settings
+    // change. The scheduler reads charge ENERGIES from this; it keeps its OWN timing/queue
+    // logic. Returns null for old saves the engine can't rebuild -> callers fall back to
+    // the legacy demand math. Target-SoC resolver matches the per-airport context.
+    let _profStamp = null; const _profCache = {};
+    function _tripProfile(trip) {
+        if (!trip || !window.CNSFlight || !CNSFlight.profileForTrip) return null;
+        const stamp = (localStorage.getItem(FOLDER_KEY) || '') + '¦' + (localStorage.getItem(CFG_KEY) || '') + '¦' + _settingsStamp();
+        if (stamp !== _profStamp) { _profStamp = stamp; for (const k in _profCache) delete _profCache[k]; }
+        if (!(trip.id in _profCache)) {
+            const getTargetSoc = (id) => (window.CNSDemand && CNSDemand.resolveTargetSoc) ? CNSDemand.resolveTargetSoc(loadCfg()[id] || null) : null;
+            _profCache[trip.id] = CNSFlight.profileForTrip(trip, { getTargetSoc });
+        }
+        return _profCache[trip.id];
+    }
+
     // ---------- per-airport charger context (memoised on folder + cfg + model settings) ----------
     let _stamp = null, _ctx = {};
     function _settingsStamp() {
@@ -103,20 +119,24 @@ window.CNSScheduler = (function () {
         // Aircraft list: use the cross-airport-aware energy helper so the
         // charger plan reflects the operator's target-SoC choices on both ends.
         const aircraft = trips.map((t, i) => {
-            const plane = (window.PLANES_BY_ID || {})[t.planeId] || t;
-            const usable = _usableB({ ...t, planeId: t.planeId }) || batteryOf(t);
             const batt = batteryOf(t);
-            const leg = num(t, 'legEnergy') * _route();
-            const role = roleAt(t, ident);
-            const otherIdent = role === 'home' ? t.destIdent
-                             : role === 'dest' ? t.originIdent
-                             : null;
-            const otherCfg = otherIdent ? (loadCfg()[otherIdent] || null) : null;
-            const targetOther = (window.CNSDemand && CNSDemand.resolveTargetSoc)
-                ? CNSDemand.resolveTargetSoc(otherCfg) : (otherCfg && otherCfg.fullCharge ? 1.0 : null);
-            const energy = (window.CNSDemand && CNSDemand.deliveredEnergy && !t.multiLeg)
-                ? CNSDemand.deliveredEnergy(t, role, leg, batt, usable, targetSoc, targetOther)
-                : energyAt(t, ident, targetSoc === 1.0);
+            const prof = _tripProfile(t);
+            let energy;
+            if (prof) {
+                energy = prof.energyAt(ident);   // engine: per-airport charge total (charger-independent; planCharging ranks by size, so this only feeds time/peak)
+            } else {
+                // legacy fallback — old saves the engine can't rebuild (no coords / unresolvable spec)
+                const usable = _usableB({ ...t, planeId: t.planeId }) || batteryOf(t);
+                const leg = num(t, 'legEnergy') * _route();
+                const role = roleAt(t, ident);
+                const otherIdent = role === 'home' ? t.destIdent : role === 'dest' ? t.originIdent : null;
+                const otherCfg = otherIdent ? (loadCfg()[otherIdent] || null) : null;
+                const targetOther = (window.CNSDemand && CNSDemand.resolveTargetSoc)
+                    ? CNSDemand.resolveTargetSoc(otherCfg) : (otherCfg && otherCfg.fullCharge ? 1.0 : null);
+                energy = (window.CNSDemand && CNSDemand.deliveredEnergy && !t.multiLeg)
+                    ? CNSDemand.deliveredEnergy(t, role, leg, batt, usable, targetSoc, targetOther)
+                    : energyAt(t, ident, targetSoc === 1.0);
+            }
             return { _i: i, energy, size: batt };
         });
         const powers = {};
@@ -186,20 +206,27 @@ window.CNSScheduler = (function () {
         const ph = []; let off = 0;
         ph.push({ kind: 'fly', leg: 'out', start: off, dur: legMin, label: 'Fly to ' + trip.destName }); off += legMin;
 
-        // Energy at each end uses CNSDemand.deliveredEnergy so the cross-airport
-        // SoC targets stay consistent with the demand drawer + PDF.
-        const destEnergy = window.CNSDemand && CNSDemand.deliveredEnergy
-            ? CNSDemand.deliveredEnergy(trip, 'dest', leg, batt, usableBatt, destTarget, homeTarget)
-            : (trip.tripType === 'retour' ? Math.max(0, 2 * leg - usableBatt) : leg);
+        // Charge energy at each end now comes from the engine (profile.charges by role);
+        // the legacy deliveredEnergy stays as the null-profile fallback for old saves.
+        // TRAINING stays on the legacy path: its energy is the deferred G4a change (engine
+        // is UNpadded vs legacy padded), so migrating it would shift the pattern recharge ~5%.
+        const prof = (trip.tripType === 'training') ? null : _tripProfile(trip);
+        const destEnergy = prof
+            ? ((prof.charges.find(c => c.role === 'dest') || {}).energyKwh || 0)
+            : (window.CNSDemand && CNSDemand.deliveredEnergy
+                ? CNSDemand.deliveredEnergy(trip, 'dest', leg, batt, usableBatt, destTarget, homeTarget)
+                : (trip.tripType === 'retour' ? Math.max(0, 2 * leg - usableBatt) : leg));
         const destPower = _effPower(ctx.chargerAt(trip.destIdent), batt, cRate);
         const destMin = _chargeMin(destEnergy, destPower, batt);
         if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', ident: trip.destIdent, name: trip.destName, atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, label: 'Charge @ ' + trip.destName }); off += destMin; }
 
         if (trip.tripType === 'retour') {
             ph.push({ kind: 'fly', leg: 'back', start: off, dur: legMin, label: 'Fly back to ' + trip.originName }); off += legMin;
-            const homeEnergy = window.CNSDemand && CNSDemand.deliveredEnergy
-                ? CNSDemand.deliveredEnergy(trip, 'home', leg, batt, usableBatt, homeTarget, destTarget)
-                : Math.min(2 * leg, usableBatt);
+            const homeEnergy = prof
+                ? ((prof.charges.find(c => c.role === 'home') || {}).energyKwh || 0)
+                : (window.CNSDemand && CNSDemand.deliveredEnergy
+                    ? CNSDemand.deliveredEnergy(trip, 'home', leg, batt, usableBatt, homeTarget, destTarget)
+                    : Math.min(2 * leg, usableBatt));
             const homePower = _effPower(ctx.chargerAt(trip.originIdent), batt, cRate);
             const homeMin = _chargeMin(homeEnergy, homePower, batt);
             if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', ident: trip.originIdent, name: trip.originName, atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
@@ -227,9 +254,14 @@ window.CNSScheduler = (function () {
         // vs none). (Using the raw backend charges here was the earlier bug: a
         // big-battery plane charged 0 en route and dumped everything at the
         // destination, collapsing its travel time to flight-only.)
-        const liveCharges = (window.CNSDemand && CNSDemand.recomputeMultiLegCharges)
-            ? CNSDemand.recomputeMultiLegCharges(trip, (id) => ctx.targetAt(id), usableBatt)
-            : charges;
+        // Charge energies come from the engine profile (charger-independent forward-SoC walk
+        // with per-airport targets); recompute stays only as the null-profile fallback (old saves).
+        const prof = _tripProfile(trip);
+        const liveCharges = prof
+            ? prof.charges.map(c => ({ ident: c.ident, name: c.name, role: c.role, energy_kwh: c.energyKwh }))
+            : ((window.CNSDemand && CNSDemand.recomputeMultiLegCharges)
+                ? CNSDemand.recomputeMultiLegCharges(trip, (id) => ctx.targetAt(id), usableBatt)
+                : charges);
         legs.forEach((leg, i) => {
             const legMin = (Number(leg.flight_time_h) || 0) * 60 * route;
             const toName = (leg.to && leg.to.name) || '';
