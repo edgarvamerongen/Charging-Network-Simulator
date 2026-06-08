@@ -93,8 +93,14 @@ export function previewTrip(data, c) {
   const dest = c.trip === 'training' ? c.o : c.d;
   return {
     id: 'preview', tripType: data.trip_type, multiLeg: !!data.multi_leg,
-    originIdent: c.o, originName: AP[c.o].name, destIdent: dest, destName: AP[dest].name,
+    // Coords are LOAD-BEARING: tripBreakdown -> tripPhases -> CNSFlight.profileForTrip
+    // rebuilds the whole flight from origin/dest/stop lat-lon and returns null (-> all
+    // zeros) the moment originLat/originLon are missing. The real result-panel preview
+    // trip carries these, so the golden capture must too.
+    originIdent: c.o, originName: AP[c.o].name, originLat: AP[c.o].lat, originLon: AP[c.o].lon,
+    destIdent: dest, destName: AP[dest].name, destLat: AP[dest].lat, destLon: AP[dest].lon,
     planeId: c.plane, battery: (PLANES[c.plane] || {}).battery_kwh,
+    trainingRangeKm: (PLANES[c.plane] || {}).training_range_km,
     flightTimeH: data.multi_leg ? data.total_flight_time_h : data.flight_time_h,
     legEnergy: data.leg_energy_kwh,
     legs: Array.isArray(data.legs) ? data.legs : undefined,        // sim.py: int count for single-leg, array for multi

@@ -51,11 +51,15 @@ function engineSnapshot(c, vname) {
 
 const FIELDS = ['energyUsedKwh', 'flightMin', 'chargeMin', 'terminalKwh', 'arrivalSoc'];
 
-// INTENDED deltas — the engine deliberately CORRECTS a current-stack artifact (per R9 + audit T1.4):
-// in a retour at a LOW charge target, deliveredEnergy makes the plane 'discharge' to the target at
-// the turnaround then over-recharges at home, so Σcharges > Σlegs (energy NOT conserved). The engine's
-// forward walk conserves (Σcharges == Σlegs == 2·leg). The golden's inflated value here is the bug.
-const KNOWN_DELTA = new Set(['retour-beta:target50']);
+// INTENDED-delta hook (currently empty). History: the golden was once captured from the
+// pre-engine stack, whose deliveredEnergy inflated retour-beta:target50 (a low-target retour
+// 'discharged' to target at the turnaround then over-recharged at home, so Σcharges > Σlegs —
+// energy NOT conserved). The engine's forward walk conserves it (Σcharges == Σlegs == 2·leg,
+// per R9 + audit T1.4). The golden is now ENGINE-derived (the capture rebuilds via
+// CNSFlight.profileForTrip), so that artifact is gone and no case is expected to differ. Add a
+// `name:variant` key here only if a future intended engine change must out-pace a not-yet-
+// regenerated golden.
+const KNOWN_DELTA = new Set();
 
 let pass = 0, fail = 0, deltas = 0;
 for (const c of golden.cases) {
