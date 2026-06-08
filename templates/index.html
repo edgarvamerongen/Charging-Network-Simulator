@@ -1690,6 +1690,16 @@
                                 <span class="rs-val" id="rsRoutingVal">×1.05</span>
                             </div>
                         </div>
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsSidStar"><span>SID/STAR padding</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Fixed distance added to every leg for SID departure + STAR arrival track miles — terminal-area routing that isn't on the great circle. Adds on top of routing padding.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <input type="range" id="rsSidStarSl" min="5" max="50" step="5" value="10" class="form-range">
+                                <span class="rs-val" id="rsSidStarVal">+10 km</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="rs-cat">Charging</div>
@@ -2125,7 +2135,8 @@
             const p = plane || selectedPlaneSpec();
             if (!p || !p.range_km) return null;
             const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            return _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
+            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;  // fixed SID/STAR km eats into reach before routing scales (matches flight-model availRangeKm)
+            return _availRangeOverride != null ? _availRangeOverride : Math.max(0, p.range_km * _usableFrac(p) - sid) / route;
         }
         // The available range to DISPLAY/EDIT. Padding now lives in the trip LENGTH, not the
         // reach — so when the engine is on we show the FULL usable range (undo the /route in
@@ -4030,6 +4041,7 @@
                     taperPower: { input: 'rsTaperFloor', valEl: 'rsTaperFloorVal', fmt: (v) => `${v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
                 } },
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
+                sidStarPadding:    { check: 'rsSidStar',      extras: { km:            { input: 'rsSidStarSl',    valEl: 'rsSidStarVal',    fmt: (v) => `+${v} km`,                          to: (v) => v,       from: (v) => v } } },
                 chargeTarget:      { check: 'rsChargeTarget',  extras: { value:         { input: 'rsChargeTargetSl', valEl: 'rsChargeTargetVal', fmt: (v) => `${v}%`,                              to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
 

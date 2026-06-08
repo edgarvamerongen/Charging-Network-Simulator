@@ -52,6 +52,7 @@ test('v3 defaults: reserve+padding+taper ON, efficiency OFF', () => {
   assert.ok(approx(S.routingFactor(), 1.05), 'padding default 1.05');
   assert.equal(S.gridDemandFactor(), 1.0, 'efficiency off by default -> identity');
   assert.ok(S.chargeTimeMin(100, 100, 225) > 60, 'taper on -> slower than the 60min linear');
+  assert.equal(S.sidStarPaddingKm(), 0, 'SID/STAR padding off by default -> identity');
 });
 
 // ---- identity when a toggle is explicitly OFF (accessor returns the no-op) ---
@@ -107,6 +108,34 @@ test('routingFactor == 1.05 default when on', () => {
   const { S } = loadSettings();
   S.save({ routingPadding: { enabled: true, factor: 1.05 } });
   assert.ok(approx(S.routingFactor(), 1.05));
+});
+
+// ---- sidStarPadding (additive per-leg SID/STAR km) -------------------------
+test('sidStarPaddingKm == 0 by default (factor off)', () => {
+  const { S } = loadSettings();
+  assert.equal(S.sidStarPaddingKm(), 0);
+});
+test('sidStarPaddingKm returns the set km when on', () => {
+  const { S } = loadSettings();
+  S.save({ sidStarPadding: { enabled: true, km: 25 } });
+  assert.equal(S.sidStarPaddingKm(), 25);
+});
+test('sidStarPaddingKm clamps to the slider range [5,50] when on', () => {
+  const { S } = loadSettings();
+  S.save({ sidStarPadding: { enabled: true, km: 2 } });
+  assert.equal(S.sidStarPaddingKm(), 5, 'below 5 clamps up to 5');
+  S.save({ sidStarPadding: { enabled: true, km: 99 } });
+  assert.equal(S.sidStarPaddingKm(), 50, 'above 50 clamps down to 50');
+});
+test('sidStarPaddingKm falls back to 10 for non-numeric km', () => {
+  const { S } = loadSettings();
+  S.save({ sidStarPadding: { enabled: true, km: 'oops' } });
+  assert.equal(S.sidStarPaddingKm(), 10);
+});
+test('sidStarPaddingKm == 0 when explicitly off regardless of km', () => {
+  const { S } = loadSettings();
+  S.save({ sidStarPadding: { enabled: false, km: 25 } });
+  assert.equal(S.sidStarPaddingKm(), 0);
 });
 
 // ---- chargeTaper (EXPONENTIAL CV-phase roll-off) ---------------------------

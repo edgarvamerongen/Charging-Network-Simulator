@@ -58,6 +58,39 @@ const FIELDS = ['energyUsedKwh', 'flightMin', 'chargeMin', 'terminalKwh', 'arriv
 const KNOWN_DELTA = new Set(['retour-beta:target50']);
 
 let pass = 0, fail = 0, deltas = 0;
+
+// ---- sidStarPadding integration: a fixed km adds to EACH leg's routed distance,
+//      additive on top of routing padding; energy + reach follow. (Drives the
+//      flight-model.js leg + availRangeKm edits; default-OFF is covered by the goldens.)
+(function sidStarIntegration() {
+  const S = loadStack();
+  const plane = PLANES[Object.keys(PLANES)[0]];
+  const ePerKm = plane.battery_kwh / plane.range_km;
+  const waypoints = [wp('EHAM'), wp('LFPG')];
+  const run = () => S.CNSFlight.simulateTrip(plane, waypoints, { tripType: 'one-way', getChargerKw: () => 250 });
+  // baseline: distance factors off -> route = 1, no pad, full usable range
+  S.CNSSettings.save({ routingPadding: { enabled: false }, landingReserve: { enabled: false }, sidStarPadding: { enabled: false } });
+  const base = run();
+  const rawKm = base.legs[0].rawKm, d0 = base.legs[0].distKm, e0 = base.legs[0].energyKwh, avail0 = base.availRangeKm;
+  // SID/STAR on at 30 km
+  S.CNSSettings.save({ sidStarPadding: { enabled: true, km: 30 } });
+  const padded = run();
+  const d1 = padded.legs[0].distKm, e1 = padded.legs[0].energyKwh, avail1 = padded.availRangeKm;
+  const eq = (a, b) => Math.abs(a - b) < 1e-6;
+  const checks = [
+    [eq(d0, rawKm), `routing off -> distKm == rawKm (${d0} vs ${rawKm})`],
+    [eq(d1, rawKm + 30), `SID/STAR 30km -> distKm == rawKm + 30 (${d1} vs ${rawKm + 30})`],
+    [eq(e1, ePerKm * d1), `energy tracks padded distKm (${e1} vs ${ePerKm * d1})`],
+    [e1 > e0 + 1e-6, `padded energy exceeds baseline (${e1} > ${e0})`],
+    [eq(avail0, plane.range_km), `reach (factors off) == range (${avail0} vs ${plane.range_km})`],
+    [eq(avail1, plane.range_km - 30), `reach with pad == range - 30 (${avail1} vs ${plane.range_km - 30})`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    sidStar — ${msg}`); }
+    else { fail++; console.log(`  FAIL  sidStar — ${msg}`); }
+  }
+})();
+
 for (const c of golden.cases) {
   for (const v of golden._meta.settings) {
     let got;

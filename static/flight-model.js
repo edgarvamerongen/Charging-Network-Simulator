@@ -33,6 +33,7 @@
 window.CNSFlight = (function () {
     function _settings() { return window.CNSSettings || null; }
     function _routingFactor() { const s = _settings(); return s && s.routingFactor ? s.routingFactor() : 1; }
+    function _sidStarKm() { const s = _settings(); return s && s.sidStarPaddingKm ? s.sidStarPaddingKm() : 0; }
     function _usableFraction(plane) { const s = _settings(); return s && s.usableFraction ? s.usableFraction(plane) : 1; }
     function _gridDemandFactor() { const s = _settings(); return s && s.gridDemandFactor ? s.gridDemandFactor() : 1; }
     function _chargeTargetDefault() { const s = _settings(); return s && s.chargeTargetDefault ? s.chargeTargetDefault() : null; }
@@ -62,6 +63,7 @@ window.CNSFlight = (function () {
         const tripType = opts.tripType || 'one-way';
         const training = tripType === 'training';
         const route = _routingFactor();
+        const sidStar = _sidStarKm();                                 // fixed km added to EACH leg (SID/STAR); 0 when off
         const grid = _gridDemandFactor();
         const batt = Math.max(0, +plane.battery_kwh || 0);
         const range = Math.max(0, +plane.range_km || 0);
@@ -71,7 +73,7 @@ window.CNSFlight = (function () {
         const reserve = batt - usable;
         const ePerKm = range > 0 ? batt / range : 0;
         const cRate = plane.c_rate;                                   // vestigial; effectiveChargePower handles null
-        const availRangeKm = (range > 0 && route > 0) ? range * usableFrac / route : 0;   // geographic reach
+        const availRangeKm = (range > 0 && route > 0) ? Math.max(0, range * usableFrac - sidStar) / route : 0;   // geographic reach (fixed SID/STAR pad eats into it before routing scales)
         const getTarget = (typeof opts.getTargetSoc === 'function') ? opts.getTargetSoc : (() => _chargeTargetDefault());
         const getChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => +opts.chargerKw || 0);
         // Interim-deficit charging (per-rotation opts supplied by the scheduler): a shared aircraft
@@ -84,7 +86,7 @@ window.CNSFlight = (function () {
         const profile = {
             tripType, multiLeg: false, training,
             battery_kwh: batt, usable_kwh: usable, reserve_kwh: reserve, availRangeKm,
-            routingFactor: route, gridDemandFactor: grid,
+            routingFactor: route, sidStarKm: sidStar, gridDemandFactor: grid,
             nodes: [], legs: [], charges: [], phases: [],
             totals: { rawKm: 0, distKm: 0, flightMin: 0, chargeMin: 0, enRouteMin: 0, terminalMin: 0, travelMin: 0, energyUsedKwh: 0, gridKwh: 0, avgUsageKwhPer100km: 0 },
             terminal: null, errors,
@@ -132,7 +134,7 @@ window.CNSFlight = (function () {
         for (let i = 0; i < nLegs; i++) {
             const a = chain[i], b = chain[i + 1];
             const rawKm = _haversineKm(_pt(a), _pt(b));          // great-circle (geographic)
-            const distKm = rawKm * route;                        // ROUTED length (SID/STAR + airways)
+            const distKm = rawKm * route + sidStar;              // ROUTED length: airways multiplier, then fixed SID/STAR terminal km
             const energyKwh = ePerKm * distKm;                   // flown — derives from the routed length
             const flightMin = speed > 0 ? distKm / speed * 60 : 0;   // flown — derives from the routed length
             const overRange = energyKwh > usable + 1e-9;          // [R5] padded energy > usable

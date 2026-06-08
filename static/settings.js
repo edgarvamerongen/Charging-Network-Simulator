@@ -29,6 +29,9 @@
  *                        Together they form the plateau-then-taper curve.
  *   routingPadding     — multiplier on great-circle distance to approximate
  *                        SID/STAR + airways padding.
+ *   sidStarPadding     — fixed km added to EACH leg for SID/STAR terminal track
+ *                        miles. Additive, on top of routingPadding; opt-in (off
+ *                        by default so it doesn't double-count with the above).
  *
  * Per-aircraft overrides:
  *   plane.min_landing_soc — if present in the catalog (planes.json), takes
@@ -52,6 +55,7 @@ window.CNSSettings = (function () {
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
         chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
         routingPadding:    { enabled: true,  factor: 1.05 },          // ≥1
+        sidStarPadding:    { enabled: false, km: 10 },                // fixed km added to EACH leg (SID+STAR terminal track miles); opt-in, additive on top of routingPadding
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
     });
@@ -122,6 +126,17 @@ window.CNSSettings = (function () {
         const s = loadAll().routingPadding;
         if (!s.enabled) return 1.0;
         return Math.max(1.0, Math.min(1.5, +s.factor || 1.05));
+    }
+
+    /** Fixed km added to EACH leg to approximate SID/STAR terminal track miles.
+     *  0 when off (identity); clamped to the slider's [5,50] when on. Additive,
+     *  applied AFTER the routingPadding multiplier:
+     *  distKm = rawKm·routingFactor + sidStarPaddingKm. Mirrors routingFactor()'s
+     *  "identity when off, clamp to UI range when on" shape. */
+    function sidStarPaddingKm() {
+        const s = loadAll().sidStarPadding;
+        if (!s || !s.enabled) return 0;
+        return Math.max(5, Math.min(50, +s.km || 10));
     }
 
     /** Default state-of-charge every aircraft charges to at a terminus, unless a
@@ -210,9 +225,11 @@ window.CNSSettings = (function () {
             chargerEfficiency: !!s.chargerEfficiency.enabled,
             chargeTaper:       !!s.chargeTaper.enabled,
             routingPadding:    !!s.routingPadding.enabled,
+            sidStarPadding:    !!(s.sidStarPadding && s.sidStarPadding.enabled),
             chargeTarget:      !!(s.chargeTarget && s.chargeTarget.enabled),
             anyOn: !!(s.landingReserve.enabled || s.chargerEfficiency.enabled ||
                       s.chargeTaper.enabled || s.routingPadding.enabled ||
+                      (s.sidStarPadding && s.sidStarPadding.enabled) ||
                       (s.chargeTarget && s.chargeTarget.enabled)),
         };
     }
@@ -220,7 +237,7 @@ window.CNSSettings = (function () {
     return {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
-        usableFraction, gridDemandFactor, routingFactor, chargeTimeMin,
+        usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
     };
 })();
