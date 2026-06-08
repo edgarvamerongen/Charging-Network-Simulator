@@ -282,5 +282,30 @@ test('reported case: the same 401 km leg is fine with the reserve OFF', () => {
   assert.equal(res.legCount, 1);
 });
 
+// 17. Reserve must apply to a destination EXCLUDED from allAirports (the app filters chain
+//     airports out of the candidate pool) as long as the dest object carries alternate_km.
+//     This is the 0-reserve bug: planRoute's alt lookup is built only from allAirports, so an
+//     excluded endpoint fell back to its own object — which the UI built WITHOUT alternate_km.
+test('reserve applies to a destination excluded from allAirports but carrying alternate_km', () => {
+  const O = node('O', 0, 0), A = ap('A', 1.5, 5);
+  const D = { ident: 'D', lat: 0, lon: 1.0, alternate_km: 40 };   // NOT in allAirports; carries alt
+  const res = loadRouting({ requireAlt: true }).planRoute({
+    origin: O, destination: D, plane: PLANE(130),
+    allowedTypes: ['medium_airport'], allAirports: [O, A], options: {} });   // D absent from the pool
+  // O->D 111.19 + 40 reserve = 151.19 > 130 → direct blocked; A (166.79 from O) is out of range →
+  // no route. If the excluded dest's reserve were dropped (the bug), 111.19 <= 130 → it'd route.
+  assert.ok(res.error, 'excluded-dest reserve must still block the hop (111.19 + 40 > 130)');
+});
+// ...and with NO reserve, the same excluded dest routes directly (proves the 40 is what blocks it).
+test('the same excluded destination routes directly with the reserve OFF', () => {
+  const O = node('O', 0, 0), A = ap('A', 1.5, 5);
+  const D = { ident: 'D', lat: 0, lon: 1.0, alternate_km: 40 };
+  const res = loadRouting({ requireAlt: false }).planRoute({
+    origin: O, destination: D, plane: PLANE(130),
+    allowedTypes: ['medium_airport'], allAirports: [O, A], options: {} });
+  assert.equal(res.error, undefined, res.error);
+  assert.equal(res.legCount, 1);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

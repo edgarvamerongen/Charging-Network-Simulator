@@ -1298,23 +1298,27 @@
         .stops-section.stops-collapsed #stopsHint { display: none; }
         .stops-title { font-size: .72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .04em; }
         .stops-summary { font-size: .74rem; color: var(--ink-soft); }
-        .stops-list { list-style: none; margin: 0; padding: 0; }
-        .stops-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: .82rem; }
+        /* Clean grid: step · name(1fr) · alt · size · range. Each li is display:contents so its
+           5 cells become items of this one grid, so the columns align across every row. */
+        .stops-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: auto minmax(0,1fr) auto auto auto; column-gap: 7px; row-gap: 4px; align-items: start; font-size: .82rem; }
+        .stops-list li { display: contents; }
+        .stops-list li.stops-error { display: block; grid-column: 1 / -1; }
+        .stops-list li strong { line-height: 18px; min-width: 0; }   /* col 2: match the step-circle height so the number sits on the first name line; min-width:0 lets a long name wrap */
         .stops-list li .step { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--primary); color: #fff; font-size: .65rem; font-weight: 700; }
         .stops-list li.terminus .step { background: var(--ink-soft); }
         .stops-list .type-tag { font-size: .62rem; padding: 1px 5px; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
         .stops-list .type-medium { background: #dbeafe; color: #1d4ed8; }
         .stops-list .type-large { background: #d1fae5; color: #065f46; }
         .stops-list .type-small { background: #fee2e2; color: #991b1b; }
-        .stops-list .leg-dist { font-size: .7rem; color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+        .stops-list .leg-dist { font-size: .7rem; color: var(--muted); justify-self: end; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .stops-error { color: var(--danger); font-size: .82rem; }
         .stops-error button, #enableAllTypesBtn { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
         .stops-error-inline { color: var(--danger); font-size: .78rem; }
-        .stops-list .stop-rm { margin-left: 4px; border: none; background: transparent; color: var(--danger); cursor: pointer; padding: 0 4px; border-radius: 4px; font-size: 1rem; line-height: 1; opacity: .65; }
-        .stops-list .stop-rm:hover { background: rgba(239,68,68,.12); opacity: 1; }
+        .stops-list .stop-removable { cursor: pointer; }
+        .stops-list .stop-removable:hover { text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 1.5px; }
         .stops-list .leg-dist.over-range { color: var(--danger); font-weight: 700; }
-        .stops-list .alt-divert { margin-left: 6px; color: #7c3aed; cursor: pointer; font-size: .82rem; opacity: .6; user-select: none; line-height: 1; }
-        .stops-list .alt-divert:hover, .stops-list .alt-divert:focus { opacity: 1; outline: none; }
+        .stops-list .alt-hint { font-size: .56rem; font-weight: 700; color: #7c3aed; background: rgba(124,58,237,.12); padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; cursor: default; }
+        .alt-tip { position: fixed; z-index: 4000; display: none; background: #1f2937; color: #fff; padding: 4px 9px; border-radius: 6px; font-size: .72rem; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.3); }
         .stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
         .stops-list .stops-add { padding: 6px 0 0 0; position: relative; }
         .stops-list .stops-add input { width: 100%; padding: 5px 8px; font-size: .82rem; border: 1px solid #e2e8f0; border-radius: 6px; }
@@ -2110,28 +2114,32 @@
             else clearAlternates();
         }
 
-        // --- Route-list divert glyph (Option A): a per-stop "⤵" that reveals each ARRIVAL
-        // node's nearest alternate (native title) and pulses it on the map on hover/tap. Only
-        // arrival nodes carry it (the origin departs full — see routing.js), and only when the
-        // alternate-reserve setting is on, so it never clutters the default view.
-        function _altDivertHtml(wp) {
-            if (!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled())) return '';
+        // --- Alternate hint: hovering an ARRIVAL airport's name in the route list shows a native
+        // box "Divert → IDENT · km"; a small purple "alt" badge after the name prompts the hover.
+        // Only arrival nodes (the origin departs full — see routing.js), and only when the
+        // alternate-reserve setting is on, so the default view stays uncluttered.
+        function _altHint(wp) {
+            const off = { open: '<strong>', badge: '' };
+            if (!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled())) return off;
             const full = wp && wp.ident ? airportByIdent[wp.ident] : null;
-            if (!full || !full.alternate_ident) return '';
+            if (!full || !full.alternate_ident) return off;
             const km = (full.alternate_km != null) ? ' · ' + fmtDist(full.alternate_km) : '';
-            return ` <span class="alt-divert" tabindex="0" role="button" data-stop-ident="${full.ident}" data-alt-ident="${full.alternate_ident}" title="Divert → ${full.alternate_ident}${km}" aria-label="Nearest alternate ${full.alternate_ident}${km}">⤵</span>`;
+            const title = `Divert → ${full.alternate_ident}${km}`;
+            return { open: '<strong>', badge: ` <span class="alt-hint" data-tip="${title}" tabindex="0" aria-label="${title}">alt</span>` };
         }
-        let _altPulseLayers = [];
-        function clearAltPulse() { _altPulseLayers.forEach(l => map.removeLayer(l)); _altPulseLayers = []; }
-        function pulseAlternate(stopIdent, altIdent) {
-            clearAltPulse();
-            const stop = stopIdent ? airportByIdent[stopIdent] : null, alt = altIdent ? airportByIdent[altIdent] : null;
-            if (!stop || !alt) return;
-            const from = [stop.latitude_deg, stop.longitude_deg], to = [alt.latitude_deg, alt.longitude_deg];
-            const line = L.polyline([from, to], { color: '#7c3aed', weight: 3, dashArray: '4 5', opacity: 1 });
-            const ring = L.circleMarker(to, { radius: 9, color: '#7c3aed', weight: 3, fillColor: '#7c3aed', fillOpacity: 0.25 });
-            line.addTo(map); ring.addTo(map); _altPulseLayers.push(line, ring);
+        // Lightweight tooltip for the [alt] badge: appended to <body> so the scrollable planner
+        // sidebar (overflow-y:auto / x:hidden) can't clip it, and shown INSTANTLY (no native-title delay).
+        let _altTip = null;
+        function _showAltTip(badge) {
+            const txt = badge && badge.dataset && badge.dataset.tip; if (!txt) return;
+            if (!_altTip) { _altTip = document.createElement('div'); _altTip.className = 'alt-tip'; document.body.appendChild(_altTip); }
+            _altTip.textContent = txt; _altTip.style.display = 'block';
+            const r = badge.getBoundingClientRect(), t = _altTip.getBoundingClientRect();
+            const left = Math.max(6, Math.min(r.left + r.width / 2 - t.width / 2, window.innerWidth - t.width - 6));
+            let top = r.top - t.height - 8; if (top < 6) top = r.bottom + 8;   // flip below if no room above
+            _altTip.style.left = Math.round(left) + 'px'; _altTip.style.top = Math.round(top) + 'px';
         }
+        function _hideAltTip() { if (_altTip) _altTip.style.display = 'none'; }
 
         let _routeEndpoints = [];             // [{lat,lon,label}] of the active route's airports
         let _routeChargerIdents = new Set();  // charger airports on the route → drawn blue, skipped by the orange layer
@@ -2339,8 +2347,12 @@
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
             return {
-                origin: { ident: selected.origin.ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg },
-                dest:   { ident: selected.destination.ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg }
+                // Carry alternate_km on the endpoints: the planner EXCLUDES origin/dest from its
+                // candidate pool (they're already on the chain), so it builds its divert-reserve
+                // lookup without them — without this their reserve would fall back to 0 and the
+                // planner would under-plan a leg that validateRoute then flags (inconsistent).
+                origin: { ident: (airportByIdent[selected.origin.ident] || selected.origin).ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg, alternate_km: (airportByIdent[selected.origin.ident] || selected.origin).alternate_km },
+                dest:   { ident: (airportByIdent[selected.destination.ident] || selected.destination).ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg, alternate_km: (airportByIdent[selected.destination.ident] || selected.destination).alternate_km }
             };
         }
 
@@ -2397,7 +2409,7 @@
             document.querySelectorAll('#stopsContainer .stop-field .stop-input').forEach(inp => {
                 const ident = inp.dataset.ident; if (!ident) return;
                 const ap = airportByIdent[ident]; if (!ap) return;
-                manual.push({ ident: ap.ident, name: ap.name, type: ap.type, lat: ap.latitude_deg, lon: ap.longitude_deg, iata_code: ap.iata_code || '', _manual: true });
+                manual.push({ ident: ap.ident, name: ap.name, type: ap.type, lat: ap.latitude_deg, lon: ap.longitude_deg, iata_code: ap.iata_code || '', alternate_km: ap.alternate_km, _manual: true });
             });
             plannedSource = manual.length ? 'user' : 'auto';
 
@@ -2461,7 +2473,7 @@
             return bestIdx;
         }
 
-        const TYPE_TAG = { 'small_airport': ['SMALL','type-small'], 'medium_airport': ['MED','type-medium'], 'large_airport': ['LARGE','type-large'] };
+        const TYPE_TAG = { 'small_airport': ['S','type-small','Small'], 'medium_airport': ['M','type-medium','Medium'], 'large_airport': ['L','type-large','Large'] };
 
         // Shared "Enable all types" remedy button — reused by the no-route hard-fail path
         // AND the over-range-leg path. Ticking the disabled airport-size filters lets the
@@ -2534,8 +2546,8 @@
                 document.querySelector('.stops-title').textContent = 'Suggested route';
                 summaryEl.textContent = `Direct flight · ${fmtDist(_dispKm(t.origin, t.dest))}`;
                 listEl.innerHTML = `
-                    <li class="terminus"><span class="step">0</span><strong>${t.origin.name}</strong><span class="leg-dist">→ ${fmtDist(_dispKm(t.origin, t.dest))}</span></li>
-                    <li class="terminus"><span class="step">1</span><strong>${t.dest.name}</strong>${_altDivertHtml(t.dest)}</li>`;
+                    <li class="terminus"><span class="step">0</span><strong>${t.origin.name}</strong><span></span><span></span><span class="leg-dist">→ ${fmtDist(_dispKm(t.origin, t.dest))}</span></li>
+                    <li class="terminus"><span class="step">1</span>${_altHint(t.dest).open}${t.dest.name}</strong>${_altHint(t.dest).badge || '<span></span>'}<span></span><span></span></li>`;
                 hintEl.innerHTML = `Direct leg fits the aircraft's range — no stops needed. Use <strong>+ Add stop</strong> in the form above to insert one manually.`;
                 _wireStopRowActions(t);
                 return;
@@ -2547,16 +2559,19 @@
             const lis = chain.map((wp, i) => {
                 const isTerm = (i === 0 || i === chain.length - 1);
                 const tag = wp.type && TYPE_TAG[wp.type];
-                const tagHtml = (!isTerm && tag) ? `<span class="type-tag ${tag[1]}">${tag[0]}</span>` : '';
+                const tagHtml = (!isTerm && tag) ? `<span class="type-tag ${tag[1]}" data-tip="${tag[2]}" tabindex="0">${tag[0]}</span>` : '';
                 let legDist = '';
                 if (i < chain.length - 1) {
                     const d = _dispKm(wp, chain[i + 1]);
                     const bad = plannedLegIssues.includes(i);
                     legDist = `<span class="leg-dist${bad ? ' over-range' : ''}">→ ${fmtDist(d)}${bad ? ' ⚠' : ''}</span>`;
                 }
-                const rm = !isTerm ? `<button class="stop-rm" type="button" data-stop="${i - 1}" title="Remove this stop">×</button>` : '';
-                const altGlyph = i >= 1 ? _altDivertHtml(wp) : '';   // arrival nodes only (not the origin)
-                return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span><strong>${wp.name}</strong>${tagHtml}${rm}${legDist}${altGlyph}</li>`;
+                const ah = i >= 1 ? _altHint(wp) : { open: '<strong>', badge: '' };   // arrival nodes only (not the origin)
+                // Removable stops (non-terminus): the NAME is the remove control — click to remove,
+                // strike-through on hover (replaces the old × button).
+                const nameOpen = !isTerm ? `<strong class="stop-removable" data-stop="${i - 1}" title="Click to remove this stop">` : '<strong>';
+                // Always 5 grid cells (step · name · alt · size · range) so the columns line up.
+                return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span>${nameOpen}${wp.name}</strong>${ah.badge || '<span></span>'}${tagHtml || '<span></span>'}${legDist || '<span></span>'}</li>`;
             }).join('');
 
             const sourceLabel = plannedSource === 'user' ? 'Edited route' : 'Suggested route';
@@ -2605,8 +2620,8 @@
             //                  the next smartReplan (was a frustrating
             //                  loop — × did nothing because the planner
             //                  re-filled the same airport).
-            listEl.querySelectorAll('.stop-rm').forEach(btn => btn.addEventListener('click', () => {
-                const idx = +btn.dataset.stop;
+            listEl.querySelectorAll('.stop-removable').forEach(el => el.addEventListener('click', () => {
+                const idx = +el.dataset.stop;
                 const removed = plannedStops[idx];
                 if (removed && removed.ident) {
                     const formFieldExisted = !!document.querySelector(`#stopsContainer .stop-input[data-ident="${removed.ident}"]`);
@@ -3115,16 +3130,14 @@
         }));
         const fAltCb = document.getElementById('fAlternates');
         if (fAltCb) fAltCb.addEventListener('change', refreshAlternates);
-        // Route-list divert glyphs: delegated so it covers every dynamically-rendered ⤵.
-        // Hover (desktop) / tap (touch) pulses that stop's alternate on the map; the native
-        // title shows "Divert → IDENT · km". Clearing happens on mouse-out and on route teardown.
+        // [alt] badge tooltip — delegated on the stop list so it covers every re-render.
         (function () {
-            const list = document.getElementById('stopsList');
-            if (!list) return;
-            const hit = (e) => e.target.closest && e.target.closest('.alt-divert');
-            list.addEventListener('mouseover', (e) => { const g = hit(e); if (g) pulseAlternate(g.dataset.stopIdent, g.dataset.altIdent); });
-            list.addEventListener('mouseout',  (e) => { if (hit(e)) clearAltPulse(); });
-            list.addEventListener('click',     (e) => { const g = hit(e); if (g) { e.stopPropagation(); pulseAlternate(g.dataset.stopIdent, g.dataset.altIdent); } });
+            const list = document.getElementById('stopsList'); if (!list) return;
+            const badge = (e) => e.target.closest && e.target.closest('[data-tip]');
+            list.addEventListener('mouseover', (e) => { const b = badge(e); if (b) _showAltTip(b); });
+            list.addEventListener('mouseout',  (e) => { if (badge(e)) _hideAltTip(); });
+            list.addEventListener('focusin',   (e) => { const b = badge(e); if (b) _showAltTip(b); });
+            list.addEventListener('focusout',  (e) => { if (badge(e)) _hideAltTip(); });
         })();
         document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.addEventListener('click', () => setBasemap(btn.dataset.basemap)));
 
@@ -3171,7 +3184,7 @@
             // The alternate overlay belongs to the route, so it must go too — otherwise a
             // reset/clear leaves stale purple connectors on the map, and toggling Alternates
             // afterwards would redraw them from a stale lastRouteChain.
-            clearAlternates(); clearAltPulse(); lastRouteChain = [];
+            clearAlternates(); lastRouteChain = [];
         }
         // F5: per-leg label (distance · time · energy) centred on each leg.
         // Uses the backend leg metrics when present (after Simulate); otherwise
@@ -3751,6 +3764,7 @@
 
         // Live-refresh the result panel when Model settings change (charge target,
         // taper, charger efficiency …) so the preview never goes stale — no re-sim.
+        let _lastRoutingSig = null;   // routing-relevant model factors, to detect when a replan is needed
         if (window.CNSSettings && CNSSettings.subscribe) {
             CNSSettings.subscribe(() => {
                 if (_lastResultData && !document.getElementById('result').classList.contains('d-none')) {
@@ -3760,11 +3774,19 @@
                 // fraction (refresh stats only — don't clobber the override input).
                 const spec = (typeof selectedPlaneSpec === 'function') ? selectedPlaneSpec() : null;
                 if (spec && typeof _refreshSpecStats === 'function') _refreshSpecStats(spec);
-                // The planning aids (trajectory pill + suggested route) now show ROUTED
-                // distances, which depend on the padding factor — refresh them on a
-                // model-settings change. renderStops re-renders the existing plannedStops
-                // (no replan, so it never clobbers manual edits) and re-syncs the trajectory.
-                try { if (typeof renderStops === 'function') renderStops(); } catch (err) { console.error(err); }
+                // The suggested route depends on ROUTING model factors (padding, landing reserve,
+                // alternate reserve). When one changes, RE-PLAN so the auto route re-routes to
+                // respect it (inserting/dropping stops, preserving manual stops + the removed-stop
+                // blacklist) — the "no route" error + "Enable all types" button then appear ONLY
+                // when no valid route exists, never as a dead-end flag on a routable leg. A change
+                // to a NON-routing factor (charge target, taper, …) just re-renders — no replan.
+                try {
+                    const rs = CNSSettings.loadAll();
+                    const sig = `${rs.landingReserve.enabled ? rs.landingReserve.minLandingSoc : '-'}|${rs.routingPadding.enabled ? rs.routingPadding.factor : '-'}|${(rs.alternateReserve && rs.alternateReserve.enabled) ? 1 : 0}`;
+                    const fn = (sig !== _lastRoutingSig && typeof recomputeRoute === 'function') ? recomputeRoute : renderStops;
+                    _lastRoutingSig = sig;
+                    if (typeof fn === 'function') fn();
+                } catch (err) { console.error(err); }
             });
         }
 
