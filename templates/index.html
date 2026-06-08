@@ -1013,6 +1013,28 @@
         .est-note { font-size: .72rem; color: var(--muted); }
         .modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-lg); }
 
+        /* ---- Edit-flight modal: reuse the app's spec-card visual language so the
+           editor reads as native, not a bolted-on Bootstrap form. Scoped to
+           #editFlightModal / .charger-pin so nothing else is touched. ---- */
+        #editFlightModal .ef-route-sub { font-size: .76rem; font-weight: 500; color: var(--muted); margin-top: 2px; }
+        #editFlightModal .ef-plane-card {
+            display: flex; align-items: center; gap: 12px; padding: 8px 10px;
+            border: 1px solid var(--panel-border); border-radius: var(--radius-sm); background: #fff;
+        }
+        #editFlightModal .ef-thumb {
+            width: 88px; height: 56px; flex-shrink: 0; object-fit: contain;
+            border-radius: 6px; background: #f6f7f9;
+        }
+        #editFlightModal .ef-plane-name { font-weight: 600; font-size: .9rem; color: var(--ink); }
+        #editFlightModal .ef-plane-stats { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+        /* The "pinned charger" badge on a demand-calculator row — a small,
+           intentional chip rather than a bare floating emoji. */
+        .charger-pin {
+            display: inline-flex; align-items: center; vertical-align: 1px; margin-left: 4px;
+            padding: 1px 6px; border-radius: 999px; font-size: .68rem; line-height: 1.5;
+            color: var(--brand-ink); background: rgba(43,47,90,.08); cursor: help;
+        }
+
         /* Model-settings modal: one row per opt-in factor. */
         .rs-row { padding: 9px 0; border-bottom: 1px solid var(--panel-border); }
         .rs-row:last-child { border-bottom: none; }
@@ -1820,43 +1842,43 @@
     </div>
 
     <!-- Welcome / landing modal — the onboarding entry point, shown on every
-         load until the user ticks “don't show again”. “Start demo” launches the
-         guided tour; “Explore on my own” just dismisses. Reuses the .tour-welcome-*
+         load until the user ticks "don't show again". "Start demo" launches the
+         guided tour; "Explore on my own" just dismisses. Reuses the .tour-welcome-*
          / .tour-lead* visuals (the tour no longer carries a welcome step). -->
-    <div class=”modal fade” id=”welcomeModal” tabindex=”-1” aria-labelledby=”welcomeHeroTag” aria-hidden=”true”>
-        <div class=”modal-dialog modal-dialog-centered welcome-dialog”>
-            <div class=”modal-content welcome-content”>
-                <button type=”button” class=”btn-close welcome-close” data-bs-dismiss=”modal” aria-label=”Close”></button>
-                <div class=”welcome-body”>
-                    <div class=”tour-welcome-hero”>
-                        <img class=”tour-welcome-logo” src=”/pics/logos/NRG2fly_logo_kleur_wide.png” alt=”NRG2fly” onerror=”this.style.display='none'”>
-                        <div class=”tour-welcome-tag” id=”welcomeHeroTag”>Charging Network Simulator</div>
+    <div class="modal fade" id="welcomeModal" tabindex="-1" aria-labelledby="welcomeHeroTag" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered welcome-dialog">
+            <div class="modal-content welcome-content">
+                <button type="button" class="btn-close welcome-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="welcome-body">
+                    <div class="tour-welcome-hero">
+                        <img class="tour-welcome-logo" src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2fly" onerror="this.style.display='none'">
+                        <div class="tour-welcome-tag" id="welcomeHeroTag">Charging Network Simulator</div>
                     </div>
                     <p>At NRG2fly we are rolling out a European charging network that makes point-to-point electric aviation possible. This tool helps airports and operators answer the strategic questions we keep coming back to: <strong>what kind of charging infrastructure, and how much power, do we need?</strong></p>
                     <p>Simulate traffic between airports with a variety of electric aircraft and explore what different situations look like as electric aviation takes off — a defensible, client-ready sizing brief exported as a PDF, not a back-of-envelope guess.</p>
                     <p>Got questions about your network? <strong>Merlijn van Vliet</strong> and <strong>Jacco Bink</strong> would love to hear from you.</p>
-                    <div class=”tour-lead”>
-                        <div class=”tour-lead-grid”>
-                            <div class=”tour-lead-card”>
-                                <img class=”tlc-photo” src=”/pics/crew/jacco.jpeg” alt=”Jacco Bink” onerror=”this.style.visibility='hidden'”>
-                                <div class=”tlc-name”>Jacco Bink</div>
-                                <div class=”tlc-role”>COO</div>
-                                <div class=”tlc-links”><a href=”https://www.linkedin.com/in/jacco-bink-ba6254/” target=”_blank” rel=”noopener”>LinkedIn ↗</a> · <a href=”mailto:jacco@nrg2fly.com”>jacco@nrg2fly.com</a></div>
+                    <div class="tour-lead">
+                        <div class="tour-lead-grid">
+                            <div class="tour-lead-card">
+                                <img class="tlc-photo" src="/pics/crew/jacco.jpeg" alt="Jacco Bink" onerror="this.style.visibility='hidden'">
+                                <div class="tlc-name">Jacco Bink</div>
+                                <div class="tlc-role">COO</div>
+                                <div class="tlc-links"><a href="https://www.linkedin.com/in/jacco-bink-ba6254/" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:jacco@nrg2fly.com">jacco@nrg2fly.com</a></div>
                             </div>
-                            <div class=”tour-lead-card”>
-                                <img class=”tlc-photo” src=”/pics/crew/merlijn.jpeg” alt=”Merlijn van Vliet” onerror=”this.style.visibility='hidden'”>
-                                <div class=”tlc-name”>Merlijn van Vliet</div>
-                                <div class=”tlc-role”>CEO</div>
-                                <div class=”tlc-links”><a href=”https://www.linkedin.com/in/merlijnvanvliet/” target=”_blank” rel=”noopener”>LinkedIn ↗</a> · <a href=”mailto:merlijn@nrg2fly.com”>merlijn@nrg2fly.com</a></div>
+                            <div class="tour-lead-card">
+                                <img class="tlc-photo" src="/pics/crew/merlijn.jpeg" alt="Merlijn van Vliet" onerror="this.style.visibility='hidden'">
+                                <div class="tlc-name">Merlijn van Vliet</div>
+                                <div class="tlc-role">CEO</div>
+                                <div class="tlc-links"><a href="https://www.linkedin.com/in/merlijnvanvliet/" target="_blank" rel="noopener">LinkedIn ↗</a> · <a href="mailto:merlijn@nrg2fly.com">merlijn@nrg2fly.com</a></div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class=”welcome-foot”>
-                    <label class=”welcome-dontshow”><input type=”checkbox” id=”welcomeDontShow”> Don't show this again</label>
-                    <div class=”welcome-actions”>
-                        <button type=”button” class=”welcome-skip” data-bs-dismiss=”modal”>Explore on my own</button>
-                        <button type=”button” class=”welcome-start” id=”welcomeStartBtn”>Start demo →</button>
+                <div class="welcome-foot">
+                    <label class="welcome-dontshow"><input type="checkbox" id="welcomeDontShow"> Don't show this again</label>
+                    <div class="welcome-actions">
+                        <button type="button" class="welcome-skip" data-bs-dismiss="modal">Explore on my own</button>
+                        <button type="button" class="welcome-start" id="welcomeStartBtn">Start demo →</button>
                     </div>
                 </div>
             </div>
@@ -1867,65 +1889,68 @@
          change the flight type, aircraft, the charger it uses (manual override of
          the automatic priority), frequency and fleet mode. Plane / flight-type
          changes re-run the simulation so energy & timing stay consistent. -->
-    <div class=”modal fade” id=”editFlightModal” tabindex=”-1”>
-        <div class=”modal-dialog modal-dialog-centered”>
-            <div class=”modal-content”>
-                <div class=”modal-header”>
-                    <h5 class=”modal-title”>Edit flight</h5>
-                    <button type=”button” class=”btn-close” data-bs-dismiss=”modal”></button>
+    <div class="modal fade" id="editFlightModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Edit flight</h5>
+                        <div class="ef-route-sub" id="efRoute"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class=”modal-body”>
-                    <div class=”mb-2 text-muted small”>Route: <span id=”efRoute” class=”fw-semibold”></span></div>
-                    <div class=”row g-2”>
-                        <div class=”col-6 mb-2”>
-                            <label class=”form-label”>Flight type</label>
-                            <select id=”efTripType” class=”form-select”>
-                                <option value=”one-way”>One-way (A → B)</option>
-                                <option value=”retour”>Retour (A → B → A)</option>
-                                <option value=”training”>Training (loop at base)</option>
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <div class="col-6 mb-2">
+                            <label class="form-label">Flight type</label>
+                            <select id="efTripType" class="form-select">
+                                <option value="one-way">One-way (A → B)</option>
+                                <option value="retour">Retour (A → B → A)</option>
+                                <option value="training">Training (loop at base)</option>
                             </select>
                         </div>
-                        <div class=”col-6 mb-2”>
-                            <label class=”form-label”>Charger it uses</label>
-                            <select id=”efCharger” class=”form-select”></select>
-                            <div class=”form-text”>Pick a charger at this airport to override the automatic priority, or “Auto”.</div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label">Charger it uses</label>
+                            <select id="efCharger" class="form-select"></select>
+                            <div class="form-text">Pin a charger here to override the automatic pick, or leave on Auto.</div>
                         </div>
                     </div>
-                    <div class=”mb-2”>
-                        <label class=”form-label”>Aircraft</label>
-                        <div class=”d-flex align-items-center gap-3”>
-                            <img id=”efThumb” class=”d-none” alt=”” style=”max-height:60px;max-width:120px;border-radius:6px;object-fit:contain;background:#f6f7f9”>
-                            <div class=”flex-grow-1”>
-                                <select id=”efPlane” class=”form-select”></select>
-                                <div id=”efPlaneSpec” class=”form-text”></div>
+                    <div class="mb-2">
+                        <label class="form-label">Aircraft</label>
+                        <select id="efPlane" class="form-select"></select>
+                        <div class="ef-plane-card mt-2">
+                            <img id="efThumb" class="ef-thumb d-none" alt="">
+                            <div class="ef-plane-meta">
+                                <div class="ef-plane-name" id="efPlaneName"></div>
+                                <div id="efPlaneSpec" class="ef-plane-stats"></div>
                             </div>
                         </div>
                     </div>
-                    <div class=”row g-2”>
-                        <div class=”col-6 mb-2”>
-                            <label class=”form-label”>Frequency</label>
-                            <div class=”input-group”>
-                                <input id=”efFreqN” type=”number” min=”1” step=”1” class=”form-control”>
-                                <select id=”efFreqUnit” class=”form-select”>
-                                    <option value=”day”>/day</option>
-                                    <option value=”week”>/week</option>
+                    <div class="row g-2">
+                        <div class="col-6 mb-2">
+                            <label class="form-label">Frequency</label>
+                            <div class="input-group">
+                                <input id="efFreqN" type="number" min="1" step="1" class="form-control">
+                                <select id="efFreqUnit" class="form-select">
+                                    <option value="day">/day</option>
+                                    <option value="week">/week</option>
                                 </select>
                             </div>
                         </div>
-                        <div class=”col-6 mb-2” id=”efFleetRow”>
-                            <label class=”form-label”>Fleet</label>
-                            <div class=”d-flex gap-3 pt-1”>
-                                <label class=”opt-check mb-0”><input type=”radio” name=”efFleetMode” value=”shared”><span>One aircraft</span></label>
-                                <label class=”opt-check mb-0”><input type=”radio” name=”efFleetMode” value=”separate”><span>Separate planes</span></label>
+                        <div class="col-6 mb-2" id="efFleetRow">
+                            <label class="form-label">Fleet</label>
+                            <div class="d-flex gap-3 pt-1">
+                                <label class="opt-check mb-0"><input type="radio" name="efFleetMode" value="shared"><span>One aircraft</span></label>
+                                <label class="opt-check mb-0"><input type="radio" name="efFleetMode" value="separate"><span>Separate planes</span></label>
                             </div>
                         </div>
                     </div>
-                    <div id=”efError” class=”text-danger small d-none”></div>
-                    <p class=”est-note mb-0 mt-2”>Changing the aircraft or flight type re-runs the simulation, so recharge energy and timings update automatically. To change the route, stops or departure/destination airports, remove this flight and add a new one.</p>
+                    <div id="efError" class="text-danger small d-none"></div>
+                    <p class="est-note mb-0 mt-2">Changing the aircraft or flight type re-runs the simulation, so recharge energy and timings update automatically. To change the route, stops or departure/destination airports, remove this flight and add a new one.</p>
                 </div>
-                <div class=”modal-footer”>
-                    <button type=”button” class=”btn btn-secondary” data-bs-dismiss=”modal”>Cancel</button>
-                    <button type=”button” id=”efSave” class=”btn btn-primary”>Save changes</button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="efSave" class="btn btn-primary">Save changes</button>
                 </div>
             </div>
         </div>
@@ -4111,8 +4136,10 @@
             const spec = _editPlaneSpec(document.getElementById('efPlane').value);
             const thumb = document.getElementById('efThumb');
             const specEl = document.getElementById('efPlaneSpec');
+            const nameEl = document.getElementById('efPlaneName');
             if (spec && spec.image) { thumb.src = '/pics/' + spec.image; thumb.alt = spec.name; thumb.classList.remove('d-none'); }
             else { thumb.removeAttribute('src'); thumb.classList.add('d-none'); }
+            if (nameEl) nameEl.textContent = spec ? spec.name : '';
             if (spec) {
                 const range = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
                 specEl.textContent = `${spec.battery_kwh || 0} kWh · ${range}${spec.seats ? ' · ' + spec.seats + ' seats' : ''}`;
