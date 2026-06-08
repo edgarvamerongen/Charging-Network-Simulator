@@ -262,5 +262,25 @@ test('toggle OFF ignores alternate_km entirely (even huge values)', () => {
   assert.deepEqual(idents(res), ['A']);
 });
 
+// 15. The reported field case: Beta Alia, available 420 km, routing ×1.07, the leg's arrival
+//     airport has a 22 km alternate. Displayed 401 + 22 > 420 → the divert reserve tips it over.
+//     Great-circle: leg 374.8 + 22/1.07 (20.56) = 395.4 > 420/1.07 (392.5) → rejected.
+test('reported case: a 401 km leg with a 22 km destination alternate is rejected (420 km, ×1.07)', () => {
+  const O = node('O', 0, 0), D = node('D', 374.77 / 111.19, 22);
+  const res = loadRouting({ requireAlt: true, route: 1.07 }).planRoute({
+    origin: O, destination: D, plane: PLANE(420),
+    allowedTypes: ['medium_airport'], allAirports: [O, D], options: {} });
+  assert.ok(res.error, 'leg 374.8 + 20.56 = 395.4 > 392.5 maxLeg → must be rejected');
+});
+// ...and the SAME leg is fine with the reserve OFF — the 22 km alternate is exactly what tips it.
+test('reported case: the same 401 km leg is fine with the reserve OFF', () => {
+  const O = node('O', 0, 0), D = node('D', 374.77 / 111.19, 22);
+  const res = loadRouting({ requireAlt: false, route: 1.07 }).planRoute({
+    origin: O, destination: D, plane: PLANE(420),
+    allowedTypes: ['medium_airport'], allAirports: [O, D], options: {} });
+  assert.equal(res.error, undefined, res.error);
+  assert.equal(res.legCount, 1);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

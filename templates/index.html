@@ -1732,7 +1732,7 @@
                         <div class="rs-cell">
                             <div class="rs-cell-head">
                                 <label class="rs-toggle"><input type="checkbox" id="rsAlternate"><span>Alternate reserve</span></label>
-                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Every stop and the destination must arrive holding enough charge to divert to its nearest airport. The reserve is each airport's own distance to the nearest runway — no routing padding, since a short divert is flown direct. Remote fields cost more range than well-served ones.">?</span>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Every stop and the destination must arrive holding enough charge to divert to its nearest airport. The reserve is each airport's own distance to the nearest runway — no routing padding, since a short divert is flown direct.">?</span>
                             </div>
                             <div class="rs-cell-ctrl">
                                 <span class="rs-val">auto · per-airport</span>
@@ -2245,8 +2245,14 @@
                     // shown distance — routed km vs FULL usable range when the engine is on, else
                     // great-circle km vs the great-circle reach (range x usable / route).
                     const maxLeg = _availableRangeKm(plane) * route;   // routed reach (km of routed path that fits the usable range)
-                    if (km > maxLeg) {
-                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
+                    // Divert reserve (when on): the destination must also reach its nearest alternate.
+                    // km + maxLeg are in routed (padded) units, so the raw alternate_km adds directly
+                    // (the unpadded /route cancels against the padded scale) — matches validateRoute.
+                    const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled());
+                    const destFull = (requireAlt && selected.destination.ident) ? airportByIdent[selected.destination.ident] : null;
+                    const altKm = (destFull && destFull.alternate_km != null) ? (+destFull.alternate_km || 0) : 0;
+                    if (km + altKm > maxLeg) {
+                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km + altKm - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
                 }
                 const via = useStops ? ` <span class="text-muted">via ${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''}</span>` : '';
@@ -2348,10 +2354,21 @@
             const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
             const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
             const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
+            // Mirror routing.js's altReserveKm (line 89): when the alternate reserve is on, each
+            // ARRIVAL node must ALSO hold enough range to divert to its nearest airport
+            // (alternate_km / route — unpadded, a divert is flown direct). 0 when off, so the
+            // per-leg test stays byte-identical to before and matches what the planner enforces.
+            const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled());
+            const altReserveKm = (wp) => {
+                if (!requireAlt || !wp) return 0;
+                const full = wp.ident ? airportByIdent[wp.ident] : null;
+                const km = (full && full.alternate_km != null) ? +full.alternate_km : (+wp.alternate_km || 0);
+                return (isFinite(km) ? km : 0) / route;
+            };
             const chain = [t.origin, ...plannedStops, t.dest];
             for (let i = 0; i < chain.length - 1; i++) {
                 const d = CNSRouting.haversineKm(chain[i], chain[i + 1]);
-                if (d > maxLeg) plannedLegIssues.push(i);
+                if (d + altReserveKm(chain[i + 1]) > maxLeg) plannedLegIssues.push(i);   // arrival node carries the divert reserve
             }
             if (plannedLegIssues.length) {
                 const n = plannedLegIssues.length;
