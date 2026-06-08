@@ -331,6 +331,9 @@
            map content the user is supposed to be watching. */
         .tour-modal-front, .tour-modal-front .modal-backdrop { z-index: 100050 !important; }
         body.tour-network-step .driver-overlay { z-index: 100040; }
+        /* Model-settings tour step: lower the overlay so the lifted #modelSettingsModal
+           shows; its top-pinned popover (cns-tour-popover-top, z 100070) floats above. */
+        body.tour-modalfront-step .driver-overlay { z-index: 100040; }
         /* Demand Calculator tour step: lift the WHOLE drawer above the tour
            overlay so the trigger pill reads as bright/active instead of dimmed.
            The .drawer parent has position:fixed + z-index:20 which creates a

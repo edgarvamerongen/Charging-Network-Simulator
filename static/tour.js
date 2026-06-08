@@ -268,6 +268,25 @@ window.CNSTour = (function () {
         const close = document.querySelector('#flightsMapModal.show .btn-close');
         if (close) { close.click(); await _wait(400); }
     }
+    // Model-settings step: open #modelSettingsModal and lift it above the tour
+    // overlay (same recipe as the flights-map step) so the user sees the live
+    // panel while the popover overviews its groups; closed again on step exit.
+    async function _openModelSettings() {
+        const el = document.getElementById('modelSettingsModal');
+        if (!el) return;
+        if (window.bootstrap && window.bootstrap.Modal) window.bootstrap.Modal.getOrCreateInstance(el).show();
+        await _wait(450);   // let the show transition settle before lifting
+        el.classList.add('tour-modal-front');
+        document.body.classList.add('tour-modalfront-step');
+    }
+    async function _closeModelSettings() {
+        const el = document.getElementById('modelSettingsModal');
+        if (!el) return;
+        el.classList.remove('tour-modal-front');
+        document.body.classList.remove('tour-modalfront-step');
+        if (window.bootstrap && window.bootstrap.Modal) window.bootstrap.Modal.getOrCreateInstance(el).hide();
+        await _wait(300);
+    }
 
     // The step list — every entry has element + popover. Side-effects live in
     // onHighlightStarted so they fire just before the popover appears.
@@ -314,6 +333,22 @@ window.CNSTour = (function () {
             {
                 element: '#planModelSettingsBtn',
                 popover: { title: 'Model settings — applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 30% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. It also holds the charging price (€/kWh) and charger efficiency behind the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are exactly why the Beta Alia\'s 600&nbsp;km range can\'t reach Munich in one hop — so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
+            },
+            // 9a. Model settings panel — open it and walk its three groups. Pinned
+            // popover (top) with the modal lifted above the tour overlay, same
+            // recipe as the Overview flights-map step.
+            {
+                popover: {
+                    title: 'Inside the model settings',
+                    description: 'Here\'s the panel itself — every factor cascades through the result panel, demand calculator, scheduler and PDF. Three groups: <strong>Available range</strong> — landing reserve + routing padding, what trims the aircraft\'s usable reach; <strong>Charging</strong> — the charge-target SoC plus the CC→CV taper curve that stretches the final top-up; and <strong>Revenue</strong> — charger efficiency (grid demand) and the €/kWh tariff behind Airport revenue. Flip any factor off or drag a slider and everything recomputes live.',
+                    side: 'over', align: 'center',
+                    // Bottom-pinned: the panel is tall (taper chart), so a top pin would
+                    // cover its title — pinning low leaves the title + all three groups
+                    // visible and only overlaps the footer buttons.
+                    popoverClass: 'cns-tour-popover cns-tour-popover-bottom',
+                },
+                onHighlightStarted: async () => { await _openModelSettings(); },
+                onDeselected: async () => { await _closeModelSettings(); },
             },
             // 10. Plan with charging stops — toggle it ON here so the user watches
             // the suggested route appear in the next step.
@@ -385,7 +420,7 @@ window.CNSTour = (function () {
             // visible (it sits below the trip-calculated table).
             {
                 element: '#addFolder',
-                popover: { title: 'Add to demand calculator', description: 'Saves the flight to the network. Demand at each airport touched by the trip (Departure, Destination, every stop) gets attributed and aggregated across ALL saved flights.', side: 'left' },
+                popover: { title: 'Add to demand calculator', description: 'Saves the flight to the network — the <strong>Demand Calculator</strong> pill at the bottom flashes a brief confirmation. Demand at each airport the trip touches (Departure, Destination, every stop) is attributed and aggregated across ALL saved flights.', side: 'left' },
                 onHighlightStarted: async () => {
                     await _ensureSimulated(); await _ensureInFolder();
                     // The Add button is the LAST element in the result panel, which
@@ -443,6 +478,12 @@ window.CNSTour = (function () {
             {
                 element: '#folder .soc-chip',
                 popover: { title: 'Charge target', description: '<strong>Auto</strong> inherits the global default charge target from Model settings (80% by default). Set a percentage here to override it for <em>this</em> airport — a LOCAL target always wins over the GLOBAL default. Higher targets give the plane more reserve but slow charging (lithium-ion tapers above ~80% SoC).', side: 'top' },
+                onHighlightStarted: async () => { await _ensureDrawerOpen(); },
+            },
+            // 19a. NEW — Edit / remove a saved flight (pencil + ×) on any row.
+            {
+                element: '#folder [data-dest] [data-edit]',
+                popover: { title: 'Edit a saved flight', description: 'Plans change — the <strong>pencil</strong> on any row reopens that flight in an edit dialog to swap its trip type, aircraft or charger without re-planning from scratch. The red <strong>×</strong> beside it removes the flight from the network. Every figure recomputes the moment you save.', side: 'top' },
                 onHighlightStarted: async () => { await _ensureDrawerOpen(); },
             },
             // 20. Rotation scheduler — lift the drawer above the tour overlay
