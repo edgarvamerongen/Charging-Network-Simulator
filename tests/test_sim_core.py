@@ -95,9 +95,11 @@ class TestRetourDeficitBranch(unittest.TestCase):
         self.assertAlmostEqual(r["total_distance_km"], 2 * d, places=2)
 
     def test_boundary_exactly_full(self):
-        # Vaeridion: 100 kWh/100km, 600 battery. leg == 300 kWh at d=300 -> 2*leg
-        # == 600 == battery exactly -> deficit 0.
-        r = self.sim.calculate_flight_by_distance("vaeridion", 300.0, "aircraft_charger", "retour")
+        # A retour exactly fills the battery when 2*leg == battery. leg = battery/range * d,
+        # so 2 * battery/range * d == battery <=> d == range/2 — the boundary distance, derived
+        # from the catalog so a range retune can't silently push d off the threshold.
+        d = VAERIDION["range_km"] / 2.0
+        r = self.sim.calculate_flight_by_distance("vaeridion", d, "aircraft_charger", "retour")
         self.assertTrue(r.get("success"), r)
         self.assertAlmostEqual(r["recharge_energy_kwh"], 0.0, places=2)
 

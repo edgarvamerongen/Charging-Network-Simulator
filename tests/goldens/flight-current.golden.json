@@ -148,7 +148,7 @@
           "legs": null,
           "charges": null,
           "leg_distance_km": 398.55,
-          "leg_energy_kwh": 149.46,
+          "leg_energy_kwh": 157.05,
           "flight_time_h": 1.59,
           "total_distance_km": 398.55,
           "multi_leg": false
@@ -156,14 +156,14 @@
       },
       "variants": {
         "off": {
-          "energyUsedKwh": 149.4568,
+          "energyUsedKwh": 157.0475,
           "flightMin": 95.6524,
-          "chargeMin": 35.8696,
+          "chargeMin": 37.6914,
           "enRouteMin": 0,
-          "terminalMin": 35.8696,
-          "terminalKwh": 149.4568,
+          "terminalMin": 37.6914,
+          "terminalKwh": 157.0475,
           "terminalName": "Paris",
-          "arrivalSoc": 0.3357,
+          "arrivalSoc": 0.302,
           "phases": [
             {
               "kind": "fly",
@@ -176,20 +176,20 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 35.8696,
-              "energy": 149.4568
+              "dur": 37.6914,
+              "energy": 157.0475
             }
           ]
         },
         "default": {
-          "energyUsedKwh": 156.9297,
+          "energyUsedKwh": 164.8998,
           "flightMin": 100.435,
-          "chargeMin": 50.3265,
+          "chargeMin": 52.2393,
           "enRouteMin": 0,
-          "terminalMin": 50.3265,
-          "terminalKwh": 156.9297,
+          "terminalMin": 52.2393,
+          "terminalKwh": 164.8998,
           "terminalName": "Paris",
-          "arrivalSoc": 0.3025,
+          "arrivalSoc": 0.2671,
           "phases": [
             {
               "kind": "fly",
@@ -202,20 +202,20 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 50.3265,
-              "energy": 156.9297
+              "dur": 52.2393,
+              "energy": 164.8998
             }
           ]
         },
         "target100": {
-          "energyUsedKwh": 156.9297,
+          "energyUsedKwh": 164.8998,
           "flightMin": 100.435,
-          "chargeMin": 50.3265,
+          "chargeMin": 52.2393,
           "enRouteMin": 0,
-          "terminalMin": 50.3265,
-          "terminalKwh": 156.9297,
+          "terminalMin": 52.2393,
+          "terminalKwh": 164.8998,
           "terminalName": "Paris",
-          "arrivalSoc": 0.3025,
+          "arrivalSoc": 0.2671,
           "phases": [
             {
               "kind": "fly",
@@ -228,20 +228,20 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 50.3265,
-              "energy": 156.9297
+              "dur": 52.2393,
+              "energy": 164.8998
             }
           ]
         },
         "target50": {
-          "energyUsedKwh": 156.9297,
+          "energyUsedKwh": 164.8998,
           "flightMin": 100.435,
-          "chargeMin": 50.3265,
+          "chargeMin": 52.2393,
           "enRouteMin": 0,
-          "terminalMin": 50.3265,
-          "terminalKwh": 156.9297,
+          "terminalMin": 52.2393,
+          "terminalKwh": 164.8998,
           "terminalName": "Paris",
-          "arrivalSoc": 0.3025,
+          "arrivalSoc": 0.2671,
           "phases": [
             {
               "kind": "fly",
@@ -254,8 +254,8 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 50.3265,
-              "energy": 156.9297
+              "dur": 52.2393,
+              "energy": 164.8998
             }
           ]
         }
@@ -273,7 +273,7 @@
           "legs": null,
           "charges": null,
           "leg_distance_km": 151.81,
-          "leg_energy_kwh": 56.93,
+          "leg_energy_kwh": 59.82,
           "flight_time_h": 1.21,
           "total_distance_km": 303.63,
           "multi_leg": false
@@ -281,14 +281,14 @@
       },
       "variants": {
         "off": {
-          "energyUsedKwh": 113.8603,
+          "energyUsedKwh": 119.6431,
           "flightMin": 72.8706,
-          "chargeMin": 27.3265,
+          "chargeMin": 28.7143,
           "enRouteMin": 0,
-          "terminalMin": 27.3265,
-          "terminalKwh": 113.8603,
+          "terminalMin": 28.7143,
+          "terminalKwh": 119.6431,
           "terminalName": "Amsterdam",
-          "arrivalSoc": 0.494,
+          "arrivalSoc": 0.4683,
           "phases": [
             {
               "kind": "fly",
@@ -308,20 +308,20 @@
               "kind": "charge",
               "leg": null,
               "at": "home",
-              "dur": 27.3265,
-              "energy": 113.8603
+              "dur": 28.7143,
+              "energy": 119.6431
             }
           ]
         },
         "default": {
-          "energyUsedKwh": 119.5533,
+          "energyUsedKwh": 125.6252,
           "flightMin": 76.5141,
-          "chargeMin": 41.709,
-          "enRouteMin": 3.8992,
-          "terminalMin": 37.8098,
-          "terminalKwh": 104.7767,
+          "chargeMin": 43.1662,
+          "enRouteMin": 4.6278,
+          "terminalMin": 38.5384,
+          "terminalKwh": 107.8126,
           "terminalName": "Amsterdam",
-          "arrivalSoc": 0.5343,
+          "arrivalSoc": 0.5208,
           "phases": [
             {
               "kind": "fly",
@@ -334,8 +334,8 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 3.8992,
-              "energy": 14.7767
+              "dur": 4.6278,
+              "energy": 17.8126
             },
             {
               "kind": "fly",
@@ -348,20 +348,20 @@
               "kind": "charge",
               "leg": null,
               "at": "home",
-              "dur": 37.8098,
-              "energy": 104.7767
+              "dur": 38.5384,
+              "energy": 107.8126
             }
           ]
         },
         "target100": {
-          "energyUsedKwh": 119.5533,
+          "energyUsedKwh": 125.6252,
           "flightMin": 76.5141,
-          "chargeMin": 54.0196,
-          "enRouteMin": 27.0098,
-          "terminalMin": 27.0098,
-          "terminalKwh": 59.7767,
+          "chargeMin": 55.4768,
+          "enRouteMin": 27.7384,
+          "terminalMin": 27.7384,
+          "terminalKwh": 62.8126,
           "terminalName": "Amsterdam",
-          "arrivalSoc": 0.7343,
+          "arrivalSoc": 0.7208,
           "phases": [
             {
               "kind": "fly",
@@ -374,8 +374,8 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 27.0098,
-              "energy": 59.7767
+              "dur": 27.7384,
+              "energy": 62.8126
             },
             {
               "kind": "fly",
@@ -388,20 +388,20 @@
               "kind": "charge",
               "leg": null,
               "at": "home",
-              "dur": 27.0098,
-              "energy": 59.7767
+              "dur": 27.7384,
+              "energy": 62.8126
             }
           ]
         },
         "target50": {
-          "energyUsedKwh": 119.5533,
+          "energyUsedKwh": 125.6252,
           "flightMin": 76.5141,
-          "chargeMin": 41.3562,
+          "chargeMin": 42.8134,
           "enRouteMin": 0,
-          "terminalMin": 41.3562,
-          "terminalKwh": 119.5533,
+          "terminalMin": 42.8134,
+          "terminalKwh": 125.6252,
           "terminalName": "Amsterdam",
-          "arrivalSoc": 0.4687,
+          "arrivalSoc": 0.4417,
           "phases": [
             {
               "kind": "fly",
@@ -421,8 +421,8 @@
               "kind": "charge",
               "leg": null,
               "at": "home",
-              "dur": 41.3562,
-              "energy": 119.5533
+              "dur": 42.8134,
+              "energy": 125.6252
             }
           ]
         }
@@ -444,14 +444,14 @@
               "from": "Amsterdam",
               "to": "Rotterdam",
               "distance_km": 45.02,
-              "energy_kwh": 16.88,
+              "energy_kwh": 17.74,
               "flight_time_h": 0.18
             },
             {
               "from": "Rotterdam",
               "to": "London",
               "distance_km": 341.62,
-              "energy_kwh": 128.11,
+              "energy_kwh": 134.62,
               "flight_time_h": 1.366
             }
           ],
@@ -464,11 +464,11 @@
             {
               "ident": "EGLL",
               "role": "dest",
-              "energy_kwh": 144.99
+              "energy_kwh": 152.36
             }
           ],
           "leg_distance_km": null,
-          "leg_energy_kwh": 16.88,
+          "leg_energy_kwh": 17.74,
           "flight_time_h": null,
           "total_distance_km": 386.64,
           "multi_leg": true
@@ -476,14 +476,14 @@
       },
       "variants": {
         "off": {
-          "energyUsedKwh": 144.9902,
+          "energyUsedKwh": 152.354,
           "flightMin": 92.7937,
-          "chargeMin": 34.7976,
+          "chargeMin": 36.565,
           "enRouteMin": 0,
-          "terminalMin": 34.7976,
-          "terminalKwh": 144.9902,
+          "terminalMin": 36.565,
+          "terminalKwh": 152.354,
           "terminalName": "London",
-          "arrivalSoc": 0.3556,
+          "arrivalSoc": 0.3229,
           "phases": [
             {
               "kind": "fly",
@@ -503,53 +503,20 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 34.7976,
-              "energy": 144.9902
+              "dur": 36.565,
+              "energy": 152.354
             }
           ]
         },
         "default": {
-          "energyUsedKwh": 152.2397,
+          "energyUsedKwh": 159.9717,
           "flightMin": 97.4334,
-          "chargeMin": 49.2009,
-          "enRouteMin": 0,
-          "terminalMin": 49.2009,
-          "terminalKwh": 152.2397,
+          "chargeMin": 51.8263,
+          "enRouteMin": 1.363,
+          "terminalMin": 50.4634,
+          "terminalKwh": 157.5,
           "terminalName": "London",
-          "arrivalSoc": 0.3234,
-          "phases": [
-            {
-              "kind": "fly",
-              "leg": 0,
-              "at": null,
-              "dur": 11.3442,
-              "energy": null
-            },
-            {
-              "kind": "fly",
-              "leg": 1,
-              "at": null,
-              "dur": 86.0892,
-              "energy": null
-            },
-            {
-              "kind": "charge",
-              "leg": null,
-              "at": "dest",
-              "dur": 49.2009,
-              "energy": 152.2397
-            }
-          ]
-        },
-        "target100": {
-          "energyUsedKwh": 152.2397,
-          "flightMin": 97.4334,
-          "chargeMin": 56.7474,
-          "enRouteMin": 11.8006,
-          "terminalMin": 44.9468,
-          "terminalKwh": 134.5144,
-          "terminalName": "London",
-          "arrivalSoc": 0.4022,
+          "arrivalSoc": 0.3,
           "phases": [
             {
               "kind": "fly",
@@ -562,8 +529,8 @@
               "kind": "charge",
               "leg": null,
               "at": "stop",
-              "dur": 11.8006,
-              "energy": 17.7254
+              "dur": 1.363,
+              "energy": 2.4717
             },
             {
               "kind": "fly",
@@ -576,20 +543,20 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 44.9468,
-              "energy": 134.5144
+              "dur": 50.4634,
+              "energy": 157.5
             }
           ]
         },
-        "target50": {
-          "energyUsedKwh": 152.2397,
+        "target100": {
+          "energyUsedKwh": 159.9717,
           "flightMin": 97.4334,
-          "chargeMin": 49.2009,
-          "enRouteMin": 0,
-          "terminalMin": 49.2009,
-          "terminalKwh": 152.2397,
+          "chargeMin": 58.8751,
+          "enRouteMin": 12.2886,
+          "terminalMin": 46.5864,
+          "terminalKwh": 141.3461,
           "terminalName": "London",
-          "arrivalSoc": 0.3234,
+          "arrivalSoc": 0.3718,
           "phases": [
             {
               "kind": "fly",
@@ -599,6 +566,13 @@
               "energy": null
             },
             {
+              "kind": "charge",
+              "leg": null,
+              "at": "stop",
+              "dur": 12.2886,
+              "energy": 18.6256
+            },
+            {
               "kind": "fly",
               "leg": 1,
               "at": null,
@@ -609,8 +583,48 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 49.2009,
-              "energy": 152.2397
+              "dur": 46.5864,
+              "energy": 141.3461
+            }
+          ]
+        },
+        "target50": {
+          "energyUsedKwh": 159.9717,
+          "flightMin": 97.4334,
+          "chargeMin": 51.8263,
+          "enRouteMin": 1.363,
+          "terminalMin": 50.4634,
+          "terminalKwh": 157.5,
+          "terminalName": "London",
+          "arrivalSoc": 0.3,
+          "phases": [
+            {
+              "kind": "fly",
+              "leg": 0,
+              "at": null,
+              "dur": 11.3442,
+              "energy": null
+            },
+            {
+              "kind": "charge",
+              "leg": null,
+              "at": "stop",
+              "dur": 1.363,
+              "energy": 2.4717
+            },
+            {
+              "kind": "fly",
+              "leg": 1,
+              "at": null,
+              "dur": 86.0892,
+              "energy": null
+            },
+            {
+              "kind": "charge",
+              "leg": null,
+              "at": "dest",
+              "dur": 50.4634,
+              "energy": 157.5
             }
           ]
         }
@@ -632,28 +646,28 @@
               "from": "Amsterdam",
               "to": "Rotterdam",
               "distance_km": 45.02,
-              "energy_kwh": 16.88,
+              "energy_kwh": 17.74,
               "flight_time_h": 0.18
             },
             {
               "from": "Rotterdam",
               "to": "London",
               "distance_km": 341.62,
-              "energy_kwh": 128.11,
+              "energy_kwh": 134.62,
               "flight_time_h": 1.366
             },
             {
               "from": "London",
               "to": "Rotterdam",
               "distance_km": 341.62,
-              "energy_kwh": 128.11,
+              "energy_kwh": 134.62,
               "flight_time_h": 1.366
             },
             {
               "from": "Rotterdam",
               "to": "Amsterdam",
               "distance_km": 45.02,
-              "energy_kwh": 16.88,
+              "energy_kwh": 17.74,
               "flight_time_h": 0.18
             }
           ],
@@ -666,12 +680,12 @@
             {
               "ident": "EGLL",
               "role": "dest",
-              "energy_kwh": 48.1
+              "energy_kwh": 61.98
             },
             {
               "ident": "EHRD",
               "role": "stop",
-              "energy_kwh": 16.88
+              "energy_kwh": 17.74
             },
             {
               "ident": "EHAM",
@@ -680,7 +694,7 @@
             }
           ],
           "leg_distance_km": null,
-          "leg_energy_kwh": 16.88,
+          "leg_energy_kwh": 17.74,
           "flight_time_h": null,
           "total_distance_km": 773.28,
           "multi_leg": true
@@ -688,10 +702,10 @@
       },
       "variants": {
         "off": {
-          "energyUsedKwh": 289.9804,
+          "energyUsedKwh": 304.708,
           "flightMin": 185.5875,
-          "chargeMin": 69.5953,
-          "enRouteMin": 15.5953,
+          "chargeMin": 73.1299,
+          "enRouteMin": 19.1299,
           "terminalMin": 54,
           "terminalKwh": 225,
           "terminalName": "Amsterdam",
@@ -715,8 +729,8 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 11.5438,
-              "energy": 48.0991
+              "dur": 14.8726,
+              "energy": 61.9693
             },
             {
               "kind": "fly",
@@ -729,8 +743,8 @@
               "kind": "charge",
               "leg": null,
               "at": "stop",
-              "dur": 4.0515,
-              "energy": 16.8813
+              "dur": 4.2573,
+              "energy": 17.7387
             },
             {
               "kind": "fly",
@@ -749,14 +763,14 @@
           ]
         },
         "default": {
-          "energyUsedKwh": 304.4794,
+          "energyUsedKwh": 319.9434,
           "flightMin": 194.8668,
-          "chargeMin": 89.7472,
-          "enRouteMin": 62.0298,
-          "terminalMin": 27.7175,
-          "terminalKwh": 62.7254,
+          "chargeMin": 96.187,
+          "enRouteMin": 68.2535,
+          "terminalMin": 27.9335,
+          "terminalKwh": 63.6256,
           "terminalName": "Amsterdam",
-          "arrivalSoc": 0.7212,
+          "arrivalSoc": 0.7172,
           "phases": [
             {
               "kind": "fly",
@@ -764,6 +778,13 @@
               "at": null,
               "dur": 11.3442,
               "energy": null
+            },
+            {
+              "kind": "charge",
+              "leg": null,
+              "at": "stop",
+              "dur": 1.363,
+              "energy": 2.4717
             },
             {
               "kind": "fly",
@@ -776,8 +797,8 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 34.677,
-              "energy": 129.2541
+              "dur": 39.5377,
+              "energy": 141.3461
             },
             {
               "kind": "fly",
@@ -804,20 +825,20 @@
               "kind": "charge",
               "leg": null,
               "at": "home",
-              "dur": 27.7175,
-              "energy": 62.7254
+              "dur": 27.9335,
+              "energy": 63.6256
             }
           ]
         },
         "target100": {
-          "energyUsedKwh": 304.4794,
+          "energyUsedKwh": 319.9434,
           "flightMin": 194.8668,
-          "chargeMin": 113.4948,
-          "enRouteMin": 101.6942,
-          "terminalMin": 11.8006,
-          "terminalKwh": 17.7254,
+          "chargeMin": 117.7502,
+          "enRouteMin": 105.4615,
+          "terminalMin": 12.2886,
+          "terminalKwh": 18.6256,
           "terminalName": "Amsterdam",
-          "arrivalSoc": 0.9212,
+          "arrivalSoc": 0.9172,
           "phases": [
             {
               "kind": "fly",
@@ -830,8 +851,8 @@
               "kind": "charge",
               "leg": null,
               "at": "stop",
-              "dur": 11.8006,
-              "energy": 17.7254
+              "dur": 12.2886,
+              "energy": 18.6256
             },
             {
               "kind": "fly",
@@ -844,8 +865,8 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 44.9468,
-              "energy": 134.5144
+              "dur": 46.5864,
+              "energy": 141.3461
             },
             {
               "kind": "fly",
@@ -858,8 +879,8 @@
               "kind": "charge",
               "leg": null,
               "at": "stop",
-              "dur": 44.9468,
-              "energy": 134.5144
+              "dur": 46.5864,
+              "energy": 141.3461
             },
             {
               "kind": "fly",
@@ -872,20 +893,20 @@
               "kind": "charge",
               "leg": null,
               "at": "home",
-              "dur": 11.8006,
-              "energy": 17.7254
+              "dur": 12.2886,
+              "energy": 18.6256
             }
           ]
         },
         "target50": {
-          "energyUsedKwh": 304.4794,
+          "energyUsedKwh": 319.9434,
           "flightMin": 194.8668,
-          "chargeMin": 89.3944,
-          "enRouteMin": 45.477,
-          "terminalMin": 43.9175,
-          "terminalKwh": 130.2254,
+          "chargeMin": 95.8342,
+          "enRouteMin": 51.7007,
+          "terminalMin": 44.1335,
+          "terminalKwh": 131.1256,
           "terminalName": "Amsterdam",
-          "arrivalSoc": 0.4212,
+          "arrivalSoc": 0.4172,
           "phases": [
             {
               "kind": "fly",
@@ -893,6 +914,13 @@
               "at": null,
               "dur": 11.3442,
               "energy": null
+            },
+            {
+              "kind": "charge",
+              "leg": null,
+              "at": "stop",
+              "dur": 1.363,
+              "energy": 2.4717
             },
             {
               "kind": "fly",
@@ -905,8 +933,8 @@
               "kind": "charge",
               "leg": null,
               "at": "dest",
-              "dur": 34.677,
-              "energy": 129.2541
+              "dur": 39.5377,
+              "energy": 141.3461
             },
             {
               "kind": "fly",
@@ -933,8 +961,8 @@
               "kind": "charge",
               "leg": null,
               "at": "home",
-              "dur": 43.9175,
-              "energy": 130.2254
+              "dur": 44.1335,
+              "energy": 131.1256
             }
           ]
         }
