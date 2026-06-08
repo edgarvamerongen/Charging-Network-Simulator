@@ -30,11 +30,12 @@ const approx = (a, b, tol) => Math.abs(a - b) <= (tol == null ? Math.max(1e-6, M
 
 console.log('CNSFlight padding model (static/flight-model.js) — node harness\n');
 
-// Multi-leg one-way Beta with a stop, padding ON (shipped default 1.05).
+// Multi-leg one-way Beta with a stop. Routing padding now ships OFF, so enable it
+// explicitly (1.05) to exercise the ON behaviour; run(false) is the OFF case.
 function run(padding = true) {
   const S = loadStack();
   S.CNSSettings.reset();
-  if (!padding) S.CNSSettings.save({ routingPadding: { enabled: false } });
+  S.CNSSettings.save({ routingPadding: padding ? { enabled: true, factor: 1.05 } : { enabled: false } });
   const prof = S.CNSFlight.simulateTrip(PLANES.beta_plane, [wp('EHAM'), wp('EHRD'), wp('EGLL')],
     { tripType: 'one-way', getTargetSoc: () => S.CNSSettings.chargeTargetDefault(), getChargerKw: () => 250 });
   return { prof, route: S.CNSSettings.routingFactor() };
@@ -42,9 +43,9 @@ function run(padding = true) {
 const P = PLANES.beta_plane;
 const ePerKm = P.battery_kwh / P.range_km;
 
-test('routing padding is ON by default (1.05)', () => {
-  const { route } = run();
-  assert.ok(approx(route, 1.05), `routingFactor ${route}`);
+test('routing padding is OFF by default (identity 1.0)', () => {
+  const S = loadStack(); S.CNSSettings.reset();
+  assert.equal(S.CNSSettings.routingFactor(), 1.0, `routingFactor ${S.CNSSettings.routingFactor()}`);
 });
 
 test('distKm == rawKm * routingFactor — padding lands on the LENGTH', () => {

@@ -45,11 +45,11 @@ const approx = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 
 console.log('CNSSettings (static/settings.js) — node harness\n');
 
-// ---- v3 defaults: the realistic model is ON by default ----------------------
-test('v3 defaults: reserve+padding+taper ON, efficiency OFF', () => {
+// ---- v3 defaults: reserve + taper ON; routing padding, SID/STAR, efficiency OFF ----
+test('v3 defaults: reserve+taper ON, routing/SID-STAR/efficiency OFF', () => {
   const { S } = loadSettings();
   assert.ok(approx(S.usableFraction({}), 0.70), 'reserve default 30% -> usable 0.70');
-  assert.ok(approx(S.routingFactor(), 1.05), 'padding default 1.05');
+  assert.equal(S.routingFactor(), 1.0, 'routing padding OFF by default -> identity');
   assert.equal(S.gridDemandFactor(), 1.0, 'efficiency off by default -> identity');
   assert.ok(S.chargeTimeMin(100, 100, 225) > 60, 'taper on -> slower than the 60min linear');
   assert.equal(S.sidStarPaddingKm(), 0, 'SID/STAR padding off by default -> identity');
