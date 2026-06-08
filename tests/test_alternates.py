@@ -3,7 +3,8 @@ and their passthrough into the /api/airports payload."""
 import unittest
 
 from _helpers import REPO_ROOT  # noqa: F401  (ensures repo root is importable)
-from airport_alternates import nearest_alternate, nearest_alternate_km
+from airport_alternates import (nearest_alternate, nearest_alternate_km,
+                                suitable_alternate_idents)
 
 
 class TestNearestAlternate(unittest.TestCase):
@@ -42,6 +43,37 @@ class TestNearestAlternate(unittest.TestCase):
             ref = min(haversine(lats[i], lons[i], lats[j], lons[j])
                       for j in range(len(lats)) if j != i)
             self.assertAlmostEqual(km[i], ref, delta=0.5)
+
+    def test_candidate_mask_restricts_targets(self):
+        # Equator points at lon 0,1,2,3; only points 0 and 3 are eligible
+        # alternates. Each point must resolve to the nearest *eligible* point,
+        # never itself.
+        km, idx = nearest_alternate([0, 0, 0, 0], [0, 1, 2, 3],
+                                    candidate_mask=[True, False, False, True])
+        self.assertEqual(list(idx), [3, 0, 3, 0])   # 0->3, 1->0, 2->3, 3->0
+        self.assertAlmostEqual(km[1], 111.19, delta=1.0)   # lon1 -> lon0
+        self.assertAlmostEqual(km[0], 333.58, delta=1.5)   # lon0 -> lon3 (self excluded)
+
+
+class TestSuitability(unittest.TestCase):
+    def test_is_paved(self):
+        from airport_alternates import _is_paved
+        for s in ["ASP", "ASPH", "ASPHALT", "CON", "CONC", "CONCRETE", "ASPH/ CONC", "BIT"]:
+            self.assertTrue(_is_paved(s), s)
+        for s in ["TURF", "GRS", "GRASS", "GRE", "GVL", "GRAVEL", "DIRT", "WATER", "UNK", "", None]:
+            self.assertFalse(_is_paved(s), repr(s))
+
+    def test_suitable_requires_open_paved_min_length(self):
+        import pandas as pd
+        rw = pd.DataFrame([
+            {"airport_ident": "PAVED_LONG",   "length_ft": "3000", "surface": "ASP",   "closed": "0"},
+            {"airport_ident": "GRASS_LONG",   "length_ft": "3000", "surface": "GRASS", "closed": "0"},
+            {"airport_ident": "PAVED_SHORT",  "length_ft": "500",  "surface": "CON",   "closed": "0"},  # ~152 m
+            {"airport_ident": "PAVED_CLOSED", "length_ft": "4000", "surface": "ASPH",  "closed": "1"},
+            {"airport_ident": "NODATA",       "length_ft": "",     "surface": "",      "closed": "0"},
+        ])
+        # Only the open, paved, >=300 m runway qualifies.
+        self.assertEqual(suitable_alternate_idents(rw), {"PAVED_LONG"})
 
 
 class TestApiPassthrough(unittest.TestCase):
