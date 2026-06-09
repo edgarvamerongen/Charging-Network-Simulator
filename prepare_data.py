@@ -1,8 +1,20 @@
-import random
-import numpy as np
+import os
+import sys
 
 import pandas as pd
 from airport_alternates import compute_alternate_columns
+
+# The raw OurAirports dumps are gitignored (only the generated
+# european_airports.csv is tracked) — fail with a pointer, not a stack trace.
+_RAW_INPUTS = ("airports.csv", "countries.csv", "runways.csv")
+_missing = [f for f in _RAW_INPUTS if not os.path.exists(f)]
+if _missing:
+    sys.exit(
+        f"Missing raw input file(s): {', '.join(_missing)}. Download the "
+        "OurAirports dumps (https://ourairports.com/data/) into this directory "
+        "first — they are gitignored and only needed to regenerate "
+        "european_airports.csv."
+    )
 
 # Load datasets
 airports = pd.read_csv("airports.csv")

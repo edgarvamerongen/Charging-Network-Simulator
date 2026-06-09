@@ -1,10 +1,17 @@
+import contextlib
 import json
 import math
 import os
 import re
 import subprocess
+import tempfile
 import time
 from datetime import datetime, timezone
+
+try:
+    import fcntl            # POSIX only; absent on Windows dev boxes
+except ImportError:
+    fcntl = None
 
 from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, Response, redirect, make_response
 from sim import Simulator
@@ -124,12 +131,54 @@ def _read_list(path):
 
 def _write_list(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
+    # Write-to-temp + atomic rename: a concurrent reader never sees a torn,
+    # half-written JSON file, and a crash mid-write leaves the old file intact.
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+@contextlib.contextmanager
+def _custom_lock(kind):
+    """Cross-process mutex around the read-modify-write of a customs file.
+    Without it, two gunicorn workers handling concurrent POSTs can both read
+    the same list, each append, and the second write silently drops the first
+    entry (and the MAX_CUSTOMS cap can be raced past). No-op where fcntl is
+    unavailable (Windows dev), matching the previous best-effort behaviour."""
+    if fcntl is None:
+        yield
+        return
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(os.path.join(DATA_DIR, f'.{kind}.lock'), 'w') as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
 
 
 def _new_id(prefix):
     return f"{prefix}_{int(time.time() * 1000)}"
+
+
+# A client may supply its own id (the localStorage→server migration in
+# static/planes.js re-posts legacy entries with their existing ids). Accept it
+# only when it's a sane token AND not already taken — otherwise DELETE-by-id
+# could remove a different entry than the one the user clicked.
+_CLIENT_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+
+
+def _accept_client_id(client_id, data):
+    cid = str(client_id or '')
+    if _CLIENT_ID_RE.match(cid) and not any(e.get('id') == cid for e in data):
+        return cid
+    return None
 
 
 @app.route('/')
@@ -228,46 +277,48 @@ def add_custom_plane():
         _log('planes', 'REJECT', reason='value out of range', name=p.get('name', ''))
         return jsonify({'error': 'battery_kwh ≤ 100000, range_km ≤ 50000, speed_kmh ≤ 5000'}), 400
 
-    data = _read_list(CUSTOM_FILES['planes'])
-    if len(data) >= MAX_CUSTOMS:
-        _log('planes', 'REJECT', reason=f'cap of {MAX_CUSTOMS} reached', name=p.get('name', ''))
-        return jsonify({'error': f'Limit of {MAX_CUSTOMS} custom planes reached — remove one first.'}), 400
+    with _custom_lock('planes'):
+        data = _read_list(CUSTOM_FILES['planes'])
+        if len(data) >= MAX_CUSTOMS:
+            _log('planes', 'REJECT', reason=f'cap of {MAX_CUSTOMS} reached', name=p.get('name', ''))
+            return jsonify({'error': f'Limit of {MAX_CUSTOMS} custom planes reached — remove one first.'}), 400
 
-    saved = {'id': p.get('id') or _new_id('custom'),
-             'name': str(p['name'])[:80],
-             'battery_kwh': battery, 'range_km': rng, 'speed_kmh': spd}
-    if p.get('seats') not in (None, ''):
-        try:    saved['seats'] = int(p['seats'])
-        except: pass
-    if p.get('load_kg') not in (None, ''):
-        try:    saved['load_kg'] = float(p['load_kg'])
-        except: pass
-    # Optional battery charge C-rate (used by the charging-curve model factor).
-    # Only persist a sane, finite, positive value; otherwise it falls back to
-    # the global slider default at calculation time.
-    if p.get('c_rate') not in (None, ''):
-        try:
-            cr = float(p['c_rate'])
-            if math.isfinite(cr) and 0 < cr <= 10:
-                saved['c_rate'] = cr
-        except (TypeError, ValueError):
-            pass
+        saved = {'id': _accept_client_id(p.get('id'), data) or _new_id('custom'),
+                 'name': str(p['name'])[:80],
+                 'battery_kwh': battery, 'range_km': rng, 'speed_kmh': spd}
+        if p.get('seats') not in (None, ''):
+            try:    saved['seats'] = int(p['seats'])
+            except (TypeError, ValueError): pass
+        if p.get('load_kg') not in (None, ''):
+            try:    saved['load_kg'] = float(p['load_kg'])
+            except (TypeError, ValueError): pass
+        # Optional battery charge C-rate (used by the charging-curve model factor).
+        # Only persist a sane, finite, positive value; otherwise it falls back to
+        # the global slider default at calculation time.
+        if p.get('c_rate') not in (None, ''):
+            try:
+                cr = float(p['c_rate'])
+                if math.isfinite(cr) and 0 < cr <= 10:
+                    saved['c_rate'] = cr
+            except (TypeError, ValueError):
+                pass
 
-    data.append(saved)
-    _write_list(CUSTOM_FILES['planes'], data)
+        data.append(saved)
+        _write_list(CUSTOM_FILES['planes'], data)
     _log('planes', 'ADD', **saved)
     return jsonify(saved), 201
 
 
 @app.route('/api/custom/planes/<plane_id>', methods=['DELETE'])
 def delete_custom_plane(plane_id):
-    data = _read_list(CUSTOM_FILES['planes'])
-    target = next((p for p in data if p.get('id') == plane_id), None)
-    if not target:
-        _log('planes', 'MISS', op='delete', id=plane_id)
-        return jsonify({'error': 'not found'}), 404
-    kept = [p for p in data if p.get('id') != plane_id]
-    _write_list(CUSTOM_FILES['planes'], kept)
+    with _custom_lock('planes'):
+        data = _read_list(CUSTOM_FILES['planes'])
+        target = next((p for p in data if p.get('id') == plane_id), None)
+        if not target:
+            _log('planes', 'MISS', op='delete', id=plane_id)
+            return jsonify({'error': 'not found'}), 404
+        kept = [p for p in data if p.get('id') != plane_id]
+        _write_list(CUSTOM_FILES['planes'], kept)
     _log('planes', 'DELETE', id=plane_id, name=target.get('name', ''))
     return jsonify({'deleted': plane_id})
 
@@ -295,30 +346,32 @@ def add_custom_charger():
         _log('chargers', 'REJECT', reason='value out of range', name=c.get('name', ''))
         return jsonify({'error': 'power_kw ≤ 100000'}), 400
 
-    data = _read_list(CUSTOM_FILES['chargers'])
-    if len(data) >= MAX_CUSTOMS:
-        _log('chargers', 'REJECT', reason=f'cap of {MAX_CUSTOMS} reached', name=c.get('name', ''))
-        return jsonify({'error': f'Limit of {MAX_CUSTOMS} custom chargers reached — remove one first.'}), 400
+    with _custom_lock('chargers'):
+        data = _read_list(CUSTOM_FILES['chargers'])
+        if len(data) >= MAX_CUSTOMS:
+            _log('chargers', 'REJECT', reason=f'cap of {MAX_CUSTOMS} reached', name=c.get('name', ''))
+            return jsonify({'error': f'Limit of {MAX_CUSTOMS} custom chargers reached — remove one first.'}), 400
 
-    saved = {'id': c.get('id') or _new_id('charger'),
-             'name': str(c['name'])[:80],
-             'power_kw': power}
+        saved = {'id': _accept_client_id(c.get('id'), data) or _new_id('charger'),
+                 'name': str(c['name'])[:80],
+                 'power_kw': power}
 
-    data.append(saved)
-    _write_list(CUSTOM_FILES['chargers'], data)
+        data.append(saved)
+        _write_list(CUSTOM_FILES['chargers'], data)
     _log('chargers', 'ADD', **saved)
     return jsonify(saved), 201
 
 
 @app.route('/api/custom/chargers/<charger_id>', methods=['DELETE'])
 def delete_custom_charger(charger_id):
-    data = _read_list(CUSTOM_FILES['chargers'])
-    target = next((c for c in data if c.get('id') == charger_id), None)
-    if not target:
-        _log('chargers', 'MISS', op='delete', id=charger_id)
-        return jsonify({'error': 'not found'}), 404
-    kept = [c for c in data if c.get('id') != charger_id]
-    _write_list(CUSTOM_FILES['chargers'], kept)
+    with _custom_lock('chargers'):
+        data = _read_list(CUSTOM_FILES['chargers'])
+        target = next((c for c in data if c.get('id') == charger_id), None)
+        if not target:
+            _log('chargers', 'MISS', op='delete', id=charger_id)
+            return jsonify({'error': 'not found'}), 404
+        kept = [c for c in data if c.get('id') != charger_id]
+        _write_list(CUSTOM_FILES['chargers'], kept)
     _log('chargers', 'DELETE', id=charger_id, name=target.get('name', ''))
     return jsonify({'deleted': charger_id})
 
@@ -382,8 +435,11 @@ def report_pdf():
     except RuntimeError as e:
         # Missing dependency: surface the message verbatim so the operator sees it.
         return jsonify({'error': str(e)}), 500
-    except Exception as e:
-        return jsonify({'error': f'PDF generation failed: {e}'}), 500
+    except Exception:
+        # Full traceback to the server log; only a generic message to the client
+        # (raw exception text can leak filesystem paths / internals).
+        app.logger.exception('PDF generation failed')
+        return jsonify({'error': 'PDF generation failed — see the server log for details.'}), 500
 
     filename = f'nrg2fly-charging-plan-{datetime.now().strftime("%Y-%m-%d")}.pdf'
     return Response(
@@ -406,8 +462,9 @@ def report_xlsx():
     except RuntimeError as e:
         # Missing dependency (openpyxl): surface verbatim.
         return jsonify({'error': str(e)}), 500
-    except Exception as e:
-        return jsonify({'error': f'Spreadsheet generation failed: {e}'}), 500
+    except Exception:
+        app.logger.exception('Spreadsheet generation failed')
+        return jsonify({'error': 'Spreadsheet generation failed — see the server log for details.'}), 500
 
     filename = f'nrg2fly-charging-plan-{datetime.now().strftime("%Y-%m-%d")}.xlsx'
     return Response(

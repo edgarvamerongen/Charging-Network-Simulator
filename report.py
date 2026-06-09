@@ -21,6 +21,7 @@ import math
 import mimetypes
 import os
 import platform
+import re
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -564,6 +565,11 @@ def _network_map_png(routes, airports, width=900, height=520):
 # ---------- Airport photo (bonus) -------------------------------------------
 _PHOTO_CACHE_DIR = os.path.join(PICS_DIR, 'airports', '_cache')
 _WIKI_UA = 'NRG2FLY-CNS/1.0 (https://nrg2fly.com; charging advisory report)'
+# The ident comes straight from the client-POSTed payload and is used to build
+# filesystem paths (curated pics + the download cache) and a SPARQL query. Only
+# an ICAO-shaped code is acceptable — anything else (e.g. ../../etc/passwd)
+# must be treated as "no ident" or it becomes a path-traversal read/write.
+_SAFE_IDENT_RE = re.compile(r'^[A-Za-z0-9_-]{2,8}$')
 
 def _http_get(url, timeout=6, accept_json=False, params=None):
     # Prefer requests (bundles certifi) — this framework Python's urllib has no
@@ -669,6 +675,8 @@ def _airport_photo(ident, name, lat, lon):
     failure is swallowed → the cover renders photo-less (the band is hidden)."""
     blank = {'uri': '', 'credit': ''}
     ident = (ident or '').strip()
+    if not _SAFE_IDENT_RE.match(ident):
+        ident = ''
 
     # 1) curated local, then a prior cached download
     for base in ([os.path.join(PICS_DIR, 'airports', ident)] if ident else []) + \

@@ -149,6 +149,12 @@ class Simulator:
                 }
             }
 
+        # DELIBERATE: this is the raw catalog range, with no landing reserve /
+        # SID-STAR / routing padding applied. Reserves are a frontend "Model
+        # settings" concern — the browser re-validates each leg against the
+        # padded usable range (static/flight-model.js) BEFORE calling this API
+        # and blocks the request if it fails. The backend stays the pure-physics
+        # baseline so the two layers never double-count a reserve.
         if distance_km > plane['range_km']:
             return {"error": f"Leg distance {distance_km:.1f}km exceeds plane range {plane['range_km']}km"}
 
@@ -260,6 +266,8 @@ class Simulator:
         for i in range(len(chain) - 1):
             a, b = chain[i], chain[i + 1]
             d = haversine(a['lat'], a['lon'], b['lat'], b['lon'])
+            # Raw catalog range, no reserves — same deliberate split as
+            # calculate_flight_by_distance (frontend enforces Model settings).
             if d > rng:
                 return {"error": f"Leg {a['name']} → {b['name']} is {d:.0f} km, exceeds range {rng:.0f} km."}
             legs.append({
