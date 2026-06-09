@@ -2443,43 +2443,22 @@
             const manual = [];
             document.querySelectorAll('#stopsContainer .stop-field .stop-input').forEach(inp => {
                 const ident = inp.dataset.ident; if (!ident) return;
-                const ap = airportByIdent[ident]; if (!ap) return;
-                manual.push({ ident: ap.ident, name: ap.name, type: ap.type, lat: ap.latitude_deg, lon: ap.longitude_deg, iata_code: ap.iata_code || '', alternate_km: ap.alternate_km, _manual: true });
+                const apx = airportByIdent[ident]; if (!apx) return;
+                manual.push({ ident: apx.ident, name: apx.name, type: apx.type, lat: apx.latitude_deg, lon: apx.longitude_deg, iata_code: apx.iata_code || '', alternate_km: apx.alternate_km });
             });
             plannedSource = manual.length ? 'user' : 'auto';
 
-            // Build chain endpoints; auto-fill each gap.
-            const chain = [t.origin, ...manual, t.dest];
-            const result = [];
-            const usedIdents = new Set(chain.map(p => p.ident).filter(Boolean));
-            for (let i = 0; i < chain.length - 1; i++) {
-                // Don't let the auto-planner re-pick an airport already in the
-                // chain (would create A → X → X → B nonsense), AND honour the
-                // operator's removed-stop blacklist — clicking × on an auto-
-                // stop should keep that airport off the route until Reset.
-                const filteredAirports = allAirports.filter(a => !usedIdents.has(a.ident) && !_blacklistedStopIdents.has(a.ident));
-                const segRes = CNSRouting.planRoute({
-                    origin: chain[i], destination: chain[i + 1], plane,
-                    allAirports: filteredAirports,
-                    allowedTypes: _allowedTypes(),
-                    // The available range (reserve + route padding folded in, or the
-                    // per-flight override) IS the max straight-line leg the planner allows.
-                    options: { ..._routingOptions(), maxLegKm: _availableRangeKm(plane) },
-                });
-                if (segRes.error && manual.length === 0) {
-                    // Pure auto path with no manual stops to anchor on: bubble up.
-                    plannedError = segRes.error; renderStops(); return;
-                }
-                // Append any auto-stops the planner inserted for this segment.
-                (segRes.stops || []).forEach(s => {
-                    result.push({ ...s, _auto: true });
-                    if (s.ident) usedIdents.add(s.ident);
-                });
-                // Append the manual stop that anchors the end of this segment
-                // (last segment ends at the destination — don't push that).
-                if (i < chain.length - 2) result.push(chain[i + 1]);
-            }
-            plannedStops = result;
+            // Preserve manual stops, auto-fill each gap — the shared routing core
+            // (CNSRecompute re-plans saved flights through the SAME planChain).
+            const chainRes = CNSRouting.planChain({
+                origin: t.origin, dest: t.dest, manualStops: manual, plane,
+                allowedTypes: _allowedTypes(), allAirports,
+                blacklist: _blacklistedStopIdents,
+                maxLegKm: _availableRangeKm(plane),
+                options: _routingOptions(),
+            });
+            if (chainRes.error && manual.length === 0) { plannedError = chainRes.error; renderStops(); return; }
+            plannedStops = chainRes.stops;
             validateRoute();
             renderStops();
         }

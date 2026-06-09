@@ -191,5 +191,36 @@ window.CNSRouting = (function () {
         return { stops, totalDistanceKm: best.distKm, legCount: stops.length + 1 };
     }
 
-    return { planRoute, haversineKm, routedKm };
+    // Build a full stop chain that PRESERVES the caller's manual stops and auto-fills
+    // each gap between them with planRoute. This is the exact chain-build the live
+    // planner uses; index.html's recomputeRoute and CNSRecompute both call it so the
+    // re-planning path is identical by construction (not two implementations agreeing).
+    //   manualStops: [{ ident, name, lat, lon, alternate_km, ... }]  (order preserved)
+    // Returns { stops: [ …each tagged _manual or _auto ], legCount, error }.
+    function planChain(opts) {
+        const { origin, dest, plane, allAirports } = opts;
+        const manualStops = (opts.manualStops || []).map(s => ({ ...s, _manual: true }));
+        const allowedTypes = opts.allowedTypes || [];
+        const blacklist = opts.blacklist instanceof Set ? opts.blacklist : new Set(opts.blacklist || []);
+        const maxLegKm = opts.maxLegKm;
+        const chain = [origin, ...manualStops, dest];
+        const usedIdents = new Set(chain.map(p => p && p.ident).filter(Boolean));
+        const stops = [];
+        for (let i = 0; i < chain.length - 1; i++) {
+            const filtered = allAirports.filter(a => !usedIdents.has(a.ident) && !blacklist.has(a.ident));
+            const seg = planRoute({
+                origin: chain[i], destination: chain[i + 1], plane,
+                allAirports: filtered, allowedTypes,
+                options: Object.assign({}, opts.options || {}, { maxLegKm }),
+            });
+            if (seg.error && manualStops.length === 0) {
+                return { stops: [], legCount: 0, error: seg.error };
+            }
+            (seg.stops || []).forEach(s => { stops.push({ ...s, _auto: true }); if (s.ident) usedIdents.add(s.ident); });
+            if (i < chain.length - 2) stops.push(manualStops[i]);   // the manual anchor ending this gap
+        }
+        return { stops, legCount: stops.length + 1, error: null };
+    }
+
+    return { planRoute, planChain, haversineKm, routedKm };
 })();
