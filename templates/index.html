@@ -823,16 +823,25 @@
         }
 
         .drawer-body {
-            position: absolute; left: 16px; right: 16px; bottom: 70px;
+            position: absolute; left: 0; right: 0; bottom: 70px;
+            /* Fit the DC into the central column between the two 360px side rails:
+               grow with the viewport, but never narrower than the content needs
+               (min) nor wider than its full-bleed size on a 1080p screen (max). */
+            width: clamp(720px, calc(100vw - 800px), 1888px); margin-inline: auto;
             background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
             border-radius: var(--radius);
-            max-height: calc(85vh - 80px); overflow-y: auto;
+            max-height: calc(85vh - 80px);
+            display: flex; flex-direction: column; overflow: hidden;
             padding: 18px 20px;
             transform: translateY(24px); opacity: 0; pointer-events: none;
             transition: transform .28s ease, opacity .28s ease;
         }
         .drawer.open .drawer-body { transform: translateY(0); opacity: 1; pointer-events: auto; }
+        /* Sticky header: the drawer body itself no longer scrolls; #folder does,
+           so the title bar + intro line stay pinned while the airport cards scroll. */
+        .drawer-body > #folder { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+        .drawer-body > p { border-bottom: 1px solid var(--panel-border); padding-bottom: 10px; }
         /* Close (×) — top-right of the drawer, mirrors the result-panel minimise. */
         .drawer-close {
             position: absolute; top: 12px; right: 14px; z-index: 6;
@@ -846,6 +855,9 @@
 
         .drawer-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
         .drawer-title { font-size: 1.1rem; font-weight: 700; margin: 0; }
+        .folder-airport-name { font-size: 1.7rem; font-weight: 700; line-height: 1.15; }
+        .folder-airport-sub { font-size: .85rem; color: var(--muted); margin-top: 2px; }
+        .folder-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
         .drawer-tools { display: flex; gap: 12px; align-items: center; margin-left: auto; flex-wrap: wrap; }
         .inline-field { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--ink-soft); }
         .inline-field select { font-size: .85rem; min-width: 160px; }
@@ -898,17 +910,19 @@
         .sched-card {
             display: flex; align-items: center; gap: 14px;
             width: 100%; margin-top: 12px;
-            background: rgba(43,47,90,.04);
-            border: 1px solid rgba(43,47,90,.10);
+            background: #fff;
+            border: 1px solid rgba(43,47,90,.18);
+            border-left: 3px solid var(--brand-orange-3);
             border-radius: var(--radius-sm);
-            padding: 10px 14px;
+            padding: 11px 14px;
             color: var(--ink); text-align: left; font: inherit;
+            box-shadow: 0 1px 3px rgba(43,47,90,.08);
             cursor: pointer; transition: background .15s, border-color .15s, box-shadow .15s;
         }
         .sched-card:hover {
-            background: rgba(229,120,80,.06);
-            border-color: rgba(229,120,80,.25);
-            box-shadow: 0 4px 12px rgba(43,47,90,.08);
+            background: rgba(229,120,80,.07);
+            border-color: rgba(229,120,80,.45);
+            box-shadow: 0 4px 14px rgba(43,47,90,.13);
         }
         .sched-card-icon {
             font-size: 1.4rem; line-height: 1;
@@ -925,6 +939,7 @@
             background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
             color: #fff; border-radius: var(--radius-sm);
             padding: 16px 20px; box-shadow: 0 6px 16px rgba(43,47,90,.22);
+            margin-bottom: 16px;
         }
         .agg-hero-row {
             display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;
@@ -964,10 +979,6 @@
         #folder .alert {
             border-radius: var(--radius-sm); border: none; font-size: .85rem;
             padding: 10px 14px !important;
-        }
-        #folder .alert-success {
-            background: #ecfdf5; color: #065f46;
-            border-left: 3px solid var(--success);
         }
         #folder .alert-warning {
             background: #fffbeb; color: #92400e;
@@ -3985,6 +3996,7 @@
         const { loadFolder, saveFolder, loadCfg, saveCfg, flightsPerDay, computeAirports } = CNSDemand;
         let calcFilter = 'all';
         const schedOpen = new Set();   // airport idents whose embedded scheduler is expanded
+        const routesOpen = new Set();   // airport idents whose route breakdown is expanded (default collapsed)
 
         // UI wrapper: mutate via the data module, then re-render.
         function updateTrip(id, patch) { CNSDemand.updateTrip(id, patch); renderFolder(); }
@@ -4158,40 +4170,13 @@
                 const fpd = Math.round(dailyFlights(a) * 10) / 10;
 
                 return `<div class="border rounded p-3 mb-3" data-dest="${ident}">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5 class="mb-0">${a.name} <small class="text-muted">— ${fpd} flights/day</small></h5>
+                    <div class="folder-head mb-3">
+                        <div>
+                            <h5 class="mb-0 folder-airport-name">${a.name}</h5>
+                            <div class="folder-airport-sub">${fpd} flights/day</div>
+                        </div>
                         <button class="btn btn-sm btn-outline-primary" data-map="${ident}">View flights on map</button>
                     </div>
-                    <div class="mb-3">
-                        <label class="lbl d-block mb-1">Chargers at this airport</label>
-                        <div class="d-flex flex-wrap gap-2 align-items-center">
-                            ${fleetHtml}
-                            <button class="btn btn-sm btn-outline-success fleet-add" title="Add charger">+</button>
-                            <div class="soc-inline ms-3">
-                                <span class="soc-label">Charge target</span>
-                                <button class="soc-chip soc-toggle" type="button" data-ident="${ident}" title="Set the departure state-of-charge target — useful for avoiding the slow taper region above 80%">
-                                    <strong>${targetSocLabel}</strong>
-                                    <span class="chev">▾</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="soc-panel ${targetSoc != null ? '' : 'd-none'}" data-soc-ident="${ident}">
-                            <div class="soc-row">
-                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="auto" ${targetSoc == null ? 'checked' : ''}><span>Auto — use the global default charge target (Model settings)</span></label>
-                            </div>
-                            <div class="soc-row">
-                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="target" ${targetSoc != null ? 'checked' : ''}><span>Charge to at least</span></label>
-                                <input type="range" min="20" max="100" step="5" value="${targetSoc != null ? Math.round(targetSoc * 100) : 80}" class="form-range soc-slider" data-ident="${ident}" ${targetSoc != null ? '' : 'disabled'}>
-                                <span class="soc-val" data-soc-val="${ident}">${targetSoc != null ? Math.round(targetSoc * 100) : 80}%</span>
-                            </div>
-                            <p class="rs-help">A higher target gives the plane more range, but charging above ~80% enters the slow taper region. The model never charges below the minimum needed to safely return.</p>
-                        </div>
-                    </div>
-                    <table class="table table-sm align-middle mb-3">
-                        <thead><tr class="text-muted" style="font-size:.8rem">
-                            <th>Role / route</th><th>Aircraft</th><th>Trip</th><th>Freq</th><th>Recharge</th><th></th>
-                        </tr></thead><tbody>${rows}</tbody>
-                    </table>
                     <!-- Stats summary: two HERO metrics (peak power + daily energy)
                          that map directly to infrastructure-sizing decisions, plus
                          three secondary derived metrics on a smaller row. -->
@@ -4219,9 +4204,34 @@
                             <div class="agg-small"><div class="agg-small-lbl">Charging time / day</div><div class="agg-small-num">${fmtDuration(dailyHours * 60)}</div></div>
                         </div>
                     </div>
+                    <div class="mb-3">
+                        <label class="lbl d-block mb-1">Chargers at this airport</label>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            ${fleetHtml}
+                            <button class="btn btn-sm btn-outline-success fleet-add" title="Add charger">+</button>
+                            <div class="soc-inline ms-3">
+                                <span class="soc-label">Charge target</span>
+                                <button class="soc-chip soc-toggle" type="button" data-ident="${ident}" title="Set the departure state-of-charge target — useful for avoiding the slow taper region above 80%">
+                                    <strong>${targetSocLabel}</strong>
+                                    <span class="chev">▾</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="soc-panel ${targetSoc != null ? '' : 'd-none'}" data-soc-ident="${ident}">
+                            <div class="soc-row">
+                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="auto" ${targetSoc == null ? 'checked' : ''}><span>Auto — use the global default charge target (Model settings)</span></label>
+                            </div>
+                            <div class="soc-row">
+                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="target" ${targetSoc != null ? 'checked' : ''}><span>Charge to at least</span></label>
+                                <input type="range" min="20" max="100" step="5" value="${targetSoc != null ? Math.round(targetSoc * 100) : 80}" class="form-range soc-slider" data-ident="${ident}" ${targetSoc != null ? '' : 'disabled'}>
+                                <span class="soc-val" data-soc-val="${ident}">${targetSoc != null ? Math.round(targetSoc * 100) : 80}%</span>
+                            </div>
+                            <p class="rs-help">A higher target gives the plane more range, but charging above ~80% enters the slow taper region. The model never charges below the minimum needed to safely return.</p>
+                        </div>
+                    </div>
                     ${sInfo.overflow
                         ? `<div class="alert alert-warning py-2 mt-2 mb-0">With ${fleet.length} charger${fleet.length > 1 ? 's' : ''} (${fmtPower(installed)}) the rotations don't all fit before 23:00 — the last finishes ${fmtClock(sInfo.latestEnd)}. Add chargers or reduce flights.</div>`
-                        : `<div class="alert alert-success py-2 mt-2 mb-0">${fleet.length} charger${fleet.length > 1 ? 's' : ''} (${fmtPower(installed)}) handle the day — peak draw ${fmtPower(peakPower)}, last rotation ends ${fmtClock(sInfo.latestEnd)}.</div>`}
+                        : ''}
                     <button class="sched-card sched-toggle" data-ident="${ident}" type="button" title="Open the per-charger Gantt-style scheduler for this airport">
                         <span class="sched-card-icon" aria-hidden="true">⏱</span>
                         <span class="sched-card-body">
@@ -4231,6 +4241,21 @@
                         <span class="sched-card-chev" aria-hidden="true">${schedOpen.has(ident) ? '▴' : '▾'}</span>
                     </button>
                     <div class="sched-box mt-2 ${schedOpen.has(ident) ? '' : 'd-none'}" data-schedbox="${ident}"></div>
+                    <button class="sched-card routes-toggle" data-ident="${ident}" type="button" title="Show or hide the per-route breakdown">
+                        <span class="sched-card-icon" aria-hidden="true">☰</span>
+                        <span class="sched-card-body">
+                            <span class="sched-card-title">Route breakdown</span>
+                            <span class="sched-card-summary">${routesOpen.has(ident) ? 'hide' : 'show'} the per-flight detail</span>
+                        </span>
+                        <span class="sched-card-chev" aria-hidden="true">${routesOpen.has(ident) ? '▴' : '▾'}</span>
+                    </button>
+                    <div class="${routesOpen.has(ident) ? '' : 'd-none'} mt-2">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead><tr class="text-muted" style="font-size:.8rem">
+                                <th>Role / route</th><th>Aircraft</th><th>Trip</th><th>Freq</th><th>Recharge</th><th></th>
+                            </tr></thead><tbody>${rows}</tbody>
+                        </table>
+                    </div>
                 </div>`;
             }).join('');
 
@@ -4284,6 +4309,11 @@
             el.querySelectorAll('.sched-toggle').forEach(btn => btn.addEventListener('click', () => {
                 const id = btn.dataset.ident;
                 schedOpen.has(id) ? schedOpen.delete(id) : schedOpen.add(id);
+                renderFolder();
+            }));
+            el.querySelectorAll('.routes-toggle').forEach(btn => btn.addEventListener('click', () => {
+                const id = btn.dataset.ident;
+                routesOpen.has(id) ? routesOpen.delete(id) : routesOpen.add(id);
                 renderFolder();
             }));
             el.querySelectorAll('[data-schedbox]').forEach(box => {
