@@ -3822,7 +3822,7 @@
                 // to a NON-routing factor (charge target, taper, …) just re-renders — no replan.
                 try {
                     const rs = CNSSettings.loadAll();
-                    const sig = `${rs.landingReserve.enabled ? rs.landingReserve.minLandingSoc : '-'}|${rs.routingPadding.enabled ? rs.routingPadding.factor : '-'}|${(rs.alternateReserve && rs.alternateReserve.enabled) ? 1 : 0}`;
+                    const sig = `${rs.landingReserve.enabled ? rs.landingReserve.minLandingSoc : '-'}|${rs.routingPadding.enabled ? rs.routingPadding.factor : '-'}|${(rs.sidStarPadding && rs.sidStarPadding.enabled) ? rs.sidStarPadding.km : '-'}|${(rs.alternateReserve && rs.alternateReserve.enabled) ? 1 : 0}`;
                     const fn = (sig !== _lastRoutingSig && typeof recomputeRoute === 'function') ? recomputeRoute : renderStops;
                     _lastRoutingSig = sig;
                     if (typeof fn === 'function') fn();
@@ -3957,6 +3957,31 @@
 
         // UI wrapper: mutate via the data module, then re-render.
         function updateTrip(id, patch) { CNSDemand.updateTrip(id, patch); renderFolder(); }
+
+        // Re-plan every saved flight under current settings (preserve manual stops,
+        // honour the alternate divert reserve via the shared planChain), persist, then
+        // render. Same planChain + engine the live planner/DES use → re-planning matches
+        // a fresh add. Debounced so dragging a slider doesn't thrash.
+        let _recomputeTimer = null;
+        function _recomputeCtx() {
+            return {
+                allAirports,
+                allowedTypes: _allowedTypes(),
+                planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate }),
+                availableRangeKm: (plane) => _availableRangeKm(plane),
+            };
+        }
+        function recomputeAllFlights() {
+            if (!window.CNSRecompute) { renderFolder(); return; }
+            const trips = CNSDemand.loadFolder();
+            if (!trips.length) { renderFolder(); return; }
+            CNSDemand.saveFolder(CNSRecompute.recomputeAll(trips, _recomputeCtx()));
+            renderFolder();
+        }
+        function recomputeAllFlightsDebounced() {
+            clearTimeout(_recomputeTimer);
+            _recomputeTimer = setTimeout(recomputeAllFlights, 250);
+        }
 
         let _dcRevenueYearly = false;   // Demand-calc revenue hero: false = per day, true = per year
         function renderFolder() {
@@ -4697,6 +4722,9 @@
             // Redraw the curve + refresh the price whenever the modal opens.
             const _msModal = document.getElementById('modelSettingsModal');
             if (_msModal) _msModal.addEventListener('shown.bs.modal', syncFromState);
+            // Reconcile saved-flight feasibility against current settings on open (catches
+            // drift from a prior session before the operator even touches a slider).
+            if (_msModal) _msModal.addEventListener('shown.bs.modal', () => { if (typeof recomputeAllFlights === 'function') recomputeAllFlights(); });
 
             // Apply settings — explicitly fan out the current state through
             // every subscriber, even if the user didn't change any control
@@ -4725,7 +4753,7 @@
                 if (typeof smartReplan === 'function') smartReplan();
                 if (typeof updateTrajectory === 'function') updateTrajectory();
                 if (typeof drawLiveRoute === 'function') drawLiveRoute();
-                if (typeof renderFolder === 'function') renderFolder();
+                if (typeof recomputeAllFlightsDebounced === 'function') recomputeAllFlightsDebounced();
                 if (typeof lastResult !== 'undefined' && lastResult) renderResult(lastResult);
             });
 
