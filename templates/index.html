@@ -4553,7 +4553,7 @@
                 const thrEl = document.getElementById('rsTaperThr'), flEl = document.getElementById('rsTaperFloor');
                 const thr = thrEl ? Math.max(0.05, Math.min(0.95, +thrEl.value / 100)) : 0.70;
                 const floor = flEl ? Math.max(0.02, Math.min(0.95, +flEl.value / 100)) : 0.15;
-                const W = 320, H = 72, mL = 26, mR = 8, mT = 8, mB = 13;
+                const W = 320, H = 72, mL = 26, mR = 8, mT = 16, mB = 13;
                 const px = soc => mL + soc * (W - mL - mR);
                 const py = p => (H - mB) - p * (H - mT - mB);
                 const pts = [];
@@ -4565,12 +4565,12 @@
                 let g = '';
                 [0, 0.5, 1].forEach(p => { g += `<line x1="${mL}" y1="${py(p)}" x2="${W - mR}" y2="${py(p)}" stroke="#e2e8f0"/><text x="${mL - 3}" y="${py(p) + 3}" font-size="7" text-anchor="end" fill="#94a3b8">${p * 100}</text>`; });
                 [0, 0.5, 1].forEach(s => { g += `<text x="${px(s)}" y="${H - 7}" font-size="7" text-anchor="middle" fill="#94a3b8">${s * 100}%</text>`; });
-                const knee = `<line x1="${px(thr)}" y1="${py(0)}" x2="${px(thr)}" y2="${py(1)}" stroke="#f59e0b" stroke-dasharray="3 2"/><text x="${px(thr)}" y="${mT + 5}" font-size="7" text-anchor="middle" fill="#d97706">knee</text>`;
+                const knee = `<line x1="${px(thr)}" y1="${py(0)}" x2="${px(thr)}" y2="${py(1)}" stroke="#f59e0b" stroke-dasharray="3 2"/><text x="${px(thr)}" y="${mT - 6}" font-size="7" text-anchor="middle" fill="#d97706">knee</text>`;
                 const area = `M${px(0)},${py(0)} L${pts.join(' L')} L${px(1)},${py(0)} Z`;
                 svg.innerHTML = g + knee
                     + `<path d="${area}" fill="rgba(37,99,235,.12)"/>`
                     + `<polyline fill="none" stroke="#2563eb" stroke-width="2" points="${pts.join(' ')}"/>`
-                    + `<text x="2" y="9" font-size="7" fill="#64748b">power %</text>`;
+                    + `<text x="2" y="${mT - 6}" font-size="7" fill="#64748b">power %</text>`;
             }
             ['rsTaperThr', 'rsTaperFloor'].forEach(id => {
                 const sl = document.getElementById(id);
