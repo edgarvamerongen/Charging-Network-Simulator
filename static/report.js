@@ -57,8 +57,15 @@ window.CNSReport = (function () {
         // drawer uses, so the PDF agrees with the screen.
         const engCache = {};
         const aircraftList = a.contribs.map((c, i) => {
+            // Feed the trip's assigned charger into the engine so per-leg charge
+            // TIMES are real. profileForTrip defaults getChargerKw to () => 0
+            // (it's normally only consumed for charge ENERGIES), which makes the
+            // profile's per-charge chargeMin explode (energy / 0). The plane's
+            // c-rate still caps the effective power, so this matches the charge
+            // time shown on the contribution's main row.
+            const tripChargerKw = +c.t.chargerPower || 0;
             const prof = (c.t.id in engCache) ? engCache[c.t.id]
-                : (engCache[c.t.id] = (window.CNSFlight && CNSFlight.profileForTrip) ? CNSFlight.profileForTrip(c.t, { getTargetSoc }) : null);
+                : (engCache[c.t.id] = (window.CNSFlight && CNSFlight.profileForTrip) ? CNSFlight.profileForTrip(c.t, { getTargetSoc, getChargerKw: () => tripChargerKw }) : null);
             return {
                 _i: i, name: c.t.planeName,
                 energy: prof ? (CNSFlight.chargeEnergyAt(prof, c) ?? 0) : 0,   // engine charge energy (0 if unresolvable)
@@ -83,6 +90,25 @@ window.CNSReport = (function () {
                 : asg.chargeTimeMin;
             const fpd = _flightsPerDay(t);
             dailyKwh += energy * fpd;
+            // Per-leg charging breakdown for multi-leg trips (origin → stops →
+            // terminal, each charge from the engine's per-leg plan).
+            let legs = null;
+            const prof = engCache[t.id];
+            if (t.multiLeg && prof && Array.isArray(prof.charges)) {
+                const ls = prof.charges
+                    .filter(ch => (ch.energyKwh || 0) > 0.01)
+                    .map(ch => {
+                        // Energy is authoritative. Time/power are only meaningful
+                        // when the stop actually has a charger — planner-inserted
+                        // airfields have none, so powerKw is 0 and chargeMin blows
+                        // up (energy / 0). Show those as energy-only.
+                        const powerKw = (ch.powerKw > 0 && isFinite(ch.powerKw)) ? ch.powerKw : null;
+                        const chargeMin = (powerKw && isFinite(ch.chargeMin) && ch.chargeMin >= 0 && ch.chargeMin < 100000)
+                            ? ch.chargeMin : null;
+                        return { toName: ch.name, energyKwh: ch.energyKwh, chargeMin, powerKw };
+                    });
+                if (ls.length) legs = ls.slice(0, 8);
+            }
             return {
                 planeName: t.planeName,
                 tripType: t.tripType,
@@ -96,6 +122,7 @@ window.CNSReport = (function () {
                 energyPerFlight: energy,
                 chargeMin: isFinite(chargeMin) ? chargeMin : 0,
                 chargerName: asg.charger ? asg.charger.name : 'no charger',
+                legs,
             };
         });
 
@@ -185,6 +212,7 @@ window.CNSReport = (function () {
                 id: t.planeId,
                 name: t.planeName,
                 svg: t.planeSvg || (cat && cat.svg) || '',
+                image: (cat && cat.image) || '',
                 battery_kwh: (cat && cat.battery_kwh) ?? t.battery ?? 0,
                 range_km: (cat && cat.range_km) ?? 0,
                 speed_kmh: (cat && cat.speed_kmh) ?? 0,
@@ -220,17 +248,71 @@ window.CNSReport = (function () {
         return false;
     }
 
+    // ---------- time-of-day load curve -------------------------------------
+    // Step series [{t: <abs minute>, kw}] of total on-airport charging power,
+    // built from the SAME scheduler phases summary() sweeps for the peak — so
+    // the curve's maximum equals the reported peak by construction.
+    function _loadCurveAt(ident) {
+        const rows = (window.CNSScheduler && CNSScheduler.rotationsAt) ? CNSScheduler.rotationsAt(ident) : [];
+        const evs = [];
+        rows.forEach(row => (row.rotations || []).forEach(rot => (rot.phases || []).forEach(p => {
+            if (p.kind === 'charge' && p.atX && p.power > 0 && p.dur > 0) {
+                const start = rot.takeoff + p.start;
+                evs.push({ t: start, d: +p.power });
+                evs.push({ t: start + p.dur, d: -p.power });
+            }
+        })));
+        if (!evs.length) return [];
+        evs.sort((a, b) => a.t - b.t || a.d - b.d);
+        const pts = [];
+        let cur = 0;
+        evs.forEach(e => {
+            cur += e.d;
+            if (pts.length && pts[pts.length - 1].t === e.t) pts[pts.length - 1].kw = cur;
+            else pts.push({ t: e.t, kw: Math.max(0, cur) });
+        });
+        return pts;
+    }
+
+    // ---------- energy mix by aircraft type --------------------------------
+    function _energyByType(contribs) {
+        const agg = {};
+        (contribs || []).forEach(c => {
+            const k = c.planeName || 'Unknown';
+            agg[k] = (agg[k] || 0) + (c.energyPerFlight || 0) * (c.flightsPerDay || 0);
+        });
+        return Object.entries(agg)
+            .map(([planeName, value]) => ({ planeName, label: planeName, value }))
+            .filter(s => s.value > 0)
+            .sort((a, b) => b.value - a.value);
+    }
+
+    // ---------- model settings snapshot (for the assumptions panel) --------
+    function _modelSettings() {
+        const S = window.CNSSettings;
+        if (!S) return {};
+        const all = S.loadAll ? S.loadAll() : {};
+        const rp = all.routingPadding || {};
+        return {
+            chargeTarget: S.chargeTargetDefault ? S.chargeTargetDefault() : null,
+            chargeRate: S.chargeRate ? S.chargeRate() : null,
+            routingPadding: { enabled: !!rp.enabled, factor: rp.factor || 1 },
+            sidStarPaddingKm: S.sidStarPaddingKm ? S.sidStarPaddingKm() : 0,
+            alternateReserve: S.alternateReserveEnabled ? S.alternateReserveEnabled() : false,
+            gridDemandFactor: S.gridDemandFactor ? S.gridDemandFactor() : 1,
+        };
+    }
+
     // ---------- assemble + send --------------------------------------------
-    function buildPayload() {
+    // focusIdent: the airport ICAO chosen in the required report modal. The
+    // whole report is scoped to it — its stats, its page, the charts, and only
+    // the flights that touch it.
+    function buildPayload(focusIdent) {
         const flights = CNSDemand.loadFolder();
         const rawAirports = Object.values(CNSDemand.computeAirports());
         let airports = rawAirports.map(_buildAirport);
 
-        // Per-airport mode: the Demand Calculator's "Show airport" filter
-        // (#airportFilter) scopes the WHOLE report to a single airport when it
-        // isn't "all" — its stats, its page, and only the flights touching it.
-        const filterEl = document.getElementById('airportFilter');
-        const focusIdent = (filterEl && filterEl.value && filterEl.value !== 'all') ? filterEl.value : null;
+        focusIdent = focusIdent || null;
         let focusAirport = null, scopedRaw = rawAirports;
         if (focusIdent) {
             airports = airports.filter(a => a.ident === focusIdent);
@@ -238,6 +320,10 @@ window.CNSReport = (function () {
             focusAirport = (airports[0] || {}).name || null;
         }
         const relevantFlights = focusIdent ? flights.filter(t => _touches(t, focusIdent)) : flights;
+
+        // attach each (focus) airport's time-of-day load curve
+        airports.forEach(a => { a.loadCurvePoints = _loadCurveAt(a.ident); });
+        const focusA = airports[0] || null;
 
         const totals = {
             airportCount: airports.length,
@@ -250,8 +336,12 @@ window.CNSReport = (function () {
             generatedAt: new Date().toLocaleString('en-GB', {
                 year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
             }),
+            focusIdent,
             focusAirport,
             chargeRate: (window.CNSSettings && CNSSettings.chargeRate) ? CNSSettings.chargeRate() : 0.60,
+            modelSettings: _modelSettings(),
+            loadCurvePoints: focusA ? focusA.loadCurvePoints : [],
+            energyByType: focusA ? _energyByType(focusA.contribs) : [],
             totals,
             airports,
             planes: _usedPlanes(relevantFlights),
@@ -264,7 +354,7 @@ window.CNSReport = (function () {
         };
     }
 
-    async function generate(btn) {
+    async function generate(btn, focusIdent) {
         const folder = CNSDemand.loadFolder();
         if (!folder.length) {
             alert('Add at least one flight to the folder before generating a report.');
@@ -276,7 +366,7 @@ window.CNSReport = (function () {
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating PDF…';
         }
         try {
-            const payload = buildPayload();
+            const payload = buildPayload(focusIdent);
             const resp = await fetch('/api/report.pdf', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

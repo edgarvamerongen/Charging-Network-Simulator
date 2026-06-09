@@ -16,9 +16,13 @@ without touching this file — only templates/report.html + static/report.css.
 import base64
 import ctypes
 import io
+import json
+import math
 import mimetypes
 import os
 import platform
+import urllib.parse
+import urllib.request
 from datetime import datetime
 
 
@@ -96,6 +100,34 @@ _macos_setup_weasyprint()
 # breaking module import (and the whole Flask app).
 DAY_START = 7 * 60
 DAY_END = 23 * 60
+
+# --- Revenue & cost scenario (clearly-labelled, tunable assumptions) ---------
+# Not every available kWh is billed at the headline tariff (off-peak sessions,
+# contracted rates, idle capacity), so annual revenue is shown as a realisation
+# BAND rather than a single figure.
+REALISATION_LOW = 0.70
+REALISATION_HIGH = 1.00
+# Wholesale energy procurement cost (EUR/kWh). Tariff minus this is the gross
+# margin, before grid fees, demand charges, and operating costs.
+PROCUREMENT_EUR_PER_KWH = 0.15
+# Bonus: auto-embed an airport photo on the cover (curated local first, then
+# Wikimedia). Flip to False to disable the network fallback entirely.
+AIRPORT_PHOTO_WIKIMEDIA = True
+
+# House palette for the energy-mix donut (muted base + accents).
+_DONUT_PALETTE = ['#2563eb', '#F0892B', '#10b981', '#6f42c1', '#0ea5e9',
+                  '#f59e0b', '#14b8a6', '#ef4444', '#8b5cf6', '#64748b']
+
+# House colours reused by the server-drawn SVGs / map.
+_C_NAVY = '#152455'
+_C_BLUE = '#2563eb'
+_C_ORANGE = '#F0892B'
+_C_GREEN = '#10b981'
+_C_INK = '#0f1729'
+_C_BODY = '#334155'
+_C_MUTED = '#94a3b8'
+_C_LINE = '#e2e8f0'
+_C_SOFT = '#f1f5f9'
 
 ROOT = os.path.dirname(__file__)
 PICS_DIR = os.path.join(ROOT, 'pics')
@@ -217,16 +249,191 @@ def _xml_escape(s):
             .replace('>', '&gt;'))
 
 
+def _nice_axis(vmax, target_ticks=4):
+    """Return (nice_max, step) so a 0..nice_max axis has ~target_ticks gridlines
+    at round values."""
+    if vmax is None or vmax <= 0:
+        return (1.0, 1.0)
+    raw = vmax / max(1, target_ticks)
+    mag = 10 ** math.floor(math.log10(raw)) if raw > 0 else 1.0
+    step = mag
+    for m in (1, 2, 2.5, 5, 10):
+        if m * mag >= raw:
+            step = m * mag
+            break
+    nice_max = math.ceil(vmax / step) * step
+    return (nice_max, step)
+
+
+# ---------- Time-of-day load curve -------------------------------------------
+_CURVE_W = 720
+_CURVE_H = 205
+
+def _load_curve_svg(series, peak_kw=None, installed_kw=None):
+    """Daily power load profile. `series` is a step function: a list of
+    {'t': <minute from 00:00>, 'kw': <number>} breakpoints where the power is
+    `kw` from this t until the next breakpoint. Draws a filled area + top line,
+    a dashed peak line, and a faint installed-capacity line."""
+    pts = sorted(({'t': float(p['t']), 'kw': max(0.0, float(p['kw']))}
+                  for p in (series or []) if p.get('t') is not None),
+                 key=lambda p: p['t'])
+    if not pts or all(p['kw'] <= 0 for p in pts):
+        return '<p class="lede">No charging load on this day.</p>'
+
+    t0 = DAY_START
+    last_activity = max(p['t'] for p in pts)
+    last_hour = min(30, max(int(math.ceil(DAY_END / 60)), int(math.ceil(last_activity / 60))))
+    t1 = last_hour * 60
+    # clamp / pad the series to the drawn window
+    if pts[0]['t'] > t0:
+        pts.insert(0, {'t': t0, 'kw': 0.0})
+    if pts[-1]['t'] < t1:
+        pts.append({'t': t1, 'kw': 0.0})
+
+    vmax = max([p['kw'] for p in pts] + [peak_kw or 0, installed_kw or 0])
+    nice_max, step = _nice_axis(vmax, 4)
+    mw = nice_max >= 1000
+    div = 1000.0 if mw else 1.0
+    unit = 'MW' if mw else 'kW'
+
+    left, right, top, bottom = 60, _CURVE_W - 16, 16, _CURVE_H - 26
+    span_t = (t1 - t0) or 1
+    px = lambda t: left + (t - t0) / span_t * (right - left)
+    py = lambda kw: bottom - (kw / nice_max) * (bottom - top)
+
+    out = [f'<svg class="curve" viewBox="0 0 {_CURVE_W} {_CURVE_H}" '
+           f'preserveAspectRatio="xMinYMin meet" xmlns="http://www.w3.org/2000/svg" '
+           f'font-family="Inter, sans-serif">']
+    # y gridlines + labels
+    n = int(round(nice_max / step))
+    for i in range(n + 1):
+        v = i * step
+        y = py(v)
+        out.append(f'<line x1="{left}" y1="{y:.1f}" x2="{right}" y2="{y:.1f}" '
+                   f'stroke="{_C_LINE}" stroke-width="1"/>')
+        out.append(f'<text x="{left - 6}" y="{y + 3:.1f}" text-anchor="end" '
+                   f'font-size="9" fill="{_C_MUTED}">{v / div:.2f}</text>' if mw
+                   else f'<text x="{left - 6}" y="{y + 3:.1f}" text-anchor="end" '
+                   f'font-size="9" fill="{_C_MUTED}">{v / div:.0f}</text>')
+    out.append(f'<text x="{left - 6}" y="{top - 5:.1f}" text-anchor="end" '
+               f'font-size="8.5" fill="{_C_MUTED}">{unit}</text>')
+    # x hour ticks
+    for hr in range(t0 // 60, last_hour + 1):
+        x = px(hr * 60)
+        out.append(f'<text x="{x:.1f}" y="{bottom + 14:.1f}" text-anchor="middle" '
+                   f'font-size="9" fill="{_C_MUTED}">{hr:02d}</text>')
+
+    # area + line (step-after)
+    area = [f'M {px(t0):.1f} {bottom:.1f}']
+    line = []
+    prev = 0.0
+    for j, p in enumerate(pts):
+        x = px(p['t'])
+        area.append(f'L {x:.1f} {py(prev):.1f} L {x:.1f} {py(p["kw"]):.1f}')
+        cmd = 'M' if not line else 'L'
+        line.append(f'{cmd} {x:.1f} {py(prev):.1f} L {x:.1f} {py(p["kw"]):.1f}')
+        prev = p['kw']
+    area.append(f'L {px(t1):.1f} {bottom:.1f} Z')
+    out.append(f'<path d="{" ".join(area)}" fill="{_C_BLUE}" fill-opacity="0.14"/>')
+    out.append(f'<path d="{" ".join(line)}" fill="none" stroke="{_C_BLUE}" '
+               f'stroke-width="2" stroke-linejoin="round"/>')
+
+    # installed-capacity line (faint grey dashed)
+    if installed_kw and installed_kw > 0 and installed_kw <= nice_max:
+        y = py(installed_kw)
+        out.append(f'<line x1="{left}" y1="{y:.1f}" x2="{right}" y2="{y:.1f}" '
+                   f'stroke="{_C_MUTED}" stroke-width="1.2" stroke-dasharray="2 3"/>')
+        out.append(f'<text x="{right}" y="{y - 4:.1f}" text-anchor="end" '
+                   f'font-size="8.5" fill="{_C_MUTED}">Installed {installed_kw / div:.2f} {unit}</text>')
+    # peak line (dashed orange) + label at the peak time
+    if peak_kw and peak_kw > 0:
+        peak_t = max(pts, key=lambda p: p['kw'])['t']
+        y = py(peak_kw)
+        out.append(f'<line x1="{left}" y1="{y:.1f}" x2="{right}" y2="{y:.1f}" '
+                   f'stroke="{_C_ORANGE}" stroke-width="1.4" stroke-dasharray="4 3"/>')
+        out.append(f'<text x="{px(peak_t) + 6:.1f}" y="{y - 4:.1f}" '
+                   f'font-size="9" font-weight="700" fill="{_C_ORANGE}">'
+                   f'Peak {peak_kw / div:.2f} {unit} @ {_fmt_clock(peak_t)}</text>')
+    out.append('</svg>')
+    return ''.join(out)
+
+
+# ---------- Energy-mix donut -------------------------------------------------
+_DONUT_W = 720
+_DONUT_H = 184
+
+def _polar(cx, cy, r, deg):
+    a = math.radians(deg - 90)
+    return (cx + r * math.cos(a), cy + r * math.sin(a))
+
+def _donut_svg(slices, center_value, center_unit):
+    """`slices`: [{'label', 'value'}] (value in kWh/day). Renders a donut sized
+    by value, a centre total, and a legend with per-slice value + percentage."""
+    data = [{'label': s.get('label', ''), 'value': max(0.0, float(s.get('value') or 0))}
+            for s in (slices or [])]
+    data = [s for s in data if s['value'] > 0]
+    total = sum(s['value'] for s in data)
+    if not data or total <= 0:
+        return '<p class="lede">No energy throughput on this day.</p>'
+
+    cx, cy, rO, rI = 104, 92, 70, 43
+    out = [f'<svg class="donut" viewBox="0 0 {_DONUT_W} {_DONUT_H}" '
+           f'preserveAspectRatio="xMinYMin meet" xmlns="http://www.w3.org/2000/svg" '
+           f'font-family="Inter, sans-serif">']
+    if len(data) == 1:
+        c = _DONUT_PALETTE[0]
+        out.append(f'<circle cx="{cx}" cy="{cy}" r="{(rO + rI) / 2}" fill="none" '
+                   f'stroke="{c}" stroke-width="{rO - rI}"/>')
+    else:
+        a0 = 0.0
+        for i, s in enumerate(data):
+            a1 = a0 + s['value'] / total * 360.0
+            large = 1 if (a1 - a0) > 180 else 0
+            ox0, oy0 = _polar(cx, cy, rO, a0)
+            ox1, oy1 = _polar(cx, cy, rO, a1)
+            ix1, iy1 = _polar(cx, cy, rI, a1)
+            ix0, iy0 = _polar(cx, cy, rI, a0)
+            c = _DONUT_PALETTE[i % len(_DONUT_PALETTE)]
+            out.append(
+                f'<path d="M {ox0:.2f} {oy0:.2f} A {rO} {rO} 0 {large} 1 {ox1:.2f} {oy1:.2f} '
+                f'L {ix1:.2f} {iy1:.2f} A {rI} {rI} 0 {large} 0 {ix0:.2f} {iy0:.2f} Z" '
+                f'fill="{c}"/>')
+            a0 = a1
+    # centre total
+    out.append(f'<text x="{cx}" y="{cy - 2}" text-anchor="middle" font-size="20" '
+               f'font-weight="800" fill="{_C_INK}">{center_value}</text>')
+    out.append(f'<text x="{cx}" y="{cy + 14}" text-anchor="middle" font-size="9" '
+               f'fill="{_C_MUTED}">{_xml_escape(center_unit)}</text>')
+    # legend
+    lx, ly = 250, 28
+    for i, s in enumerate(data):
+        c = _DONUT_PALETTE[i % len(_DONUT_PALETTE)]
+        pct = s['value'] / total * 100
+        out.append(f'<rect x="{lx}" y="{ly - 9}" width="11" height="11" rx="2" fill="{c}"/>')
+        out.append(f'<text x="{lx + 18}" y="{ly}" font-size="11" fill="{_C_INK}">'
+                   f'{_xml_escape(s["label"])}</text>')
+        out.append(f'<text x="{_DONUT_W - 8}" y="{ly}" text-anchor="end" font-size="10.5" '
+                   f'fill="{_C_BODY}">{_fmt_energy(s["value"])} · {pct:.0f}%</text>')
+        ly += 24
+    out.append('</svg>')
+    return ''.join(out)
+
+
 # ---------- Rotation Gantt ---------------------------------------------------
 _GANTT_W = 720
-_GANTT_LBL_W = 150
-_GANTT_LANE_H = 38
+_GANTT_LBL_W = 176
+_GANTT_LANE_H = 40
 _PHASE_COLOR = {
-    'fly':       '#0d6efd',
-    'charge':    '#198754',
-    'elsewhere': '#9bd3ad',  # off-airport charge phases
-    'wait':      'url(#wait-stripe)',
+    'fly':          _C_BLUE,
+    'charge':       _C_GREEN,
+    'elsewhere':    '#9bd3ad',          # off-airport charge phases
+    'wait':         'url(#wait-stripe)',
+    'waitElsewhere': 'url(#queue-stripe)',
 }
+
+def _truncate(s, n):
+    s = s or ''
+    return s if len(s) <= n else s[:n - 1].rstrip() + '…'
 
 def _gantt_svg(rotations, last_hour=23):
     """Render an airport's rotation lanes as a vector Gantt chart.
@@ -242,47 +449,53 @@ def _gantt_svg(rotations, last_hour=23):
                 end_clock = inst['start'] + p['start'] + p['dur']
                 last_hour = max(last_hour, int(end_clock // 60) + 1)
     last_hour = min(30, max(23, last_hour))
-    track_w = _GANTT_W - _GANTT_LBL_W - 10
+    track_x = _GANTT_LBL_W
+    track_w = _GANTT_W - _GANTT_LBL_W - 16          # right padding so the last bar/tick isn't clipped
     span = (last_hour * 60) - DAY_START
-    px = lambda mins: _GANTT_LBL_W + (mins - DAY_START) / span * track_w
+    px = lambda mins: track_x + (mins - DAY_START) / span * track_w
     width_px = lambda mins: max(1.5, (mins / span) * track_w)
     lanes = len(rotations)
-    h = lanes * _GANTT_LANE_H + 28
+    top = 22
+    h = lanes * _GANTT_LANE_H + top + 8
 
     out = [f'<svg class="gantt" viewBox="0 0 {_GANTT_W} {h}" '
            f'preserveAspectRatio="xMinYMin meet" xmlns="http://www.w3.org/2000/svg" '
            f'font-family="Inter, sans-serif">']
-    # stripe pattern for waits
-    out.append('<defs><pattern id="wait-stripe" patternUnits="userSpaceOnUse" '
-               'width="6" height="6" patternTransform="rotate(45)">'
-               '<rect width="6" height="6" fill="#fbe4c4"/>'
-               '<rect width="3" height="6" fill="#f0ad4e"/></pattern></defs>')
+    # stripe patterns for waits (here = amber, elsewhere = grey)
+    out.append('<defs>'
+               '<pattern id="wait-stripe" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">'
+               '<rect width="6" height="6" fill="#fde9cf"/><rect width="3" height="6" fill="#F0892B"/></pattern>'
+               '<pattern id="queue-stripe" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">'
+               '<rect width="6" height="6" fill="#eef2f6"/><rect width="3" height="6" fill="#cbd5e1"/></pattern>'
+               '</defs>')
     # hour axis
     for hr in range(7, last_hour + 1):
         x = px(hr * 60)
-        out.append(f'<text x="{x:.1f}" y="14" font-size="9" fill="#94a3b8" '
+        out.append(f'<text x="{x:.1f}" y="14" font-size="10" fill="{_C_MUTED}" '
                    f'text-anchor="middle">{hr:02d}</text>')
-        out.append(f'<line x1="{x:.1f}" y1="20" x2="{x:.1f}" y2="{h}" '
-                   f'stroke="#f1f5f9" stroke-width="1"/>')
-    # frame
-    out.append(f'<rect x="{_GANTT_LBL_W}" y="20" width="{track_w}" height="{lanes * _GANTT_LANE_H}" '
-               f'fill="none" stroke="#e2e8f0" rx="4"/>')
+        out.append(f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{h - 6}" '
+                   f'stroke="{_C_SOFT}" stroke-width="1"/>')
+    # frame + label-gutter divider
+    out.append(f'<rect x="{track_x}" y="{top}" width="{track_w}" height="{lanes * _GANTT_LANE_H}" '
+               f'fill="none" stroke="{_C_LINE}" rx="4"/>')
+    out.append(f'<line x1="{track_x - 8}" y1="{top}" x2="{track_x - 8}" y2="{top + lanes * _GANTT_LANE_H}" '
+               f'stroke="{_C_LINE}" stroke-width="1"/>')
 
     for li, rot in enumerate(rotations):
-        y = 20 + li * _GANTT_LANE_H
+        y = top + li * _GANTT_LANE_H
         # row separator
         if li:
             out.append(f'<line x1="0" y1="{y}" x2="{_GANTT_W}" y2="{y}" '
                        f'stroke="#f4f4f4" stroke-width="1"/>')
-        # label
-        plane = _xml_escape(rot.get('planeName', ''))
-        route = _xml_escape(rot.get('route', ''))
-        out.append(f'<text x="6" y="{y + 14}" font-size="9" font-weight="600" fill="#0f1729">{route}</text>')
-        sub = f'{plane} · {rot.get("role", "")}'
+        # label (truncated, full name in <title>)
+        route = rot.get('route', '')
+        out.append(f'<text x="6" y="{y + 15}" font-size="10" font-weight="700" fill="{_C_INK}">'
+                   f'{_xml_escape(_truncate(route, 30))}<title>{_xml_escape(route)}</title></text>')
+        sub = f'{rot.get("planeName", "")} · {rot.get("role", "")}'
         if rot.get('multiLeg'):
             sub += ' · multi-leg'
         sub += f' · {len(rot.get("instances", []))}/day'
-        out.append(f'<text x="6" y="{y + 26}" font-size="8" fill="#94a3b8">{_xml_escape(sub)}</text>')
+        out.append(f'<text x="6" y="{y + 28}" font-size="9" fill="{_C_MUTED}">{_xml_escape(_truncate(sub, 34))}</text>')
 
         # bars
         for inst in rot.get('instances', []):
@@ -293,9 +506,9 @@ def _gantt_svg(rotations, last_hour=23):
                 x = px(start_clock)
                 w = width_px(p['dur'])
                 kind = p.get('kind', 'fly')
-                color = _PHASE_COLOR.get(kind, '#94a3b8')
+                color = _PHASE_COLOR.get(kind, _C_MUTED)
                 tooltip = _xml_escape(p.get('label', ''))
-                out.append(f'<rect x="{x:.1f}" y="{y + 7}" width="{w:.1f}" height="{_GANTT_LANE_H - 14}" '
+                out.append(f'<rect x="{x:.1f}" y="{y + 9}" width="{w:.1f}" height="{_GANTT_LANE_H - 18}" '
                            f'fill="{color}" rx="2"><title>{tooltip}</title></rect>')
 
     out.append('</svg>')
@@ -320,21 +533,24 @@ def _network_map_png(routes, airports, width=900, height=520):
         url_template='https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         headers={'User-Agent': 'NRG2FLY-CNS/1.0 (cns.ghettofaust.exposed)'},
     )
-    # routes (staticmap takes (lon, lat))
+    # routes (staticmap takes (lon, lat)). White casing + orange line so legs
+    # read clearly over busy OSM tiles.
     for r in routes:
         wp = r.get('waypoints') or []
         if len(wp) < 2:
             continue
         coords = [(lon, lat) for lat, lon in wp]
-        m.add_line(Line(coords, '#6c8aa4', 3))
-    # airport markers
+        m.add_line(Line(coords, '#ffffff', 7))   # casing
+        m.add_line(Line(coords, _C_ORANGE, 4))    # route
+    # airport markers — drawn AFTER lines (on top); white halo UNDER the colour
+    # so the dot stays visible (the old code drew a black ring over the colour).
     for a in airports:
         lat, lon = a.get('lat'), a.get('lon')
         if lat is None or lon is None:
             continue
-        color = '#ff7800' if a.get('role') == 'terminal' else '#2563eb'
+        color = _C_BLUE if a.get('role') == 'terminal' else _C_GREEN
+        m.add_marker(CircleMarker((lon, lat), '#ffffff', 12))  # halo
         m.add_marker(CircleMarker((lon, lat), color, 8))
-        m.add_marker(CircleMarker((lon, lat), '#000', 9))  # outline
 
     try:
         img = m.render()
@@ -343,6 +559,169 @@ def _network_map_png(routes, airports, width=900, height=520):
         return buf.getvalue()
     except Exception:
         return b''
+
+
+# ---------- Airport photo (bonus) -------------------------------------------
+_PHOTO_CACHE_DIR = os.path.join(PICS_DIR, 'airports', '_cache')
+_WIKI_UA = 'NRG2FLY-CNS/1.0 (https://nrg2fly.com; charging advisory report)'
+
+def _http_get(url, timeout=6, accept_json=False, params=None):
+    # Prefer requests (bundles certifi) — this framework Python's urllib has no
+    # CA bundle and fails SSL verification against Wikimedia. staticmap already
+    # pulls requests in, so it's always available; urllib is a last resort.
+    try:
+        import requests
+        resp = requests.get(url, params=params, headers={'User-Agent': _WIKI_UA}, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json() if accept_json else resp.content
+    except ImportError:
+        if params:
+            url += ('&' if '?' in url else '?') + urllib.parse.urlencode(params)
+        req = urllib.request.Request(url, headers={
+            'User-Agent': _WIKI_UA,
+            'Accept': 'application/json' if accept_json else '*/*',
+        })
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read()
+        return json.loads(data) if accept_json else data
+
+
+def _commons_filepath(filename):
+    """A directly-fetchable URL for a Commons file (redirects to the upload)."""
+    return 'https://commons.wikimedia.org/wiki/Special:FilePath/' + urllib.parse.quote(filename.replace(' ', '_'))
+
+
+def _wikidata_image(ident, name):
+    """Resolve an airport to its Wikidata image (P18), by ICAO code (P239) first
+    — exact and language-independent — then by name. Returns a Commons FilePath
+    URL or ''. Each step is best-effort."""
+    # by ICAO — the canonical identifier (matches the right airport every time)
+    if ident:
+        try:
+            q = 'SELECT ?img WHERE { ?i wdt:P239 "%s" . ?i wdt:P18 ?img } LIMIT 1' % ident.replace('"', '')
+            j = _http_get('https://query.wikidata.org/sparql', accept_json=True,
+                          params={'format': 'json', 'query': q})
+            rows = (j.get('results') or {}).get('bindings') or []
+            if rows:
+                return rows[0]['img']['value']   # already a Special:FilePath URL
+        except Exception:
+            pass
+    # by name — fuzzy entity search; first hit that carries an image
+    if name:
+        try:
+            s = _http_get('https://www.wikidata.org/w/api.php', accept_json=True,
+                          params={'action': 'wbsearchentities', 'search': name, 'language': 'en',
+                                  'format': 'json', 'type': 'item', 'limit': 5})
+            ids = [h['id'] for h in (s.get('search') or [])]
+            if ids:
+                e = _http_get('https://www.wikidata.org/w/api.php', accept_json=True,
+                              params={'action': 'wbgetentities', 'ids': '|'.join(ids),
+                                      'props': 'claims', 'format': 'json'})
+                ents = e.get('entities') or {}
+                for i in ids:
+                    p18 = ((ents.get(i) or {}).get('claims') or {}).get('P18')
+                    if p18:
+                        return _commons_filepath(p18[0]['mainsnak']['datavalue']['value'])
+        except Exception:
+            pass
+    return ''
+
+
+def _commons_geosearch(lat, lon):
+    """Nearest Commons file to the airport. Ranks candidates photo (.jpg/.png)
+    > map > .svg, so a real photo wins but a map or logo still beats nothing.
+    Returns (url, title) or ('', '')."""
+    try:
+        j = _http_get('https://commons.wikimedia.org/w/api.php', accept_json=True,
+                      params={'action': 'query', 'format': 'json', 'generator': 'geosearch',
+                              'ggsnamespace': 6, 'ggslimit': 20, 'ggscoord': f'{float(lat)}|{float(lon)}',
+                              'ggsradius': 10000, 'prop': 'imageinfo', 'iiprop': 'url', 'iiurlwidth': 1400})
+    except Exception:
+        return '', ''
+    best = None   # (tier, url, title) — lower tier = preferred
+    for pg in ((j.get('query') or {}).get('pages') or {}).values():
+        ii = (pg.get('imageinfo') or [{}])[0]
+        u = ii.get('thumburl') or ii.get('url') or ''
+        if not u:
+            continue
+        title = pg.get('title', '')
+        ext = u.split('?')[0].lower().rsplit('.', 1)[-1]
+        if 'map' in title.lower():
+            tier = 1                                   # a map — after real photos
+        elif ext in ('jpg', 'jpeg', 'png'):
+            tier = 0                                   # a photo — best
+        elif ext == 'svg':
+            tier = 2                                   # an svg (logo/diagram) — last resort
+        else:
+            continue                                   # skip gif/tif/etc.
+        if best is None or tier < best[0]:
+            best = (tier, u, title)
+            if tier == 0:
+                break
+    return (best[1], best[2]) if best else ('', '')
+
+
+def _airport_photo(ident, name, lat, lon):
+    """Return {'uri': <data-uri>, 'credit': <str>} for the chosen airport, or
+    blanks. Order: curated local pics/airports/<ICAO>.* → cache → (when
+    AIRPORT_PHOTO_WIKIMEDIA) Wikidata image by ICAO then by name → Commons
+    geosearch by coordinates. Downloads cache under pics/airports/_cache/. Any
+    failure is swallowed → the cover renders photo-less (the band is hidden)."""
+    blank = {'uri': '', 'credit': ''}
+    ident = (ident or '').strip()
+
+    # 1) curated local, then a prior cached download
+    for base in ([os.path.join(PICS_DIR, 'airports', ident)] if ident else []) + \
+                ([os.path.join(_PHOTO_CACHE_DIR, ident)] if ident else []):
+        for ext in ('jpg', 'jpeg', 'png', 'webp', 'svg'):
+            p = f'{base}.{ext}'
+            if os.path.exists(p):
+                credit = ''
+                meta = f'{base}.txt'
+                if os.path.exists(meta):
+                    try:
+                        with open(meta, encoding='utf-8') as f:
+                            credit = f.read().strip()
+                    except OSError:
+                        pass
+                return {'uri': _file_data_uri(p), 'credit': credit}
+
+    if not AIRPORT_PHOTO_WIKIMEDIA:
+        return blank
+
+    # 2) Wikidata image — by ICAO, then by name
+    img_url = _wikidata_image(ident, name)
+    credit = ''
+    if img_url:
+        fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')
+        credit = f'{os.path.splitext(fn)[0]} — Wikimedia Commons'
+    # 3) Commons geosearch by coordinates (photo > map > svg)
+    if not img_url and lat is not None and lon is not None:
+        u, title = _commons_geosearch(lat, lon)
+        if u:
+            img_url = u
+            credit = f'{os.path.splitext(title.split(":", 1)[-1])[0]} — Wikimedia Commons'
+
+    if not img_url:
+        return blank
+    # download + cache + embed
+    try:
+        raw = _http_get(img_url)
+        mime = mimetypes.guess_type(img_url.split('?')[0])[0] or 'image/jpeg'
+        ext = 'svg' if 'svg' in mime else ('png' if 'png' in mime else 'jpg')
+        if ident:
+            try:
+                os.makedirs(_PHOTO_CACHE_DIR, exist_ok=True)
+                with open(os.path.join(_PHOTO_CACHE_DIR, f'{ident}.{ext}'), 'wb') as f:
+                    f.write(raw)
+                with open(os.path.join(_PHOTO_CACHE_DIR, f'{ident}.txt'), 'w', encoding='utf-8') as f:
+                    f.write(credit)
+            except OSError:
+                pass
+        return {'uri': f'data:{mime};base64,' + base64.b64encode(raw).decode('ascii'),
+                'credit': credit}
+    except Exception:
+        return blank
 
 
 # ---------- main entry -------------------------------------------------------
@@ -368,39 +747,68 @@ def generate_pdf(payload, css_url, request_root):
     chargers = payload.get('chargers') or []
     routes = payload.get('routes') or []
 
-    # peak + energy bar charts, sorted big → small
-    peak_items = sorted(
-        [(a['name'], float(a.get('peakKw') or 0)) for a in airports],
-        key=lambda x: x[1], reverse=True,
-    )
-    energy_items = sorted(
-        [(a['name'], float(a.get('dailyKwh') or 0)) for a in airports],
-        key=lambda x: x[1], reverse=True,
-    )
-    bar_chart_peak = _bar_chart_svg(peak_items, _fmt_power, '#2563eb')
-    bar_chart_energy = _bar_chart_svg(energy_items, _fmt_energy, '#10b981')
+    # The report is single-airport. The focus is the client-chosen airport (or
+    # the busiest one as a robust fallback if the payload wasn't scoped).
+    focus = None
+    focus_ident = payload.get('focusIdent')
+    if focus_ident:
+        focus = next((a for a in airports if a.get('ident') == focus_ident), None)
+    if focus is None and airports:
+        focus = max(airports, key=lambda a: float(a.get('dailyKwh') or 0))
 
-    # per-airport Gantts
+    # per-airport Gantts + derived bits
     for a in airports:
         a['gantt_svg'] = _gantt_svg(a.get('rotations') or [])
         a['latestEndClock'] = _fmt_clock(float(a.get('latestEnd') or DAY_END))
         a['chargerCount'] = sum(int(c.get('count') or 1) for c in (a.get('chargers') or []))
+        a['installedKw'] = sum(float(c.get('power_kw') or 0) * int(c.get('count') or 1)
+                               for c in (a.get('chargers') or []))
 
-    # plane svg embeds (so WeasyPrint doesn't have to fetch them)
+    # Executive-summary charts (focus airport): time-of-day load curve + donut.
+    installed_kw = float((focus or {}).get('installedKw') or 0)
+    peak_kw = float((focus or {}).get('peakKw') or 0)
+    load_curve_svg = _load_curve_svg(
+        (focus or {}).get('loadCurvePoints') or payload.get('loadCurvePoints') or [],
+        peak_kw=peak_kw, installed_kw=installed_kw)
+    energy_by_type = payload.get('energyByType') or (focus or {}).get('energyByType') or []
+    donut_slices = [{'label': s.get('label') or s.get('planeName'),
+                     'value': s.get('value') if s.get('value') is not None else s.get('dailyKwh')}
+                    for s in energy_by_type]
+    total_daily = sum(float(s.get('value') or 0) for s in donut_slices) \
+        or float((focus or {}).get('dailyKwh') or 0)
+    center_val = ('%.2f' % (total_daily / 1000)) if total_daily >= 1000 else ('%.0f' % total_daily)
+    center_unit = 'MWh / day' if total_daily >= 1000 else 'kWh / day'
+    donut_svg = _donut_svg(donut_slices, center_val, center_unit)
+
+    # plane embeds (so WeasyPrint doesn't have to fetch them): photo + glyph.
     for p in planes:
         svg = p.get('svg')
-        if svg:
-            p['svg_data_uri'] = _file_data_uri(os.path.join(PICS_DIR, 'plane_svgs', svg))
-        else:
-            p['svg_data_uri'] = ''
+        p['svg_data_uri'] = _file_data_uri(os.path.join(PICS_DIR, 'plane_svgs', svg)) if svg else ''
+        img = p.get('image')
+        p['image_data_uri'] = _file_data_uri(os.path.join(PICS_DIR, img)) if img else ''
 
-    # network map
-    map_airports = []
-    for a in airports:
-        map_airports.append({'lat': a.get('lat'), 'lon': a.get('lon'),
-                             'role': 'terminal' if any(c.get('role') in ('home', 'dest', 'origin')
-                                                       for c in a.get('contribs') or [])
-                                                   else 'stop'})
+    # network map — markers from EVERY route waypoint (so charging stops are
+    # visible, not just the focus airport). Ends of a leg = terminal, middle
+    # waypoints = charging stop; a point seen as terminal anywhere stays terminal.
+    pts = {}
+    for r in routes:
+        wp = r.get('waypoints') or []
+        n = len(wp)
+        for i, pt in enumerate(wp):
+            if not pt or len(pt) < 2:
+                continue
+            try:
+                lat, lon = float(pt[0]), float(pt[1])
+            except (TypeError, ValueError):
+                continue
+            key = (round(lat, 3), round(lon, 3))
+            role = 'terminal' if (i == 0 or i == n - 1) else 'stop'
+            cur = pts.get(key)
+            if cur is None:
+                pts[key] = {'lat': lat, 'lon': lon, 'role': role}
+            elif role == 'terminal':
+                cur['role'] = 'terminal'
+    map_airports = list(pts.values())
     map_png = _network_map_png(routes, map_airports)
     map_data_uri = _png_data_uri(map_png) if map_png else ''
 
@@ -417,26 +825,57 @@ def generate_pdf(payload, css_url, request_root):
 
     generated_at = payload.get('generatedAt') or datetime.now().strftime('%Y-%m-%d %H:%M')
 
+    charge_rate = payload.get('chargeRate')
+    charge_rate = float(charge_rate) if charge_rate is not None else 0.60
+
+    # Revenue & cost scenario (clearly-labelled, tunable — see module constants).
+    daily_kwh = float(totals.get('totalDailyKwh') or 0)
+    annual_kwh = daily_kwh * 365
+    margin_rate = charge_rate - PROCUREMENT_EUR_PER_KWH
+    scenario = {
+        'tariff': charge_rate,
+        'procurement': PROCUREMENT_EUR_PER_KWH,
+        'realisation_low': REALISATION_LOW,
+        'realisation_high': REALISATION_HIGH,
+        'daily_kwh': daily_kwh,
+        'annual_kwh': annual_kwh,
+        'annual_mwh': annual_kwh / 1000.0,
+        'gross_rev_year': charge_rate * annual_kwh,
+        'rev_year_low': charge_rate * annual_kwh * REALISATION_LOW,
+        'rev_year_high': charge_rate * annual_kwh * REALISATION_HIGH,
+        'energy_cost_year': PROCUREMENT_EUR_PER_KWH * annual_kwh,
+        'margin_year_low': margin_rate * annual_kwh * REALISATION_LOW,
+        'margin_year_high': margin_rate * annual_kwh * REALISATION_HIGH,
+    }
+    model_settings = payload.get('modelSettings') or {}
+
+    # Bonus: airport cover photo (graceful — '' hides the band).
+    photo = _airport_photo((focus or {}).get('ident'),
+                           payload.get('focusAirport') or (focus or {}).get('name'),
+                           (focus or {}).get('lat'), (focus or {}).get('lon'))
+
     # ---- Render template + PDF ---------------------------------------------
     env = current_app.jinja_env
     env.filters['fmt_energy'] = _fmt_energy   # kWh / MWh
     env.filters['fmt_power'] = _fmt_power      # kW / MW
     env.filters['fmt_money'] = _fmt_money      # € with thousands sep
-    charge_rate = payload.get('chargeRate')
-    charge_rate = float(charge_rate) if charge_rate is not None else 0.60
     html_str = env.get_template('report.html').render(
         totals=totals,
         airports=airports,
         planes=planes,
         chargers=chargers,
-        bar_chart_peak=bar_chart_peak,
-        bar_chart_energy=bar_chart_energy,
+        load_curve_svg=load_curve_svg,
+        donut_svg=donut_svg,
         map_data_uri=map_data_uri,
         logo_data_uri=logo_data_uri,
         generated_at=generated_at,
         css_url=css_url,
         focus_airport=payload.get('focusAirport'),
         charge_rate=charge_rate,
+        scenario=scenario,
+        model_settings=model_settings,
+        airport_photo=photo.get('uri'),
+        airport_photo_credit=photo.get('credit'),
     )
 
     # WeasyPrint → PDF, then append the NRG2fly onepager (if present) as the

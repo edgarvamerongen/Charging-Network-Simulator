@@ -1,56 +1,64 @@
 /* NRG2FLY Charging Network Plan — print stylesheet (WeasyPrint).
-   Mirrors the in-app design tokens so the PDF feels like the same product. */
+   House style: muted base (white / grey / charcoal / navy) + a single accent
+   (orange), with royal-blue for data and green for energy throughput. */
 
 @page {
     size: A4;
-    margin: 16mm 14mm 18mm 14mm;
+    margin: 22mm;
 }
 
 :root {
-    --ink:      #0f1729;
-    --ink-soft: #475569;
-    --muted:    #94a3b8;
-    --primary:  #2563eb;
-    --primary-2:#1e40af;
-    --success:  #10b981;
-    --warn:     #f59e0b;
-    --danger:   #ef4444;
-    --bg-soft:  #f1f5f9;
-    --border:   #e2e8f0;
+    /* house palette */
+    --navy:      #152455;
+    --blue:      #2563eb;   /* primary data */
+    --orange:    #F0892B;   /* ACCENT ONLY: rules, highlights, peak line, routes */
+    --green:     #10b981;   /* energy throughput */
+    --ink:       #0f1729;   /* headings */
+    --body:      #334155;   /* body text — dark grey, not pure black */
+    --muted:     #94a3b8;   /* captions */
+    --line:      #e2e8f0;   /* hairlines */
+    --bg-soft:   #f1f5f9;   /* table headers / panels */
+    /* legacy aliases (kept so existing rules keep working) */
+    --primary:   #2563eb;
+    --primary-2: #152455;
+    --ink-soft:  #334155;
+    --success:   #10b981;
+    --warn:      #f59e0b;
+    --danger:    #ef4444;
+    --border:    #e2e8f0;
     --border-strong: #cbd5e1;
 }
 
 * { box-sizing: border-box; }
 
 body {
-    font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: var(--body);
     font-size: 10.5pt;
     line-height: 1.45;
     margin: 0;
 }
 
-h1, h2, h3, h4 {
-    color: var(--ink);
-    font-weight: 700;
-    margin: 0 0 .35em 0;
-    line-height: 1.2;
-}
-h1 { font-size: 28pt; }
-h2 { font-size: 18pt; margin-top: 0; padding-bottom: .25em; border-bottom: 2px solid var(--primary); }
-h3 { font-size: 12pt; margin-top: 1.1em; color: var(--ink-soft); letter-spacing: .01em; text-transform: uppercase; font-weight: 600; }
+h1, h2, h3, h4 { color: var(--ink); font-weight: 700; margin: 0 0 .35em 0; line-height: 1.2; }
+h1 { font-size: 30pt; }
+h2 { font-size: 19pt; margin-top: 12mm; padding-bottom: .25em; border-bottom: 2px solid var(--orange); }
+h2:first-child, .cover h1, .ap-header h2 { margin-top: 0; }
+h3 { font-size: 12.5pt; margin-top: 6mm; color: var(--ink); letter-spacing: .02em; text-transform: uppercase; font-weight: 700; }
 
 p { margin: .35em 0 .8em 0; }
-.lede { color: var(--ink-soft); }
-.mt-4 { margin-top: 1.5em; }
-code { background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; font-size: 9.5pt; }
+.lede { color: var(--body); font-size: 11pt; }
+.mt-4 { margin-top: 12mm; }
+.chart-cap { font-size: 9pt; color: var(--muted); margin: 0 0 2mm 0; }
+code { background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; font-size: 9.5pt; color: var(--ink); }
 
 /* ---------- Page mechanics ---------- */
 .page {
     page-break-after: always;
-    page-break-inside: avoid;
     position: relative;
-    min-height: 250mm;
+    /* Stay safely under the A4 content height (297 − 2×22mm ≈ 253mm) so a page
+       never overflows by a hair into an empty trailing page (WeasyPrint then
+       crashes laying out a page whose only box is the running footer). */
+    min-height: 244mm;
 }
 .page:last-child { page-break-after: auto; }
 
@@ -60,271 +68,155 @@ code { background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; font-si
     color: var(--muted);
     text-align: center;
     padding-top: 6mm;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--line);
     margin-top: 8mm;
 }
 
 /* ---------- Cover ---------- */
-.cover { display: flex; flex-direction: column; min-height: 255mm; }
-.cover-head { padding-bottom: 8mm; }
-.cover-logo { height: 22mm; }
-.cover-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    text-align: left;
+.cover { display: flex; flex-direction: column; min-height: 244mm; }
+.cover-head { padding-bottom: 6mm; }
+.cover-logo { height: 20mm; }
+.cover-photo-band {
+    height: 66mm;
+    border-radius: 12px;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    margin-bottom: 8mm;
+    box-shadow: 0 1mm 4mm rgba(21, 36, 85, .20);
 }
-.cover-title {
-    font-size: 38pt;
-    line-height: 1.05;
-    color: var(--primary-2);
-    margin: 0 0 6mm 0;
+.photo-credit {
+    position: absolute; left: 4mm; bottom: 3mm;
+    font-size: 7.5pt; color: #fff;
+    background: rgba(21, 36, 85, .55);
+    padding: 1px 6px; border-radius: 4px;
 }
-.cover-sub {
-    font-size: 14pt;
-    color: var(--ink-soft);
-    margin: 0 0 18mm 0;
+.cover-body { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
+.cover-overline {
+    font-size: 11pt; font-weight: 700; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--orange); margin: 0 0 5mm 0;
 }
-.cover-stats {
-    display: flex;
-    gap: 6mm;
-    margin-bottom: 16mm;
-}
+.cover-title { font-size: 38pt; line-height: 1.05; color: var(--navy); margin: 0 0 6mm 0; }
+.cover-sub { font-size: 14pt; color: var(--body); margin: 0 0 16mm 0; }
+.cover-stats { display: flex; gap: 4mm; margin-bottom: 14mm; }
 .cs {
     flex: 1;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
-    color: #fff;
-    border-radius: 10px;
-    padding: 8mm 6mm;
-    text-align: center;
+    background: linear-gradient(135deg, var(--blue) 0%, var(--navy) 100%);
+    color: #fff; border-radius: 10px; padding: 8mm 6mm; text-align: center;
 }
-.cs-n {
-    font-size: 32pt;
-    font-weight: 800;
-    line-height: 1;
-    margin-bottom: 3mm;
-}
-.cs-l {
-    font-size: 9pt;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    opacity: .85;
-}
-.cover-overline {
-    font-size: 11pt;
-    font-weight: 700;
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    color: var(--primary);
-    margin: 0 0 5mm 0;
-}
-.cover-meta {
-    color: var(--ink-soft);
-    font-size: 10pt;
-    border-top: 1px solid var(--border);
-    padding-top: 5mm;
-}
+.cs-n { font-size: 32pt; font-weight: 800; line-height: 1; margin-bottom: 3mm; }
+.cs-l { font-size: 9pt; text-transform: uppercase; letter-spacing: .08em; opacity: .85; }
+.cover-meta { color: var(--body); font-size: 10pt; border-top: 1px solid var(--line); padding-top: 5mm; }
 
 /* ---------- About + advisory framing ---------- */
-.about-cols { display: flex; gap: 6mm; margin: 4mm 0 2mm 0; }
+.about-cols { display: flex; gap: 4mm; margin: 4mm 0 2mm 0; }
 .about-col { flex: 1; background: var(--bg-soft); border-radius: 8px; padding: 4mm; }
-.about-col-h { color: var(--primary); font-weight: 700; font-size: 11pt; margin-bottom: 2mm; }
-.about-col p { font-size: 9.5pt; color: var(--ink-soft); margin: 0; }
+.about-col-h { color: var(--blue); font-weight: 700; font-size: 11pt; margin-bottom: 2mm; }
+.about-col p { font-size: 9.5pt; color: var(--body); margin: 0; }
 
 .questions-box {
     margin-top: 8mm;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
-    color: #fff;
-    border-radius: 10px;
-    padding: 6mm 7mm;
+    background: linear-gradient(135deg, var(--blue) 0%, var(--navy) 100%);
+    color: #fff; border-radius: 10px; padding: 6mm 7mm;
 }
 .questions-h { font-size: 14pt; font-weight: 800; margin-bottom: 2mm; }
-.questions-box p { color: rgba(255,255,255,.92); margin: 1mm 0; }
+.questions-box p { color: rgba(255, 255, 255, .92); margin: 1mm 0; }
 .questions-foot { font-size: 9pt; opacity: .8; }
 
 /* ---------- Charts ---------- */
-.bar-chart {
-    width: 100%;
-    margin: 4mm 0 8mm 0;
-}
+/* Explicit heights: without them WeasyPrint reserves the SVG viewBox height as
+   POINTS, making each chart box far taller than its rendered content. These
+   match the width-scaled aspect so the box hugs the chart. */
+.curve { display: block; width: 100%; height: 48mm; margin: 1mm 0 4mm 0; }
+.donut { display: block; width: 100%; height: 43mm; margin: 1mm 0 4mm 0; }
+
+/* ---------- Assumptions & scenario panel ---------- */
+.panel { border: 1px solid var(--line); background: var(--bg-soft); border-radius: 10px; padding: 6mm; }
+.assump-grid { display: flex; gap: 8mm; }
+.assump-block { flex: 1; }
+.assump-block + .assump-block { border-left: 1px solid var(--line); padding-left: 8mm; }
+.assump-sub { font-weight: 700; font-size: 10.5pt; color: var(--ink); margin-bottom: 3mm; }
+.kv-table { width: 100%; border-collapse: collapse; }
+.kv-table th { text-align: left; font-weight: 400; color: var(--muted); font-size: 9.5pt; padding: 1.3mm 0; width: 46%; vertical-align: top; }
+.kv-table td { text-align: left; color: var(--ink); font-weight: 600; font-size: 9.5pt; padding: 1.3mm 0; vertical-align: top; }
+.assump-note { font-size: 9pt; color: var(--body); line-height: 1.5; margin: 0 0 2mm 0; }
+.scenario-table { width: 100%; border-collapse: collapse; margin-top: 1mm; }
+.scenario-table td { padding: 1.6mm 0; border-bottom: 1px solid var(--line); font-size: 9.5pt; }
+.scenario-table td:first-child { color: var(--body); }
+.scenario-table td:last-child { text-align: right; font-weight: 600; color: var(--ink); }
+.scenario-strong td { font-weight: 800; border-bottom: none; }
+.scenario-strong td:last-child { color: var(--green); }
 
 /* ---------- Network map ---------- */
-.map-page .net-map {
-    display: block;
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    margin: 3mm 0 4mm 0;
-}
-.map-legend {
-    font-size: 9.5pt;
-    color: var(--ink-soft);
-    display: flex;
-    gap: 8mm;
-    align-items: center;
-}
-.lg-dot {
-    display: inline-block;
-    width: 9px; height: 9px;
-    border-radius: 50%;
-    margin-right: 3px;
-    vertical-align: middle;
-    border: 1px solid rgba(0,0,0,.3);
-}
-.lg-orange { background: #ff7800; }
-.lg-blue { background: #2563eb; }
-.lg-line { display: inline-block; width: 22px; height: 3px; background: #6c8aa4; vertical-align: middle; margin-right: 3px; border-radius: 2px; }
+.map-page .net-map { display: block; width: 100%; border: 1px solid var(--line); border-radius: 8px; margin: 3mm 0 4mm 0; }
+.map-legend { font-size: 9.5pt; color: var(--body); display: flex; gap: 8mm; align-items: center; }
+.lg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 3px; vertical-align: middle; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+.lg-term { background: var(--blue); }
+.lg-stop { background: var(--green); }
+.lg-line { display: inline-block; width: 22px; height: 4px; vertical-align: middle; margin-right: 3px; border-radius: 2px; }
+.lg-route { background: var(--orange); }
 
-/* ---------- Kit (aircraft + chargers) ---------- */
-.kit-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 3mm;
-}
-.kit-table th, .kit-table td {
-    padding: 4mm 3mm;
-    border-bottom: 1px solid var(--border);
-    text-align: left;
-    vertical-align: middle;
-}
-.kit-table th {
-    background: var(--bg-soft);
-    color: var(--ink-soft);
-    font-weight: 600;
-    font-size: 9.5pt;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-}
-.kit-img { width: 18mm; }
-.kit-img img { width: 16mm; height: 16mm; object-fit: contain; }
-.kit-name { font-weight: 600; }
+/* ---------- Kit (aircraft) ---------- */
+.kit-table { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+.kit-table th, .kit-table td { padding: 3.5mm 3mm; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.kit-table th { background: var(--bg-soft); color: var(--body); font-weight: 600; font-size: 9.5pt; text-transform: uppercase; letter-spacing: .04em; }
+.kit-img { width: 30mm; }
+.kit-img img { width: 28mm; height: 17mm; object-fit: contain; }
+.kit-photo { border-radius: 6px; object-fit: cover; border: 1px solid var(--line); }
+.kit-name { font-weight: 600; color: var(--ink); }
 
 /* ---------- Airport pages ---------- */
-.ap-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 4mm;
-    padding-bottom: 4mm;
-    border-bottom: 2px solid var(--primary);
-}
-.ap-name { font-size: 20pt; margin: 0; color: var(--primary-2); }
-.ap-meta {
-    font-size: 9.5pt;
-    color: var(--ink-soft);
-    margin-top: 2mm;
-}
-.ap-meta > * {
-    display: inline-block;
-    margin-right: 4mm;
-}
+.ap-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4mm; padding-bottom: 4mm; border-bottom: 2px solid var(--orange); }
+.ap-name { font-size: 21pt; margin: 0; color: var(--navy); }
+.ap-meta { font-size: 9.5pt; color: var(--body); margin-top: 2mm; }
+.ap-meta > * { display: inline-block; margin-right: 4mm; }
 .ap-ident { background: var(--bg-soft); padding: 1px 6px; border-radius: 4px; font-weight: 600; color: var(--ink); }
 .ap-type { text-transform: uppercase; font-size: 8.5pt; letter-spacing: .05em; color: var(--muted); }
 .ap-headline { display: flex; gap: 4mm; }
-.ap-h {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
-    color: #fff;
-    border-radius: 8px;
-    padding: 4mm 6mm;
-    text-align: center;
-    min-width: 28mm;
-}
+.ap-h { background: linear-gradient(135deg, var(--blue) 0%, var(--navy) 100%); color: #fff; border-radius: 8px; padding: 4mm 6mm; text-align: center; min-width: 28mm; }
 .ap-hn { font-size: 18pt; font-weight: 800; line-height: 1; }
 .ap-hl { font-size: 8pt; text-transform: uppercase; letter-spacing: .06em; opacity: .85; margin-top: 1mm; }
 
 /* ---------- Tables ---------- */
-.charger-table, .contrib-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 2mm 0 4mm 0;
-}
+.charger-table, .contrib-table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm 0; }
 .charger-table th, .charger-table td,
-.contrib-table th, .contrib-table td {
-    padding: 2.5mm 3mm;
-    border-bottom: 1px solid var(--border);
-    text-align: left;
-    vertical-align: top;
-}
-.charger-table th, .contrib-table th {
-    background: var(--bg-soft);
-    color: var(--ink-soft);
-    font-weight: 600;
-    font-size: 9pt;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-}
+.contrib-table th, .contrib-table td { padding: 2.5mm 3mm; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.charger-table th, .contrib-table th { background: var(--bg-soft); color: var(--body); font-weight: 600; font-size: 9pt; text-transform: uppercase; letter-spacing: .04em; }
 .contrib-table td small { color: var(--muted); font-size: 8.5pt; }
-.total-row td { font-weight: 700; background: var(--bg-soft); }
+.total-row td { font-weight: 700; background: var(--bg-soft); color: var(--ink); }
+.contrib-table tr.has-legs td { border-bottom: none; }
 
-.role {
-    display: inline-block;
-    font-size: 7.5pt;
-    font-weight: 700;
-    letter-spacing: .08em;
-    padding: 1px 5px;
-    border-radius: 4px;
-    margin-right: 3px;
-    color: #fff;
-}
+.role { display: inline-block; font-size: 7.5pt; font-weight: 700; letter-spacing: .08em; padding: 1px 5px; border-radius: 4px; margin-right: 3px; color: #fff; }
 .role-home { background: #6f42c1; }
-.role-dest { background: #d97706; }
-.role-stop { background: #2563eb; }
+.role-dest { background: var(--orange); }
+.role-origin { background: #0ea5e9; }
+.role-stop { background: var(--blue); }
 
-.note {
-    background: #fffbe6;
-    border-left: 3px solid var(--warn);
-    color: #854d0e;
-    padding: 2mm 4mm;
-    margin: 3mm 0;
-    font-size: 9.5pt;
-    border-radius: 4px;
-}
+/* per-leg charging breakdown under a multi-leg contribution */
+.legs-row td { padding-top: 0; }
+.legs { display: flex; flex-wrap: wrap; gap: 3mm; align-items: center; padding: 0 0 1mm 0; }
+.legs-label { font-size: 8pt; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.leg { font-size: 9pt; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 1.2mm 3mm; }
+.leg .leg-to { font-weight: 700; }
+.leg small { color: var(--muted); font-size: 8pt; margin-left: 3px; }
+
+.note { background: #fffbe6; border-left: 3px solid var(--warn); color: #854d0e; padding: 2mm 4mm; margin: 3mm 0; font-size: 9.5pt; border-radius: 4px; }
 
 /* ---------- Gantt ---------- */
-.gantt-legend {
-    font-size: 9pt;
-    color: var(--ink-soft);
-    display: flex;
-    gap: 5mm;
-    align-items: center;
-    margin: 2mm 0 2mm 0;
-}
-.lg-box {
-    display: inline-block;
-    width: 10px; height: 10px;
-    margin-right: 3px;
-    vertical-align: middle;
-    border-radius: 2px;
-}
-.lg-fly { background: #0d6efd; }
-.lg-charge { background: #198754; }
+.gantt-legend { font-size: 9pt; color: var(--body); display: flex; gap: 5mm; align-items: center; margin: 2mm 0 2mm 0; }
+.lg-box { display: inline-block; width: 10px; height: 10px; margin-right: 3px; vertical-align: middle; border-radius: 2px; }
+.lg-fly { background: var(--blue); }
+.lg-charge { background: var(--green); }
 .lg-elsewhere { background: #9bd3ad; }
-.lg-wait { background: repeating-linear-gradient(45deg, #f0ad4e, #f0ad4e 3px, #fbe4c4 3px, #fbe4c4 6px); }
-
-.gantt {
-    width: 100%;
-    margin: 2mm 0 4mm 0;
-}
+.lg-wait { background: repeating-linear-gradient(45deg, #F0892B, #F0892B 3px, #fde9cf 3px, #fde9cf 6px); }
+.gantt { width: 100%; margin: 2mm 0 4mm 0; }
 
 /* ---------- Verdict ---------- */
-.verdict {
-    margin-top: 4mm;
-    padding: 3mm 4mm;
-    border-radius: 6px;
-    font-size: 10pt;
-}
-.verdict-ok {
-    background: #ecfdf5;
-    border-left: 3px solid var(--success);
-    color: #065f46;
-}
-.verdict-warn {
-    background: #fff7ed;
-    border-left: 3px solid var(--warn);
-    color: #9a3412;
-}
+.verdict { margin-top: 4mm; padding: 3mm 4mm; border-radius: 6px; font-size: 10pt; }
+.verdict-ok { background: #ecfdf5; border-left: 3px solid var(--success); color: #065f46; }
+.verdict-warn { background: #fff7ed; border-left: 3px solid var(--warn); color: #9a3412; }
 
 /* ---------- Methodology ---------- */
-.methodology h3 { margin-top: 1em; }
+.methodology h3 { margin-top: 8mm; }
 .methodology p { font-size: 10pt; }

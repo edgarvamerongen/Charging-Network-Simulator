@@ -110,9 +110,13 @@ available (see "Data sources" cited inline):
   `kind==='charge' && atX && power>0`; its max equals `summary().peakKw`).
 - `energyByType: [{ planeName, dailyKwh }]` — from `_energyByType()`; colours
   assigned server-side from a fixed palette.
-- per-contrib `legs: [{ toName, energyKwh, chargerName, chargeMin }]` — added in
-  `_buildAirport()` for `multiLeg` trips (unpacked from the engine profile /
-  `CNSScheduler.tripPhases`), rendered as a nested breakdown under the contrib.
+- per-contrib `legs: [{ toName, energyKwh, chargeMin, powerKw }]` — added in
+  `_buildAirport()` for `multiLeg` trips from the engine profile's `charges[]`.
+  NOTE: `profileForTrip` defaults `getChargerKw` to `() => 0` (it's normally read
+  for energies only), which makes per-charge `chargeMin` explode (energy ÷ 0), so
+  we pass `getChargerKw: () => trip.chargerPower`. Energy is always shown;
+  time/power are hidden for charger-less planner stops. See memory
+  `project_profile_charge_times`. Rendered as a nested breakdown under the contrib.
 - per-plane `image` — `_usedPlanes()` also reads the catalog `image` field;
   `report.py` embeds `pics/<image>` as `image_data_uri`.
 - `modelSettings: { chargeTarget, chargeRate, routingPadding:{enabled,factor},
@@ -224,13 +228,18 @@ semantics but align the colours to the house palette.
 
 ## Airport photo lookup (bonus)
 
-1. **Curated:** `pics/airports/<ICAO>.{jpg,png,webp}` (tracked). We ship a small
-   set for NRG2fly's key airports (EHLE Lelystad, EHTE Teuge, EHEH Eindhoven,
-   EHDL Deelen, …) as available.
-2. **Wikimedia fallback** (best-effort, short timeout): Wikipedia REST
-   `…/page/summary/<Airport name>` → `originalimage/thumbnail`; if absent,
-   Commons geosearch by lat/lon. Download → embed as data URI → cache under
-   `pics/airports/_cache/` (gitignored).
+1. **Curated:** `pics/airports/<ICAO>.{jpg,jpeg,png,webp,svg}` (tracked) — first
+   choice, drop-in anytime. None shipped this round (we lean on the fallback);
+   the path is honoured so curated shots can be added later with no code change.
+2. **Wikidata, then Commons** (best-effort, short timeout) — *identity over name*:
+   a. **Wikidata by ICAO** — SPARQL `?i wdt:P239 "<ICAO>"; wdt:P18 ?img` →
+      the Commons `Special:FilePath` URL. Exact + language-independent.
+   b. **Wikidata by name** — `wbsearchentities(name)` → first hit with a `P18`
+      image (`wbgetentities`).
+   c. **Commons geosearch** by lat/lon — candidates ranked **photo (.jpg/.png)
+      › map › .svg** (so a real photo wins, but a map/logo still beats nothing).
+   Download → embed as data URI → cache under `pics/airports/_cache/`
+   (gitignored). Image sizing left as-is (no thumbnailing).
 3. **Graceful:** any miss/timeout/error ⇒ `''`. When empty, the cover's photo
    band is **hidden entirely** (`display:none` — no blank frame), and the cover
    renders in today's clean no-photo layout. The fallback is easily disabled via

@@ -18,3 +18,7 @@ runways.csv
 # Server-side custom planes & chargers (user-generated; created at runtime).
 # Excluded so deploys never overwrite what users have added on the server.
 data/
+
+# Auto-downloaded Wikimedia airport cover photos (curated pics/airports/<ICAO>.jpg
+# are tracked; the network-fetched cache is not).
+pics/airports/_cache/

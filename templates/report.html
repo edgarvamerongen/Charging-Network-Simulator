@@ -7,19 +7,26 @@
 </head>
 <body>
 
+{% set annual_mwh = (totals.totalDailyKwh * 365) / 1000 %}
+
 <!-- =================== COVER =================== -->
 <section class="page cover">
     <header class="cover-head">
         <img class="cover-logo" src="{{ logo_data_uri }}" alt="NRG2FLY">
     </header>
+    {% if airport_photo %}
+    <div class="cover-photo-band" style="background-image:url('{{ airport_photo }}')">
+        {% if airport_photo_credit %}<span class="photo-credit">Photo: {{ airport_photo_credit }}</span>{% endif %}
+    </div>
+    {% endif %}
     <div class="cover-body">
         <p class="cover-overline">Charging Infrastructure Advisory</p>
         <h1 class="cover-title">{% if focus_airport %}{{ focus_airport }}<br>as an Energy Hub{% else %}Your Airport<br>as an Energy Hub{% endif %}</h1>
         <p class="cover-sub">{% if focus_airport %}Sizing the charging network for {{ focus_airport }} — and what it means for your electrification roadmap.{% else %}Sizing the charging network for a first electric route, and what it means for your electrification roadmap.{% endif %}</p>
         <div class="cover-stats">
-            <div class="cs"><div class="cs-n">{{ totals.airportCount }}</div><div class="cs-l">airport{{ 's' if totals.airportCount != 1 else '' }}</div></div>
             <div class="cs"><div class="cs-n">{% if totals.totalDailyKwh >= 1000 %}{{ '%.2f'|format(totals.totalDailyKwh / 1000) }}{% else %}{{ totals.totalDailyKwh | round(0, 'common') | int }}{% endif %}</div><div class="cs-l">{{ 'MWh' if totals.totalDailyKwh >= 1000 else 'kWh' }} / day</div></div>
             <div class="cs"><div class="cs-n">{% if totals.peakKw >= 1000 %}{{ '%.2f'|format(totals.peakKw / 1000) }}{% else %}{{ totals.peakKw | round(0, 'common') | int }}{% endif %}</div><div class="cs-l">peak {{ 'MW' if totals.peakKw >= 1000 else 'kW' }}</div></div>
+            <div class="cs"><div class="cs-n">{% if annual_mwh >= 1000 %}{{ '%.2f'|format(annual_mwh / 1000) }}{% else %}{{ annual_mwh | round(0, 'common') | int }}{% endif %}</div><div class="cs-l">{{ 'GWh' if annual_mwh >= 1000 else 'MWh' }} / year</div></div>
         </div>
         <div class="cover-meta">
             Generated {{ generated_at }} · {{ totals.flightCount }} flight schedule{{ 's' if totals.flightCount != 1 else '' }} · {{ totals.planeCount }} aircraft type{{ 's' if totals.planeCount != 1 else '' }}
@@ -88,20 +95,49 @@
         This plan covers <strong>{{ totals.flightCount }}</strong> recurring flight schedule{{ 's' if totals.flightCount != 1 else '' }}
         across <strong>{{ totals.airportCount }}</strong> airport{{ 's' if totals.airportCount != 1 else '' }},
         served by <strong>{{ totals.planeCount }}</strong> aircraft type{{ 's' if totals.planeCount != 1 else '' }}.
-        Combined the network draws <strong>{{ totals.totalDailyKwh | fmt_energy }} / day</strong>
-        with a peak instantaneous demand of <strong>{{ totals.peakKw | fmt_power }}</strong>.
         {% endif %}
     </p>
 
-    <p>At a charging tariff of <strong>€{{ '%.2f'|format(charge_rate) }}/kWh</strong>, that daily energy is worth up to
-    <strong>{{ (charge_rate * totals.totalDailyKwh) | fmt_money }} / day</strong> in charging revenue —
-    roughly <strong>{{ (charge_rate * totals.totalDailyKwh * 365) | fmt_money }} / year</strong>.</p>
+    <h3>Daily load profile</h3>
+    <p class="chart-cap">Total charging power drawn at this airport across the operating day — the curve the grid connection has to serve.</p>
+    {{ load_curve_svg | safe }}
 
-    <h3>Peak instantaneous demand per airport</h3>
-    {{ bar_chart_peak | safe }}
+    <h3>Energy by aircraft type</h3>
+    <p class="chart-cap">Where the daily energy goes, split by aircraft.</p>
+    {{ donut_svg | safe }}
 
-    <h3>Daily energy throughput per airport</h3>
-    {{ bar_chart_energy | safe }}
+    <h3>Assumptions &amp; scenario</h3>
+    <div class="panel assumptions">
+        <div class="assump-grid">
+            <div class="assump-block">
+                <div class="assump-sub">Model settings used</div>
+                <table class="kv-table">
+                    <tr><th>Charge target</th><td>{% if model_settings.chargeTarget %}{{ (model_settings.chargeTarget * 100) | round(0,'common') | int }}% SoC{% else %}deficit model{% endif %}</td></tr>
+                    <tr><th>Charging tariff</th><td>€{{ '%.2f'|format(charge_rate) }}/kWh</td></tr>
+                    <tr><th>Routing padding</th><td>{% if model_settings.routingPadding and model_settings.routingPadding.enabled %}×{{ '%.2f'|format(model_settings.routingPadding.factor) }}{% else %}off{% endif %}</td></tr>
+                    <tr><th>SID/STAR padding</th><td>{% if model_settings.sidStarPaddingKm %}{{ model_settings.sidStarPaddingKm | round(0,'common') | int }} km/leg{% else %}off{% endif %}</td></tr>
+                    <tr><th>Alternate reserve</th><td>{{ 'on' if model_settings.alternateReserve else 'off' }}</td></tr>
+                    <tr><th>Operating window</th><td>07:00 – 23:00</td></tr>
+                </table>
+            </div>
+            <div class="assump-block">
+                <div class="assump-sub">Revenue &amp; cost scenario</div>
+                <p class="assump-note">These figures are indicative. <strong>Gross revenue</strong> assumes every
+                kWh delivered is billed at the €{{ '%.2f'|format(charge_rate) }}/kWh tariff. In practice not all
+                available energy is sold at the headline price — off-peak sessions, contracted rates, and idle
+                capacity — so we show a <strong>{{ (scenario.realisation_low * 100) | int }}–{{ (scenario.realisation_high * 100) | int }}% realisation band</strong>
+                as a planning range. <strong>Energy cost</strong> assumes wholesale procurement at
+                €{{ '%.2f'|format(scenario.procurement) }}/kWh; the difference is the <strong>gross margin</strong>,
+                before grid fees, demand charges, and operating costs that a full business case would add.</p>
+                <table class="scenario-table">
+                    <tr><td>Annual energy</td><td>{{ scenario.annual_kwh | fmt_energy }}</td></tr>
+                    <tr><td>Annual revenue</td><td>{{ scenario.rev_year_low | fmt_money }} – {{ scenario.rev_year_high | fmt_money }}</td></tr>
+                    <tr><td>Annual energy cost</td><td>{{ scenario.energy_cost_year | fmt_money }}</td></tr>
+                    <tr class="scenario-strong"><td>Annual gross margin</td><td>{{ scenario.margin_year_low | fmt_money }} – {{ scenario.margin_year_high | fmt_money }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
 
     <footer class="page-foot">NRG2FLY · Charging Network Plan</footer>
 </section>
@@ -110,20 +146,20 @@
 {% if map_data_uri %}
 <section class="page map-page">
     <h2>Network overview</h2>
-    <p class="lede">All flight legs in the plan. Orange = origin / destination, blue = intermediate charging stop.</p>
+    <p class="lede">All flight legs that touch this airport.</p>
     <img class="net-map" src="{{ map_data_uri }}" alt="Network map">
     <div class="map-legend">
-        <span class="lg-dot lg-orange"></span> Origin / destination
-        <span class="lg-dot lg-blue"></span> Charging stop
-        <span class="lg-line"></span> Flight leg
+        <span class="lg-line lg-route"></span> Flight leg
+        <span class="lg-dot lg-term"></span> Origin / destination
+        <span class="lg-dot lg-stop"></span> Charging stop
     </div>
     <footer class="page-foot">NRG2FLY · Charging Network Plan</footer>
 </section>
 {% endif %}
 
-<!-- =================== AIRCRAFT + CHARGERS USED =================== -->
+<!-- =================== AIRCRAFT IN THIS PLAN =================== -->
 <section class="page">
-    <h2>Aircraft used</h2>
+    <h2>Aircraft in this plan</h2>
     <table class="kit-table">
         <thead><tr>
             <th></th><th>Aircraft</th><th>Battery</th><th>Range</th><th>Speed</th><th>Seats</th><th>Payload</th>
@@ -131,7 +167,7 @@
         <tbody>
             {% for p in planes %}
             <tr>
-                <td class="kit-img">{% if p.svg_data_uri %}<img src="{{ p.svg_data_uri }}" alt="">{% endif %}</td>
+                <td class="kit-img">{% if p.image_data_uri %}<img class="kit-photo" src="{{ p.image_data_uri }}" alt="">{% elif p.svg_data_uri %}<img src="{{ p.svg_data_uri }}" alt="">{% endif %}</td>
                 <td class="kit-name">{{ p.name }}</td>
                 <td>{{ p.battery_kwh | fmt_energy }}</td>
                 <td>{{ p.range_km | round(0, 'common') | int }} km</td>
@@ -139,16 +175,6 @@
                 <td>{{ p.seats if p.seats else '—' }}</td>
                 <td>{{ p.load_kg | round(0, 'common') | int ~ ' kg' if p.load_kg else '—' }}</td>
             </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <h2 class="mt-4">Chargers used</h2>
-    <table class="kit-table">
-        <thead><tr><th>Charger</th><th>Power</th></tr></thead>
-        <tbody>
-            {% for c in chargers %}
-            <tr><td class="kit-name">{{ c.name }}</td><td>{{ c.power_kw | fmt_power }}</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -202,7 +228,7 @@
         </tr></thead>
         <tbody>
             {% for c in a.contribs %}
-            <tr>
+            <tr{% if c.legs %} class="has-legs"{% endif %}>
                 <td>
                     <span class="role role-{{ c.role }}">{{ c.role | upper }}</span>
                     {% if c.role == 'home' %}→ {{ c.other }} &amp; back
@@ -218,6 +244,16 @@
                 <td>{{ c.chargeMin | round(0, 'common') | int }} min<br><small>on {{ c.chargerName }}</small></td>
                 <td>{{ (c.energyPerFlight * c.flightsPerDay) | fmt_energy }}</td>
             </tr>
+            {% if c.legs %}
+            <tr class="legs-row"><td colspan="7">
+                <div class="legs">
+                    <span class="legs-label">Charging legs:</span>
+                    {% for L in c.legs %}
+                    <span class="leg"><span class="leg-to">{{ L.toName }}</span> {{ L.energyKwh | fmt_energy }}{% if L.chargeMin %} · {{ L.chargeMin | round(0, 'common') | int }} min{% endif %}{% if L.powerKw %}<small>{{ L.powerKw | fmt_power }}</small>{% endif %}</span>
+                    {% endfor %}
+                </div>
+            </td></tr>
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>

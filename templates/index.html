@@ -1803,6 +1803,37 @@
         </div>
     </div>
 
+    <!-- Report airport picker — REQUIRED single-airport choice before generating -->
+    <style>
+        .report-ap-list { display: flex; flex-direction: column; gap: 6px; max-height: 48vh; overflow-y: auto; }
+        .report-ap-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border, #e2e8f0); border-radius: 10px; cursor: pointer; margin: 0; transition: border-color .12s, background .12s; }
+        .report-ap-row:hover { border-color: #94a3b8; }
+        .report-ap-row.is-sel { border-color: #2563eb; background: #eff4ff; box-shadow: 0 0 0 1px #2563eb inset; }
+        .report-ap-row input { margin: 0; flex: 0 0 auto; }
+        .report-ap-main { display: flex; flex-direction: column; line-height: 1.25; }
+        .report-ap-name { font-weight: 600; color: var(--ink, #0f1729); }
+        .report-ap-sub { font-size: .8rem; color: var(--muted, #94a3b8); }
+    </style>
+    <div class="modal fade" id="reportAirportPickerModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Generate advisory — pick an airport</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="est-note mb-2">Each report is a single-airport advisory. Choose the airport this PDF is for — it scopes every figure, chart, and the rotation timeline to that site.</p>
+                    <div id="reportAirportList" class="report-ap-list"></div>
+                    <p id="reportAirportEmpty" class="text-muted small mb-0 d-none">No airports in the plan yet — add a flight first.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="reportAirportGo" class="btn btn-primary" disabled>Generate PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="customChargerModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-sm">
             <div class="modal-content">
@@ -4319,7 +4350,55 @@
             confirmRouteAdded(`${d._origin.name} → ${d._dest.name}`);
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
-        document.getElementById('generateReport').addEventListener('click', (e) => CNSReport.generate(e.currentTarget));
+        // ---------- report airport picker (REQUIRED single-airport choice) ----------
+        (function () {
+            const genBtn = document.getElementById('generateReport');
+            const modalEl = document.getElementById('reportAirportPickerModal');
+            const listEl = document.getElementById('reportAirportList');
+            const emptyEl = document.getElementById('reportAirportEmpty');
+            const goBtn = document.getElementById('reportAirportGo');
+            if (!genBtn || !modalEl || !window.bootstrap) return;
+            const modal = new bootstrap.Modal(modalEl);
+            let selected = null;
+
+            function populate() {
+                const list = Object.values(computeAirports());
+                const daily = a => a.contribs.reduce((s, c) => s + flightsPerDay(c.t), 0);
+                list.sort((a, b) => daily(b) - daily(a));
+                selected = null;
+                goBtn.disabled = true;
+                if (!list.length) { listEl.innerHTML = ''; emptyEl.classList.remove('d-none'); return; }
+                emptyEl.classList.add('d-none');
+                listEl.innerHTML = list.map(a => {
+                    const d = daily(a);
+                    const dStr = (d % 1 ? d.toFixed(1) : d.toFixed(0));
+                    const n = a.contribs.length;
+                    return `<label class="report-ap-row">
+                        <input type="radio" name="reportAp" value="${a.ident}">
+                        <span class="report-ap-main"><span class="report-ap-name">${a.name}</span>
+                        <span class="report-ap-sub">${a.ident} · ${dStr} flights/day · ${n} route${n !== 1 ? 's' : ''}</span></span>
+                    </label>`;
+                }).join('');
+                listEl.querySelectorAll('input[name="reportAp"]').forEach(r => {
+                    r.addEventListener('change', e => {
+                        selected = e.target.value;
+                        goBtn.disabled = false;
+                        listEl.querySelectorAll('.report-ap-row').forEach(row => row.classList.toggle('is-sel', row.contains(e.target)));
+                    });
+                });
+            }
+
+            genBtn.addEventListener('click', () => {
+                if (!CNSDemand.loadFolder().length) { alert('Add at least one flight to the folder before generating a report.'); return; }
+                populate();
+                modal.show();
+            });
+            goBtn.addEventListener('click', () => {
+                if (!selected) return;
+                modal.hide();
+                CNSReport.generate(genBtn, selected);
+            });
+        })();
 
         // ---------- edit a saved flight (the pencil icon on each row) ----------
         // Lets the operator change a flight's TYPE, AIRCRAFT and the CHARGER it
