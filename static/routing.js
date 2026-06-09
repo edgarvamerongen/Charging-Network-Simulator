@@ -121,54 +121,70 @@ window.CNSRouting = (function () {
             return C;
         }
 
-        // A* over {origin} ∪ C ∪ {dest}. Returns { order, C, distKm } or null.
-        function astar(C) {
-            const N = C.length, ORIG = 0, DEST = N + 1;
-            const pos  = (i) => i === ORIG ? O : i === DEST ? D : C[i - 1].ap;
-            const type = (i) => (i === ORIG || i === DEST) ? null : C[i - 1].a.type;
-            const obj  = (i) => i === ORIG ? origin : i === DEST ? destination : C[i - 1].a;
-            const g    = new Array(N + 2).fill(Infinity);   // best cost origin→i
-            const came = new Array(N + 2).fill(-1);
-            const done = new Array(N + 2).fill(false);
-            g[ORIG] = 0;
-            const open = [{ i: ORIG, f: direct }];          // f = g + straight-line-to-dest (admissible)
-            while (open.length) {
-                let b = 0; for (let k = 1; k < open.length; k++) if (open[k].f < open[b].f) b = k;
-                const i = open.splice(b, 1)[0].i;
-                if (done[i]) continue;                       // stale duplicate
-                if (i === DEST) break;                       // optimal path to dest is finalised
-                done[i] = true;
-                const from = pos(i);
-                const relax = (j) => {
-                    if (done[j]) return;
-                    const d = haversineKm(from, pos(j));
-                    if (d + altReserveKm(obj(j)) > maxLeg) return;   // not flyable incl. divert reserve
-                    const pen = (j === DEST) ? 0 : options.stopPenaltyKm + (typePen[type(j)] || 0);
-                    const t = g[i] + d + pen;
-                    if (t < g[j]) { g[j] = t; came[j] = i; open.push({ i: j, f: t + haversineKm(pos(j), D) }); }
-                };
-                for (let j = 1; j <= N; j++) relax(j);
-                relax(DEST);
-            }
-            if (g[DEST] === Infinity) return null;
+        // A* over {origin} ∪ C ∪ {dest} for a given per-type penalty. Returns the best
+        // { order, C, distKm } across widening corridors, or null. Wrapped in searchWith so the
+        // caller can re-run it with the type preference dropped (the soft-bias fallback below).
+        function searchWith(typePen) {
+            function astar(C) {
+                const N = C.length, ORIG = 0, DEST = N + 1;
+                const pos  = (i) => i === ORIG ? O : i === DEST ? D : C[i - 1].ap;
+                const type = (i) => (i === ORIG || i === DEST) ? null : C[i - 1].a.type;
+                const obj  = (i) => i === ORIG ? origin : i === DEST ? destination : C[i - 1].a;
+                const g    = new Array(N + 2).fill(Infinity);   // best cost origin→i
+                const came = new Array(N + 2).fill(-1);
+                const done = new Array(N + 2).fill(false);
+                g[ORIG] = 0;
+                const open = [{ i: ORIG, f: direct }];          // f = g + straight-line-to-dest (admissible)
+                while (open.length) {
+                    let b = 0; for (let k = 1; k < open.length; k++) if (open[k].f < open[b].f) b = k;
+                    const i = open.splice(b, 1)[0].i;
+                    if (done[i]) continue;                       // stale duplicate
+                    if (i === DEST) break;                       // optimal path to dest is finalised
+                    done[i] = true;
+                    const from = pos(i);
+                    const relax = (j) => {
+                        if (done[j]) return;
+                        const d = haversineKm(from, pos(j));
+                        if (d + altReserveKm(obj(j)) > maxLeg) return;   // not flyable incl. divert reserve
+                        const pen = (j === DEST) ? 0 : options.stopPenaltyKm + (typePen[type(j)] || 0);
+                        const t = g[i] + d + pen;
+                        if (t < g[j]) { g[j] = t; came[j] = i; open.push({ i: j, f: t + haversineKm(pos(j), D) }); }
+                    };
+                    for (let j = 1; j <= N; j++) relax(j);
+                    relax(DEST);
+                }
+                if (g[DEST] === Infinity) return null;
 
-            const order = [];
-            for (let i = DEST; i !== -1; i = came[i]) order.push(i);
-            order.reverse();                                  // ORIG … DEST
-            let distKm = 0;                                   // actual flown distance (penalties excluded)
-            for (let k = 0; k < order.length - 1; k++) distKm += haversineKm(pos(order[k]), pos(order[k + 1]));
-            return { order, C, distKm };
+                const order = [];
+                for (let i = DEST; i !== -1; i = came[i]) order.push(i);
+                order.reverse();                                  // ORIG … DEST
+                let distKm = 0;                                   // actual flown distance (penalties excluded)
+                for (let k = 0; k < order.length - 1; k++) distKm += haversineKm(pos(order[k]), pos(order[k + 1]));
+                return { order, C, distKm };
+            }
+            // Widen the corridor until the best route is provably unbeatable (its flown
+            // distance ≤ cap × direct, so no airport outside the ellipse could shorten it).
+            let best = null;
+            for (const mult of WIDEN) {
+                const cap = options.detourCap * mult;
+                const res = astar(candidates(cap));
+                if (!res) continue;
+                if (!best || res.distKm < best.distKm) best = res;
+                if (res.distKm <= cap * direct) break;
+            }
+            return best;
         }
 
-        // Widen the corridor until the best route is provably unbeatable (its flown
-        // distance ≤ cap × direct, so no airport outside the ellipse could shorten it).
-        let best = null;
-        for (const mult of WIDEN) {
-            const cap = options.detourCap * mult;
-            const res = astar(candidates(cap));
-            if (!res) continue;
-            if (!best || res.distKm < best.distKm) best = res;
-            if (res.distKm <= cap * direct) break;
+        // Type preference is a SOFT bias, not a hard rule: honour it first, but if the preferred
+        // route would need more than maxStops (or none is found), retry with the preference
+        // dropped so a route that actually exists is returned (e.g. a small-field-only corridor
+        // a "prefer medium" search would otherwise push past the stop cap). The preference still
+        // wins whenever it yields a route within maxStops.
+        const tooMany = (b) => !!b && (b.order.length - 2) > options.maxStops;
+        let best = searchWith(typePen);
+        if (Object.values(typePen).some(v => v > 0) && (!best || tooMany(best))) {
+            const fallback = searchWith({});   // pure distance, no per-type penalty
+            if (fallback && (!best || !tooMany(fallback))) best = fallback;
         }
         if (!best) {
             return { stops: [], totalDistanceKm: 0, legCount: 0,

@@ -307,5 +307,36 @@ test('the same excluded destination routes directly with the reserve OFF', () =>
   assert.equal(res.legCount, 1);
 });
 
+// Type preference is a SOFT bias: a "prefer medium" search that would overrun maxStops must
+// fall back to a less-preferred (small-field) route that fits, rather than hard-failing.
+// Geography (equator, 1deg=111.19km): O@0 -> D@3 (333km, needs a stop at reach 200).
+//   small  S@1.5  bridges in ONE stop (166.8km legs)
+//   medium M1@1, M2@2 bridge in TWO stops (111km legs)
+const apT = (ident, lon, type) => ({ ident, name: ident, type, latitude_deg: 0, longitude_deg: lon, iata_code: '', alternate_km: 0 });
+const PREF_MED = { small_airport: 150, medium_airport: 0 };
+const SCENE = ['small_airport', 'medium_airport'];
+const POOL = [apT('S', 1.5, 'small_airport'), apT('M1', 1, 'medium_airport'), apT('M2', 2, 'medium_airport')];
+
+test('type preference is soft: falls back past maxStops to a route that fits', () => {
+  const res = loadRouting({ usable: 1.0, route: 1.0 }).planRoute({
+    origin: node('O', 0), destination: node('D', 3), plane: PLANE(200),
+    allowedTypes: SCENE, allAirports: POOL,
+    options: { maxLegKm: 200, maxStops: 1, typePenalty: PREF_MED },
+  });
+  // prefer-medium wants M1+M2 (2 stops) > maxStops 1 → must fall back to the 1-stop small bridge.
+  assert.ok(!res.error, 'should fall back, not hard-fail: ' + res.error);
+  assert.equal(res.stops.map(s => s.ident).join(','), 'S');   // join: routing.js arrays live in a vm realm
+});
+
+test('type preference still wins when it fits within maxStops', () => {
+  const res = loadRouting({ usable: 1.0, route: 1.0 }).planRoute({
+    origin: node('O', 0), destination: node('D', 3), plane: PLANE(200),
+    allowedTypes: SCENE, allAirports: POOL,
+    options: { maxLegKm: 200, maxStops: 3, typePenalty: PREF_MED },
+  });
+  assert.ok(!res.error, res.error);
+  assert.equal(res.stops.map(s => s.ident).join(','), 'M1,M2', 'prefer medium honoured (no fallback)');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
