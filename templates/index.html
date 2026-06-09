@@ -1466,7 +1466,7 @@
                                 <span class="ps-stat"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
                                 <span class="ps-stat"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
                                 <span class="ps-stat"><strong id="psUsage"></strong><span class="ps-stat-l">avg usage</span></span>
-                                <span class="ps-stat ps-stat-avail"><strong id="psAvail"></strong><span class="ps-stat-l">available range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; SID/STAR and airways overhead (3–8% above great-circle, per EUROCONTROL). Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></span></span>
+                                <span class="ps-stat ps-stat-avail"><strong id="psAvail"></strong><span class="ps-stat-l">available range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></span></span>
                             </div>
                             <button type="button" id="psOverrideToggle" class="ps-override-toggle">Edit for this flight <span class="chev">▾</span></button>
                         </div>
@@ -1714,7 +1714,7 @@
                         <div class="rs-cell">
                             <div class="rs-cell-head">
                                 <label class="rs-toggle"><input type="checkbox" id="rsRouting"><span>Routing padding</span></label>
-                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Multiplier on great-circle distance for SID/STAR + airways. EUROCONTROL average is ~3–8% over GC.">?</span>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Multiplier on great-circle distance for airways routing and ATC vectoring — actual track miles run longer than the direct line. EUROCONTROL en-route extension averages ~3–8%.">?</span>
                             </div>
                             <div class="rs-cell-ctrl">
                                 <input type="range" id="rsRoutingSl" min="100" max="125" step="1" value="105" class="form-range">

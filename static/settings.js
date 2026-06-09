@@ -27,8 +27,8 @@
  *                              rolls off exponentially toward `taperPower × peak`, stretching the
  *                              top-up to near-full.
  *                        Together they form the plateau-then-taper curve.
- *   routingPadding     — multiplier on great-circle distance to approximate
- *                        SID/STAR + airways padding.
+ *   routingPadding     — multiplier on great-circle distance for airways routing /
+ *                        ATC route extension (SID/STAR is the separate sidStarPadding).
  *   sidStarPadding     — fixed km added to EACH leg for SID/STAR terminal track
  *                        miles. Additive, on top of routingPadding; opt-in (off
  *                        by default so it doesn't double-count with the above).
@@ -121,7 +121,8 @@ window.CNSSettings = (function () {
         return 1.0 / Math.max(0.5, Math.min(1.0, +s.value || 0.88));
     }
 
-    /** Multiplier on great-circle distance to approximate SID/STAR + airways.
+    /** Multiplier on great-circle distance for airways routing / ATC route extension
+     *  (SID/STAR terminal track miles are the separate sidStarPadding factor).
      *  Cascades into leg distance, energy, flight time, and routing reach. */
     function routingFactor() {
         const s = loadAll().routingPadding;
