@@ -57,5 +57,62 @@ test('mergeManualFlags: copies _manual onto saved stops by ident', () => {
   if (out[1]._manual === true) throw new Error('EDDL (auto) must not be _manual');
 });
 
+// Build a saved trip + a ctx the way index.html will.
+function tripFor(o, d, planeId = 'beta_plane', stops = []) {
+  const P = PLANES[planeId];
+  return { id: 't', planeId, planeName: P.name, tripType: 'retour',
+    originIdent: o, originName: AP[o].name, originLat: AP[o].lat, originLon: AP[o].lon,
+    destIdent: d, destName: AP[d].name, destLat: AP[d].lat, destLon: AP[d].lon,
+    battery: P.battery_kwh, range_km: P.range_km, speed_kmh: P.speed_kmh, c_rate: P.c_rate,
+    chargerId: 'dc_250', chargerName: '250 kW DC', chargerPower: 250,
+    freqN: 1, freqUnit: 'day', fleetMode: 'separate', stops };
+}
+const CATALOG = ['EHAM', 'EHGG', 'EHRD', 'EGLL', 'LFPG'].map(k => ap(k));
+const ctx = (rangeKm) => ({
+  allAirports: CATALOG,
+  allowedTypes: ['medium_airport', 'large_airport'],
+  planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate }),
+  availableRangeKm: (plane) => {
+    const route = S.CNSSettings.routingFactor();
+    const sid = S.CNSSettings.sidStarPaddingKm ? S.CNSSettings.sidStarPaddingKm() : 0;
+    const base = (rangeKm != null ? rangeKm : plane.range_km) * S.CNSSettings.usableFraction(plane) / route;
+    return Math.max(0, base - sid / route);
+  },
+});
+
+test('recomputeFlight: a short retour is feasible', () => {
+  S.CNSSettings.reset();
+  const out = S.CNSRecompute.recomputeFlight(tripFor('EHAM', 'EHGG'), ctx());
+  if (out.feasible !== true) throw new Error('short retour should be feasible: ' + out.infeasibleReason);
+});
+
+test('recomputeFlight: cutting available range below the leg flips to infeasible', () => {
+  S.CNSSettings.reset();
+  const out = S.CNSRecompute.recomputeFlight(tripFor('EHAM', 'EGLL'), { ...ctx(), allAirports: [ap('EHAM'), ap('EGLL')], availableRangeKm: () => 100 });
+  if (out.feasible !== false) throw new Error('expected infeasible when no route fits');
+  if (!out.infeasibleReason) throw new Error('infeasible flight must carry a reason');
+});
+
+test('recomputeFlight: idempotent at unchanged settings', () => {
+  S.CNSSettings.reset();
+  const a = S.CNSRecompute.recomputeFlight(tripFor('EHAM', 'EHGG'), ctx());
+  const b = S.CNSRecompute.recomputeFlight(a, ctx());
+  if (JSON.stringify(a.stops) !== JSON.stringify(b.stops)) throw new Error('stops drift on re-recompute');
+  if (Math.abs((a.legEnergy || 0) - (b.legEnergy || 0)) > 1e-6) throw new Error('legEnergy drift on re-recompute');
+});
+
+test('recomputeFlight: alternate reserve can flip feasibility', () => {
+  S.CNSSettings.reset();
+  const big = ['EHAM', 'EHRD', 'EGLL'].map(k => ap(k, 'medium_airport', k === 'EGLL' ? 120 : 0));
+  const t = tripFor('EHAM', 'EGLL');
+  S.CNSSettings.save({ alternateReserve: { enabled: false } });
+  const off = S.CNSRecompute.recomputeFlight(t, { ...ctx(), allAirports: big });
+  S.CNSSettings.save({ alternateReserve: { enabled: true } });
+  const on = S.CNSRecompute.recomputeFlight(t, { ...ctx(), allAirports: big });
+  if (off.feasible !== true) throw new Error('should fit with the reserve off');
+  if (on.feasible === off.feasible && JSON.stringify(on.stops) === JSON.stringify(off.stops))
+    throw new Error('alternate reserve had no effect on routing/feasibility');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
