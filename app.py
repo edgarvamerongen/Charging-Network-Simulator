@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, Response, redirect, make_response
 from sim import Simulator
 from report import generate_pdf
+from spreadsheet import generate_xlsx
 
 app = Flask(__name__)
 # Anchor catalog/data loading to this file's directory, not the process cwd —
@@ -388,6 +389,30 @@ def report_pdf():
     return Response(
         pdf_bytes,
         mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+@app.route('/api/report.xlsx', methods=['POST'])
+def report_xlsx():
+    """Browser POSTs the whole-DC plan; we build a standardised, responsive XLSX
+    workbook and stream it back. See spreadsheet.py for the format. Returns 400
+    if the payload is empty, 500 (JSON error) if the builder fails."""
+    payload = request.get_json(silent=True) or {}
+    if not payload.get('airports'):
+        return jsonify({'error': 'Nothing to export — add at least one flight first.'}), 400
+    try:
+        xlsx_bytes = generate_xlsx(payload)
+    except RuntimeError as e:
+        # Missing dependency (openpyxl): surface verbatim.
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': f'Spreadsheet generation failed: {e}'}), 500
+
+    filename = f'nrg2fly-charging-plan-{datetime.now().strftime("%Y-%m-%d")}.xlsx'
+    return Response(
+        xlsx_bytes,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
 

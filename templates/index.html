@@ -506,6 +506,9 @@
         .btn-cns-ghost    { background: transparent; border-color: #e2e8f0; color: var(--ink-soft); }
         .btn-cns-ghost:hover { background: #f8fafc; color: var(--ink); }
         .btn-cns:active, .btn-cns-success:active, .btn-cns-ghost:active { transform: translateY(1px); }
+        /* Export-to-spreadsheet button: classic Excel green. */
+        #exportSpreadsheet { background: linear-gradient(180deg, #2a8a5a, #217346); color: #fff; box-shadow: 0 4px 12px rgba(33,115,70,.28); }
+        #exportSpreadsheet:hover { box-shadow: 0 8px 18px rgba(33,115,70,.38); }
 
         /* Compact variant of the primary button (drawer header CTA) */
         .btn-sm-cns {
@@ -1661,6 +1664,7 @@
                     </label>
                     <button id="modelSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true">⚙</span> Model settings <span id="modelBadge" class="model-badge d-none">0</span></button>
                     <button id="generateReport" class="btn-cns btn-sm-cns" type="button" title="Generate a PDF report of the current plan">Generate PDF report</button>
+                    <button id="exportSpreadsheet" class="btn-cns btn-sm-cns" type="button" title="Export the whole plan as an Excel spreadsheet (.xlsx)">Export spreadsheet</button>
                     <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
                 </div>
             </header>
@@ -2042,6 +2046,7 @@
     <script src="/static/scheduler.js?v={{ asset_version }}"></script>
     <script src="/static/animation.js?v={{ asset_version }}"></script>
     <script src="/static/report.js?v={{ asset_version }}"></script>
+    <script src="/static/spreadsheet.js?v={{ asset_version }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <script src="/static/tour.js?v={{ asset_version }}"></script>
     <script>
@@ -4384,6 +4389,7 @@
             confirmRouteAdded(`${d._origin.name} → ${d._dest.name}`);
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
+        document.getElementById('exportSpreadsheet').addEventListener('click', (e) => CNSSpreadsheet.export(e.currentTarget));
         // ---------- report airport picker (REQUIRED single-airport choice) ----------
         (function () {
             const genBtn = document.getElementById('generateReport');
