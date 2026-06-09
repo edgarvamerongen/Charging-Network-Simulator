@@ -2608,12 +2608,17 @@
 
             // Hint / error line
             if (plannedError) {
-                // Over-range legs the planner couldn't bridge with the current airport sizes:
-                // offer the same "Enable all types" remedy ONLY if turning the disabled size(s)
-                // on would actually route every failing leg (otherwise no dead button).
-                const offer = _couldEnablingTypesRoute() ? ' ' + _enableTypesBtnMarkup() : '';
-                hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span>${offer}`;
-                if (offer) _wireEnableTypesBtn();
+                // Offer the "Enable all types" remedy ONLY when a size filter is OFF and turning
+                // it on would route every failing leg. When it wouldn't (all sizes already on, or
+                // enabling them still can't bridge the gap), airport types aren't the blocker — the
+                // aircraft simply can't reach within range/reserves, so say THAT instead of the
+                // planner's generic "enable more airport types" (which reads wrong with all types on).
+                if (_couldEnablingTypesRoute()) {
+                    hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> ${_enableTypesBtnMarkup()}`;
+                    _wireEnableTypesBtn();
+                } else {
+                    hintEl.innerHTML = `<span class="stops-error-inline">No route within range — even with every airport type, this aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</span>`;
+                }
             } else {
                 hintEl.textContent = plannedSource === 'auto'
                     ? 'Shortest-path routing (A*) with your preference order. Click × to remove a stop, or + Add stop above to insert one manually.'
