@@ -660,11 +660,9 @@
         return (ident || (name || '').split(/\s+/)[0] || '').toUpperCase();
     }
 
-    function fmtDur(mins) {
-        const m = Math.round(mins || 0);
-        if (m < 60) return m + ' min';
-        return Math.floor(m / 60) + 'h ' + (m % 60 ? (m % 60) + 'min' : '');
-    }
+    // Duration formatting lives in CNSUnits — single source of truth shared with
+    // the desktop scheduler/animation (units.js loads before mobile.js).
+    const fmtDur = (mins) => CNSUnits.fmtDuration(mins);
 
     // Sampled-bezier "arc" between two lat/lons. `bend` is the offset of
     // the control point perpendicular to the chord (positive = up-left,
@@ -802,7 +800,7 @@
         empty.classList.add('d-none');
 
         const airports = Object.values(CNSDemand.computeAirports());
-        const flightsPerDay = t => (t.freqUnit === 'week' ? t.freqN / 7 : t.freqN);
+        const flightsPerDay = CNSDemand.flightsPerDay;   // single source of truth in demand.js
 
         airports.sort((a, b) =>
             b.contribs.reduce((s, c) => s + flightsPerDay(c.t), 0) -

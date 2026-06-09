@@ -12,7 +12,7 @@
 window.CNSReport = (function () {
     const DAY_START = 7 * 60, DAY_END = 23 * 60;
     const _short = (s, n = 18) => (s && s.length > n) ? s.slice(0, n - 1) + '…' : (s || '');
-    const _flightsPerDay = t => t.freqUnit === 'week' ? t.freqN / 7 : t.freqN;
+    const _flightsPerDay = CNSDemand.flightsPerDay;   // single source of truth in demand.js
 
     // ---------- charger lookup (catalog: window.CHARGERS_BY_ID set by index.html) -
     function _chargerById(id, fallbackName, fallbackPower) {

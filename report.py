@@ -99,18 +99,12 @@ _macos_setup_weasyprint()
 # Heavy deps are imported lazily inside generate_pdf() so a misconfigured
 # environment surfaces a single clear error at request time rather than
 # breaking module import (and the whole Flask app).
-DAY_START = 7 * 60
-DAY_END = 23 * 60
+#
+# Operating day + revenue/cost assumptions are shared with spreadsheet.py via
+# economics.py so the PDF and XLSX exports never disagree.
+from economics import (DAY_START_MIN as DAY_START, DAY_END_MIN as DAY_END,
+                       REALISATION_LOW, REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH)
 
-# --- Revenue & cost scenario (clearly-labelled, tunable assumptions) ---------
-# Not every available kWh is billed at the headline tariff (off-peak sessions,
-# contracted rates, idle capacity), so annual revenue is shown as a realisation
-# BAND rather than a single figure.
-REALISATION_LOW = 0.70
-REALISATION_HIGH = 1.00
-# Wholesale energy procurement cost (EUR/kWh). Tariff minus this is the gross
-# margin, before grid fees, demand charges, and operating costs.
-PROCUREMENT_EUR_PER_KWH = 0.15
 # Bonus: auto-embed an airport photo on the cover (curated local first, then
 # Wikimedia). Flip to False to disable the network fallback entirely.
 AIRPORT_PHOTO_WIKIMEDIA = True

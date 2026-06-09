@@ -38,7 +38,7 @@ window.CNSAnimation = (function () {
         const i = Math.min(pts.length - 2, Math.floor(x));
         return [lerp(pts[i], pts[i + 1], x - i), bearing(pts[i], pts[i + 1])];
     }
-    const fmtTime = (m) => { const c = Math.max(0, Math.round(m)); return String(Math.floor(c / 60)).padStart(2, '0') + ':' + String(c % 60).padStart(2, '0'); };
+    const fmtTime = (m) => CNSUnits.fmtClock(m);   // single source of truth in units.js
 
     // ---------- icons ----------
     function planeIcon(svg) {
