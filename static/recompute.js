@@ -45,7 +45,11 @@ window.CNSRecompute = (function () {
         const chain = window.CNSRouting.planChain({
             origin, dest, manualStops, plane,
             allowedTypes: ctx.allowedTypes, allAirports: ctx.allAirports,
-            maxLegKm: ctx.availableRangeKm(plane), options: {},
+            // Forward the planner's routing options (the "Prefer" control → typePenalty), or the
+            // recompute diverges from the live planner: a hard-coded {} applies the DEFAULT
+            // small-airport penalty, which can push a small-field route over maxStops and wrongly
+            // flag a planner-feasible flight as "no route".
+            maxLegKm: ctx.availableRangeKm(plane), options: ctx.routingOptions || {},
         });
         if (chain.error) { t.feasible = false; t.infeasibleReason = chain.error; return t; }
 

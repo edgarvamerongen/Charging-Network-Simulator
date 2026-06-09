@@ -151,5 +151,18 @@ test('recomputeFlight re-plans auto/untagged stops, preserves only explicit manu
     throw new Error('explicit manual stop must be preserved');
 });
 
+test('recomputeFlight forwards ctx.routingOptions to the planner (not hard-coded {})', () => {
+  S.CNSSettings.reset();
+  // EHAM→EGLL at a 350 km reach needs one stop (EHRD bridges). With routingOptions.maxStops:0
+  // the planner must refuse the stop → infeasible. Proves the recompute honours the planner's
+  // options (the "Prefer"/typePenalty the live planner passes) instead of a hard-coded {} — the
+  // bug where the default small-airport penalty flipped feasible routes to "no route" in the DC.
+  const base = { ...ctx(), allAirports: [ap('EHAM'), ap('EHRD'), ap('EGLL')], availableRangeKm: () => 350 };
+  if (S.CNSRecompute.recomputeFlight(tripFor('EHAM', 'EGLL'), base).feasible !== true)
+    throw new Error('control: one stop should make it feasible');
+  if (S.CNSRecompute.recomputeFlight(tripFor('EHAM', 'EGLL'), { ...base, routingOptions: { maxStops: 0 } }).feasible !== false)
+    throw new Error('ctx.routingOptions.maxStops:0 must propagate → infeasible');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

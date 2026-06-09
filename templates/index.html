@@ -4015,6 +4015,7 @@
                 allowedTypes: _allowedTypes(),
                 planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate }),
                 availableRangeKm: (plane) => _availableRangeKm(plane),
+                routingOptions: _routingOptions(),   // same "Prefer"/typePenalty the live planner uses, so feasibility matches the Suggested route
             };
         }
         function recomputeAllFlights() {
