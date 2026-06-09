@@ -515,6 +515,9 @@
             width: auto; padding: 6px 14px; font-size: .85rem;
             border-radius: var(--radius-sm);
         }
+        /* Terse export buttons (PDF / XLSX) — compact so they don't crowd the drawer header. */
+        .btn-export { padding: 5px 11px; font-size: .8rem; }
+        .btn-export .dl { opacity: .75; margin-right: 2px; }
 
         /* Ghost utility button for low-emphasis tool actions (Model settings).
            Renders as plain text + icon with a tinted hover state — visually
@@ -1674,8 +1677,8 @@
                         <select id="airportFilter" class="form-select form-select-sm"></select>
                     </label>
                     <button id="modelSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true">⚙</span> Model settings <span id="modelBadge" class="model-badge d-none">0</span></button>
-                    <button id="generateReport" class="btn-cns btn-sm-cns" type="button" title="Generate a PDF report of the current plan">Generate PDF report</button>
-                    <button id="exportSpreadsheet" class="btn-cns btn-sm-cns" type="button" title="Export the whole plan as an Excel spreadsheet (.xlsx)">Export spreadsheet</button>
+                    <button id="generateReport" class="btn-cns btn-sm-cns btn-export" type="button" title="Generate a PDF report of the current plan"><span class="dl" aria-hidden="true">⤓</span> PDF</button>
+                    <button id="exportSpreadsheet" class="btn-cns btn-sm-cns btn-export" type="button" title="Export the whole plan as an Excel spreadsheet (.xlsx)"><span class="dl" aria-hidden="true">⤓</span> XLSX</button>
                     <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
                 </div>
             </header>
@@ -4168,12 +4171,17 @@
                         ${fleet.length > 1 ? `<button class="btn btn-outline-danger fleet-remove" data-i="${i}" title="Remove charger">×</button>` : ''}
                     </div>`).join('');
                 const fpd = Math.round(dailyFlights(a) * 10) / 10;
+                // Infeasible flights are listed but excluded from the stats. Surface a count in
+                // the always-visible header so the ⚠ flag isn't buried in the collapsed Route
+                // breakdown (the per-row badge there still carries the specific reason). Distinct
+                // trips, so a retour touching this airport twice counts once.
+                const nInfeasible = new Set(a.contribs.filter(c => c && c.t && c.t.feasible === false).map(c => c.t.id)).size;
 
                 return `<div class="border rounded p-3 mb-3" data-dest="${ident}">
                     <div class="folder-head mb-3">
                         <div>
                             <h5 class="mb-0 folder-airport-name">${a.name}</h5>
-                            <div class="folder-airport-sub">${fpd} flights/day</div>
+                            <div class="folder-airport-sub">${fpd} flights/day${nInfeasible ? ` · <span class="tag-infeasible" title="${nInfeasible} saved flight${nInfeasible > 1 ? 's' : ''} can't be routed at the current settings — open Route breakdown for the reason. Excluded from the totals.">⚠ ${nInfeasible} infeasible</span>` : ''}</div>
                         </div>
                         <button class="btn btn-sm btn-outline-primary" data-map="${ident}">View flights on map</button>
                     </div>
