@@ -121,6 +121,7 @@ window.CNSReport = (function () {
             const t = row.trip;
             const role = (t.destIdent === ident) ? 'dest'
                        : (t.originIdent === ident && t.tripType === 'retour') ? 'home'
+                       : (t.originIdent === ident) ? 'origin'
                        : 'stop';
             const instances = row.rotations.map(rot => ({
                 start: rot.takeoff,

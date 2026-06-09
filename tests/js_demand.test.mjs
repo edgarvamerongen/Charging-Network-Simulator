@@ -65,12 +65,12 @@ test('energyAt: retour home == min(2*leg, batt)', () => {
   assert.ok(approx(D.energyAt(trip, 'H', false), Math.min(360, 225)));   // 225
 });
 
-// ---- computeAirports: a one-way ORIGIN does NOT charge ---------------------
-// Model decision (B): a one-way departure leaves FULL — its charge is accounted
-// for at the airport where it last landed (a 'dest' there), so charging it again
-// at the origin would double-count. The origin contributes no charging demand;
-// destinations and intermediate stops still do.
-test('computeAirports: one-way single-leg charges the DEST, not the origin', () => {
+// ---- computeAirports: a one-way ORIGIN is LISTED but charges ZERO ----------
+// A one-way departure leaves FULL — its charge is accounted for where it last
+// landed (a 'dest' there), so it adds NO charging demand at the origin. But the
+// departure hub is still listed (a zero-energy 'origin' contribution) so it
+// doesn't vanish from the DC; destinations and intermediate stops charge as before.
+test('computeAirports: one-way single-leg — origin LISTED with 0 charging, dest charges', () => {
   D.saveFolder([{
     tripType: 'one-way', legEnergy: 90, battery: 225,
     originIdent: 'EDDB', originName: 'Berlin', originLat: 52.36, originLon: 13.50,
@@ -79,11 +79,14 @@ test('computeAirports: one-way single-leg charges the DEST, not the origin', () 
   const ap = D.computeAirports();
   assert.ok('EHAM' in ap, 'one-way destination is missing');
   assert.equal(ap.EHAM.contribs[0].role, 'dest');
-  assert.ok(!('EDDB' in ap), 'one-way ORIGIN must not contribute charging (departs full)');
+  assert.ok(approx(ap.EHAM.contribs[0].base, 90), 'dest still charges the full leg');
+  assert.ok('EDDB' in ap, 'one-way ORIGIN should be LISTED (departure hub)');
+  assert.equal(ap.EDDB.contribs[0].role, 'origin');
+  assert.equal(ap.EDDB.contribs[0].base, 0, 'origin contributes ZERO charging (departs full)');
   D.saveFolder([]);
 });
 
-test('computeAirports: one-way MULTI-LEG charges stops + dest, not the origin', () => {
+test('computeAirports: one-way MULTI-LEG — origin LISTED with 0 charging; stops + dest charge', () => {
   D.saveFolder([{
     multiLeg: true, tripType: 'one-way',
     originIdent: 'EDDB', originName: 'Berlin', originLat: 52.36, originLon: 13.50,
@@ -96,9 +99,23 @@ test('computeAirports: one-way MULTI-LEG charges stops + dest, not the origin', 
     ],
   }]);
   const ap = D.computeAirports();
-  assert.ok(!('EDDB' in ap), 'multi-leg one-way ORIGIN must not contribute charging (departs full)');
+  assert.ok('EDDB' in ap, 'multi-leg one-way ORIGIN should be LISTED (departure hub)');
+  assert.equal(ap.EDDB.contribs[0].role, 'origin');
+  assert.equal(ap.EDDB.contribs[0].base, 0, 'origin contributes ZERO charging');
   assert.ok('EDDP' in ap, 'intermediate charging stop is missing');
   assert.ok('EHAM' in ap, 'destination is missing');
+  D.saveFolder([]);
+});
+
+test('computeAirports: a RETOUR origin is still home (charges), not an origin tag', () => {
+  D.saveFolder([{
+    tripType: 'retour', legEnergy: 180, battery: 225,
+    originIdent: 'EDDB', originName: 'Berlin', originLat: 52.36, originLon: 13.50,
+    destIdent: 'EHAM', destName: 'Amsterdam', destLat: 52.31, destLon: 4.77,
+  }]);
+  const ap = D.computeAirports();
+  assert.equal(ap.EDDB.contribs[0].role, 'home', 'retour origin must stay home (it recharges to fly back)');
+  assert.ok(ap.EDDB.contribs[0].base > 0, 'retour home charges > 0');
   D.saveFolder([]);
 });
 

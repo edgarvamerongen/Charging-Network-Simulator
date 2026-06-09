@@ -4046,8 +4046,10 @@
                     // small "pinned" badge so it's clear why it ignored the
                     // automatic biggest-with-biggest assignment.
                     const pinned = asg && asg.forced;
-                    const chargerCell = `${fmtEnergy(energy)} <small class="text-muted">on ${chargerName}</small>`
-                        + (pinned ? ` <span class="charger-pin" title="Charger pinned by you — overrides the automatic priority">📌</span>` : '');
+                    const chargerCell = c.role === 'origin'
+                        ? `<small class="text-muted">departs at 100% · no charging</small>`
+                        : `${fmtEnergy(energy)} <small class="text-muted">on ${chargerName}</small>`
+                          + (pinned ? ` <span class="charger-pin" title="Charger pinned by you — overrides the automatic priority">📌</span>` : '');
                     const tripLabel =
                         t.tripType === 'training' ? `Training · ${Math.round((+t.flightTimeH || 0) * 60)} min`
                         : (t.tripType === 'retour' ? 'Retour' : 'One-way') + (t.multiLeg ? ' · multi-leg' : '');

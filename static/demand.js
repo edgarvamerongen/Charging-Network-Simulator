@@ -28,6 +28,8 @@ window.CNSDemand = (function () {
     //   'training' — training pattern based at this airport (origin = destination)
     //   'dest'     — the trip arrives here (one-way or retour destination)
     //   'home'     — the trip's home base (retour origin only)
+    //   'origin'   — a one-way departure hub: the aircraft leaves FULL, so it
+    //                contributes no charging demand here — listed for completeness.
     //   'stop'     — an intermediate charging stop on a multi-leg trip
     //   null       — this airport isn't touched by the trip
     function roleAt(trip, ident) {
@@ -36,6 +38,7 @@ window.CNSDemand = (function () {
         }
         if (trip.destIdent === ident) return 'dest';
         if (trip.originIdent === ident && trip.tripType === 'retour') return 'home';
+        if (trip.originIdent === ident) return 'origin';   // one-way departure hub (departs full → 0 charging)
         if (trip.multiLeg && Array.isArray(trip.stops) && trip.stops.some(s => s && s.ident === ident)) return 'stop';
         return null;
     }
@@ -107,13 +110,16 @@ window.CNSDemand = (function () {
                         direction: isReturnVisit ? 'back' : 'out'
                     });
                 });
-                // A one-way departure is assumed to leave FULL: the plane's charge
-                // is attributed at the airport where it last LANDED (a 'dest'
-                // contribution there), so adding an origin charge here would
-                // double-count. A one-way origin therefore contributes no charging
-                // demand. (Retour origins still charge — as 'home' below. A pure
-                // departure hub with no inbound flight is treated as pre-charged
-                // off-model.)
+                // A one-way departure leaves FULL, so it contributes no CHARGING
+                // (the charge is attributed where the plane last landed — a 'dest'
+                // contribution — and adding one here would double-count). It still
+                // gets a zero-energy 'origin' contribution so the departure hub is
+                // listed in the DC with its take-off rotation instead of vanishing.
+                // (Retour origins charge as 'home' via the charges loop above.)
+                if (t.tripType !== 'retour') {
+                    ensure(t.originIdent, t.originName, t.originLat, t.originLon)
+                        .contribs.push({ t, role: 'origin', other: t.destName, base: 0 });
+                }
                 return;
             }
             // Training path: a single contribution at the home base. The base
@@ -132,12 +138,15 @@ window.CNSDemand = (function () {
                 ensure(t.destIdent, t.destName, t.destLat, t.destLon)
                     .contribs.push({ t, role: 'dest', other: t.originName, base: Math.max(0, 2 * t.legEnergy - battery) });
             } else {
-                // One-way single-leg: the departure is assumed to leave FULL (its
-                // charge is accounted for at the airport where it last landed — a
-                // 'dest' there — so charging it again at the origin would double-
-                // count). Only the arrival top-up at the DEST is attributed here.
+                // One-way single-leg: the departure leaves FULL, so the arrival top-up
+                // at the DEST is the only CHARGING attributed. The origin still gets a
+                // zero-energy 'origin' contribution so the departure hub appears in the
+                // DC (listed + its take-off rotation) instead of vanishing — no charging,
+                // by construction (base 0), so totals are unchanged.
                 ensure(t.destIdent, t.destName, t.destLat, t.destLon)
                     .contribs.push({ t, role: 'dest', other: t.originName, base: t.legEnergy });
+                ensure(t.originIdent, t.originName, t.originLat, t.originLon)
+                    .contribs.push({ t, role: 'origin', other: t.destName, base: 0 });
             }
         });
         return airports;

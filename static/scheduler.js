@@ -46,6 +46,7 @@ window.CNSScheduler = (function () {
     function roleAt(trip, ident) {
         if (trip.destIdent === ident) return 'dest';
         if (trip.originIdent === ident && trip.tripType === 'retour') return 'home';
+        if (trip.originIdent === ident) return 'origin';   // one-way departure hub: take-off here at 100%, no charge
         if (trip.multiLeg && Array.isArray(trip.stops) && trip.stops.some(s => s && s.ident === ident)) return 'stop';
         return null;
     }
@@ -570,7 +571,8 @@ window.CNSScheduler = (function () {
         const evs = [];
         let latest = DAY_START;
         g.lanes.forEach(L => {
-            if (!roleAt(L.trip, ident)) return;
+            const role = roleAt(L.trip, ident);
+            if (!role) return;
             L.rotations.forEach(rot => {
                 rot.phases.forEach(ph => {
                     if (ph.kind === 'charge' && ph.ident === ident && ph.dur > 0 && ph.power) {
@@ -578,7 +580,11 @@ window.CNSScheduler = (function () {
                         evs.push({ tm: ph.start + ph.dur, d: -ph.power });
                     }
                 });
-                if (rot.end > latest) latest = rot.end;
+                // A one-way ORIGIN only sees the take-off here (the plane departs and
+                // lands elsewhere), so its on-airport activity ends at departure — not
+                // the flight's end. dest/home/stop terminate or charge here → rot.end.
+                const endHere = role === 'origin' ? rot.takeoff : rot.end;
+                if (endHere > latest) latest = endHere;
             });
         });
         evs.sort((a, b) => a.tm - b.tm || a.d - b.d);
@@ -646,7 +652,7 @@ window.CNSScheduler = (function () {
         rows.forEach((row, li) => {
             const trip = row.trip;
             const role = roleAt(trip, ident);
-            const roleLabel = role === 'home' ? 'departure' : role === 'stop' ? 'stop' : 'destination';
+            const roleLabel = (role === 'home' || role === 'origin') ? 'departure' : role === 'stop' ? 'stop' : 'destination';
             const lane = document.createElement('div');
             lane.style.cssText = `position:absolute;left:0;right:0;top:${li * LANE_H}px;height:${LANE_H}px;border-top:${li ? '1px solid #f4f4f4' : 'none'}`;
 
