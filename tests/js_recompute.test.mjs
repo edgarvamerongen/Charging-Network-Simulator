@@ -114,5 +114,13 @@ test('recomputeFlight: alternate reserve can flip feasibility', () => {
     throw new Error('alternate reserve had no effect on routing/feasibility');
 });
 
+test('recomputeAll: recomputes every trip and sets feasible on each', () => {
+  S.CNSSettings.reset();
+  const trips = [tripFor('EHAM', 'EHGG'), tripFor('EHAM', 'LFPG')];
+  const out = S.CNSRecompute.recomputeAll(trips, ctx());
+  if (out.length !== 2) throw new Error('expected 2 trips back');
+  if (!out.every(t => typeof t.feasible === 'boolean')) throw new Error('every trip must get a feasible flag');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

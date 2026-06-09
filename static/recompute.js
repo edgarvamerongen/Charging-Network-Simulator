@@ -68,5 +68,15 @@ window.CNSRecompute = (function () {
         return t;
     }
 
-    return { mergeManualFlags, recomputeFlight };
+    // The queue: recompute every trip (by value) and return the updated list. Pure —
+    // the caller persists + re-renders. Any one trip that throws is marked infeasible
+    // rather than aborting the whole pass.
+    function recomputeAll(trips, ctx) {
+        return (trips || []).map(t => {
+            try { return recomputeFlight(t, ctx); }
+            catch (e) { return { ...t, feasible: false, infeasibleReason: 'recompute error: ' + (e && e.message) }; }
+        });
+    }
+
+    return { mergeManualFlags, recomputeFlight, recomputeAll };
 })();
