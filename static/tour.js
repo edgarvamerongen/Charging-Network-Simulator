@@ -257,6 +257,26 @@ window.CNSTour = (function () {
             await _wait(400);
         }
     }
+    // The per-flight rows now live in a collapsed "Route breakdown" section on
+    // each card (a .routes-toggle button reveals them). Expand it so the
+    // Role/route and Edit-flight steps spotlight a visible row, not a hidden one.
+    async function _ensureRoutesOpen() {
+        const card = document.querySelector('#folder [data-dest]');
+        if (!card) return;
+        const trip = card.querySelector('.folder-trip');
+        if (!trip || trip.getBoundingClientRect().height === 0) {
+            const toggle = card.querySelector('.routes-toggle');
+            if (toggle) { toggle.click(); await _wait(350); }
+        }
+    }
+    // A demand card can be taller than the #folder scroll window, and Driver only
+    // scrolls the page (not the inner #folder container), so a per-card anchor
+    // below the window would land off-screen. Scroll the target into the drawer's
+    // view before the spotlight lands (same approach as the scheduler step).
+    async function _revealInDrawer(sel, block) {
+        const el = document.querySelector(sel);
+        if (el && el.scrollIntoView) { el.scrollIntoView({ block: block || 'center', behavior: 'auto' }); await _wait(300); }
+    }
     async function _ensureFlightsMapOpen() {
         const btn = document.querySelector('#folder [data-map]');
         if (btn && !document.querySelector('#flightsMapModal.show')) {
@@ -460,31 +480,31 @@ window.CNSTour = (function () {
             {
                 element: '#folder [data-dest]',
                 popover: { title: 'Per-airport breakdown', description: 'Each airport touched by a flight gets its own card. Numbers shown (daily energy, peak power, charging time) are <strong>specific to this airport</strong>, not the whole network. Multiple flights through the same airport are aggregated.', side: 'top', align: 'center' },
-                onHighlightStarted: async () => { await _ensureDrawerOpen(); },
+                onHighlightStarted: async () => { await _ensureDrawerOpen(); await _revealInDrawer('#folder [data-dest]', 'start'); },
             },
             // 17. NEW — Role / route column
             {
                 element: '#folder [data-dest] .folder-trip td:first-child',
                 popover: { title: 'Role / route', description: 'For each contributing flight: which role this airport plays in the trip (<span class="role role-home">DEPARTURE</span>, <span class="role role-dest">DESTINATION</span>, or <span class="role role-stop">STOP</span>) and where the flight goes. Same airport visited twice on a retour shows two rows with direction arrows.', side: 'top', align: 'start' },
-                onHighlightStarted: async () => { await _ensureDrawerOpen(); },
+                onHighlightStarted: async () => { await _ensureDrawerOpen(); await _ensureRoutesOpen(); await _revealInDrawer('#folder [data-dest] .folder-trip td:first-child'); },
             },
             // 18. NEW — Chargers row, with add/remove emphasis
             {
                 element: '#folder [data-dest] .fleet-add',
                 popover: { title: 'Chargers installed at this airport', description: 'The dropdown picks the charger model. Click the green <strong>+</strong> to add another charger (parallel chargers serve more aircraft simultaneously, raising peak power but cutting queue waits). The × on each existing charger removes it. Custom models added via the planner are available here too.', side: 'top' },
-                onHighlightStarted: async () => { await _ensureDrawerOpen(); },
+                onHighlightStarted: async () => { await _ensureDrawerOpen(); await _revealInDrawer('#folder [data-dest] .fleet-add'); },
             },
             // 19. NEW — Charge target chip
             {
                 element: '#folder .soc-chip',
                 popover: { title: 'Charge target', description: '<strong>Auto</strong> inherits the global default charge target from Model settings (80% by default). Set a percentage here to override it for <em>this</em> airport; a LOCAL target always wins over the GLOBAL default. Higher targets give the plane more reserve but slow charging (lithium-ion tapers above ~80% SoC).', side: 'top' },
-                onHighlightStarted: async () => { await _ensureDrawerOpen(); },
+                onHighlightStarted: async () => { await _ensureDrawerOpen(); await _revealInDrawer('#folder .soc-chip'); },
             },
             // 19a. NEW — Edit / remove a saved flight (pencil + ×) on any row.
             {
                 element: '#folder [data-dest] [data-edit]',
                 popover: { title: 'Edit a saved flight', description: 'The <strong>pencil</strong> on any row reopens that flight in an edit dialog, where its trip type, aircraft or charger can be changed without re-planning from scratch. The red <strong>×</strong> beside it removes the flight from the network. Saving updates every figure immediately.', side: 'top' },
-                onHighlightStarted: async () => { await _ensureDrawerOpen(); },
+                onHighlightStarted: async () => { await _ensureDrawerOpen(); await _ensureRoutesOpen(); await _revealInDrawer('#folder [data-dest] [data-edit]'); },
             },
             // 20. Rotation scheduler — lift the drawer above the tour overlay
             // (same pattern as the network-animation step) so the Gantt chart
