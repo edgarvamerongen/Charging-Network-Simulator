@@ -2161,7 +2161,34 @@
         const selected = { origin: null, destination: null };
         let lastResult = null;
 
-        const labelFor = ap => [ap.iata_code, ap.municipality].filter(Boolean).join(' · ');
+        const labelFor = ap => [ap.ident, ap.iata_code, ap.municipality].filter(Boolean).join(' · ');
+
+        // Ranked airport match shared by every route-builder autocomplete
+        // (Departure/Destination, manual stops, Add-stop box). Mirrors the
+        // backend sim.py get_airport order: exact ICAO/IATA code first, then a
+        // code prefix (EDD → EDDF/EDDM…), then name/municipality substring.
+        // Without the ident match, typing "EHLE" lands on whichever name happens
+        // to contain those letters (e.g. "ObermEHLEr") instead of Lelystad.
+        function rankAirportMatches(query, pool, limit = 50) {
+            const q = (query || '').trim().toLowerCase();
+            if (q.length < 2) return [];
+            const scored = [];
+            for (const ap of pool) {
+                const ident = (ap.ident || '').toLowerCase();
+                const iata  = (ap.iata_code || '').toLowerCase();
+                const name  = (ap.name || '').toLowerCase();
+                const muni  = (ap.municipality || '').toLowerCase();
+                let r = -1;
+                if (ident === q || iata === q) r = 0;        // exact ICAO/IATA code
+                else if (ident.startsWith(q)) r = 1;          // ICAO prefix
+                else if (iata.startsWith(q))  r = 2;          // IATA prefix
+                else if (name.includes(q))    r = 3;          // name substring
+                else if (muni.includes(q))    r = 4;          // municipality substring
+                if (r >= 0) scored.push([r, ap]);
+            }
+            scored.sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name));
+            return scored.slice(0, limit).map(s => s[1]);
+        }
         function haversineKm(a, b) {
             const R = 6371, toRad = d => d * Math.PI / 180;
             const dLat = toRad(b[0] - a[0]), dLon = toRad(b[1] - a[1]);
@@ -2658,13 +2685,8 @@
             });
             let acCurrent = [];
             addInp.addEventListener('input', () => {
-                const q = addInp.value.trim().toLowerCase();
-                if (q.length < 2) { addLst.classList.add('d-none'); return; }
-                acCurrent = allAirports.filter(ap =>
-                    (ap.name && ap.name.toLowerCase().includes(q)) ||
-                    (ap.municipality && ap.municipality.toLowerCase().includes(q)) ||
-                    (ap.iata_code && ap.iata_code.toLowerCase() === q)
-                ).slice(0, 30);
+                if (addInp.value.trim().length < 2) { addLst.classList.add('d-none'); return; }
+                acCurrent = rankAirportMatches(addInp.value, allAirports, 30);
                 addLst.innerHTML = acCurrent.length
                     ? acCurrent.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${ap.name}</strong> <small>${labelFor(ap)}</small></div>`).join('')
                     : '<div class="ac-item text-muted">No matches.</div>';
@@ -2812,12 +2834,8 @@
             input.addEventListener('input', () => {
                 input.dataset.ident = '';
                 _syncManualStops(); refreshAfterEdit(); drawLiveRoute();
-                const q = input.value.trim().toLowerCase();
-                if (q.length < 2) { list.classList.add('d-none'); return; }
-                render(allAirports.filter(ap =>
-                    (ap.name && ap.name.toLowerCase().includes(q)) ||
-                    (ap.municipality && ap.municipality.toLowerCase().includes(q)) ||
-                    (ap.iata_code && ap.iata_code.toLowerCase() === q)).slice(0, 50));
+                if (input.value.trim().length < 2) { list.classList.add('d-none'); return; }
+                render(rankAirportMatches(input.value, allAirports, 50));
             });
             list.addEventListener('mousedown', (e) => {
                 const item = e.target.closest('.ac-item');
@@ -2970,12 +2988,8 @@
             }
             input.addEventListener('input', () => {
                 selected[field] = null; updateTrajectory();
-                const q = input.value.trim().toLowerCase();
-                if (q.length < 2) { list.classList.add('d-none'); return; }
-                render(allAirports.filter(ap =>
-                    (ap.name && ap.name.toLowerCase().includes(q)) ||
-                    (ap.municipality && ap.municipality.toLowerCase().includes(q)) ||
-                    (ap.iata_code && ap.iata_code.toLowerCase() === q)).slice(0, 50));
+                if (input.value.trim().length < 2) { list.classList.add('d-none'); return; }
+                render(rankAirportMatches(input.value, allAirports, 50));
             });
             list.addEventListener('mousedown', (e) => {
                 const item = e.target.closest('.ac-item');
