@@ -122,5 +122,18 @@ test('recomputeAll: recomputes every trip and sets feasible on each', () => {
   if (!out.every(t => typeof t.feasible === 'boolean')) throw new Error('every trip must get a feasible flag');
 });
 
+test('runGlobal excludes feasible:false flights (no lane, no peak)', () => {
+  S.CNSSettings.reset();
+  const ok = { ...tripFor('EHAM', 'EHGG'), id: 'ok', feasible: true };
+  const bad = { ...tripFor('EHAM', 'LFPG'), id: 'bad', feasible: false };
+  S.localStorage.setItem('cns_folder', JSON.stringify([ok, bad]));
+  S.localStorage.setItem('cns_airport_cfg', JSON.stringify({}));
+  S.CNSScheduler.init({ chargers: { dc_250: { id: 'dc_250', name: '250 kW DC', power_kw: 250 } } });
+  const laneTripIds = new Set(S.CNSScheduler.runGlobal().lanes.map(L => L.trip.id));
+  if (laneTripIds.has('bad')) throw new Error('infeasible flight must be excluded from runGlobal');
+  if (!laneTripIds.has('ok')) throw new Error('feasible flight should still have a lane');
+  S.localStorage.setItem('cns_folder', JSON.stringify([]));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

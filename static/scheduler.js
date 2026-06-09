@@ -363,7 +363,10 @@ window.CNSScheduler = (function () {
 
         // 1. Build lanes (aircraft) with their canonical phase template.
         const lanes = [];
-        loadTrips().forEach(t => {
+        // Infeasible flights (recompute marked feasible:false — no valid route at current
+        // settings) don't fly, so they contribute no lane, peak, or rotation. Legacy trips
+        // have no `feasible` field → undefined !== false keeps them, unchanged.
+        loadTrips().filter(t => t.feasible !== false).forEach(t => {
             const { ph, total } = tripPhases(t, null);     // charges carry .ident
             const starts = instanceStarts(t);
             const base = { trip: t, ph, total, cap: batteryOf(t), cRate: _cRateOf(t) };

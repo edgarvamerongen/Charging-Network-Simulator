@@ -868,6 +868,13 @@
         }
         .folder-trip { font-size: .85rem; }
         .folder-trip td { padding: 8px 6px !important; vertical-align: middle; }
+        /* A flight the recompute marked infeasible (no route at current settings): listed
+           but muted, with a clear amber flag; it contributes nothing to demand/peak. */
+        .folder-trip-infeasible td { opacity: .55; }
+        .folder-trip-infeasible td:first-child { opacity: 1; }   /* keep the role + flag legible */
+        .tag-infeasible { display: inline-block; font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+            color: #92400e; background: #fde68a; border: 1px solid #f59e0b; border-radius: 999px;
+            padding: 1px 7px; margin-left: 6px; cursor: help; white-space: nowrap; }
         #folder .table-sm thead th {
             font-size: .65rem !important; font-weight: 700; text-transform: uppercase;
             letter-spacing: .06em; color: var(--muted) !important;
@@ -4030,7 +4037,7 @@
                 };
                 const aircraftList = a.contribs.map((c, i) => ({
                     _i: i, name: c.t.planeName,
-                    energy: _engEnergyAt(c) ?? 0,                   // engine charge energy at this airport (0 if unresolvable)
+                    energy: (c.t.feasible === false) ? 0 : (_engEnergyAt(c) ?? 0),   // infeasible flights can't fly → no demand (listed but excluded from totals/peak)
                     size: c.t.battery ?? c.t.legEnergy * 2,
                     // forcedChargerId pins this flight to a specific charger (manual-first);
                     // planCharging honours it before its priority heuristic.
@@ -4043,7 +4050,7 @@
                 // (interim-deficit: a shared >1x/day lane charges less between rotations). Once per trip.
                 const _seenHrs = new Set();
                 a.contribs.forEach(c => {
-                    if (_seenHrs.has(c.t.id) || !(window.CNSScheduler && CNSScheduler.dailyChargeMinutesAt)) return;
+                    if (_seenHrs.has(c.t.id) || c.t.feasible === false || !(window.CNSScheduler && CNSScheduler.dailyChargeMinutesAt)) return;
                     _seenHrs.add(c.t.id);
                     dailyHours += CNSScheduler.dailyChargeMinutesAt(c.t, a.ident) / 60;
                 });
@@ -4089,8 +4096,11 @@
                     const tripLabel =
                         t.tripType === 'training' ? `Training · ${Math.round((+t.flightTimeH || 0) * 60)} min`
                         : (t.tripType === 'retour' ? 'Retour' : 'One-way') + (t.multiLeg ? ' · multi-leg' : '');
-                    return `<tr class="folder-trip">
-                        <td>${roleTag} ${dir}</td>
+                    const infeasibleBadge = (t.feasible === false)
+                        ? ` <span class="tag-infeasible" title="${(t.infeasibleReason || 'No valid route at the current settings').replace(/"/g, '&quot;')}">⚠ no route</span>`
+                        : '';
+                    return `<tr class="folder-trip${t.feasible === false ? ' folder-trip-infeasible' : ''}">
+                        <td>${roleTag} ${dir}${infeasibleBadge}</td>
                         <td>${t.planeName}</td>
                         <td>${tripLabel}</td>
                         <td><div class="input-group input-group-sm" style="width:150px">
