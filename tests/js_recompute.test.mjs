@@ -49,5 +49,13 @@ test('planChain: no route within range and no anchor → error', () => {
   if (!r.error) throw new Error('expected an error for an unroutable too-short leg');
 });
 
+test('mergeManualFlags: copies _manual onto saved stops by ident', () => {
+  const saved = [{ ident: 'EHRD', name: 'R' }, { ident: 'EDDL', name: 'D' }];
+  const planned = [{ ident: 'EHRD', _manual: true }, { ident: 'EDDL', _auto: true }];
+  const out = S.CNSRecompute.mergeManualFlags(saved, planned);
+  if (out[0]._manual !== true) throw new Error('EHRD should be _manual');
+  if (out[1]._manual === true) throw new Error('EDDL (auto) must not be _manual');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

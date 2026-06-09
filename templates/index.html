@@ -2029,6 +2029,7 @@
     <script src="/static/demand.js?v={{ asset_version }}"></script>
     <script src="/static/routing.js?v={{ asset_version }}"></script>
     <script src="/static/flight-model.js?v={{ asset_version }}"></script>
+    <script src="/static/recompute.js?v={{ asset_version }}"></script>
     <!-- domain modules -->
     <script src="/static/charging.js?v={{ asset_version }}"></script>
     <script src="/static/scheduler.js?v={{ asset_version }}"></script>
@@ -4292,7 +4293,7 @@
                     multiLeg: true,
                     flightTimeH: d.total_flight_time_h,
                     rechargeEnergy: d.total_recharge_energy_kwh,   // legacy field — used as a fallback by older code
-                    stops: d.stops,                                // [{ident,name,lat,lon,type}]
+                    stops: CNSRecompute.mergeManualFlags(d.stops, plannedStops),   // carry _manual (lost on the sim round-trip)
                     charges: d.charges,                            // [{at_index,name,lat,lon,ident,role,energy_kwh,charge_time_min,...}]
                     legs: d.legs,                                  // [{from,to,distance_km,flight_time_h,energy_kwh}]
                     totalDistanceKm: d.total_distance_km,
@@ -4490,7 +4491,7 @@
                     multiLeg: true,
                     flightTimeH: d.total_flight_time_h,
                     rechargeEnergy: d.total_recharge_energy_kwh,
-                    stops: d.stops, charges: d.charges, legs: d.legs,
+                    stops: CNSRecompute.mergeManualFlags(d.stops, prev.stops), charges: d.charges, legs: d.legs,
                     totalDistanceKm: d.total_distance_km, totalFlightTimeH: d.total_flight_time_h,
                     totalChargeMin: d.total_charge_time_min, totalRechargeKwh: d.total_recharge_energy_kwh,
                 });
