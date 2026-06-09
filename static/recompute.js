@@ -5,10 +5,13 @@
  */
 window.CNSRecompute = (function () {
     // Copy the planner's _manual flag onto the saved stop objects (which come from
-    // /api/simulate and have lost it), matched by ident. Auto stops stay unflagged.
+    // /api/simulate and have lost it), matched by ident. EVERY stop is tagged
+    // explicitly — manual ones `_manual`, the rest `_auto` — so recomputeFlight can tell
+    // a planner-inserted stop (re-plannable) from one the operator chose (preserve). Without
+    // the _auto tag a fully-auto route looks "untagged" and gets frozen instead of re-planned.
     function mergeManualFlags(savedStops, plannedStops) {
         const manualIdents = new Set((plannedStops || []).filter(s => s && s._manual).map(s => s.ident));
-        return (savedStops || []).map(s => (s && manualIdents.has(s.ident)) ? { ...s, _manual: true } : { ...s });
+        return (savedStops || []).map(s => (s && manualIdents.has(s.ident)) ? { ...s, _manual: true } : { ...s, _auto: true });
     }
 
     // Map an engine profile.charges[] entry to the stored shape computeAirports reads.
@@ -32,10 +35,11 @@ window.CNSRecompute = (function () {
         };
         const origin = mk(trip.originIdent, trip.originName, trip.originLat, trip.originLon);
         const dest = mk(trip.destIdent, trip.destName, trip.destLat, trip.destLon);
-        // Legacy trips (no _manual markers) → treat every stored stop as manual (preserve it).
+        // Preserve ONLY stops the operator explicitly chose (_manual). Planner-inserted
+        // (_auto) and legacy untagged stops are re-planned from scratch, so the recompute
+        // produces the same route a fresh planner run would — not a frozen old auto-route.
         const stops = Array.isArray(trip.stops) ? trip.stops : [];
-        const anyTagged = stops.some(s => s && (s._manual || s._auto));
-        const manualStops = stops.filter(s => s && (anyTagged ? s._manual : true))
+        const manualStops = stops.filter(s => s && s._manual === true)
             .map(s => mk(s.ident, s.name, s.lat, s.lon));
 
         const chain = window.CNSRouting.planChain({

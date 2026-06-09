@@ -135,5 +135,21 @@ test('runGlobal excludes feasible:false flights (no lane, no peak)', () => {
   S.localStorage.setItem('cns_folder', JSON.stringify([]));
 });
 
+test('recomputeFlight re-plans auto/untagged stops, preserves only explicit manual', () => {
+  S.CNSSettings.reset();
+  // A short hop that needs no stop, stored with an UNNEEDED stop and NO _manual tag
+  // (how a saved auto-planned route looks). Recompute must DROP it like a fresh plan —
+  // not freeze it (the incoherence: DES kept the route while the planner re-planned).
+  const auto = { ...tripFor('EHAM', 'EHGG'), multiLeg: true,
+    stops: [{ ident: 'EHRD', name: AP.EHRD.name, lat: AP.EHRD.lat, lon: AP.EHRD.lon }] };
+  if (S.CNSRecompute.recomputeFlight(auto, ctx()).stops.some(s => s.ident === 'EHRD'))
+    throw new Error('untagged auto-stop must be re-planned away, not preserved');
+  // An EXPLICIT manual stop is still preserved.
+  const man = { ...tripFor('EHAM', 'EHGG'), multiLeg: true,
+    stops: [{ ident: 'EHRD', name: AP.EHRD.name, lat: AP.EHRD.lat, lon: AP.EHRD.lon, _manual: true }] };
+  if (!S.CNSRecompute.recomputeFlight(man, ctx()).stops.some(s => s.ident === 'EHRD'))
+    throw new Error('explicit manual stop must be preserved');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
