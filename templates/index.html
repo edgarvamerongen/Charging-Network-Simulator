@@ -758,15 +758,6 @@
         /* =========================================================
            Floating map controls (bottom-right, stacked)
            ========================================================= */
-        .clear-route-btn {
-            position: fixed; bottom: 86px; right: 16px; z-index: 25;
-            border: 1px solid var(--panel-border); border-radius: 999px;
-            background: var(--panel-strong); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            color: var(--ink-soft); font-size: .78rem; font-weight: 700;
-            padding: 6px 12px; cursor: pointer; box-shadow: 0 2px 8px rgba(43,47,90,.12);
-            transition: background .15s, color .15s;
-        }
-        .clear-route-btn:hover { background: #fff; color: var(--danger); }
         .map-controls {
             position: fixed; bottom: 16px; right: 16px; z-index: 10;
             display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
@@ -1447,9 +1438,6 @@
 <body>
     <!-- map is the full-viewport canvas, behind everything else -->
     <div id="map"></div>
-    <!-- Floating escape hatch: visible only while a route is drawn; click = full
-         plan reset (same as the form's ↺). Esc does the same (wired below). -->
-    <button type="button" id="clearRouteBtn" class="clear-route-btn d-none" title="Clear the route (Esc)">✕ Clear route</button>
 
     <!-- top bar -->
     <header class="topbar">
@@ -3185,16 +3173,6 @@
             renderStops();
             clearRoute(); setRoute([]);   // route gone → revert any blue route teardrops to orange
         });
-        // Escape hatch wiring: the × pill mirrors planReset, and Esc does the same
-        // when nothing else (autocomplete, modal, tour) wants the key.
-        document.getElementById('clearRouteBtn').addEventListener('click', () => document.getElementById('planReset').click());
-        document.addEventListener('keydown', (e) => {
-            if (e.key !== 'Escape') return;
-            if (document.querySelector('.ac-list:not(.d-none)')) return;          // autocomplete eats Esc
-            if (document.querySelector('.modal.show, .driver-active')) return;    // modals/tour own Esc
-            if (!_routeEndpoints.length) return;                                  // nothing to escape
-            document.getElementById('planReset').click();
-        });
         // (advReserve was removed when the global Model settings took over reserve handling)
         // Switching planes re-plans the route (range changes auto-stops) AND must
         // redraw the map — recomputeRoute only updates the stop chain + validation.
@@ -3730,7 +3708,6 @@
             if (key === _routeKey) return;
             _routeKey = key;
             _routeEndpoints = endpoints;
-            document.getElementById('clearRouteBtn')?.classList.toggle('d-none', !endpoints.length);
             // EVERY route airport's charger is pulled from the orange layer: with the
             // network on, anything on the active route — dep, dest or stop — reads as
             // the blue teardrop, never the standard orange network pin.

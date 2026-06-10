@@ -634,6 +634,10 @@ window.CNSTour = (function () {
             // Deliberate exit is via the footer Close button or Esc (bound above).
             allowClose: false,
             showButtons: ['next', 'previous', 'close'],
+            // The × must actually end the tour at ANY point: driver.js 1.3.1 only
+            // EMITS closeClick — with allowClose:false nothing listens, so the
+            // rendered × was dead (Esc worked only via our own handler below).
+            onCloseClick: () => { try { _activeDriver && _activeDriver.destroy(); } catch (e) {} },
             stagePadding: 6,
             smoothScroll: true,
             popoverClass: 'cns-tour-popover',
