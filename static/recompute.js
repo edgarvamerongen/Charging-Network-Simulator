@@ -24,7 +24,7 @@ window.CNSRecompute = (function () {
 
     // Re-plan one saved trip under current settings; return a NEW trip with refreshed
     // route + feasibility. Training/direct skip routing. ctx = { allAirports, planeFor,
-    // availableRangeKm, allowedTypes }.
+    // availableRangeKm, allowedTypes, allowedIdents, routingOptions }.
     function recomputeFlight(trip, ctx) {
         const t = { ...trip };
         if (trip.tripType === 'training') { t.feasible = true; t.infeasibleReason = null; return t; }
