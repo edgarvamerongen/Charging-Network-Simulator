@@ -1123,8 +1123,8 @@
 
         /* F5: per-leg route pin — a route icon that smoothly expands into a brand
            label (distance · time · energy) on hover. */
-        .leg-pin-wrap { background: none; border: none; }
-        .leg-pin {
+        .flight-pin-wrap { background: none; border: none; }
+        .flight-pin {
             position: absolute;
             transform: translate(-50%, -50%);
             display: inline-flex;
@@ -1137,8 +1137,8 @@
             cursor: pointer;
             transition: padding .22s ease, border-color .22s ease, box-shadow .22s ease;
         }
-        .leg-pin-ico { width: 20px; height: 20px; flex: 0 0 auto; display: block; }
-        .leg-pin-text {
+        .flight-pin-ico { width: 20px; height: 20px; flex: 0 0 auto; display: block; }
+        .flight-pin-text {
             max-width: 0;
             overflow: hidden;
             white-space: nowrap;
@@ -1149,14 +1149,14 @@
             color: var(--brand-ink);
             transition: max-width .26s ease, opacity .2s ease .03s, margin-left .26s ease;
         }
-        .leg-pin:hover,
-        #map.leg-labels-open .leg-pin {
+        .flight-pin:hover,
+        #map.flight-labels-open .flight-pin {
             border-color: var(--brand-orange-3);
             box-shadow: 0 4px 12px rgba(255, 122, 0, .30);
             padding: 4px 9px 4px 5px;
         }
-        .leg-pin:hover .leg-pin-text,
-        #map.leg-labels-open .leg-pin-text { max-width: 220px; opacity: 1; margin-left: 6px; }
+        .flight-pin:hover .flight-pin-text,
+        #map.flight-labels-open .flight-pin-text { max-width: 220px; opacity: 1; margin-left: 6px; }
 
         /* A1 Step 2: NRG2fly charger markers — favicon teardrop floated above the
            airport dot so the dot's Dep/Dest/Stop popup stays clickable. */
@@ -1453,8 +1453,8 @@
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">Route</div>
-                        <label class="opt-check"><input type="checkbox" id="legLabelToggle" checked><span>Show leg labels</span></label>
-                        <label class="opt-check opt-sub" id="legLabelExpandRow"><input type="checkbox" id="legLabelExpand"><span>Expand labels</span></label>
+                        <label class="opt-check"><input type="checkbox" id="flightLabelToggle" checked><span>Show flight labels</span></label>
+                        <label class="opt-check opt-sub" id="flightLabelExpandRow"><input type="checkbox" id="flightLabelExpand"><span>Expand labels</span></label>
                         <label class="opt-check"><input type="checkbox" id="fAlternates"><span>Alternates</span></label>
                     </div>
                     <div class="opt-group">
@@ -2265,7 +2265,7 @@
         let _routeEndpoints = [];             // [{lat,lon,label}] of the active route's airports
         let _routeChargerIdents = new Set();  // charger airports on the route → drawn blue, skipped by the orange layer
         let _routeKey = '';                   // change-detection so the markers only rebuild when the route/toggle changes
-        let _showLegLabels = true;   // Map Options → Route → Show leg labels
+        let _showFlightLabels = true;   // Map Options → Route → Show flight labels
         let _hideAirportsOnRoute = false;   // Map Options → hide the size-cluster airport dots while a route is drawn
         const clusters = {
             small_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
@@ -3322,28 +3322,28 @@
             if (typeof smartReplan === 'function')   smartReplan();
             if (typeof drawLiveRoute === 'function') drawLiveRoute();
         });
-        // Map Options → Route → Show leg labels (per-leg distance/time/energy pins).
-        const _legToggle = document.getElementById('legLabelToggle');
-        // Map Options → Route → Expand labels: keep every leg label open (showing
+        // Map Options → Route → Show flight labels (per-leg distance/time/energy pins).
+        const _flightLabelToggle = document.getElementById('flightLabelToggle');
+        // Map Options → Route → Expand labels: keep every flight label open (showing
         // its distance · time · energy) instead of only on hover. Pure CSS class on
         // #map, so it applies to all current and future leg pins — no redraw needed.
-        const _legExpand = document.getElementById('legLabelExpand');
-        const _legExpandRow = document.getElementById('legLabelExpandRow');
+        const _flightLabelExpand = document.getElementById('flightLabelExpand');
+        const _flightLabelExpandRow = document.getElementById('flightLabelExpandRow');
         const _mapEl = document.getElementById('map');
         // The Expand sub-option only makes sense while labels are shown — grey it out
-        // (and clear the open state) whenever "Show leg labels" is off.
-        function _syncLegExpandState() {
-            const labelsOn = !_legToggle || _legToggle.checked;
-            if (_legExpandRow) _legExpandRow.classList.toggle('is-disabled', !labelsOn);
-            if (_mapEl) _mapEl.classList.toggle('leg-labels-open', labelsOn && !!_legExpand && _legExpand.checked);
+        // (and clear the open state) whenever "Show flight labels" is off.
+        function _syncFlightLabelExpandState() {
+            const labelsOn = !_flightLabelToggle || _flightLabelToggle.checked;
+            if (_flightLabelExpandRow) _flightLabelExpandRow.classList.toggle('is-disabled', !labelsOn);
+            if (_mapEl) _mapEl.classList.toggle('flight-labels-open', labelsOn && !!_flightLabelExpand && _flightLabelExpand.checked);
         }
-        if (_legToggle) _legToggle.addEventListener('change', (e) => {
-            _showLegLabels = e.target.checked;
-            _syncLegExpandState();
+        if (_flightLabelToggle) _flightLabelToggle.addEventListener('change', (e) => {
+            _showFlightLabels = e.target.checked;
+            _syncFlightLabelExpandState();
             if (typeof drawLiveRoute === 'function') drawLiveRoute();
         });
-        if (_legExpand) _legExpand.addEventListener('change', _syncLegExpandState);
-        _syncLegExpandState();
+        if (_flightLabelExpand) _flightLabelExpand.addEventListener('change', _syncFlightLabelExpandState);
+        _syncFlightLabelExpandState();
         // Map Options → hide the size-cluster airport dots the moment a route is drawn.
         const _hideApToggle = document.getElementById('hideAirportsOnRoute');
         if (_hideApToggle) _hideApToggle.addEventListener('change', (e) => {
@@ -3422,7 +3422,7 @@
         // Uses the backend leg metrics when present (after Simulate); otherwise
         // estimates from geometry + the selected aircraft so the live preview
         // labels too. Retour legs are labelled once (outbound only).
-        function _legLabelText(dist, timeH, energy) {
+        function _flightLabelText(dist, timeH, energy) {
             const parts = [];
             if (dist != null)            parts.push(typeof fmtDist === 'function' ? fmtDist(dist) : Math.round(dist) + ' km');
             if (timeH != null && timeH > 0)   parts.push(typeof fmtDuration === 'function' ? fmtDuration(timeH * 60) : Math.round(timeH * 60) + ' min');
@@ -3505,8 +3505,8 @@
         function _engineProfileForTrip(trip, getTargetSoc) {
             return (window.CNSFlight && CNSFlight.profileForTrip) ? CNSFlight.profileForTrip(trip, { getTargetSoc }) : null;
         }
-        function addLegLabel(a, b, leg) {
-            if (!_showLegLabels) return;   // hidden via Map Options → Route
+        function addFlightLabel(a, b, leg) {
+            if (!_showFlightLabels) return;   // hidden via Map Options → Route
             let dist, timeH, energy;
             if (leg && leg.distKm != null) {
                 // Engine leg (CNSFlight.legs[i]): final values — geographic distance,
@@ -3522,15 +3522,15 @@
                 timeH  = leg && leg.flight_time_h != null ? leg.flight_time_h * _r : e.timeH;
                 energy = leg && leg.energy_kwh    != null ? leg.energy_kwh    * _r : e.energy;
             }
-            const txt = _legLabelText(dist, timeH, energy);
+            const txt = _flightLabelText(dist, timeH, energy);
             if (!txt) return;
             // A small route icon at the leg midpoint that expands into a brand
             // label with the leg data on hover.
             const m = L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], {
                 icon: L.divIcon({
-                    className: 'leg-pin-wrap', iconSize: null,
-                    html: '<div class="leg-pin"><img class="leg-pin-ico" src="/pics/route-icon.svg" alt="leg">'
-                        + '<span class="leg-pin-text">' + txt + '</span></div>',
+                    className: 'flight-pin-wrap', iconSize: null,
+                    html: '<div class="flight-pin"><img class="flight-pin-ico" src="/pics/route-icon.svg" alt="leg">'
+                        + '<span class="flight-pin-text">' + txt + '</span></div>',
                 }),
                 keyboard: false, riseOnHover: true,
             }).addTo(map);
@@ -3687,7 +3687,7 @@
                         const seg = L.polyline([a, b], legStyle(i));
                         seg.addTo(map); routeLayers.push(seg);
                     }
-                    addLegLabel(a, b, _prof.legs[i]);   // F5: per-leg label (outbound only) — engine leg
+                    addFlightLabel(a, b, _prof.legs[i]);   // F5: per-leg label (outbound only) — engine leg
                 }
                 if (isRetour) {
                     // Return arcs — same per-leg pattern, bowed the other way,
@@ -3715,7 +3715,7 @@
                 // (data.flight_time_h, a one-leg-label/round-trip-time quirk). The engine's
                 // one-leg time is correct but would halve the label on flag flip — deferred
                 // fix to keep this migration behaviour-neutral. One-way single-leg uses the engine.
-                addLegLabel(p1, p2, (_prof && data.trip_type !== 'retour' && _prof.legs[0]) || (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
+                addFlightLabel(p1, p2, (_prof && data.trip_type !== 'retour' && _prof.legs[0]) || (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
             }
             lastRouteChain = [selected.origin, ...plannedStops, selected.destination].filter(p => p && p.ident);
             refreshAlternates();
