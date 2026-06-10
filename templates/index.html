@@ -12,14 +12,16 @@
     <!-- Open Graph (Facebook / LinkedIn / Slack link previews) -->
     <meta property="og:title" content="NRG2fly Charging Network Simulator">
     <meta property="og:description" content="Plan electric-aviation routes, size charging stops, and model fleet energy demand across Europe.">
-    <meta property="og:image" content="https://cns.ghettofaust.exposed/pics/logos/NRG2fly_logo_compact.png">
+    <meta property="og:image" content="https://cns.ghettofaust.exposed/pics/og_card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta property="og:url" content="https://cns.ghettofaust.exposed/">
     <meta property="og:type" content="website">
     <!-- Twitter / X card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NRG2fly Charging Network Simulator">
     <meta name="twitter:description" content="Plan electric-aviation routes, size charging stops, and model fleet energy demand across Europe.">
-    <meta name="twitter:image" content="https://cns.ghettofaust.exposed/pics/logos/NRG2fly_logo_compact.png">
+    <meta name="twitter:image" content="https://cns.ghettofaust.exposed/pics/og_card.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -615,6 +617,7 @@
         }
         /* No label — the green € amount IS the signal (tooltip names it). Amount left,
            its derivation right, so the line reads "€81.60   ←   136 kWh · €0.60/kWh". */
+        .hl-rev-per { font-size: .78rem; font-weight: 700; opacity: .75; margin-left: 5px; letter-spacing: 0; }
         .hl-rev-amt { flex: 0 0 auto; text-align: left; font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: #34d399; }  /* brand green (matches the success / Add-to-demand button), distinct from the gold stat tiles */
         .hl-rev-sub { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: .62rem; opacity: .75; letter-spacing: .03em; }
         .lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
@@ -1453,7 +1456,7 @@
                     <div class="opt-group">
                         <div class="opt-label">Route</div>
                         <label class="opt-check"><input type="checkbox" id="flightLabelToggle" checked><span>Leg labels</span></label>
-                        <label class="opt-check opt-sub" id="flightLabelExpandRow"><input type="checkbox" id="flightLabelExpand"><span>Expand labels</span></label>
+                        <label class="opt-check opt-sub" id="flightLabelExpandRow"><input type="checkbox" id="flightLabelExpand" checked><span>Expand labels</span></label>
                         <label class="opt-check"><input type="checkbox" id="fAlternates"><span>Alternates</span></label>
                         <label class="opt-check"><input type="checkbox" id="hideAirportsOnRoute"><span>Declutter when route is planned</span></label>
                     </div>
@@ -1664,7 +1667,7 @@
                 <!-- Headline revenue band: the airport's charging income, surfaced
                      prominently in the top block rather than buried in a collapsed
                      breakdown. Largest figure in the panel — it's the business case. -->
-                <div class="hl-revenue" title="Revenue potential — the airport's charging income for this flight">
+                <div class="hl-revenue" title="Revenue potential — the airport's charging income at the set flight frequency">
                     <span class="hl-rev-amt" id="hlRevenue">—</span>
                     <span class="hl-rev-sub" id="hlRevenueSub"></span>
                 </div>
@@ -3830,8 +3833,11 @@
             // scales to MWh; split its "956 kWh" into the two lines.
             const _eParts = fmtEnergy(usedKwh).split(' ');
             document.getElementById('hlUsed').innerHTML = `${_eParts[0]}<br>${_eParts[1] || ''}`;
-            document.getElementById('hlFlight').textContent = fmtDuration(travelMin);
-            document.getElementById('hlTime').textContent = fmtDuration(chargeMin);
+            // Stack h + min on two lines (matching the stacked energy tile); plain
+            // minutes stay on one line.
+            const _stack = (m) => fmtDuration(m).replace(/^(\d+h) (\d+min)$/, '$1<br>$2');
+            document.getElementById('hlFlight').innerHTML = _stack(travelMin);
+            document.getElementById('hlTime').innerHTML = _stack(chargeMin);
             // Sub-labels adapt to the trip context AND active model flags.
             const flags = CNSSettings.activeFlags();
             document.getElementById('hlUsedLabel').textContent =
@@ -3947,11 +3953,17 @@
             // "43 kWh · €0.60/kWh" must equal the big figure (43 × 0.60 = €25.80, not a
             // €25 computed from the unrounded kWh next to a rounded-up 43).
             const _kwhShown = r(rechargeKwh);
-            const _rev = _rate * _kwhShown;
-            document.getElementById('hlRevenue').textContent =
-                Number.isInteger(_rev) ? `€${_rev.toLocaleString('en-US')}` : `€${_rev.toFixed(2)}`;
+            // × flight frequency: the headline is the airport's income PER PERIOD at the
+            // set frequency (flights per day/week), still auditable from the sub-line:
+            // kWh × rate × n. Falls back to per-flight when the freq fields are absent.
+            const _fN = Math.max(1, Math.round(+(document.getElementById('freqN') || {}).value || 1));
+            const _fU = ((document.getElementById('freqUnit') || {}).value === 'week') ? 'week' : 'day';
+            const _rev = _rate * _kwhShown * _fN;
+            const _amt = Number.isInteger(_rev) ? `€${_rev.toLocaleString('en-US')}` : `€${_rev.toFixed(2)}`;
+            document.getElementById('hlRevenue').innerHTML =
+                `${_amt}<span class="hl-rev-per">/ ${_fU}</span>`;
             document.getElementById('hlRevenueSub').textContent =
-                `${num(_kwhShown)} kWh · €${_rate.toFixed(2)}/kWh`;
+                `${num(_kwhShown)} kWh · €${_rate.toFixed(2)}/kWh` + (_fN > 1 ? ` · ${_fN}×` : '');
 
             const common = [
                 `avg usage      = battery / range × 100`,
