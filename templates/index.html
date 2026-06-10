@@ -133,6 +133,10 @@
             font-weight: 600; font-size: .82rem; color: var(--ink-soft);
             padding-left: 12px; border-left: 1px solid var(--panel-border);
             letter-spacing: .01em;
+            /* Optical alignment with the logo: the NRG2FLY wordmark sits in the lower
+               half of the PNG (the chevron mark spans the full height), so a centred
+               tagline reads ~3px high next to it. Nudge down to the wordmark's centre. */
+            transform: translateY(3px);
         }
         .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: .82rem; color: var(--ink-soft); user-select: none; }
         .switch input { appearance: none; width: 34px; height: 20px; background: #cbd5e1; border-radius: 999px; position: relative; transition: background .2s; cursor: pointer; }
