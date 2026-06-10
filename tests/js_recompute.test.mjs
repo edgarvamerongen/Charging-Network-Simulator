@@ -164,5 +164,30 @@ test('recomputeFlight forwards ctx.routingOptions to the planner (not hard-coded
     throw new Error('ctx.routingOptions.maxStops:0 must propagate → infeasible');
 });
 
+test('recomputeFlight forwards ctx.allowedIdents (network site routable despite type filter)', () => {
+  S.CNSSettings.reset();
+  // EHAM→EGLL at reach 350 needs the EHRD bridge. EHRD is presented as a
+  // small_airport with only medium/large allowed by type — feasible ONLY when
+  // ctx.allowedIdents admits it (the DC passes the full network here).
+  const pool = [ap('EHAM'), ap('EHRD', 'small_airport'), ap('EGLL')];
+  const base = { ...ctx(), allAirports: pool, allowedTypes: ['medium_airport', 'large_airport'],
+    availableRangeKm: () => 350 };
+  if (S.CNSRecompute.recomputeFlight(tripFor('EHAM', 'EGLL'), base).feasible !== false)
+    throw new Error('control: small-type bridge must be rejected without the ident pool');
+  const out = S.CNSRecompute.recomputeFlight(tripFor('EHAM', 'EGLL'),
+    { ...base, allowedIdents: new Set(['EHRD']) });
+  if (out.feasible !== true) throw new Error('ctx.allowedIdents must admit EHRD: ' + out.infeasibleReason);
+});
+
+test('index.html: _recomputeCtx is map-filter independent (full catalog, settings-only)', () => {
+  const html = fs.readFileSync(path.join(REPO, 'templates', 'index.html'), 'utf8');
+  const m = html.match(/function _recomputeCtx\(\) \{([\s\S]*?)\n        \}/);
+  if (!m) throw new Error('_recomputeCtx not found');
+  if (m[1].includes('_allowedTypes()'))
+    throw new Error('_recomputeCtx must NOT read the map filters — saved flights react to model settings only');
+  for (const must of ['small_airport', 'medium_airport', 'large_airport', 'allowedIdents'])
+    if (!m[1].includes(must)) throw new Error(`_recomputeCtx missing ${must} (full-catalog pool)`);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

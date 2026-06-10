@@ -2,7 +2,7 @@
  * CNSRouting — multi-stop "charging stops" planner.
  * -------------------------------------------------------------------
  *
- * planRoute({ origin, destination, plane, options, allowedTypes, allAirports })
+ * planRoute({ origin, destination, plane, options, allowedTypes, allowedIdents, allAirports })
  *   → { stops, totalDistanceKm, legCount, error? }
  *
  * STRATEGY: A* shortest-path on a range-constrained graph. Nodes are the
@@ -216,6 +216,7 @@ window.CNSRouting = (function () {
     // planner uses; index.html's recomputeRoute and CNSRecompute both call it so the
     // re-planning path is identical by construction (not two implementations agreeing).
     //   manualStops: [{ ident, name, lat, lon, alternate_km, ... }]  (order preserved)
+    //   allowedIdents passes through unchanged to each gap's planRoute call.
     // Returns { stops: [ …each tagged _manual or _auto ], legCount, error }.
     function planChain(opts) {
         const { origin, dest, plane, allAirports } = opts;

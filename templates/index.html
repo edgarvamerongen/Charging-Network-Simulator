@@ -4157,12 +4157,17 @@
         // a fresh add. Debounced so dragging a slider doesn't thrash.
         let _recomputeTimer = null;
         function _recomputeCtx() {
+            // Saved flights are immune to MAP options: the recompute pool is the FULL
+            // catalog (every size class + every network site). Feasibility is a pure
+            // physics verdict driven by Model settings — the map filters are a view
+            // lens for the live planner only (see the 2026-06-10 hierarchy spec).
             return {
                 allAirports,
-                allowedTypes: _allowedTypes(),
+                allowedTypes: ['small_airport', 'medium_airport', 'large_airport'],
+                allowedIdents: new Set(Object.keys(nrgChargerDb || {})),
                 planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate }),
                 availableRangeKm: (plane) => _availableRangeKm(plane),
-                routingOptions: _routingOptions(),   // same "Prefer"/typePenalty the live planner uses, so feasibility matches the Suggested route
+                routingOptions: _routingOptions(),   // soft Prefer bias — stop choice, never feasibility
             };
         }
         function recomputeAllFlights() {

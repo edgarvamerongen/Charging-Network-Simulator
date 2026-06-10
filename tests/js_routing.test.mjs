@@ -363,5 +363,16 @@ test('without allowedIdents the same small-type bridge is rejected (regression)'
   assert.ok(res.error, 'expected no-route without the ident pool');
 });
 
+test('planChain forwards allowedIdents to each gap planRoute', () => {
+  const R = loadRouting({ usable: 1.0, route: 1.0 });
+  const res = R.planChain({
+    origin: node('O', 0), dest: node('D', 3), manualStops: [], plane: PLANE(200),
+    allowedTypes: ['medium_airport'], allowedIdents: new Set(['S']),
+    allAirports: [apT('S', 1.5, 'small_airport')], maxLegKm: 200, options: {},
+  });
+  assert.ok(!res.error, 'planChain must forward the ident pool: ' + res.error);
+  assert.equal(res.stops.map(s => s.ident).join(','), 'S');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
