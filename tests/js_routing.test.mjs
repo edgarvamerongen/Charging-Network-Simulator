@@ -338,5 +338,30 @@ test('type preference still wins when it fits within maxStops', () => {
   assert.equal(res.stops.map(s => s.ident).join(','), 'M1,M2', 'prefer medium honoured (no fallback)');
 });
 
+// WYSIWYG pool: allowedIdents admits a candidate whose TYPE is filtered off —
+// the live planner passes the NRG2fly charger idents here, so a network site is
+// routable whenever it is shown, regardless of its size class.
+test('allowedIdents admits an ident whose type is not in allowedTypes', () => {
+  const O = node('O', 0), D = node('D', 3);                       // 333.6 km, reach 200 → needs a stop
+  const S = apT('S', 1.5, 'small_airport');                       // the only bridge, small type
+  const res = loadRouting({ usable: 1.0, route: 1.0 }).planRoute({
+    origin: O, destination: D, plane: PLANE(200),
+    allowedTypes: ['medium_airport'],                              // small NOT allowed by type…
+    allowedIdents: new Set(['S']),                                 // …but shown as a network site
+    allAirports: [S], options: { maxLegKm: 200 },
+  });
+  assert.ok(!res.error, 'network ident must be routable: ' + res.error);
+  assert.equal(res.stops.map(s => s.ident).join(','), 'S');
+});
+
+test('without allowedIdents the same small-type bridge is rejected (regression)', () => {
+  const res = loadRouting({ usable: 1.0, route: 1.0 }).planRoute({
+    origin: node('O', 0), destination: node('D', 3), plane: PLANE(200),
+    allowedTypes: ['medium_airport'], allAirports: [apT('S', 1.5, 'small_airport')],
+    options: { maxLegKm: 200 },
+  });
+  assert.ok(res.error, 'expected no-route without the ident pool');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

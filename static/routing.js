@@ -60,6 +60,10 @@ window.CNSRouting = (function () {
     function planRoute(opts) {
         const { origin, destination, plane, allAirports } = opts;
         const allowedSet = new Set(opts.allowedTypes || []);
+        // WYSIWYG pool: idents admitted regardless of type — the live planner passes
+        // the shown NRG2fly charger sites; the DC recompute passes the full network.
+        const allowedIdents = opts.allowedIdents instanceof Set
+            ? opts.allowedIdents : new Set(opts.allowedIdents || []);
         const options = Object.assign({}, DEFAULTS, opts.options || {});
         const typePen = Object.assign({}, DEFAULTS.typePenalty, options.typePenalty || {});
 
@@ -112,7 +116,7 @@ window.CNSRouting = (function () {
         function candidates(cap) {
             const C = [];
             for (const a of allAirports) {
-                if (!allowedSet.has(a.type)) continue;
+                if (!allowedSet.has(a.type) && !allowedIdents.has(a.ident)) continue;
                 if (a.ident && skip.has(a.ident)) continue;
                 if (a.latitude_deg == null || a.longitude_deg == null) continue;
                 const ap = _ap(a);
@@ -226,7 +230,7 @@ window.CNSRouting = (function () {
             const filtered = allAirports.filter(a => !usedIdents.has(a.ident) && !blacklist.has(a.ident));
             const seg = planRoute({
                 origin: chain[i], destination: chain[i + 1], plane,
-                allAirports: filtered, allowedTypes,
+                allAirports: filtered, allowedTypes, allowedIdents: opts.allowedIdents,
                 options: Object.assign({}, opts.options || {}, { maxLegKm }),
             });
             if (seg.error && manualStops.length === 0) {
