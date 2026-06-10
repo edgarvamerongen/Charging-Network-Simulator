@@ -4877,6 +4877,8 @@
             if (lastResult) renderResult(lastResult);
             renderPlaneSpecCard();
             renderFolder();
+            renderStops();          // Suggested-route panel: per-leg + total distances
+            refreshAlternates();    // divert markers on the map ("EHRD · 46 km" tooltips)
         });
 
         // ---------- custom planes & chargers (data layer: CNSPlanes / CNSChargers; UI wiring below) ----------
