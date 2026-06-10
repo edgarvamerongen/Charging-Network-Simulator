@@ -702,11 +702,27 @@
         .ps-override-note { font-size: .66rem; color: var(--muted); }
         .ps-reset { background: none; border: none; padding: 0; font-size: .72rem; color: var(--brand-ink); cursor: pointer; }
 
+        /* "Show calculation" — the audit trail, typeset instead of a raw monospace dump.
+           Notes read as prose; term = formula = RESULT rows keep the flight-log structure
+           with the derived result emphasized; the → conclusion gets the house accent. */
         #calcPanel {
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem;
-            white-space: pre-wrap; background: #f8fafc; border: 1px solid #e2e8f0;
-            padding: 10px; border-radius: var(--radius-sm); color: var(--ink-soft);
+            font-size: .76rem; background: #f8fafc; border: 1px solid #e2e8f0;
+            padding: 12px 14px; border-radius: var(--radius-sm); color: var(--ink-soft);
         }
+        #calcPanel .calc-note { font-size: .74rem; color: var(--muted); line-height: 1.5; }
+        #calcPanel .calc-gap { height: 8px; }
+        #calcPanel .calc-sec { margin: 2px 0 3px; font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+        #calcPanel .calc-row { display: flex; gap: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.55; }
+        #calcPanel .calc-term { flex: 0 0 96px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+        #calcPanel .calc-math { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+        #calcPanel .calc-res { font-weight: 700; color: var(--brand-ink); }
+        #calcPanel .calc-item { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding-left: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+        #calcPanel .calc-total { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--ink); border-top: 1px dashed #e2e8f0; margin-top: 6px; padding-top: 6px; }
+        #calcPanel .calc-conclusion {
+            margin: 4px 0 2px; padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: .74rem;
+            border-left: 3px solid var(--primary); background: rgba(229,120,80,.08); color: var(--ink);
+        }
+        #calcPanel .calc-foot { margin-top: 8px; font-size: .66rem; color: var(--muted); font-style: italic; }
 
         /* =========================================================
            Right rail (result panel + error)
@@ -3808,7 +3824,7 @@
                     ``,
                     `(model computed in metric; figures above use your selected units, rounded up)`
                 ];
-                document.getElementById('calcPanel').textContent = lines.join('\n');
+                document.getElementById('calcPanel').innerHTML = _calcHtml(lines);
                 document.getElementById('result').classList.remove('d-none');
                 document.getElementById('error').classList.add('d-none');
                 return;
@@ -3840,10 +3856,37 @@
                 ];
             }
             lines.push(``, `(model computed in metric; figures above use your selected units, rounded up)`);
-            document.getElementById('calcPanel').textContent = lines.join('\n');
+            document.getElementById('calcPanel').innerHTML = _calcHtml(lines);
 
             document.getElementById('result').classList.remove('d-none');
             document.getElementById('error').classList.add('d-none');
+        }
+
+        // Typeset the calculation lines (built above as plain text — single source) into
+        // the styled card: # notes → prose, "term = formula = result" → aligned rows with
+        // the derived result emphasized, "→ ..." → accented conclusion, "( ... )" → footnote.
+        function _calcHtml(lines) {
+            const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            return lines.map(raw => {
+                const t = String(raw).trim();
+                if (!t) return '<div class="calc-gap"></div>';
+                if (t.startsWith('#')) return `<div class="calc-note">${esc(t.replace(/^#\s?/, ''))}</div>`;
+                if (t.startsWith('→')) return `<div class="calc-conclusion">${esc(t.replace(/^→\s?/, ''))}</div>`;
+                if (t.startsWith('(')) return `<div class="calc-foot">${esc(t)}</div>`;
+                if (/^(Legs|Charges):$/.test(t)) return `<div class="calc-sec">${esc(t.slice(0, -1))}</div>`;
+                if (t.startsWith('Totals:')) return `<div class="calc-total">${esc(t)}</div>`;
+                if (/^(\d+\.|[A-Z]+\s+@)/.test(t)) return `<div class="calc-item">${esc(t)}</div>`;
+                const eq = t.indexOf('=');
+                if (eq >= 0) {
+                    const term = t.slice(0, eq).trim();
+                    const chunks = t.slice(eq + 1).trim().split(' = ');
+                    const math = chunks.length > 1
+                        ? `= ${esc(chunks.slice(0, -1).join(' = '))} = <span class="calc-res">${esc(chunks[chunks.length - 1])}</span>`
+                        : `= ${esc(chunks[0])}`;
+                    return `<div class="calc-row"><span class="calc-term">${esc(term)}</span><span class="calc-math">${math}</span></div>`;
+                }
+                return `<div class="calc-item">${esc(t)}</div>`;
+            }).join('');
         }
 
         document.getElementById('toggleCalc').addEventListener('click', () => {
