@@ -1165,11 +1165,13 @@
         }
         .alt-dist-label::before { display: none; }   /* hide the tooltip caret */
 
-        /* Badge on the trigger button — shows the count of active factors. */
+        /* Badge on the trigger button — shows the count of active factors.
+           Flex-centred so the digit sits dead-centre in the pill. */
         .model-badge {
-            display: inline-block; min-width: 18px; text-align: center;
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 18px; height: 18px;
             background: var(--primary); color: #fff; font-size: .7rem; font-weight: 700;
-            padding: 1px 6px; border-radius: 999px; margin-left: 4px; line-height: 1.4;
+            padding: 0 6px; border-radius: 999px; margin-left: 4px; line-height: 1;
         }
 
         /* Per-airport "Charge target" control: button reveals slider panel. */
@@ -1210,7 +1212,7 @@
         .soc-panel .rs-help { margin-top: 6px; font-size: .76rem; }
 
         /* Charging-stops toggle + advanced section + suggested route list */
-        .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 8px; flex-wrap: wrap; }   /* narrow rail: the settings pill drops below the toggle instead of cramming */
         .stops-switch { font-size: .85rem; color: var(--ink); }
         /* "+ Add stop" link between Departure and Destination inputs. Small,
            ghost-style affordance — doesn't compete with the primary form. */
@@ -1278,9 +1280,11 @@
             border-radius: 999px; padding: 3px 10px;
             font-size: .74rem; font-weight: 600; color: var(--ink-soft);
             cursor: pointer; transition: background .15s, border-color .15s, color .15s;
-            display: inline-flex; align-items: center; gap: 4px;
+            display: inline-flex; align-items: center; gap: 5px;
+            white-space: nowrap; flex: none;   /* never squash/wrap inside the pill — the row wraps instead */
         }
         .modelset-btn:hover { background: rgba(229,120,80,.10); border-color: rgba(229,120,80,.25); color: var(--ink); }
+        .modelset-btn .gear { font-size: .95rem; line-height: 1; opacity: .8; }   /* legible gear, not a .74rem speck */
         .modelset-btn .model-badge { margin-left: 2px; }
 
         /* Preference order — inline in the Suggested route section. */
@@ -1521,7 +1525,7 @@
                          same Model settings modal used by the Demand Calculator —
                          operators can tweak model factors while planning. -->
                     <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Open Model settings — model factors cascade through the planner and result panel">
-                        <span aria-hidden="true">⚙</span> Model settings
+                        <span class="gear" aria-hidden="true">⚙</span> Model settings
                         <span id="planModelBadge" class="model-badge d-none">0</span>
                     </button>
                 </div>
