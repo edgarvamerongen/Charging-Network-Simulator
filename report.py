@@ -662,46 +662,38 @@ def _wiki_lead_image(title):
     return '', ''
 
 
-def _commons_geosearch(lat, lon):
-    """Nearest Commons file to the airport. Ranks candidates photo (.jpg/.png)
-    > map > .svg, so a real photo wins but a map or logo still beats nothing.
-    Returns (url, title) or ('', '')."""
+def _satellite_photo(lat, lon, airport_type=None):
+    """Esri World Imagery centred on the field — the deterministic last-resort
+    cover. Every airport has coordinates and a runway is always on-topic,
+    unlike the old Commons geosearch lottery (which could return any nearby
+    photo). Same imagery as the in-app map's satellite layer; rendered with
+    the staticmap dependency the network map already uses. Returns JPEG bytes
+    or b'' (any failure ⇒ the cover falls back to its clean photo-less form)."""
     try:
-        j = _http_get('https://commons.wikimedia.org/w/api.php', accept_json=True,
-                      params={'action': 'query', 'format': 'json', 'generator': 'geosearch',
-                              'ggsnamespace': 6, 'ggslimit': 20, 'ggscoord': f'{float(lat)}|{float(lon)}',
-                              'ggsradius': 10000, 'prop': 'imageinfo', 'iiprop': 'url', 'iiurlwidth': 1400})
+        from staticmap import StaticMap
+        # large fields don't fit at z15 (~5 km across); everything else does
+        zoom = 14 if 'large' in str(airport_type or '').lower() else 15
+        m = StaticMap(
+            1500, 600,
+            url_template='https://server.arcgisonline.com/ArcGIS/rest/services/'
+                         'World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            headers={'User-Agent': _WIKI_UA},
+        )
+        img = m.render(zoom=zoom, center=(float(lon), float(lat)))
+        buf = io.BytesIO()
+        img.convert('RGB').save(buf, format='JPEG', quality=88)
+        return buf.getvalue()
     except Exception:
-        return '', ''
-    best = None   # (tier, url, title) — lower tier = preferred
-    for pg in ((j.get('query') or {}).get('pages') or {}).values():
-        ii = (pg.get('imageinfo') or [{}])[0]
-        u = ii.get('thumburl') or ii.get('url') or ''
-        if not u:
-            continue
-        title = pg.get('title', '')
-        ext = u.split('?')[0].lower().rsplit('.', 1)[-1]
-        if 'map' in title.lower():
-            tier = 1                                   # a map — after real photos
-        elif ext in ('jpg', 'jpeg', 'png'):
-            tier = 0                                   # a photo — best
-        elif ext == 'svg':
-            tier = 2                                   # an svg (logo/diagram) — last resort
-        else:
-            continue                                   # skip gif/tif/etc.
-        if best is None or tier < best[0]:
-            best = (tier, u, title)
-            if tier == 0:
-                break
-    return (best[1], best[2]) if best else ('', '')
+        return b''
 
 
-def _airport_photo(ident, name, lat, lon):
+def _airport_photo(ident, name, lat, lon, airport_type=None):
     """Return {'uri': <data-uri>, 'credit': <str>} for the chosen airport, or
     blanks. Order: curated local pics/airports/<ICAO>.* → cache → (when
-    AIRPORT_PHOTO_WIKIMEDIA) Wikidata image by ICAO then by name → Commons
-    geosearch by coordinates. Downloads cache under pics/airports/_cache/. Any
-    failure is swallowed → the cover renders photo-less (the band is hidden)."""
+    AIRPORT_PHOTO_WIKIMEDIA) Wikidata image by ICAO then by name → an Esri
+    satellite render of the field by coordinates. Downloads cache under
+    pics/airports/_cache/. Any failure is swallowed → the cover renders
+    photo-less (the band is hidden)."""
     blank = {'uri': '', 'credit': ''}
     ident = (ident or '').strip()
     if not _SAFE_IDENT_RE.match(ident):
@@ -732,19 +724,23 @@ def _airport_photo(ident, name, lat, lon):
     if img_url and not credit:
         fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')
         credit = f'{os.path.splitext(fn)[0]} — Wikimedia Commons'
-    # 3) Commons geosearch by coordinates (photo > map > svg)
+    # 3) deterministic last resort: a satellite image of the field itself
+    #    (replaces the old Commons geosearch, which returned any nearby photo)
+    raw = b''
     if not img_url and lat is not None and lon is not None:
-        u, title = _commons_geosearch(lat, lon)
-        if u:
-            img_url = u
-            credit = f'{os.path.splitext(title.split(":", 1)[-1])[0]} — Wikimedia Commons'
+        raw = _satellite_photo(lat, lon, airport_type)
+        if raw:
+            credit = 'Satellite imagery © Esri — World Imagery'
 
-    if not img_url:
+    if not img_url and not raw:
         return blank
-    # download + cache + embed
+    # download (unless already rendered) + cache + embed
     try:
-        raw = _http_get(img_url)
-        mime = mimetypes.guess_type(img_url.split('?')[0])[0] or 'image/jpeg'
+        if img_url:
+            raw = _http_get(img_url)
+            mime = mimetypes.guess_type(img_url.split('?')[0])[0] or 'image/jpeg'
+        else:
+            mime = 'image/jpeg'
         ext = 'svg' if 'svg' in mime else ('png' if 'png' in mime else 'jpg')
         if ident:
             try:
@@ -889,7 +885,8 @@ def generate_pdf(payload, css_url, request_root):
     # Bonus: airport cover photo (graceful — '' hides the band).
     photo = _airport_photo((focus or {}).get('ident'),
                            payload.get('focusAirport') or (focus or {}).get('name'),
-                           (focus or {}).get('lat'), (focus or {}).get('lon'))
+                           (focus or {}).get('lat'), (focus or {}).get('lon'),
+                           airport_type=(focus or {}).get('type'))
 
     # ---- Render template + PDF ---------------------------------------------
     env = current_app.jinja_env
