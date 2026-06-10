@@ -1545,7 +1545,7 @@
                         <option value="training">Training (circular pattern A→A)</option>
                     </select>
                     <p id="trainingHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a pattern around the origin for a fixed duration (matched to the aircraft's training range). Energy per flight is capped at the usable battery.</p>
-                    <p id="circularHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a closed loop: Departure → stop(s) → Destination → back to Departure. Needs at least one stop — for a simple there-and-back, pick Retour.</p>
+                    <p id="circularHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a closed loop: Departure → stop(s) → back to Departure. Add at least one stop — the last stop is the loop's far point. For a simple there-and-back, pick Retour.</p>
                 </div>
 
                 <div class="field">
@@ -2363,7 +2363,10 @@
             if (typeof drawLiveRoute === 'function') drawLiveRoute();
         }
         window.setOrigin = function(ident) { pickAirport('origin', airportByIdent[ident]); map.closePopup(); };
-        window.setDest = function(ident) { pickAirport('destination', airportByIdent[ident]); map.closePopup(); };
+        window.setDest = function(ident) {
+            if (_isCircularTrip()) return window.setStop(ident);   // ring mode: every point is a stop
+            pickAirport('destination', airportByIdent[ident]); map.closePopup();
+        };
         // Set an airport as a manual stop. Creates a new stop field in the
         // form (or fills the first empty stop field if one exists), so the
         // map and the form stay in sync. plannedStops is updated via the
@@ -2603,6 +2606,14 @@
                 renderStops();
                 return;
             }
+            // Ring mode has no Destination field: the LAST filled stop is the loop's
+            // far point (the stored-destination ring contract). Derive the terminus
+            // from it before the chain is built.
+            if (_isCircularTrip()) {
+                const ids = [...document.querySelectorAll('#stopsContainer .stop-field .stop-input')]
+                    .map(i => i.dataset.ident).filter(Boolean);
+                selected.destination = ids.length ? (airportByIdent[ids[ids.length - 1]] || null) : null;
+            }
             const t = _terminus(); const plane = _selectedPlane();
             if (!t || !plane) { renderStops(); return; }
 
@@ -2613,6 +2624,7 @@
                 const apx = airportByIdent[ident]; if (!apx) return;
                 manual.push({ ident: apx.ident, name: apx.name, type: apx.type, lat: apx.latitude_deg, lon: apx.longitude_deg, iata_code: apx.iata_code || '', alternate_km: apx.alternate_km });
             });
+            if (_isCircularTrip()) manual.pop();   // the last stop IS the terminus — not an intermediate
             plannedSource = manual.length ? 'user' : 'auto';
 
             // Preserve manual stops, auto-fill each gap — the shared routing core
@@ -4169,8 +4181,10 @@
                 document.getElementById('result').classList.add('d-none');
                 errDiv.textContent = isTraining
                     ? 'Pick a departure airport — training flights loop around it.'
-                    : 'Please pick both airports from the suggestions list.';
-                errDiv.classList.remove('d-none'); syncUnset('origin'); if (!isTraining) syncUnset('destination'); return;
+                    : tripType === 'circular'
+                        ? 'A circular trip needs a departure and at least one stop — the last stop is the loop\'s far point.'
+                        : 'Please pick both airports from the suggestions list.';
+                errDiv.classList.remove('d-none'); syncUnset('origin'); if (!isTraining && tripType !== 'circular') syncUnset('destination'); return;
             }
             // Re-validate against the current model settings + chain BEFORE
             // calling the backend. The backend doesn't know about Model
@@ -4261,14 +4275,36 @@
             // and the model-settings toggle row are all irrelevant. Stop
             // FIELDS aren't destroyed (just hidden) so switching back to
             // one-way/retour restores the user's draft.
-            destField.classList.toggle('d-none', isTraining);
+            destField.classList.toggle('d-none', isTraining || isCircular);
             if (stopsRow) stopsRow.classList.toggle('d-none', isTraining);
             document.querySelector('.addstop-link-row')?.classList.toggle('d-none', isTraining);
             document.getElementById('stopsContainer')?.classList.toggle('d-none', isTraining);
             document.getElementById('stopsSection')?.classList.toggle('d-none', isTraining);
             help.classList.toggle('d-none', !isTraining);
             document.getElementById('circularHelp')?.classList.toggle('d-none', !isCircular);
-            destInput.required = !isTraining;
+            destInput.required = !(isTraining || isCircular);
+            if (isCircular) {
+                // Ring mode: the drafted Destination (if any) becomes the ring's last
+                // stop — the loop's far point is just a stop, there is no destination.
+                if (selected.destination && typeof _addStopField === 'function') {
+                    const d = selected.destination;
+                    const already = [...document.querySelectorAll('#stopsContainer .stop-input')].some(i => i.dataset.ident === d.ident);
+                    if (!already) _addStopField({ name: d.name, ident: d.ident });
+                }
+                destInput.value = '';
+            } else if (!isTraining && destInput.value === '') {
+                // Leaving ring mode: the ring's far point (last filled stop) becomes
+                // the Destination again so the draft survives the switch.
+                const inputs = [...document.querySelectorAll('#stopsContainer .stop-field .stop-input')].filter(i => i.dataset.ident);
+                const last = inputs[inputs.length - 1];
+                if (last && airportByIdent[last.dataset.ident]) {
+                    const apx = airportByIdent[last.dataset.ident];
+                    last.value = ''; last.dataset.ident = '';
+                    pickAirport('destination', apx);
+                } else {
+                    selected.destination = null;   // nothing to restore — force a fresh pick
+                }
+            }
             if (isTraining) {
                 selected.destination = null;
                 document.getElementById('trajInfo').classList.add('d-none');
