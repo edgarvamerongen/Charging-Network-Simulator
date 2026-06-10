@@ -71,6 +71,7 @@
     "name": "Den Helder Airport",
     "icao": "EHKD",
     "network": "NRG2FLY",
+    "status": "construction",
     "plugs": [
       { "connector": "GB/T", "power_kw": 22, "label": "Mobile Aircraft Charger" }
     ]
