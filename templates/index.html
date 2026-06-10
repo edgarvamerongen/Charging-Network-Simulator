@@ -3716,9 +3716,11 @@
             const arrivalSoc   = bd.arrivalSoc;
             const travelMin    = bd.flightMin + bd.enRouteMin;
             const gridKwh      = rechargeKwh * gridMul;
-            // Unit inline with the figure ("43 kWh"), matching the time tiles ("26 min") —
-            // not stacked below in a different style. fmtEnergy also scales to MWh.
-            document.getElementById('hlUsed').textContent = fmtEnergy(usedKwh);
+            // Energy: number on the first line, unit on the second — same type style,
+            // just stacked, so multi-digit figures never cram the column. fmtEnergy
+            // scales to MWh; split its "956 kWh" into the two lines.
+            const _eParts = fmtEnergy(usedKwh).split(' ');
+            document.getElementById('hlUsed').innerHTML = `${_eParts[0]}<br>${_eParts[1] || ''}`;
             document.getElementById('hlFlight').textContent = fmtDuration(travelMin);
             document.getElementById('hlTime').textContent = fmtDuration(chargeMin);
             // Sub-labels adapt to the trip context AND active model flags.
