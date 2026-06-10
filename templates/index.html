@@ -1123,8 +1123,8 @@
 
         /* F5: per-leg route pin — a route icon that smoothly expands into a brand
            label (distance · time · energy) on hover. */
-        .flight-pin-wrap { background: none; border: none; }
-        .flight-pin {
+        .leg-pin-wrap { background: none; border: none; }
+        .leg-pin {
             position: absolute;
             transform: translate(-50%, -50%);
             display: inline-flex;
@@ -1137,8 +1137,8 @@
             cursor: pointer;
             transition: padding .22s ease, border-color .22s ease, box-shadow .22s ease;
         }
-        .flight-pin-ico { width: 20px; height: 20px; flex: 0 0 auto; display: block; }
-        .flight-pin-text {
+        .leg-pin-ico { width: 20px; height: 20px; flex: 0 0 auto; display: block; }
+        .leg-pin-text {
             max-width: 0;
             overflow: hidden;
             white-space: nowrap;
@@ -1149,14 +1149,14 @@
             color: var(--brand-ink);
             transition: max-width .26s ease, opacity .2s ease .03s, margin-left .26s ease;
         }
-        .flight-pin:hover,
-        #map.flight-labels-open .flight-pin {
+        .leg-pin:hover,
+        #map.leg-labels-open .leg-pin {
             border-color: var(--brand-orange-3);
             box-shadow: 0 4px 12px rgba(255, 122, 0, .30);
             padding: 4px 9px 4px 5px;
         }
-        .flight-pin:hover .flight-pin-text,
-        #map.flight-labels-open .flight-pin-text { max-width: 220px; opacity: 1; margin-left: 6px; }
+        .leg-pin:hover .leg-pin-text,
+        #map.leg-labels-open .leg-pin-text { max-width: 220px; opacity: 1; margin-left: 6px; }
 
         /* A1 Step 2: NRG2fly charger markers — favicon teardrop floated above the
            airport dot so the dot's Dep/Dest/Stop popup stays clickable. */
@@ -1382,7 +1382,7 @@
         .stops-list .type-small { background: #fee2e2; color: #991b1b; }
         .stops-list .leg-dist { font-size: .7rem; color: var(--muted); justify-self: end; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .stops-error { color: var(--danger); font-size: .82rem; }
-        .stops-error button, #enableAllTypesBtn { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
+        .stops-error button, #enableAllTypesBtn, #enableNetworkBtn, #enableAllPoolsBtn { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
         .stops-error-inline { color: var(--danger); font-size: .78rem; }
         .stops-list .stop-removable { cursor: pointer; }
         .stops-list .stop-removable:hover { text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 1.5px; }
@@ -1453,8 +1453,8 @@
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">Route</div>
-                        <label class="opt-check"><input type="checkbox" id="flightLabelToggle" checked><span>Show flight labels</span></label>
-                        <label class="opt-check opt-sub" id="flightLabelExpandRow"><input type="checkbox" id="flightLabelExpand"><span>Expand labels</span></label>
+                        <label class="opt-check"><input type="checkbox" id="legLabelToggle" checked><span>Show leg labels</span></label>
+                        <label class="opt-check opt-sub" id="legLabelExpandRow"><input type="checkbox" id="legLabelExpand"><span>Expand labels</span></label>
                         <label class="opt-check"><input type="checkbox" id="fAlternates"><span>Alternates</span></label>
                     </div>
                     <div class="opt-group">
@@ -2265,7 +2265,7 @@
         let _routeEndpoints = [];             // [{lat,lon,label}] of the active route's airports
         let _routeChargerIdents = new Set();  // charger airports on the route → drawn blue, skipped by the orange layer
         let _routeKey = '';                   // change-detection so the markers only rebuild when the route/toggle changes
-        let _showFlightLabels = true;   // Map Options → Route → Show flight labels
+        let _showLegLabels = true;   // Map Options → Route → Show leg labels
         let _hideAirportsOnRoute = false;   // Map Options → hide the size-cluster airport dots while a route is drawn
         const clusters = {
             small_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
@@ -2444,10 +2444,11 @@
         // The live planner's WYSIWYG ident pool: NRG2fly charger sites are routable
         // whenever the network layer is SHOWN, regardless of their size class.
         // (Declutter is view-only and does not affect this set.)
+        function _fullNetworkIdents() { return new Set(Object.keys(nrgChargerDb || {})); }
         function _plannerAllowedIdents() {
             const t = document.getElementById('nrgChargerToggle');
             const netOn = !t || t.checked;
-            return netOn ? new Set(Object.keys(nrgChargerDb || {})) : new Set();
+            return netOn ? _fullNetworkIdents() : new Set();
         }
         function _routingOptions() {
             // Reserve margin is now exclusively handled by the Model settings
@@ -2640,37 +2641,49 @@
             if (b) b.addEventListener('click', () =>
                 document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } }));
         }
-        // True iff a size filter is OFF and turning the OFF one(s) on would actually make
-        // EVERY currently-failing leg routable — so we never show a dead remedy button.
+        // Which one-click remedy would actually route every failing leg?
+        //   'types'   → ticking the disabled size class(es) fixes it (network state as-is)
+        //   'network' → switching the charger layer on fixes it (types as-is)
+        //   'both'    → only the two together fix it
+        //   null      → nothing we can offer fixes it (the hard-fail copy is then truthful)
+        // Each remedy is probed with exactly the pool its click would produce, so the
+        // offered button always fixes the route and the hard-fail copy is always truthful.
         // Callers gate this behind plannedError, so it adds no planRoute work on success.
-        function _couldEnablingTypesRoute() {
+        function _noRouteRemedy() {
             const enabled  = _allowedTypes();
             const allTypes = [...document.querySelectorAll('.airport-filter')].map(cb => cb.value);
             const disabled = allTypes.filter(x => !enabled.includes(x));
-            if (!disabled.length) return false;
+            const netToggle = document.getElementById('nrgChargerToggle');
+            const netOn = !netToggle || netToggle.checked;
             const t = _terminus(); const plane = _selectedPlane();
-            if (!t || !plane) return false;
+            if (!t || !plane) return null;
             const maxLeg = _availableRangeKm(plane);
             const chain = [t.origin, ...plannedStops, t.dest];
             const segments = plannedStops.length
                 ? plannedLegIssues.map(i => [chain[i], chain[i + 1]])
                 : [[t.origin, t.dest]];
-            if (!segments.length) return false;
-            const allowed = enabled.concat(disabled);   // every size on
+            if (!segments.length) return null;
             // Exclude every airport already on the chain (matches recomputeRoute's
             // usedIdents) + the operator's removed-stop blacklist.
             const usedIdents = new Set(chain.map(p => p && p.ident).filter(Boolean));
             const filtered = allAirports.filter(ap => !usedIdents.has(ap.ident) && !_blacklistedStopIdents.has(ap.ident));
-            return segments.every(([a, b]) => {
-                if (!a || !b) return false;
-                const r = CNSRouting.planRoute({
-                    origin: a, destination: b, plane,
-                    allAirports: filtered, allowedTypes: allowed,
-                    allowedIdents: new Set(Object.keys(nrgChargerDb || {})),
-                    options: { ..._routingOptions(), maxLegKm: maxLeg },
+            // probe(types, idents) — returns true iff every failing segment routes with that pool.
+            function probe(types, idents) {
+                return segments.every(([a, b]) => {
+                    if (!a || !b) return false;
+                    const r = CNSRouting.planRoute({
+                        origin: a, destination: b, plane,
+                        allAirports: filtered, allowedTypes: types,
+                        allowedIdents: idents,
+                        options: { ..._routingOptions(), maxLegKm: maxLeg },
+                    });
+                    return !r.error;
                 });
-                return !r.error;
-            });
+            }
+            if (disabled.length && probe(allTypes, _plannerAllowedIdents())) return 'types';
+            if (!netOn && probe(enabled, _fullNetworkIdents()))               return 'network';
+            if (disabled.length && !netOn && probe(allTypes, _fullNetworkIdents())) return 'both';
+            return null;
         }
 
         function renderStops() {
@@ -2687,10 +2700,25 @@
             // Error path with no stops (algorithm couldn't route)
             if (plannedError && !plannedStops.length) {
                 section.classList.remove('d-none');
-                listEl.innerHTML = `<li class="stops-error">${plannedError}${_enableTypesBtnMarkup()}</li>`;
                 summaryEl.textContent = '';
                 hintEl.innerHTML = '';
-                _wireEnableTypesBtn();
+                const _remedy0 = _noRouteRemedy();
+                switch (_remedy0) {
+                    case 'types':
+                        listEl.innerHTML = `<li class="stops-error">${plannedError}${_enableTypesBtnMarkup()}</li>`;
+                        _wireEnableTypesBtn();
+                        break;
+                    case 'network':
+                        listEl.innerHTML = `<li class="stops-error">${plannedError} <button type="button" id="enableNetworkBtn">Show charger sites</button></li>`;
+                        (function() { const b = document.getElementById('enableNetworkBtn'); if (b) b.addEventListener('click', () => { const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
+                        break;
+                    case 'both':
+                        listEl.innerHTML = `<li class="stops-error">${plannedError} <button type="button" id="enableAllPoolsBtn">Enable all types + network</button></li>`;
+                        (function() { const b = document.getElementById('enableAllPoolsBtn'); if (b) b.addEventListener('click', () => { document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } }); const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
+                        break;
+                    default:
+                        listEl.innerHTML = `<li class="stops-error">${plannedError}</li>`;
+                }
                 return;
             }
             // No auto-stops needed — direct leg fits. We still render the
@@ -2741,16 +2769,25 @@
 
             // Hint / error line
             if (plannedError) {
-                // Offer the "Enable all types" remedy ONLY when a size filter is OFF and turning
-                // it on would route every failing leg. When it wouldn't (all sizes already on, or
-                // enabling them still can't bridge the gap), airport types aren't the blocker — the
-                // aircraft simply can't reach within range/reserves, so say THAT instead of the
-                // planner's generic "enable more airport types" (which reads wrong with all types on).
-                if (_couldEnablingTypesRoute()) {
-                    hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> ${_enableTypesBtnMarkup()}`;
-                    _wireEnableTypesBtn();
-                } else {
-                    hintEl.innerHTML = `<span class="stops-error-inline">No route within range — even with every airport type and the NRG2fly network, this aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</span>`;
+                // Offer a one-click remedy ONLY when it would actually fix every failing leg.
+                // Each remedy is probed with exactly the pool its click would produce, so the
+                // button is never dead and the hard-fail copy is always truthful.
+                const _remedy = _noRouteRemedy();
+                switch (_remedy) {
+                    case 'types':
+                        hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> ${_enableTypesBtnMarkup()}`;
+                        _wireEnableTypesBtn();
+                        break;
+                    case 'network':
+                        hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> <button type="button" id="enableNetworkBtn">Show charger sites</button>`;
+                        (function() { const b = document.getElementById('enableNetworkBtn'); if (b) b.addEventListener('click', () => { const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
+                        break;
+                    case 'both':
+                        hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> <button type="button" id="enableAllPoolsBtn">Enable all types + network</button>`;
+                        (function() { const b = document.getElementById('enableAllPoolsBtn'); if (b) b.addEventListener('click', () => { document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } }); const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
+                        break;
+                    default:
+                        hintEl.innerHTML = `<span class="stops-error-inline">No route within range — even with every airport type and the NRG2fly network, this aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</span>`;
                 }
             } else {
                 hintEl.textContent = plannedSource === 'auto'
@@ -3280,29 +3317,33 @@
         const _nrgToggle = document.getElementById('nrgChargerToggle');
         // Toggling the network swaps each route airport between halo (on) and plain
         // blue pin (off), so force setRoute to re-evaluate (reset the change key).
-        if (_nrgToggle) _nrgToggle.addEventListener('change', () => { _routeKey = ''; setRoute(_routeEndpoints); });
-        // Map Options → Route → Show flight labels (per-leg distance/time/energy pins).
-        const _flightLabelToggle = document.getElementById('flightLabelToggle');
-        // Map Options → Route → Expand labels: keep every flight label open (showing
-        // its distance · time · energy) instead of only on hover. Pure CSS class on
-        // #map, so it applies to all current and future leg pins — no redraw needed.
-        const _flightLabelExpand = document.getElementById('flightLabelExpand');
-        const _flightLabelExpandRow = document.getElementById('flightLabelExpandRow');
-        const _mapEl = document.getElementById('map');
-        // The Expand sub-option only makes sense while labels are shown — grey it out
-        // (and clear the open state) whenever "Show flight labels" is off.
-        function _syncFlightLabelExpandState() {
-            const labelsOn = !_flightLabelToggle || _flightLabelToggle.checked;
-            if (_flightLabelExpandRow) _flightLabelExpandRow.classList.toggle('is-disabled', !labelsOn);
-            if (_mapEl) _mapEl.classList.toggle('flight-labels-open', labelsOn && !!_flightLabelExpand && _flightLabelExpand.checked);
-        }
-        if (_flightLabelToggle) _flightLabelToggle.addEventListener('change', (e) => {
-            _showFlightLabels = e.target.checked;
-            _syncFlightLabelExpandState();
+        if (_nrgToggle) _nrgToggle.addEventListener('change', () => {
+            _routeKey = ''; setRoute(_routeEndpoints);
+            if (typeof smartReplan === 'function')   smartReplan();
             if (typeof drawLiveRoute === 'function') drawLiveRoute();
         });
-        if (_flightLabelExpand) _flightLabelExpand.addEventListener('change', _syncFlightLabelExpandState);
-        _syncFlightLabelExpandState();
+        // Map Options → Route → Show leg labels (per-leg distance/time/energy pins).
+        const _legToggle = document.getElementById('legLabelToggle');
+        // Map Options → Route → Expand labels: keep every leg label open (showing
+        // its distance · time · energy) instead of only on hover. Pure CSS class on
+        // #map, so it applies to all current and future leg pins — no redraw needed.
+        const _legExpand = document.getElementById('legLabelExpand');
+        const _legExpandRow = document.getElementById('legLabelExpandRow');
+        const _mapEl = document.getElementById('map');
+        // The Expand sub-option only makes sense while labels are shown — grey it out
+        // (and clear the open state) whenever "Show leg labels" is off.
+        function _syncLegExpandState() {
+            const labelsOn = !_legToggle || _legToggle.checked;
+            if (_legExpandRow) _legExpandRow.classList.toggle('is-disabled', !labelsOn);
+            if (_mapEl) _mapEl.classList.toggle('leg-labels-open', labelsOn && !!_legExpand && _legExpand.checked);
+        }
+        if (_legToggle) _legToggle.addEventListener('change', (e) => {
+            _showLegLabels = e.target.checked;
+            _syncLegExpandState();
+            if (typeof drawLiveRoute === 'function') drawLiveRoute();
+        });
+        if (_legExpand) _legExpand.addEventListener('change', _syncLegExpandState);
+        _syncLegExpandState();
         // Map Options → hide the size-cluster airport dots the moment a route is drawn.
         const _hideApToggle = document.getElementById('hideAirportsOnRoute');
         if (_hideApToggle) _hideApToggle.addEventListener('change', (e) => {
@@ -3381,7 +3422,7 @@
         // Uses the backend leg metrics when present (after Simulate); otherwise
         // estimates from geometry + the selected aircraft so the live preview
         // labels too. Retour legs are labelled once (outbound only).
-        function _flightLabelText(dist, timeH, energy) {
+        function _legLabelText(dist, timeH, energy) {
             const parts = [];
             if (dist != null)            parts.push(typeof fmtDist === 'function' ? fmtDist(dist) : Math.round(dist) + ' km');
             if (timeH != null && timeH > 0)   parts.push(typeof fmtDuration === 'function' ? fmtDuration(timeH * 60) : Math.round(timeH * 60) + ' min');
@@ -3464,8 +3505,8 @@
         function _engineProfileForTrip(trip, getTargetSoc) {
             return (window.CNSFlight && CNSFlight.profileForTrip) ? CNSFlight.profileForTrip(trip, { getTargetSoc }) : null;
         }
-        function addFlightLabel(a, b, leg) {
-            if (!_showFlightLabels) return;   // hidden via Map Options → Route
+        function addLegLabel(a, b, leg) {
+            if (!_showLegLabels) return;   // hidden via Map Options → Route
             let dist, timeH, energy;
             if (leg && leg.distKm != null) {
                 // Engine leg (CNSFlight.legs[i]): final values — geographic distance,
@@ -3481,15 +3522,15 @@
                 timeH  = leg && leg.flight_time_h != null ? leg.flight_time_h * _r : e.timeH;
                 energy = leg && leg.energy_kwh    != null ? leg.energy_kwh    * _r : e.energy;
             }
-            const txt = _flightLabelText(dist, timeH, energy);
+            const txt = _legLabelText(dist, timeH, energy);
             if (!txt) return;
             // A small route icon at the leg midpoint that expands into a brand
             // label with the leg data on hover.
             const m = L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], {
                 icon: L.divIcon({
-                    className: 'flight-pin-wrap', iconSize: null,
-                    html: '<div class="flight-pin"><img class="flight-pin-ico" src="/pics/route-icon.svg" alt="leg">'
-                        + '<span class="flight-pin-text">' + txt + '</span></div>',
+                    className: 'leg-pin-wrap', iconSize: null,
+                    html: '<div class="leg-pin"><img class="leg-pin-ico" src="/pics/route-icon.svg" alt="leg">'
+                        + '<span class="leg-pin-text">' + txt + '</span></div>',
                 }),
                 keyboard: false, riseOnHover: true,
             }).addTo(map);
@@ -3646,7 +3687,7 @@
                         const seg = L.polyline([a, b], legStyle(i));
                         seg.addTo(map); routeLayers.push(seg);
                     }
-                    addFlightLabel(a, b, _prof.legs[i]);   // F5: per-leg label (outbound only) — engine leg
+                    addLegLabel(a, b, _prof.legs[i]);   // F5: per-leg label (outbound only) — engine leg
                 }
                 if (isRetour) {
                     // Return arcs — same per-leg pattern, bowed the other way,
@@ -3674,7 +3715,7 @@
                 // (data.flight_time_h, a one-leg-label/round-trip-time quirk). The engine's
                 // one-leg time is correct but would halve the label on flag flip — deferred
                 // fix to keep this migration behaviour-neutral. One-way single-leg uses the engine.
-                addFlightLabel(p1, p2, (_prof && data.trip_type !== 'retour' && _prof.legs[0]) || (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
+                addLegLabel(p1, p2, (_prof && data.trip_type !== 'retour' && _prof.legs[0]) || (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
             }
             lastRouteChain = [selected.origin, ...plannedStops, selected.destination].filter(p => p && p.ident);
             refreshAlternates();
