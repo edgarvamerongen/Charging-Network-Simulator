@@ -49,9 +49,11 @@ window.CNSSettings = (function () {
     // 5C hook (per-aircraft `c_rate` retired from the catalog). Bumping the key
     // retires browsers' old blobs — including any persisted 2.0C cap — so
     // everyone picks up the new defaults on next load.
-    const KEY = 'cns_settings_v3';
+    // v4: landing-reserve default drops 30% → 20%; the catalog ranges in planes.json
+    // are recalibrated against it (range_km = familiar available range ÷ 0.8).
+    const KEY = 'cns_settings_v4';
     const DEFAULTS = Object.freeze({
-        landingReserve:    { enabled: true,  minLandingSoc: 0.30 },   // 0..1
+        landingReserve:    { enabled: true,  minLandingSoc: 0.20 },   // 0..1 — planes.json ranges are calibrated to this default
         alternateReserve:  { enabled: false },                       // divert-to-nearest-airport reserve; uses each airport's pre-baked alternate_km
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
         chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint

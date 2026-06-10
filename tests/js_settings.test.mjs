@@ -48,7 +48,7 @@ console.log('CNSSettings (static/settings.js) — node harness\n');
 // ---- v3 defaults: reserve + taper ON; routing padding, SID/STAR, efficiency OFF ----
 test('v3 defaults: reserve+taper ON, routing/SID-STAR/efficiency OFF', () => {
   const { S } = loadSettings();
-  assert.ok(approx(S.usableFraction({}), 0.70), 'reserve default 30% -> usable 0.70');
+  assert.ok(approx(S.usableFraction({}), 0.80), 'reserve default 20% -> usable 0.80');
   assert.equal(S.routingFactor(), 1.0, 'routing padding OFF by default -> identity');
   assert.equal(S.gridDemandFactor(), 1.0, 'efficiency off by default -> identity');
   assert.ok(S.chargeTimeMin(100, 100, 225) > 60, 'taper on -> slower than the 60min linear');

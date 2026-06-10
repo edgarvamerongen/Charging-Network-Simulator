@@ -135,8 +135,10 @@ let pass = 0, fail = 0, deltas = 0;
 (function padGatesMaxRange() {
   const S = loadStack();
   S.CNSSettings.reset();
-  S.CNSSettings.save({ routingPadding: { enabled: false } });   // route = 1 → distKm = rawKm + sid
-  const plane = { id: 'test_mid', name: 'Test Mid', battery_kwh: 200, range_km: 600, speed_kmh: 300, c_rate: 2 };
+  // Pin the reserve (don't inherit the default) + size the plane so fullAvail
+  // (range × 0.8 = 416 km) brackets the EHAM→LFPG leg (~399 km): bare fits, +30 tips.
+  S.CNSSettings.save({ routingPadding: { enabled: false }, landingReserve: { enabled: true, minLandingSoc: 0.20 } });   // route = 1 → distKm = rawKm + sid
+  const plane = { id: 'test_mid', name: 'Test Mid', battery_kwh: 200, range_km: 520, speed_kmh: 300, c_rate: 2 };
   const run = () => S.CNSFlight.simulateTrip(plane, [wp('EHAM'), wp('LFPG')], { tripType: 'one-way', getChargerKw: () => 250 });
   S.CNSSettings.save({ sidStarPadding: { enabled: false } });
   const noPad = run();

@@ -161,7 +161,7 @@ class TestRejections(unittest.TestCase):
 
     def test_at_range_boundary_accepted(self):
         # Exactly range_km is allowed (strict >).
-        r = self.sim.calculate_flight_by_distance("pipistrel_velis", 100.0, "aircraft_charger", "one-way")
+        r = self.sim.calculate_flight_by_distance("pipistrel_velis", VELIS["range_km"], "aircraft_charger", "one-way")
         self.assertTrue(r.get("success"), r)
 
     def test_unknown_plane(self):

@@ -4,9 +4,9 @@
     "name": "Velis Electro",
     "seats": 2,
     "battery_kwh": 22,
-    "range_km": 100,
+    "range_km": 87.5,
     "speed_kmh": 150,
-    "training_range_km": 100,
+    "training_range_km": 87.5,
     "image": "pipistrel.jpg",
     "svg": "pepistrel.svg",
     "default_charger_id": "dc_22"
@@ -17,7 +17,7 @@
     "seats": 6,
     "load_kg": 500,
     "battery_kwh": 225,
-    "range_km": 571,
+    "range_km": 500,
     "speed_kmh": 250,
     "image": "beta.png",
     "svg": "beta.svg"
@@ -28,7 +28,7 @@
     "seats": 9,
     "load_kg": 1000,
     "battery_kwh": 600,
-    "range_km": 571,
+    "range_km": 500,
     "speed_kmh": 400,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg"
@@ -39,7 +39,7 @@
     "seats": 4,
     "load_kg": 600,
     "battery_kwh": 600,
-    "range_km": 786,
+    "range_km": 687.5,
     "speed_kmh": 400,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg"
@@ -50,10 +50,13 @@
     "seats": 90,
     "load_kg": 9000,
     "battery_kwh": 14000,
-    "range_km": 1143,
+    "range_km": 1000,
     "speed_kmh": 720,
     "image": "elysian.jpg",
     "svg": "vaeridion.svg",
-    "simultaneous_charging": { "enabled": true, "max": 2 }
+    "simultaneous_charging": {
+      "enabled": true,
+      "max": 2
+    }
   }
 ]
