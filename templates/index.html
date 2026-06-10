@@ -758,6 +758,15 @@
         /* =========================================================
            Floating map controls (bottom-right, stacked)
            ========================================================= */
+        .clear-route-btn {
+            position: fixed; bottom: 86px; right: 16px; z-index: 25;
+            border: 1px solid var(--panel-border); border-radius: 999px;
+            background: var(--panel-strong); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            color: var(--ink-soft); font-size: .78rem; font-weight: 700;
+            padding: 6px 12px; cursor: pointer; box-shadow: 0 2px 8px rgba(43,47,90,.12);
+            transition: background .15s, color .15s;
+        }
+        .clear-route-btn:hover { background: #fff; color: var(--danger); }
         .map-controls {
             position: fixed; bottom: 16px; right: 16px; z-index: 10;
             display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
@@ -1438,6 +1447,9 @@
 <body>
     <!-- map is the full-viewport canvas, behind everything else -->
     <div id="map"></div>
+    <!-- Floating escape hatch: visible only while a route is drawn; click = full
+         plan reset (same as the form's ↺). Esc does the same (wired below). -->
+    <button type="button" id="clearRouteBtn" class="clear-route-btn d-none" title="Clear the route (Esc)">✕ Clear route</button>
 
     <!-- top bar -->
     <header class="topbar">
@@ -1471,7 +1483,7 @@
                         <label class="opt-check"><input type="checkbox" id="flightLabelToggle" checked><span>Leg labels</span></label>
                         <label class="opt-check opt-sub" id="flightLabelExpandRow"><input type="checkbox" id="flightLabelExpand" checked><span>Expand labels</span></label>
                         <label class="opt-check"><input type="checkbox" id="fAlternates"><span>Alternates</span></label>
-                        <label class="opt-check"><input type="checkbox" id="hideAirportsOnRoute"><span>Declutter when route is planned</span></label>
+                        <label class="opt-check"><input type="checkbox" id="hideAirportsOnRoute"><span>Hide airports when route is planned</span></label>
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">Basemap</div>
@@ -2554,7 +2566,7 @@
                 // lookup without them — without this their reserve would fall back to 0 and the
                 // planner would under-plan a leg that validateRoute then flags (inconsistent).
                 origin: { ident: (airportByIdent[selected.origin.ident] || selected.origin).ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg, alternate_km: (airportByIdent[selected.origin.ident] || selected.origin).alternate_km },
-                dest:   { ident: (airportByIdent[selected.destination.ident] || selected.destination).ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg, alternate_km: (airportByIdent[selected.destination.ident] || selected.destination).alternate_km }
+                dest:   { ident: (airportByIdent[selected.destination.ident] || selected.destination).ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg, alternate_km: (airportByIdent[selected.destination.ident] || selected.destination).alternate_km, type: (airportByIdent[selected.destination.ident] || selected.destination).type }
             };
         }
 
@@ -2820,8 +2832,13 @@
                 // strike-through on hover (replaces the old × button). Only nodes that map into
                 // plannedStops are removable — on a circular ring the destination and closing-leg
                 // auto-stops sit past that range (closing stops re-plan via the route fields).
-                const removable = !isTerm && (i - 1) < plannedStops.length;
-                const nameOpen = removable ? `<strong class="stop-removable" data-stop="${i - 1}" title="Click to remove this stop">` : '<strong>';
+                const isRingFar = _isCircularTrip() && i === plannedStops.length + 1;
+                const removable = (!isTerm && (i - 1) < plannedStops.length) || isRingFar;
+                const nameOpen = removable
+                    ? (isRingFar
+                        ? `<strong class="stop-removable" data-ring-far="1" title="Click to remove this stop — the previous stop becomes the loop's far point">`
+                        : `<strong class="stop-removable" data-stop="${i - 1}" title="Click to remove this stop">`)
+                    : '<strong>';
                 // Always 5 grid cells (step · name · alt · size · range) so the columns line up.
                 return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span>${nameOpen}${escHtml(wp.name)}</strong>${ah.badge || '<span></span>'}${tagHtml || '<span></span>'}${legDist || '<span></span>'}</li>`;
             }).join('');
@@ -2888,6 +2905,16 @@
             //                  loop — × did nothing because the planner
             //                  re-filled the same airport).
             listEl.querySelectorAll('.stop-removable').forEach(el => el.addEventListener('click', () => {
+                if (el.dataset.ringFar) {
+                    // The ring's far point IS the last filled stop field — remove that
+                    // field; the planner re-derives the far point from the new last stop.
+                    const filled = [...document.querySelectorAll('#stopsContainer .stop-field .stop-input')].filter(i => i.dataset.ident);
+                    const last = filled[filled.length - 1];
+                    if (last) { last.closest('.stop-field').remove(); _renumberStops(); }
+                    smartReplan();
+                    drawLiveRoute();
+                    return;
+                }
                 const idx = +el.dataset.stop;
                 const removed = plannedStops[idx];
                 if (removed && removed.ident) {
@@ -3152,6 +3179,16 @@
             renderStops();
             clearRoute(); setRoute([]);   // route gone → revert any blue route teardrops to orange
         });
+        // Escape hatch wiring: the × pill mirrors planReset, and Esc does the same
+        // when nothing else (autocomplete, modal, tour) wants the key.
+        document.getElementById('clearRouteBtn').addEventListener('click', () => document.getElementById('planReset').click());
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            if (document.querySelector('.ac-list:not(.d-none)')) return;          // autocomplete eats Esc
+            if (document.querySelector('.modal.show, .driver-active')) return;    // modals/tour own Esc
+            if (!_routeEndpoints.length) return;                                  // nothing to escape
+            document.getElementById('planReset').click();
+        });
         // (advReserve was removed when the global Model settings took over reserve handling)
         // Switching planes re-plans the route (range changes auto-stops) AND must
         // redraw the map — recomputeRoute only updates the stop chain + validation.
@@ -3335,7 +3372,7 @@
             return !!(cb && cb.checked);
         }
         // Declutter ALL non-route layers (size-cluster airport dots/bubbles + NRG2fly
-        // network layer) when the "Declutter when route is planned" option (ROUTE group)
+        // network layer) when the "Hide airports when route is planned" option (ROUTE group)
         // is on AND a route is drawn, so only the route reads.
         // refreshNrgChargerLayer() guards the network layer; this function handles the
         // size-cluster groups. The route's own markers are drawn separately and stay too.
@@ -3479,7 +3516,7 @@
         function flightLayers(p1, p2, tripType) {
             if (tripType === 'retour') return [
                 L.polyline(arcPoints(p1, p2, BEND), { color: '#0d6efd', weight: 3 }),
-                L.polyline(arcPoints(p1, p2, -BEND), { color: '#198754', weight: 3, dashArray: '8 6' })
+                L.polyline(arcPoints(p1, p2, -BEND), { color: '#198754', weight: 2, dashArray: '8 6' })
             ];
             return [L.polyline([p1, p2], { color: 'blue', weight: 4 })];
         }
@@ -3687,6 +3724,7 @@
             if (key === _routeKey) return;
             _routeKey = key;
             _routeEndpoints = endpoints;
+            document.getElementById('clearRouteBtn')?.classList.toggle('d-none', !endpoints.length);
             // EVERY route airport's charger is pulled from the orange layer: with the
             // network on, anything on the active route — dep, dest or stop — reads as
             // the blue teardrop, never the standard orange network pin.
@@ -3733,7 +3771,7 @@
             // hop exceeds the aircraft's range. Default blue otherwise.
             const issueSet = new Set(Array.isArray(data.legIssues) ? data.legIssues : []);
             const legStyle = (i) => issueSet.has(i)
-                ? { color: '#dc2626', weight: 3.5, dashArray: '6 4', opacity: .95 }
+                ? { color: '#dc2626', weight: 2, dashArray: '6 4', opacity: .95 }
                 : { color: '#0d6efd', weight: 3 };
             // Auto-zoom is OFF for live preview (data.fitBounds === false). It
             // was distracting during planning — the map would jump on every
