@@ -1445,7 +1445,6 @@
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
-                        <label class="opt-check"><input type="checkbox" id="hideAirportsOnRoute"><span>Hide when route is planned</span></label>
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">NRG2fly network</div>
@@ -1456,6 +1455,7 @@
                         <label class="opt-check"><input type="checkbox" id="flightLabelToggle" checked><span>Show flight labels</span></label>
                         <label class="opt-check opt-sub" id="flightLabelExpandRow"><input type="checkbox" id="flightLabelExpand"><span>Expand labels</span></label>
                         <label class="opt-check"><input type="checkbox" id="fAlternates"><span>Alternates</span></label>
+                        <label class="opt-check"><input type="checkbox" id="hideAirportsOnRoute"><span>Declutter when route is planned</span></label>
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">Basemap</div>
@@ -3287,6 +3287,10 @@
         // the single source of their dot — no duplicates and the OR is exact.
         function refreshNrgChargerLayer() {
             nrgChargerLayer.clearLayers();
+            // Declutter: with a route on screen and the toggle set, the network layer
+            // hides like the size clusters — the route keeps its own blue teardrops.
+            // View-only: the planner pool reads the FILTER state, never this.
+            if (_hideAirportsOnRoute && _routeEndpoints.length > 0) return;
             const t = document.getElementById('nrgChargerToggle');
             const netOn = !t || t.checked;
             const pin = '<span class="nrg-pin-head"><img class="nrg-pin-ico" src="/pics/logos/NRG2fly_icon_circle_inv.png" alt=""></span><span class="nrg-pin-tail"></span>';
@@ -3349,6 +3353,7 @@
         if (_hideApToggle) _hideApToggle.addEventListener('change', (e) => {
             _hideAirportsOnRoute = e.target.checked;
             _applyAirportVisibility();
+            refreshNrgChargerLayer();
         });
         document.querySelectorAll('.airport-filter').forEach(cb => cb.addEventListener('change', () => {
             _applyAirportVisibility();   // honour the size filter AND the hide-on-route option
