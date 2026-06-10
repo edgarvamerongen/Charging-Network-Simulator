@@ -994,7 +994,8 @@
             font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
             font-weight: 600; opacity: .8;
         }
-        .agg-hero-lbl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .agg-hero-lbl-row { display: flex; align-items: center; justify-content: space-between; gap: 4px 8px; flex-wrap: wrap; }
+        .agg-hero-rev { cursor: pointer; }
         /* Segmented day/year chips — both periods visible up front (the old ⇄ glyph
            read as decoration, so nobody discovered the toggle). */
         .rev-seg { display: inline-flex; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; padding: 2px; }
@@ -4437,7 +4438,7 @@
                                 <div class="agg-hero-num">${fmtEnergy(dailyEnergy * gridMul)}</div>
                                 <div class="agg-hero-sub">${gridMul > 1 ? `aircraft side ${fmtEnergy(dailyEnergy)}` : 'across all flights to/from here'}</div>
                             </div>
-                            <div class="agg-hero agg-hero-rev">
+                            <div class="agg-hero agg-hero-rev" role="button" tabindex="0" data-rev-toggle title="Switch daily / yearly">
                                 <div class="agg-hero-lbl-row">
                                     <div class="agg-hero-lbl">Potential revenue</div>
                                     <div class="rev-seg" role="group" aria-label="Revenue period">
@@ -4510,7 +4511,8 @@
                 </div>`;
             }).join('');
 
-            el.querySelectorAll('[data-rev-period]').forEach(b => b.addEventListener('click', () => { _dcRevenueYearly = b.dataset.revPeriod === 'year'; renderFolder(); }));
+            el.querySelectorAll('[data-rev-toggle]').forEach(c => c.addEventListener('click', () => { _dcRevenueYearly = !_dcRevenueYearly; renderFolder(); }));
+            el.querySelectorAll('[data-rev-period]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); _dcRevenueYearly = b.dataset.revPeriod === 'year'; renderFolder(); }));
             el.querySelectorAll('[data-rm]').forEach(btn => btn.addEventListener('click', () => { saveFolder(loadFolder().filter(t => t.id !== btn.dataset.rm)); renderFolder(); }));
             el.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openFlightEdit(btn.dataset.edit, btn.dataset.editIdent)));
             el.querySelectorAll('.trip-freq-n').forEach(inp => inp.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqN: Math.max(1, parseInt(e.target.value || '1', 10)) })));
