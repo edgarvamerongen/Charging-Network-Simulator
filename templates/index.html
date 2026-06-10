@@ -597,7 +597,11 @@
             margin-bottom: 14px;
             box-shadow: 0 6px 16px rgba(43,47,90,.25);
         }
-        .headline-box .big { font-size: 1.55rem; font-weight: 800; line-height: 1.1; margin: 3px 0; letter-spacing: -.02em; color: var(--brand-gold); }
+        /* Labels bottom-anchored in a fixed two-line box, values on one line — all
+           three figures share the same y whether the label wraps ("TOTAL TRAVEL
+           TIME") or not ("CHARGE TIME"). */
+        .headline-box .lbl { min-height: 2.4em; line-height: 1.2; display: flex; align-items: flex-end; justify-content: center; }
+        .headline-box .big { font-size: 1.3rem; font-weight: 800; line-height: 1.2; margin: 3px 0; letter-spacing: -.02em; color: var(--brand-gold); white-space: nowrap; }
         .headline-box .unit { font-size: .65rem; opacity: .7; letter-spacing: .04em; }
         .headline-box .col-4 { padding: 0 4px; }
         /* Revenue band — the headline business figure, larger than the stat tiles. */
@@ -606,9 +610,10 @@
             margin: 10px 8px 0; padding-top: 9px;
             display: flex; align-items: baseline; gap: 6px;
         }
-        .hl-rev-label { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .04em; font-weight: 700; white-space: nowrap; }
-        .hl-rev-amt { flex: 1 1 auto; text-align: center; font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: #34d399; }  /* centred amount; brand green (matches the success / Add-to-demand button), distinct from the gold stat tiles */
-        .hl-rev-sub { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: .58rem; opacity: .7; letter-spacing: .03em; }   /* units pinned to the right; ellipsises if space is tight */
+        /* No label — the green € amount IS the signal (tooltip names it). Amount left,
+           its derivation right, so the line reads "€81.60   ←   136 kWh · €0.60/kWh". */
+        .hl-rev-amt { flex: 0 0 auto; text-align: left; font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: #34d399; }  /* brand green (matches the success / Add-to-demand button), distinct from the gold stat tiles */
+        .hl-rev-sub { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: .62rem; opacity: .75; letter-spacing: .03em; }
         .lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
 
         .section-tag {
@@ -1233,7 +1238,13 @@
 
         /* Charging-stops toggle + advanced section + suggested route list */
         .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 8px; flex-wrap: wrap; }   /* narrow rail: the settings pill drops below the toggle instead of cramming */
-        .stops-switch { font-size: .85rem; color: var(--ink); }
+        /* `.field > label` (block + uppercase, for field captions) would override the
+           switch's flex layout and shout the label — restore the switch pattern here. */
+        .field > .stops-switch {
+            display: inline-flex; align-items: center; margin-bottom: 0;
+            font-size: .85rem; font-weight: 600; color: var(--ink);
+            text-transform: none; letter-spacing: normal;
+        }
         /* "+ Add stop" link between Departure and Destination inputs. Small,
            ghost-style affordance — doesn't compete with the primary form. */
         /* Right-aligned so Departure / Destination read as a single unit
@@ -1295,19 +1306,22 @@
         /* Compact "Model settings" trigger in the Plan a flight panel.
            Opens the same modal as the Demand Calculator's button. Sits
            where the old > Advanced details used to live. */
-        /* Icon-only Model-settings trigger: a large gear + the active-factor count.
-           No label — the tooltip/aria-label name it; the badge is the signal. */
+        /* Icon-only Model-settings trigger: a borderless gear with the active-factor
+           count as a notification dot on its corner. Tooltip/aria-label name it. */
         .modelset-btn {
-            background: none; border: 1px solid var(--panel-border);
-            border-radius: 999px; padding: 4px 9px;
-            color: var(--ink-soft);
-            cursor: pointer; transition: background .15s, border-color .15s, color .15s;
-            display: inline-flex; align-items: center; gap: 4px;
-            white-space: nowrap; flex: none;
+            position: relative; background: none; border: none;
+            width: 34px; height: 34px; border-radius: 50%; padding: 0;
+            display: inline-flex; align-items: center; justify-content: center;
+            color: var(--ink-soft); cursor: pointer; flex: none;
+            transition: background .15s, color .15s;
         }
-        .modelset-btn:hover { background: rgba(229,120,80,.10); border-color: rgba(229,120,80,.25); color: var(--ink); }
-        .modelset-btn .gear { font-size: 1.15rem; line-height: 1; opacity: .85; }
-        .modelset-btn .model-badge { margin-left: 0; }
+        .modelset-btn:hover { background: rgba(43,47,90,.08); color: var(--ink); }
+        .modelset-btn .gear { font-size: 1.3rem; line-height: 1; opacity: .85; }
+        .modelset-btn .model-badge {
+            position: absolute; top: -1px; right: -3px; margin: 0;
+            min-width: 16px; height: 16px; padding: 0 4px; font-size: .62rem;
+            border: 2px solid #fffbf4;   /* punch-out ring in the panel tone so the dot reads cleanly */
+        }
 
         /* Preference order — inline in the Suggested route section. */
         .stops-pref {
@@ -1634,8 +1648,7 @@
                 <!-- Headline revenue band: the airport's charging income, surfaced
                      prominently in the top block rather than buried in a collapsed
                      breakdown. Largest figure in the panel — it's the business case. -->
-                <div class="hl-revenue">
-                    <span class="hl-rev-label">Revenue potential</span>
+                <div class="hl-revenue" title="Revenue potential — the airport's charging income for this flight">
                     <span class="hl-rev-amt" id="hlRevenue">—</span>
                     <span class="hl-rev-sub" id="hlRevenueSub"></span>
                 </div>
@@ -2511,6 +2524,9 @@
         // (runs CNSRouting.planRoute once per segment, n−1 times for n
         // waypoints). When the toggle is off it's a direct flight; we still
         // validate so plannedLegIssues reflects current Model settings.
+        // True only while the recompute triggered by the user's own toggle-on click runs
+        // (set/cleared in the withStops change handler) — gates the no-stops auto-off.
+        let _stopsUserToggle = false;
         function recomputeRoute() {
             plannedStops = []; plannedError = null; plannedLegIssues = [];
             plannedSource = 'auto';
@@ -2544,9 +2560,10 @@
             plannedStops = chainRes.stops;
             // Direct leg fits the range and the user pinned no stops → charging stops are
             // moot, so the toggle switches itself off and reads as the answer ("no charging
-            // stops on this route"). Forcing a stop anyway still works via the map's
-            // "Add as stop" (setStop re-checks the toggle and pins a manual stop).
-            if (manual.length === 0 && plannedStops.length === 0) {
+            // stops on this route"). NOT when the user just flipped it on themselves
+            // (_stopsUserToggle) — snapping back inside their own click reads as broken.
+            // Forcing a stop anyway still works via the map's "Add as stop".
+            if (!_stopsUserToggle && manual.length === 0 && plannedStops.length === 0) {
                 const tg = document.getElementById('withStops');
                 if (tg.checked) { tg.checked = false; }
             }
@@ -2793,9 +2810,15 @@
         // the user can flip back without losing what they typed.
         document.getElementById('withStops').addEventListener('change', (e) => {
             if (e.target.checked) {
+                // Suppress the no-stops auto-off for THIS recompute: it runs synchronously
+                // inside the user's own click, and snapping the switch straight back off
+                // reads as a dead control. They get the "Direct flight — no stops needed"
+                // panel instead; the auto-off applies again on route/settings changes.
+                _stopsUserToggle = true;
                 _syncManualStops();
                 if (plannedStops.length) refreshAfterEdit();
                 else                     recomputeRoute();
+                _stopsUserToggle = false;
             } else {
                 plannedStops = []; plannedSource = 'auto'; plannedError = null; plannedLegIssues = [];
                 renderStops();
