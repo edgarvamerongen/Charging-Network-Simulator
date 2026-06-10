@@ -1172,7 +1172,10 @@
             background: #fff; border: 2px solid #fff;
             display: flex; align-items: center; justify-content: center;
         }
-        .nrg-pin-ico { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+        /* The favicon bitmap keeps a thin white margin around its disc — oversize the
+           image so the disc bleeds past the circular clip (no white sliver inside
+           the ring; the route variant's blue ring sits directly on the orange). */
+        .nrg-pin-ico { width: 116%; height: 116%; flex: none; object-fit: cover; }
         .nrg-pin-tail {
             width: 0; height: 0; margin-top: -1px;
             border-left: 6px solid transparent;
@@ -3491,14 +3494,17 @@
         // Redraw the route markers from _routeEndpoints + the toggle. Per the model:
         //   every route airport      → a blue dot (covers its orange catalog dot)
         //   departure & destination  → always also a teardrop (halo if charger+on, else pin)
+        //   stop on the network      → also the blue-halo teardrop when the layer is on
+        //                              (a route airport never shows the orange network pin)
         function refreshRouteEndpoints() {
             routeEndpointMarkers.forEach(m => map.removeLayer(m)); routeEndpointMarkers = [];
             const t = document.getElementById('nrgChargerToggle');
             const netOn = !t || t.checked;
             _routeEndpoints.forEach(e => {
                 const isEnd = e.role === 'dep' || e.role === 'dest';
-                routeEndpointMarkers.push(_routeBlueDot(e, !isEnd).addTo(map));   // dot carries the tip for stops
-                if (isEnd) routeEndpointMarkers.push(_routeTeardrop(e, netOn).addTo(map));
+                const halo = isEnd || (netOn && !!_chargerAt(e.lat, e.lon));
+                routeEndpointMarkers.push(_routeBlueDot(e, !halo).addTo(map));   // dot carries the tip when no teardrop covers it
+                if (halo) routeEndpointMarkers.push(_routeTeardrop(e, netOn).addTo(map));
             });
         }
         // Set the active route's airports (origin → stops → destination). The orange
@@ -3512,12 +3518,11 @@
             if (key === _routeKey) return;
             _routeKey = key;
             _routeEndpoints = endpoints;
-            // Only dep/dest chargers are pulled from the orange layer (they become the
-            // blue HALO). A charger used as a STOP keeps its orange network teardrop —
-            // it still gets the blue "used" dot, but no halo (halo reads as endpoint).
+            // EVERY route airport's charger is pulled from the orange layer: with the
+            // network on, anything on the active route — dep, dest or stop — reads as
+            // the blue teardrop, never the standard orange network pin.
             _routeChargerIdents = new Set(
-                endpoints.filter(e => e.role === 'dep' || e.role === 'dest')
-                         .map(e => _chargerAt(e.lat, e.lon)).filter(Boolean));
+                endpoints.map(e => _chargerAt(e.lat, e.lon)).filter(Boolean));
             refreshNrgChargerLayer();
             refreshRouteEndpoints();
             _applyAirportVisibility();   // hide/show the size-cluster dots per the route state + option
