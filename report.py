@@ -592,21 +592,35 @@ def _commons_filepath(filename):
 
 
 def _wikidata_image(ident, name):
-    """Resolve an airport to its Wikidata image (P18), by ICAO code (P239) first
-    — exact and language-independent — then by name. Returns a Commons FilePath
-    URL or ''. Each step is best-effort."""
+    """Resolve an airport to a representative photo, by ICAO code (P239) first
+    — exact and language-independent — then by name. Within each match, prefer
+    the linked Wikipedia ARTICLE's lead image (editorially curated; what a
+    reader sees as "the photo on the page") over Wikidata's P18 image property,
+    which is community-set and often a montage/crest (e.g. RAF Lakenheath).
+    Returns (image_url, credit) or ('', ''). Each step is best-effort."""
     # by ICAO — the canonical identifier (matches the right airport every time)
     if ident:
         try:
-            q = 'SELECT ?img WHERE { ?i wdt:P239 "%s" . ?i wdt:P18 ?img } LIMIT 1' % ident.replace('"', '')
+            q = ('SELECT ?img ?article WHERE { ?i wdt:P239 "%s" . '
+                 'OPTIONAL { ?i wdt:P18 ?img } '
+                 'OPTIONAL { ?article schema:about ?i ; '
+                 'schema:isPartOf <https://en.wikipedia.org/> } } LIMIT 1'
+                 % ident.replace('"', ''))
             j = _http_get('https://query.wikidata.org/sparql', accept_json=True,
                           params={'format': 'json', 'query': q})
             rows = (j.get('results') or {}).get('bindings') or []
             if rows:
-                return rows[0]['img']['value']   # already a Special:FilePath URL
+                article = (rows[0].get('article') or {}).get('value')
+                if article:
+                    url, credit = _wiki_lead_image(article.rsplit('/', 1)[-1])
+                    if url:
+                        return url, credit
+                img = (rows[0].get('img') or {}).get('value')
+                if img:
+                    return img, ''   # caller builds a Commons credit from the filename
         except Exception:
             pass
-    # by name — fuzzy entity search; first hit that carries an image
+    # by name — fuzzy entity search; same preference per hit
     if name:
         try:
             s = _http_get('https://www.wikidata.org/w/api.php', accept_json=True,
@@ -616,15 +630,36 @@ def _wikidata_image(ident, name):
             if ids:
                 e = _http_get('https://www.wikidata.org/w/api.php', accept_json=True,
                               params={'action': 'wbgetentities', 'ids': '|'.join(ids),
-                                      'props': 'claims', 'format': 'json'})
+                                      'props': 'claims|sitelinks', 'format': 'json'})
                 ents = e.get('entities') or {}
                 for i in ids:
-                    p18 = ((ents.get(i) or {}).get('claims') or {}).get('P18')
+                    ent = ents.get(i) or {}
+                    title = ((ent.get('sitelinks') or {}).get('enwiki') or {}).get('title')
+                    if title:
+                        url, credit = _wiki_lead_image(title)
+                        if url:
+                            return url, credit
+                    p18 = (ent.get('claims') or {}).get('P18')
                     if p18:
-                        return _commons_filepath(p18[0]['mainsnak']['datavalue']['value'])
+                        return _commons_filepath(p18[0]['mainsnak']['datavalue']['value']), ''
         except Exception:
             pass
-    return ''
+    return '', ''
+
+
+def _wiki_lead_image(title):
+    """The lead (infobox) image of an English Wikipedia article, via the REST
+    page summary. Returns (image_url, credit) or ('', '')."""
+    try:
+        j = _http_get('https://en.wikipedia.org/api/rest_v1/page/summary/'
+                      + urllib.parse.quote(str(title).replace(' ', '_'), safe=''),
+                      accept_json=True)
+        src = (j.get('originalimage') or j.get('thumbnail') or {}).get('source')
+        if src:
+            return src, f'{j.get("title", title)} — Wikipedia'
+    except Exception:
+        pass
+    return '', ''
 
 
 def _commons_geosearch(lat, lon):
@@ -691,10 +726,10 @@ def _airport_photo(ident, name, lat, lon):
     if not AIRPORT_PHOTO_WIKIMEDIA:
         return blank
 
-    # 2) Wikidata image — by ICAO, then by name
-    img_url = _wikidata_image(ident, name)
-    credit = ''
-    if img_url:
+    # 2) Wikidata-resolved image — by ICAO, then by name (article lead image
+    #    preferred; P18 fallback comes back credit-less)
+    img_url, credit = _wikidata_image(ident, name)
+    if img_url and not credit:
         fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')
         credit = f'{os.path.splitext(fn)[0]} — Wikimedia Commons'
     # 3) Commons geosearch by coordinates (photo > map > svg)
