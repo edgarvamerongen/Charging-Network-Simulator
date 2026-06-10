@@ -597,11 +597,12 @@
             margin-bottom: 14px;
             box-shadow: 0 6px 16px rgba(43,47,90,.25);
         }
-        /* Labels bottom-anchored in a fixed two-line box, values on one line — all
-           three figures share the same y whether the label wraps ("TOTAL TRAVEL
-           TIME") or not ("CHARGE TIME"). */
-        .headline-box .lbl { min-height: 2.4em; line-height: 1.2; display: flex; align-items: flex-end; justify-content: center; }
-        .headline-box .big { font-size: 1.3rem; font-weight: 800; line-height: 1.2; margin: 3px 0; letter-spacing: -.02em; color: var(--brand-gold); white-space: nowrap; }
+        /* Every tile shares the same rhythm: labels START at the same y in a fixed
+           two-line box (so "CHARGE TIME" sits level with the wrapped labels), and the
+           values start at the same y below it. A value may wrap its unit onto a
+           second line when the column is tight ("324 / kWh", "4h / 18min"). */
+        .headline-box .lbl { min-height: 2.4em; line-height: 1.2; display: flex; align-items: flex-start; justify-content: center; }
+        .headline-box .big { font-size: 1.3rem; font-weight: 800; line-height: 1.15; margin: 3px 0; letter-spacing: -.02em; color: var(--brand-gold); }
         .headline-box .unit { font-size: .65rem; opacity: .7; letter-spacing: .04em; }
         .headline-box .col-4 { padding: 0 4px; }
         /* Revenue band — the headline business figure, larger than the stat tiles. */
@@ -1306,19 +1307,20 @@
         /* Compact "Model settings" trigger in the Plan a flight panel.
            Opens the same modal as the Demand Calculator's button. Sits
            where the old > Advanced details used to live. */
-        /* Icon-only Model-settings trigger: a borderless gear with the active-factor
-           count as a notification dot on its corner. Tooltip/aria-label name it. */
+        /* Model-settings trigger: borderless ghost pill — gear + label, with the
+           active-factor count as a notification dot on the button's corner. */
         .modelset-btn {
             position: relative; background: none; border: none;
-            width: 34px; height: 34px; border-radius: 50%; padding: 0;
-            display: inline-flex; align-items: center; justify-content: center;
-            color: var(--ink-soft); cursor: pointer; flex: none;
+            border-radius: 999px; padding: 5px 10px;
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: .78rem; font-weight: 600; color: var(--ink-soft);
+            cursor: pointer; flex: none; white-space: nowrap;
             transition: background .15s, color .15s;
         }
         .modelset-btn:hover { background: rgba(43,47,90,.08); color: var(--ink); }
-        .modelset-btn .gear { font-size: 1.3rem; line-height: 1; opacity: .85; }
+        .modelset-btn .gear { font-size: 1.15rem; line-height: 1; opacity: .85; }
         .modelset-btn .model-badge {
-            position: absolute; top: -1px; right: -3px; margin: 0;
+            position: absolute; top: -4px; right: -2px; margin: 0;
             min-width: 16px; height: 16px; padding: 0 4px; font-size: .62rem;
             border: 2px solid #fffbf4;   /* punch-out ring in the panel tone so the dot reads cleanly */
         }
@@ -1560,8 +1562,8 @@
                     <!-- Icon-only Model settings trigger (gear + active-factor count):
                          same modal as the Demand Calculator — operators can tweak
                          model factors while planning. -->
-                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" aria-label="Model settings" title="Open Model settings — model factors cascade through the planner and result panel">
-                        <span class="gear" aria-hidden="true">⚙</span>
+                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Open Model settings — model factors cascade through the planner and result panel">
+                        <span class="gear" aria-hidden="true">⚙</span> Model settings
                         <span id="planModelBadge" class="model-badge d-none">0</span>
                     </button>
                 </div>
