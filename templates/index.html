@@ -2441,6 +2441,14 @@
         function _allowedTypes() {
             return [...document.querySelectorAll('.airport-filter')].filter(cb => cb.checked).map(cb => cb.value);
         }
+        // The live planner's WYSIWYG ident pool: NRG2fly charger sites are routable
+        // whenever the network layer is SHOWN, regardless of their size class.
+        // (Declutter is view-only and does not affect this set.)
+        function _plannerAllowedIdents() {
+            const t = document.getElementById('nrgChargerToggle');
+            const netOn = !t || t.checked;
+            return netOn ? new Set(Object.keys(nrgChargerDb || {})) : new Set();
+        }
         function _routingOptions() {
             // Reserve margin is now exclusively handled by the Model settings
             // (landing-reserve toggle, with per-aircraft min_landing_soc). The
@@ -2575,6 +2583,7 @@
             const chainRes = CNSRouting.planChain({
                 origin: t.origin, dest: t.dest, manualStops: manual, plane,
                 allowedTypes: _allowedTypes(), allAirports,
+                allowedIdents: _plannerAllowedIdents(),
                 blacklist: _blacklistedStopIdents,
                 maxLegKm: _availableRangeKm(plane),
                 options: _routingOptions(),
@@ -2657,6 +2666,7 @@
                 const r = CNSRouting.planRoute({
                     origin: a, destination: b, plane,
                     allAirports: filtered, allowedTypes: allowed,
+                    allowedIdents: new Set(Object.keys(nrgChargerDb || {})),
                     options: { ..._routingOptions(), maxLegKm: maxLeg },
                 });
                 return !r.error;
@@ -2740,7 +2750,7 @@
                     hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> ${_enableTypesBtnMarkup()}`;
                     _wireEnableTypesBtn();
                 } else {
-                    hintEl.innerHTML = `<span class="stops-error-inline">No route within range — even with every airport type, this aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</span>`;
+                    hintEl.innerHTML = `<span class="stops-error-inline">No route within range — even with every airport type and the NRG2fly network, this aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</span>`;
                 }
             } else {
                 hintEl.textContent = plannedSource === 'auto'
