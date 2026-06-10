@@ -51,14 +51,15 @@ window.CNSSettings = (function () {
     // everyone picks up the new defaults on next load.
     // v4: landing-reserve default drops 30% → 20%; the catalog ranges in planes.json
     // are recalibrated against it (range_km = familiar available range ÷ 0.8).
-    const KEY = 'cns_settings_v4';
+    // v5: alternate reserve + SID/STAR padding default ON (realistic ops out of the box).
+    const KEY = 'cns_settings_v5';
     const DEFAULTS = Object.freeze({
         landingReserve:    { enabled: true,  minLandingSoc: 0.20 },   // 0..1 — planes.json ranges are calibrated to this default
-        alternateReserve:  { enabled: false },                       // divert-to-nearest-airport reserve; uses each airport's pre-baked alternate_km
+        alternateReserve:  { enabled: true },                        // divert-to-nearest-airport reserve; uses each airport's pre-baked alternate_km
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
         chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
         routingPadding:    { enabled: false, factor: 1.05 },          // ≥1; OFF by default — SID/STAR (additive km) is the preferred padding now
-        sidStarPadding:    { enabled: false, km: 10 },                // fixed km added to EACH leg (SID+STAR terminal track miles); opt-in, additive on top of routingPadding
+        sidStarPadding:    { enabled: true,  km: 10 },                // fixed km added to EACH leg (SID+STAR terminal track miles); additive on top of routingPadding
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
     });

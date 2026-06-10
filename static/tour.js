@@ -35,7 +35,7 @@ window.CNSTour = (function () {
         if (!lelystad || !munich) return;
 
         // Beta Alia CX300: 500 km range, but with the realistic model factors on
-        // by default (20% landing reserve + ~5% routing padding) its usable reach
+        // by default (20% landing reserve + SID/STAR padding + alternate reserve) its usable reach
         // drops to ~400 km — so Lelystad→Munich (~636 km) no longer fits in one
         // hop and the auto-planner inserts a charging stop (Siegerland). That's
         // exactly what we showcase at the Model-settings + Suggested-route steps.
@@ -54,7 +54,7 @@ window.CNSTour = (function () {
         // "Plan with charging stops" must START OFF so the tour can reveal it at
         // its dedicated step — the operator then sees the natural progression:
         // first the over-range warning (the Beta can't reach Munich direct
-        // under the applied 20% reserve + padding), then the toggle flips on and
+        // under the applied 20% reserve + SID/STAR padding), then the toggle flips on and
         // the planner adds the stop. The page's own _applyDefaultFlight() enables
         // the toggle on load and planReset does NOT clear it, so we explicitly
         // switch it back off here — otherwise the route is already split before
@@ -352,7 +352,7 @@ window.CNSTour = (function () {
             // shape it (and force a stop) are understood first.
             {
                 element: '#planModelSettingsBtn',
-                popover: { title: 'Model settings: applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 20% landing reserve, ~5% routing padding, the charging-curve taper, and an 80% default charge target. They also set the charging price (€/kWh) and charger efficiency used for the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are why the Beta Alia\'s 500&nbsp;km range cannot reach Munich in one hop, so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
+                popover: { title: 'Model settings: applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 20% landing reserve, SID/STAR padding, an alternate-divert reserve, the charging-curve taper, and an 80% default charge target. They also set the charging price (€/kWh) and charger efficiency used for the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are why the Beta Alia\'s 500&nbsp;km range cannot reach Munich in one hop, so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
             },
             // 9a. Model settings panel — open it and walk its three groups. Pinned
             // popover (top) with the modal lifted above the tour overlay, same

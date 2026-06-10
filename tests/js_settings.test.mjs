@@ -45,14 +45,15 @@ const approx = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 
 console.log('CNSSettings (static/settings.js) — node harness\n');
 
-// ---- v3 defaults: reserve + taper ON; routing padding, SID/STAR, efficiency OFF ----
-test('v3 defaults: reserve+taper ON, routing/SID-STAR/efficiency OFF', () => {
+// ---- v5 defaults: reserve + taper + SID/STAR + alternate ON; routing padding, efficiency OFF ----
+test('v5 defaults: reserve/taper/SID-STAR/alternate ON, routing/efficiency OFF', () => {
   const { S } = loadSettings();
   assert.ok(approx(S.usableFraction({}), 0.80), 'reserve default 20% -> usable 0.80');
   assert.equal(S.routingFactor(), 1.0, 'routing padding OFF by default -> identity');
   assert.equal(S.gridDemandFactor(), 1.0, 'efficiency off by default -> identity');
   assert.ok(S.chargeTimeMin(100, 100, 225) > 60, 'taper on -> slower than the 60min linear');
-  assert.equal(S.sidStarPaddingKm(), 0, 'SID/STAR padding off by default -> identity');
+  assert.equal(S.sidStarPaddingKm(), 10, 'SID/STAR padding ON by default -> 10 km per leg');
+  assert.equal(S.alternateReserveEnabled(), true, 'alternate reserve ON by default');
 });
 
 // ---- identity when a toggle is explicitly OFF (accessor returns the no-op) ---
@@ -111,8 +112,9 @@ test('routingFactor == 1.05 default when on', () => {
 });
 
 // ---- sidStarPadding (additive per-leg SID/STAR km) -------------------------
-test('sidStarPaddingKm == 0 by default (factor off)', () => {
+test('sidStarPaddingKm == 0 when switched off', () => {
   const { S } = loadSettings();
+  S.save({ sidStarPadding: { enabled: false } });
   assert.equal(S.sidStarPaddingKm(), 0);
 });
 test('sidStarPaddingKm returns the set km when on', () => {
@@ -185,8 +187,9 @@ test('chargeTimeMin(0,...) == 0', () => {
 });
 
 // ---- alternateReserve ------------------------------------------------------
-test('defaults: alternateReserveEnabled() false when off', () => {
+test('alternateReserveEnabled() false when switched off', () => {
   const { S } = loadSettings();
+  S.save({ alternateReserve: { enabled: false } });
   assert.equal(S.alternateReserveEnabled(), false);
 });
 test('alternateReserveEnabled() true once toggled on', () => {

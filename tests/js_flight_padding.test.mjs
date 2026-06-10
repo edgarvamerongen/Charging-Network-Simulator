@@ -35,7 +35,9 @@ console.log('CNSFlight padding model (static/flight-model.js) — node harness\n
 function run(padding = true) {
   const S = loadStack();
   S.CNSSettings.reset();
-  S.CNSSettings.save({ routingPadding: padding ? { enabled: true, factor: 1.05 } : { enabled: false } });
+  // SID/STAR is ON by default (v5) — pin it OFF here so these tests isolate the
+  // multiplicative routing factor (sidstar's additive km has its own suite).
+  S.CNSSettings.save({ routingPadding: padding ? { enabled: true, factor: 1.05 } : { enabled: false }, sidStarPadding: { enabled: false } });
   const prof = S.CNSFlight.simulateTrip(PLANES.beta_plane, [wp('EHAM'), wp('EHRD'), wp('EGLL')],
     { tripType: 'one-way', getTargetSoc: () => S.CNSSettings.chargeTargetDefault(), getChargerKw: () => 250 });
   return { prof, route: S.CNSSettings.routingFactor() };
