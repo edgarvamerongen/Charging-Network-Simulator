@@ -1126,7 +1126,7 @@
         .flight-pin-wrap { background: none; border: none; }
         .flight-pin {
             position: absolute;
-            transform: translate(-50%, -50%) translateY(-130%);   /* float above the leg line so the pill never sits on the route or its markers */
+            transform: translate(-50%, -50%);   /* centred on the leg line; the legLabelPane keeps it above everything */
             display: inline-flex;
             align-items: center;
             background: #fff;
@@ -2160,8 +2160,8 @@
         // so a dot never covers a teardrop's tail — the marker flows on top of the dot.
         map.createPane('teardropPane');
         map.getPane('teardropPane').style.zIndex = 660;
-        map.createPane('legLabelPane');                 // leg pins: above airports, below route markers
-        map.getPane('legLabelPane').style.zIndex = 640; // markerPane 600 < this < routePane 650 < teardropPane 660
+        map.createPane('legLabelPane');                 // leg pins: the top layer — labels readable over any marker
+        map.getPane('legLabelPane').style.zIndex = 670; // ABOVE routePane 650 + teardropPane 660 — leg labels ride on top of everything
         // Tooltips (charger info boxes) default to z-index 650 — i.e. BEHIND the
         // teardrops (660). Lift the tooltip pane above every marker pane so the
         // info box always reads on top, while staying under interactive popups (700).
@@ -2719,7 +2719,7 @@
                         (function() { const b = document.getElementById('enableAllPoolsBtn'); if (b) b.addEventListener('click', () => { document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } }); const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
                         break;
                     default:
-                        listEl.innerHTML = `<li class="stops-error">No route within range — even with every airport type and the NRG2fly network, this aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</li>`;
+                        listEl.innerHTML = `<li class="stops-error">No route within range. This aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</li>`;
                 }
                 return;
             }
@@ -2789,7 +2789,7 @@
                         (function() { const b = document.getElementById('enableAllPoolsBtn'); if (b) b.addEventListener('click', () => { document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } }); const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
                         break;
                     default:
-                        hintEl.innerHTML = `<span class="stops-error-inline">No route within range — even with every airport type and the NRG2fly network, this aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</span>`;
+                        hintEl.innerHTML = `<span class="stops-error-inline">No route within range. This aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</span>`;
                 }
             } else {
                 hintEl.textContent = plannedSource === 'auto'
