@@ -3483,7 +3483,7 @@
                     pane: 'teardropPane', zIndexOffset: 1000, riseOnHover: true,
                 });
                 const plugs = (nrgChargerDb[icao] || {}).plugs || [];
-                m.bindTooltip(`${e.label}<br><span class="nrg-tip-sub">NRG2fly · ${plugs.length} plug${plugs.length !== 1 ? 's' : ''}</span>`,
+                m.bindTooltip(`${e.label}<br><span class="nrg-tip-sub">NRG2fly · ${plugs.length} plug${plugs.length !== 1 ? 's' : ''} — ${_nrgPlugSummary(plugs)}</span>`,
                     { direction: 'top', offset: [0, -44], className: 'nrg-tip' });
                 return m;
             }
