@@ -1441,13 +1441,13 @@
                 </button>
                 <div id="optionsMenu" class="options-menu" role="menu">
                     <div class="opt-group">
-                        <div class="opt-label">Airports shown on map</div>
+                        <div class="opt-label">Airports (planning)</div>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
                     </div>
                     <div class="opt-group">
-                        <div class="opt-label">NRG2fly network</div>
+                        <div class="opt-label">NRG2fly network (planning)</div>
                         <label class="opt-check"><input type="checkbox" id="nrgChargerToggle" checked><span>Show charger sites</span></label>
                     </div>
                     <div class="opt-group">
@@ -2267,7 +2267,7 @@
         let _routeEndpoints = [];             // [{lat,lon,label}] of the active route's airports
         let _routeChargerIdents = new Set();  // charger airports on the route → drawn blue, skipped by the orange layer
         let _routeKey = '';                   // change-detection so the markers only rebuild when the route/toggle changes
-        let _showFlightLabels = true;   // Map Options → Route → Show flight labels
+        let _showFlightLabels = true;   // Map Options → Route → Leg labels
         let _hideAirportsOnRoute = false;   // Map Options → declutter ALL non-route layers (size clusters + network) while a route is drawn
         const clusters = {
             small_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
@@ -3329,7 +3329,7 @@
             if (typeof smartReplan === 'function')   smartReplan();
             if (typeof drawLiveRoute === 'function') drawLiveRoute();
         });
-        // Map Options → Route → Show flight labels (per-leg distance/time/energy pins).
+        // Map Options → Route → Leg labels (per-leg distance/time/energy pins).
         const _flightLabelToggle = document.getElementById('flightLabelToggle');
         // Map Options → Route → Expand labels: keep every flight label open (showing
         // its distance · time · energy) instead of only on hover. Pure CSS class on
@@ -3338,7 +3338,7 @@
         const _flightLabelExpandRow = document.getElementById('flightLabelExpandRow');
         const _mapEl = document.getElementById('map');
         // The Expand sub-option only makes sense while labels are shown — grey it out
-        // (and clear the open state) whenever "Show flight labels" is off.
+        // (and clear the open state) whenever "Leg labels" is off.
         function _syncFlightLabelExpandState() {
             const labelsOn = !_flightLabelToggle || _flightLabelToggle.checked;
             if (_flightLabelExpandRow) _flightLabelExpandRow.classList.toggle('is-disabled', !labelsOn);
