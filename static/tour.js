@@ -374,7 +374,7 @@ window.CNSTour = (function () {
             // the suggested route appear in the next step.
             {
                 element: '.stops-toggle-row',
-                popover: { title: 'Plan with charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. We are turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Munich run.', side: 'right' },
+                popover: { title: 'Charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. We are turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Munich run. On routes the aircraft can fly direct, the toggle switches itself back off — no stops needed.', side: 'right' },
                 onHighlightStarted: async () => { await _ensureStopsOn(); },
             },
             // 11. Suggested route — the stop the applied factors forced.

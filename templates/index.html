@@ -1295,17 +1295,19 @@
         /* Compact "Model settings" trigger in the Plan a flight panel.
            Opens the same modal as the Demand Calculator's button. Sits
            where the old > Advanced details used to live. */
+        /* Icon-only Model-settings trigger: a large gear + the active-factor count.
+           No label — the tooltip/aria-label name it; the badge is the signal. */
         .modelset-btn {
             background: none; border: 1px solid var(--panel-border);
-            border-radius: 999px; padding: 3px 10px;
-            font-size: .74rem; font-weight: 600; color: var(--ink-soft);
+            border-radius: 999px; padding: 4px 9px;
+            color: var(--ink-soft);
             cursor: pointer; transition: background .15s, border-color .15s, color .15s;
-            display: inline-flex; align-items: center; gap: 5px;
-            white-space: nowrap; flex: none;   /* never squash/wrap inside the pill — the row wraps instead */
+            display: inline-flex; align-items: center; gap: 4px;
+            white-space: nowrap; flex: none;
         }
         .modelset-btn:hover { background: rgba(229,120,80,.10); border-color: rgba(229,120,80,.25); color: var(--ink); }
-        .modelset-btn .gear { font-size: .95rem; line-height: 1; opacity: .8; }   /* legible gear, not a .74rem speck */
-        .modelset-btn .model-badge { margin-left: 2px; }
+        .modelset-btn .gear { font-size: 1.15rem; line-height: 1; opacity: .85; }
+        .modelset-btn .model-badge { margin-left: 0; }
 
         /* Preference order — inline in the Suggested route section. */
         .stops-pref {
@@ -1539,13 +1541,13 @@
                 <div class="field stops-toggle-row">
                     <label class="switch stops-switch">
                         <input type="checkbox" id="withStops">
-                        <span>Plan with charging stops</span>
+                        <span>Charging stops</span>
                     </label>
-                    <!-- Replaces the old > Advanced details. One click opens the
-                         same Model settings modal used by the Demand Calculator —
-                         operators can tweak model factors while planning. -->
-                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Open Model settings — model factors cascade through the planner and result panel">
-                        <span class="gear" aria-hidden="true">⚙</span> Model settings
+                    <!-- Icon-only Model settings trigger (gear + active-factor count):
+                         same modal as the Demand Calculator — operators can tweak
+                         model factors while planning. -->
+                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" aria-label="Model settings" title="Open Model settings — model factors cascade through the planner and result panel">
+                        <span class="gear" aria-hidden="true">⚙</span>
                         <span id="planModelBadge" class="model-badge d-none">0</span>
                     </button>
                 </div>
@@ -2540,6 +2542,14 @@
             });
             if (chainRes.error && manual.length === 0) { plannedError = chainRes.error; renderStops(); return; }
             plannedStops = chainRes.stops;
+            // Direct leg fits the range and the user pinned no stops → charging stops are
+            // moot, so the toggle switches itself off and reads as the answer ("no charging
+            // stops on this route"). Forcing a stop anyway still works via the map's
+            // "Add as stop" (setStop re-checks the toggle and pins a manual stop).
+            if (manual.length === 0 && plannedStops.length === 0) {
+                const tg = document.getElementById('withStops');
+                if (tg.checked) { tg.checked = false; }
+            }
             validateRoute();
             renderStops();
         }
