@@ -4266,7 +4266,7 @@
             _recomputeTimer = setTimeout(recomputeAllFlights, 250);
         }
 
-        let _dcRevenueYearly = false;   // Demand-calc revenue hero: false = per day, true = per year
+        let _dcRevenueYearly = true;    // Demand-calc revenue hero: false = per day, true = per year — yearly by default (the headline figure)
         function renderFolder() {
             const el = document.getElementById('folder');
             const airports = computeAirports();
