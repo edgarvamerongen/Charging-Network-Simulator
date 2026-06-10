@@ -2832,13 +2832,13 @@
                 // strike-through on hover (replaces the old × button). Only nodes that map into
                 // plannedStops are removable — on a circular ring the destination and closing-leg
                 // auto-stops sit past that range (closing stops re-plan via the route fields).
-                const isRingFar = _isCircularTrip() && i === plannedStops.length + 1;
-                const removable = (!isTerm && (i - 1) < plannedStops.length) || isRingFar;
-                const nameOpen = removable
-                    ? (isRingFar
-                        ? `<strong class="stop-removable" data-ring-far="1" title="Click to remove this stop — the previous stop becomes the loop's far point">`
-                        : `<strong class="stop-removable" data-stop="${i - 1}" title="Click to remove this stop">`)
-                    : '<strong>';
+                const isRingFar  = _isCircularTrip() && i === plannedStops.length + 1;
+                const isClosing  = _isCircularTrip() && !isTerm && i > plannedStops.length + 1;   // closing-leg auto-stop (far point → home)
+                const removable = (!isTerm && (i - 1) < plannedStops.length) || isRingFar || isClosing;
+                const nameOpen = !removable ? '<strong>'
+                    : isRingFar ? `<strong class="stop-removable" data-ring-far="1" title="Click to remove this stop — the previous stop becomes the loop's far point">`
+                    : isClosing ? `<strong class="stop-removable" data-closing-ident="${escHtml(wp.ident || '')}" title="Click to remove this stop">`
+                    : `<strong class="stop-removable" data-stop="${i - 1}" title="Click to remove this stop">`;
                 // Always 5 grid cells (step · name · alt · size · range) so the columns line up.
                 return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span>${nameOpen}${escHtml(wp.name)}</strong>${ah.badge || '<span></span>'}${tagHtml || '<span></span>'}${legDist || '<span></span>'}</li>`;
             }).join('');
@@ -2905,6 +2905,12 @@
             //                  loop — × did nothing because the planner
             //                  re-filled the same airport).
             listEl.querySelectorAll('.stop-removable').forEach(el => el.addEventListener('click', () => {
+                if (el.dataset.closingIdent) {
+                    _blacklistedStopIdents.add(el.dataset.closingIdent);
+                    smartReplan();
+                    drawLiveRoute();
+                    return;
+                }
                 if (el.dataset.ringFar) {
                     // The ring's far point IS the last filled stop field — remove that
                     // field; the planner re-derives the far point from the new last stop.
