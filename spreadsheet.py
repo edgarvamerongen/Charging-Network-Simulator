@@ -6,17 +6,29 @@ figures. Deliberately SEPARATE from report.py: it only *reads* the same
 self-contained payload the browser already assembles (plus a richer
 `flightsFull` list), and never touches the PDF pipeline or the JS engine.
 
-Format = inputs + outputs:
-  * INPUT sheets (Flights / Aircraft / Chargers / Settings) are the canonical,
-    versioned schema — Excel Tables + named ranges — that a FUTURE importer will
-    read to rebuild a plan. (Import is not built yet; the format is the contract.)
-  * OUTPUT sheets (Overview, Airports, one per airport) are computed: native
-    Excel formulas (daily / revenue / installed / totals / % mix recompute when
-    the user edits an input) and native charts bound to cell ranges.
+Workbook v2 layout — three kinds of sheets:
+  * `Overview` — KPI cards, a hyperlinked airport index, and brand-styled
+    horizontal bar charts (daily energy / peak per airport).
+  * `Data` — the About/version block plus ALL five tables stacked:
+    Airports (computed) and the round-trippable inputs Flights / Aircraft /
+    Chargers / Settings. A FUTURE importer reads the input tables — they are
+    addressed by Excel Table NAME (tblFlights, …), so their sheet placement is
+    irrelevant to the contract. `CNS_Version` is a defined name an importer
+    validates first.
+  * one tab per airport — KPIs, installed charging, contributing flights,
+    energy-mix donut + step-true load curve, charts anchored CLEAR of the
+    tables (column K onward).
 
-Scheduler-derived figures (per-flight charge energy, peak kW, the load-curve
-series, rotation timing) can't be expressed as cell formulas, so they're
-exported as values; charts over them still redraw if the user edits the series.
+Responsiveness: daily energy, revenue, installed power, totals and % mix are
+native Excel formulas (recompute when the user edits a frequency, tariff or
+charger); charts are bound to cell ranges. Scheduler-derived figures
+(per-flight charge energy, peak kW, the load-curve series) can't be expressed
+as cell formulas, so they're exported as values — charts over them still
+redraw if the series is edited.
+
+v2 vs v1 (breaking → version bump): the five category sheets merged into
+`Data`; `tblSettings` changed from key/value rows to a SINGLE-ROW table (one
+column per setting); About sheet folded into `Data`.
 """
 import io
 from datetime import datetime
@@ -25,13 +37,13 @@ from economics import (DAY_START_MIN, DAY_END_MIN, REALISATION_LOW,
                        REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH)
 
 FORMAT_NAME = 'NRG2FLY Charging Network Simulator — workbook'
-FORMAT_VERSION = 'CNS Workbook v1'
+FORMAT_VERSION = 'CNS Workbook v2'
 
-# ---- styling (Arial per xlsx conventions; house accent for headers) ---------
+# ---- styling (Arial per xlsx conventions; house palette for accents) --------
 FONT = 'Arial'
-C_INPUT = 'FF0000FF'    # blue — hardcoded inputs the user may change
-C_FORMULA = 'FF000000'  # black — formulas / calculations
-C_LINK = 'FF008000'     # green — links pulling from another sheet
+C_INPUT = 'FF0000FF'    # blue text — hardcoded inputs the user may change
+C_FORMULA = 'FF000000'  # black text — formulas / calculations
+C_LINK = 'FF008000'     # green text — links pulling from another sheet
 C_MUTED = 'FF6B7280'
 NAVY = 'FF152455'
 BLUE = 'FF2563EB'
@@ -39,6 +51,13 @@ ORANGE = 'FFF0892B'
 GREEN = 'FF10B981'
 SOFT = 'FFF1F5F9'
 WHITE = 'FFFFFFFF'
+TAB_NAVY = '152455'
+TAB_GREEN = '217346'    # classic spreadsheet green (matches the export button)
+TAB_AIRPORT = 'BFD2F8'  # light blue family for the airport tab group
+
+# donut slice palette (hex without alpha, as chart fills want them)
+PALETTE = ['2563EB', 'F0892B', '10B981', '6F42C1', '0EA5E9',
+           'F59E0B', '14B8A6', 'EF4444', '8B5CF6', '64748B']
 
 FMT_KWH = '#,##0 "kWh"'
 FMT_KW = '#,##0 "kW"'
@@ -46,6 +65,7 @@ FMT_EUR = '€#,##0'
 FMT_PCT = '0.0%'
 FMT_COORD = '0.0000'
 FMT_NUM = '#,##0'
+FMT_TIME = 'hh:mm'
 
 
 def _fpd_expr(n_ref, unit_ref):
@@ -58,7 +78,9 @@ class SpreadsheetBuilder:
         from openpyxl import Workbook
         self.p = payload or {}
         self.wb = Workbook()
-        self.airports = self.p.get('airports') or []
+        # busiest-first everywhere: tab order, index, charts all read nicer
+        self.airports = sorted(self.p.get('airports') or [],
+                               key=lambda a: float(a.get('dailyKwh') or 0), reverse=True)
         self.planes = self.p.get('planes') or []
         self.chargers = self.p.get('chargers') or []
         self.flights = self.p.get('flightsFull') or self.p.get('flights') or []
@@ -71,8 +93,9 @@ class SpreadsheetBuilder:
         self.realisation_high = REALISATION_HIGH
         self.procurement = PROCUREMENT_EUR_PER_KWH
         self._tab_names = set()
-        # filled while building per-airport sheets, consumed by the summary
+        # filled while building per-airport sheets; consumed by Data + Overview
         self._airport_refs = []   # [{ident, name, lat, lon, sheet, daily, peak, installed}]
+        self._ap_rows = []        # Data-sheet row number per airport (index order)
 
     # ---- low-level helpers --------------------------------------------------
     def _cell(self, ws, r, c, value=None, *, bold=False, size=11, color=C_FORMULA,
@@ -94,8 +117,10 @@ class SpreadsheetBuilder:
         for i, lab in enumerate(labels):
             self._cell(ws, r, start_col + i, lab, bold=True, color=WHITE, fill=NAVY, align='left')
 
-    def _title(self, ws, r, text, c=1, size=16, color=NAVY):
-        self._cell(ws, r, c, text, bold=True, size=size, color=color)
+    def _section(self, ws, r, label, tag):
+        """A section band on the Data sheet: navy label + muted input/computed tag."""
+        self._cell(ws, r, 1, label, bold=True, size=12, color=NAVY)
+        self._cell(ws, r, 2, tag, italic=True, size=9, color=C_MUTED)
 
     def _table(self, ws, name, first_row, last_row, first_col, last_col):
         """Wrap a written range in an Excel Table (import anchor + styling)."""
@@ -127,136 +152,40 @@ class SpreadsheetBuilder:
         self._tab_names.add(name.lower())
         return name
 
-    # ---- sheets -------------------------------------------------------------
-    def _about(self):
-        ws = self.wb.create_sheet('About')
-        ws.sheet_view.showGridLines = False
-        self._widths(ws, [22, 90])
-        self._title(ws, 1, 'NRG2FLY · Charging Network Plan', size=18)
-        rows = [
-            ('Format', FORMAT_NAME),
-            ('Version', FORMAT_VERSION),
-            ('Generated', self.p.get('generatedAt') or datetime.now().strftime('%Y-%m-%d %H:%M')),
-            ('Airports', len(self.airports)),
-            ('Flights', len(self.flights)),
-            ('', ''),
-            ('Input sheets', 'Flights, Aircraft, Chargers, Settings — the standardised, '
-                             'round-trippable data. A future import reads ONLY these.'),
-            ('Computed sheets', 'Overview, Airports, and one tab per airport — derived from the '
-                                'inputs. Regenerated on (re)import; edits there are not read back.'),
-            ('Live figures', 'Daily energy, revenue, installed power, totals and % mix are Excel '
-                             'formulas — they recompute when you edit a frequency, tariff or charger.'),
-            ('Snapshot figures', 'Per-flight charge energy, peak power and the load curve come from '
-                                 'the CNS simulator (state-of-charge + queue logic) and are exported '
-                                 'as values. Editing aircraft specs here does not recompute them — '
-                                 're-run the simulator for that.'),
-        ]
-        r = 3
-        for k, v in rows:
-            self._cell(ws, r, 1, k, bold=True, color=NAVY if k else C_FORMULA)
-            self._cell(ws, r, 2, v, color=C_MUTED, wrap=True)
-            r += 1
-        return ws
+    def _hyperlink(self, ws, r, c, text, target_sheet):
+        """An internal hyperlink cell that jumps to another sheet."""
+        from openpyxl.worksheet.hyperlink import Hyperlink
+        cell = self._cell(ws, r, c, text, color=BLUE)
+        from openpyxl.styles import Font
+        cell.font = Font(name=FONT, color=BLUE, underline='single')
+        cell.hyperlink = Hyperlink(ref=cell.coordinate, location=f"'{target_sheet}'!A1")
+        return cell
 
-    def _flights(self):
-        ws = self.wb.create_sheet('Flights')
-        cols = ['Flight ID', 'Aircraft ID', 'Aircraft', 'Origin ICAO', 'Origin', 'Origin Lat',
-                'Origin Lon', 'Dest ICAO', 'Dest', 'Dest Lat', 'Dest Lon', 'Stops (ICAO;…)',
-                'Trip type', 'Multi-leg', 'Charger ID', 'Charger', 'Freq N', 'Freq unit']
-        self._header_row(ws, 1, cols)
-        r = 2
-        for f in self.flights:
-            stops = ';'.join(s.get('ident', '') for s in (f.get('stops') or []) if isinstance(s, dict))
-            vals = [f.get('id'), f.get('planeId'), f.get('planeName'),
-                    f.get('originIdent'), f.get('originName'), _num(f.get('originLat')), _num(f.get('originLon')),
-                    f.get('destIdent'), f.get('destName'), _num(f.get('destLat')), _num(f.get('destLon')),
-                    stops, f.get('tripType'), 'yes' if f.get('multiLeg') else 'no',
-                    f.get('chargerId'), f.get('chargerName'), _num(f.get('freqN')), f.get('freqUnit')]
-            for i, v in enumerate(vals, start=1):
-                fmt = FMT_COORD if i in (6, 7, 10, 11) else None
-                self._cell(ws, r, i, v, color=C_INPUT, fmt=fmt)
-            r += 1
-        last = max(r - 1, 2)
-        self._table(ws, 'tblFlights', 1, last, 1, len(cols))
-        self._widths(ws, [10, 14, 26, 11, 22, 11, 11, 11, 22, 11, 11, 18, 12, 9, 12, 20, 8, 9])
-        return ws
+    # ---- chart styling helpers ----------------------------------------------
+    @staticmethod
+    def _solid_series(series, hex_color, line=False, width_emu=28575):
+        """One brand colour for a whole series (kills openpyxl's rainbow default)."""
+        from openpyxl.chart.shapes import GraphicalProperties
+        from openpyxl.drawing.line import LineProperties
+        if line:
+            gp = GraphicalProperties()
+            gp.line = LineProperties(solidFill=hex_color, w=width_emu)
+            series.graphicalProperties = gp
+        else:
+            series.graphicalProperties = GraphicalProperties(solidFill=hex_color)
 
-    def _aircraft(self):
-        ws = self.wb.create_sheet('Aircraft')
-        cols = ['Aircraft ID', 'Name', 'Battery (kWh)', 'Range (km)', 'Speed (km/h)', 'Seats', 'Payload (kg)']
-        self._header_row(ws, 1, cols)
-        r = 2
-        for p in self.planes:
-            vals = [p.get('id'), p.get('name'), _num(p.get('battery_kwh')), _num(p.get('range_km')),
-                    _num(p.get('speed_kmh')), _num(p.get('seats')), _num(p.get('load_kg'))]
-            for i, v in enumerate(vals, start=1):
-                self._cell(ws, r, i, v, color=C_INPUT, fmt=(FMT_NUM if i in (3, 4, 5, 7) else None))
-            r += 1
-        last = max(r - 1, 2)
-        self._table(ws, 'tblAircraft', 1, last, 1, len(cols))
-        self._named('Aircraft_id', 'Aircraft', f'$A$2:$A${last}')
-        self._named('Aircraft_battery', 'Aircraft', f'$C$2:$C${last}')
-        self._named('Aircraft_range', 'Aircraft', f'$D$2:$D${last}')
-        self._widths(ws, [14, 30, 14, 12, 13, 8, 13])
-        return ws
-
-    def _chargers(self):
-        ws = self.wb.create_sheet('Chargers')
-        cols = ['Charger ID', 'Name', 'Power (kW)']
-        self._header_row(ws, 1, cols)
-        r = 2
-        for c in self.chargers:
-            self._cell(ws, r, 1, c.get('id'), color=C_INPUT)
-            self._cell(ws, r, 2, c.get('name'), color=C_INPUT)
-            self._cell(ws, r, 3, _num(c.get('power_kw')), color=C_INPUT, fmt=FMT_KW)
-            r += 1
-        last = max(r - 1, 2)
-        self._table(ws, 'tblChargers', 1, last, 1, len(cols))
-        self._named('Charger_id', 'Chargers', f'$A$2:$A${last}')
-        self._named('Charger_power', 'Chargers', f'$C$2:$C${last}')
-        self._widths(ws, [14, 28, 14])
-        return ws
-
-    def _settings(self):
-        ws = self.wb.create_sheet('Settings')
-        self._header_row(ws, 1, ['Setting', 'Value'])
-        s = self.settings
-        rp = s.get('routingPadding') or {}
-        rows = [
-            ('Charge target (SoC)', _num(s.get('chargeTarget')), FMT_PCT, 'Settings_chargeTarget'),
-            ('Charging tariff (EUR/kWh)', self.tariff, '€0.00', 'Settings_tariff'),
-            ('Routing padding', ('on' if rp.get('enabled') else 'off'), None, None),
-            ('Routing padding factor', _num(rp.get('factor')) or 1.0, '0.00', None),
-            ('SID/STAR padding (km/leg)', _num(s.get('sidStarPaddingKm')) or 0, FMT_NUM, None),
-            ('Alternate reserve', ('on' if s.get('alternateReserve') else 'off'), None, None),
-            ('Grid demand factor', _num(s.get('gridDemandFactor')) or 1.0, '0.00', None),
-            ('Operating day start', _clock(DAY_START_MIN), None, None),
-            ('Operating day end', _clock(DAY_END_MIN), None, None),
-            ('Revenue realisation — low', self.realisation_low, FMT_PCT, 'Settings_realisationLow'),
-            ('Revenue realisation — high', self.realisation_high, FMT_PCT, 'Settings_realisationHigh'),
-            ('Energy procurement (EUR/kWh)', self.procurement, '€0.00', 'Settings_procurement'),
-        ]
-        r = 2
-        for label, val, fmt, named in rows:
-            self._cell(ws, r, 1, label, bold=True, color=NAVY)
-            self._cell(ws, r, 2, val, color=C_INPUT, fmt=fmt)
-            if named:
-                self._named(named, 'Settings', f'$B${r}')
-            r += 1
-        self._table(ws, 'tblSettings', 1, r - 1, 1, 2)
-        self._widths(ws, [30, 16])
-        return ws
-
+    # ---- per-airport sheets --------------------------------------------------
     def _airport_detail(self, a):
         name = a.get('name') or a.get('ident') or 'Airport'
         ident = a.get('ident') or ''
         ws = self.wb.create_sheet(self._tab(ident or name))
         ws.sheet_view.showGridLines = False
-        self._widths(ws, [30, 14, 16, 16, 14])
-        self._title(ws, 1, name, size=16)
+        ws.sheet_properties.tabColor = TAB_AIRPORT
+        self._widths(ws, [30, 14, 16, 16, 14, 12, 12, 14, 14, 4])
+        self._cell(ws, 1, 1, name, bold=True, size=16, color=NAVY)
         self._cell(ws, 2, 1, ident, bold=True, color=C_MUTED)
-        self._cell(ws, 2, 2, f"{_num(a.get('lat')):.4f}, {_num(a.get('lon')):.4f}"
-                   if a.get('lat') is not None else '', color=C_MUTED)
+        if a.get('lat') is not None:
+            self._cell(ws, 2, 2, f"{_num(a.get('lat')):.4f}, {_num(a.get('lon')):.4f}", color=C_MUTED)
 
         contribs = a.get('contribs') or []
         chargers = a.get('chargers') or []
@@ -312,13 +241,13 @@ class SpreadsheetBuilder:
                    bold=True, color=C_FORMULA, fmt=FMT_KWH)
         r += 2
 
-        # --- KPI header cells (now that totals exist) ---
-        self._cell(ws, 3, 3, 'Daily', bold=True, color=C_MUTED, align='right')
-        self._cell(ws, 3, 4, f'={daily_total_cell}', color=C_LINK, fmt=FMT_KWH, align='right')
-        self._cell(ws, 2, 3, 'Peak', bold=True, color=C_MUTED, align='right')
-        self._cell(ws, 2, 4, _num(a.get('peakKw')), color=C_INPUT, fmt=FMT_KW, align='right')
+        # --- KPI header cells (top-right of the title block) ---
         self._cell(ws, 1, 3, 'Revenue/day', bold=True, color=C_MUTED, align='right')
         self._cell(ws, 1, 4, f'={daily_total_cell}*Settings_tariff', color=C_FORMULA, fmt=FMT_EUR, align='right')
+        self._cell(ws, 2, 3, 'Peak', bold=True, color=C_MUTED, align='right')
+        self._cell(ws, 2, 4, _num(a.get('peakKw')), color=C_INPUT, fmt=FMT_KW, align='right')
+        self._cell(ws, 3, 3, 'Daily', bold=True, color=C_MUTED, align='right')
+        self._cell(ws, 3, 4, f'={daily_total_cell}', color=C_LINK, fmt=FMT_KWH, align='right')
 
         # --- Energy by aircraft type (SUMIF over the contrib rows) ---
         types = []
@@ -326,7 +255,6 @@ class SpreadsheetBuilder:
             t = c.get('planeName') or 'Unknown'
             if t not in types:
                 types.append(t)
-        ebt_first = r
         self._cell(ws, r, 1, 'ENERGY BY AIRCRAFT TYPE', bold=True, color=NAVY)
         r += 1
         self._header_row(ws, r, ['Aircraft', 'Daily (kWh)', '% of day'])
@@ -343,28 +271,42 @@ class SpreadsheetBuilder:
                 r += 1
         ebt_data_last = r - 1
 
-        # --- Load curve (values) ---
+        # --- Load curve: STEP series on an Excel-time axis -------------------
+        # The payload's breakpoints say "power is kw from t until the next t".
+        # A plain line chart draws diagonals between them, so we write doubled
+        # points — (t, prev) then (t, new) — and chart them as a scatter with
+        # straight lines: a true step on a time-PROPORTIONAL x-axis.
         curve = a.get('loadCurvePoints') or []
-        lc_first = r + 1
+        lc_data_first = lc_data_last = None
         if curve:
             r += 1
             self._cell(ws, r, 1, 'DAILY LOAD PROFILE', bold=True, color=NAVY)
+            self._cell(ws, r, 2, 'step series — power holds until the next time',
+                       italic=True, size=9, color=C_MUTED)
             r += 1
             self._header_row(ws, r, ['Time', 'Power (kW)'])
             lc_data_first = r + 1
             r += 1
+            prev = None
             for pt in curve:
-                self._cell(ws, r, 1, _clock(pt.get('t')), color=C_INPUT)
-                self._cell(ws, r, 2, _num(pt.get('kw')), color=C_INPUT, fmt=FMT_NUM)
+                t = _num(pt.get('t'))
+                kw = _num(pt.get('kw')) or 0
+                if t is None:
+                    continue
+                if prev is not None and kw != prev:
+                    self._cell(ws, r, 1, t / 1440.0, color=C_INPUT, fmt=FMT_TIME)
+                    self._cell(ws, r, 2, prev, color=C_INPUT, fmt=FMT_NUM)
+                    r += 1
+                self._cell(ws, r, 1, t / 1440.0, color=C_INPUT, fmt=FMT_TIME)
+                self._cell(ws, r, 2, kw, color=C_INPUT, fmt=FMT_NUM)
+                prev = kw
                 r += 1
             lc_data_last = r - 1
-        else:
-            lc_data_first = lc_data_last = None
 
-        # --- charts ---
-        self._add_donut(ws, ident, ebt_data_first, ebt_data_last, anchor='F4')
-        if lc_data_first:
-            self._add_line(ws, lc_data_first, lc_data_last, anchor='F22')
+        # --- charts: anchored at column K, CLEAR of the A–I tables -----------
+        self._add_donut(ws, ebt_data_first, ebt_data_last, anchor='K2')
+        if lc_data_first and lc_data_last and lc_data_last > lc_data_first:
+            self._add_step_curve(ws, lc_data_first, lc_data_last, anchor='K20')
 
         self._airport_refs.append({
             'ident': ident, 'name': name, 'lat': a.get('lat'), 'lon': a.get('lon'),
@@ -373,13 +315,47 @@ class SpreadsheetBuilder:
         })
         return ws
 
-    def _airports_summary(self):
-        ws = self.wb.create_sheet('Airports')
+    # ---- Data sheet (About block + all five tables) ---------------------------
+    def _data_sheet(self):
+        ws = self.wb.create_sheet('Data')
         ws.sheet_view.showGridLines = False
+        ws.sheet_properties.tabColor = TAB_GREEN
+        self._widths(ws, [24, 20, 14, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 12, 12])
+
+        # --- About block ---
+        self._cell(ws, 1, 1, 'NRG2FLY · Charging Network Plan', bold=True, size=16, color=NAVY)
+        self._cell(ws, 2, 1, 'Format', bold=True, color=NAVY)
+        self._cell(ws, 2, 2, FORMAT_NAME, color=C_MUTED)
+        self._cell(ws, 3, 1, 'Version', bold=True, color=NAVY)
+        self._cell(ws, 3, 2, FORMAT_VERSION, color=C_MUTED)
+        self._named('CNS_Version', 'Data', '$B$3')
+        self._cell(ws, 4, 1, 'Generated', bold=True, color=NAVY)
+        self._cell(ws, 4, 2, self.p.get('generatedAt') or datetime.now().strftime('%Y-%m-%d %H:%M'),
+                   color=C_MUTED)
+        self._cell(ws, 5, 1, 'Scope', bold=True, color=NAVY)
+        self._cell(ws, 5, 2, f'{len(self.airports)} airports · {len(self.flights)} flights', color=C_MUTED)
+        note = ('Input tables (Flights, Aircraft, Chargers, Settings) are the standardised, round-trippable '
+                'plan — a future import reads only these, found by table name. Computed content (Overview, '
+                'the Airports table, airport tabs) is regenerated. Live figures (daily energy, revenue, '
+                'installed power, % mix) are Excel formulas; per-flight charge energy, peak power and the '
+                'load curves come from the CNS simulator and are exported as values — re-run the simulator '
+                'to recompute those.')
+        self._cell(ws, 6, 1, 'How to read', bold=True, color=NAVY)
+        cell = self._cell(ws, 6, 2, note, size=9, color=C_MUTED, wrap=True)
+        ws.merge_cells(start_row=6, start_column=2, end_row=6, end_column=10)
+        ws.row_dimensions[6].height = 52
+
+        r = 8
+
+        # --- AIRPORTS (computed) ---
+        self._section(ws, r, 'AIRPORTS', 'computed — regenerated on import')
+        r += 1
         cols = ['Airport', 'ICAO', 'Lat', 'Lon', 'Daily energy (kWh)', 'Peak (kW)',
                 'Installed (kW)', 'Revenue/day (EUR)']
-        self._header_row(ws, 1, cols)
-        r = 2
+        self._header_row(ws, r, cols)
+        first = r + 1
+        r += 1
+        self._ap_rows = []
         for ref in self._airport_refs:
             q = f"'{ref['sheet']}'"
             self._cell(ws, r, 1, ref['name'])
@@ -390,100 +366,251 @@ class SpreadsheetBuilder:
             self._cell(ws, r, 6, ref['peak'], color=C_INPUT, fmt=FMT_NUM)
             self._cell(ws, r, 7, f"={q}!{ref['installed']}", color=C_LINK, fmt=FMT_NUM)
             self._cell(ws, r, 8, f'=E{r}*Settings_tariff', color=C_FORMULA, fmt=FMT_EUR)
+            self._ap_rows.append(r)
             r += 1
-        self._ap_last = max(r - 1, 2)
-        self._table(ws, 'tblAirports', 1, self._ap_last, 1, len(cols))
-        self._widths(ws, [28, 10, 11, 11, 18, 12, 14, 18])
+        self._ap_first, self._ap_last = first, max(r - 1, first)
+        self._table(ws, 'tblAirports', first - 1, self._ap_last, 1, len(cols))
+        r += 2
+
+        # --- FLIGHTS (input) ---
+        self._section(ws, r, 'FLIGHTS', 'input — round-trippable')
+        r += 1
+        cols = ['Flight ID', 'Aircraft ID', 'Aircraft', 'Origin ICAO', 'Origin', 'Origin Lat',
+                'Origin Lon', 'Dest ICAO', 'Dest', 'Dest Lat', 'Dest Lon', 'Stops (ICAO;…)',
+                'Trip type', 'Multi-leg', 'Charger ID', 'Charger', 'Freq N', 'Freq unit']
+        self._header_row(ws, r, cols)
+        hdr = r
+        r += 1
+        for f in self.flights:
+            stops = ';'.join(s.get('ident', '') for s in (f.get('stops') or []) if isinstance(s, dict))
+            vals = [f.get('id'), f.get('planeId'), f.get('planeName'),
+                    f.get('originIdent'), f.get('originName'), _num(f.get('originLat')), _num(f.get('originLon')),
+                    f.get('destIdent'), f.get('destName'), _num(f.get('destLat')), _num(f.get('destLon')),
+                    stops, f.get('tripType'), 'yes' if f.get('multiLeg') else 'no',
+                    f.get('chargerId'), f.get('chargerName'), _num(f.get('freqN')), f.get('freqUnit')]
+            for i, v in enumerate(vals, start=1):
+                fmt = FMT_COORD if i in (6, 7, 10, 11) else None
+                self._cell(ws, r, i, v, color=C_INPUT, fmt=fmt)
+            r += 1
+        self._table(ws, 'tblFlights', hdr, max(r - 1, hdr + 1), 1, len(cols))
+        r += 2
+
+        # --- AIRCRAFT (input) ---
+        self._section(ws, r, 'AIRCRAFT', 'input — round-trippable')
+        r += 1
+        cols = ['Aircraft ID', 'Name', 'Battery (kWh)', 'Range (km)', 'Speed (km/h)', 'Seats', 'Payload (kg)']
+        self._header_row(ws, r, cols)
+        hdr = r
+        r += 1
+        for pl in self.planes:
+            vals = [pl.get('id'), pl.get('name'), _num(pl.get('battery_kwh')), _num(pl.get('range_km')),
+                    _num(pl.get('speed_kmh')), _num(pl.get('seats')), _num(pl.get('load_kg'))]
+            for i, v in enumerate(vals, start=1):
+                self._cell(ws, r, i, v, color=C_INPUT, fmt=(FMT_NUM if i in (3, 4, 5, 7) else None))
+            r += 1
+        last = max(r - 1, hdr + 1)
+        self._table(ws, 'tblAircraft', hdr, last, 1, len(cols))
+        self._named('Aircraft_id', 'Data', f'$A${hdr + 1}:$A${last}')
+        self._named('Aircraft_battery', 'Data', f'$C${hdr + 1}:$C${last}')
+        self._named('Aircraft_range', 'Data', f'$D${hdr + 1}:$D${last}')
+        r += 2
+
+        # --- CHARGERS (input) ---
+        self._section(ws, r, 'CHARGERS', 'input — round-trippable')
+        r += 1
+        self._header_row(ws, r, ['Charger ID', 'Name', 'Power (kW)'])
+        hdr = r
+        r += 1
+        for c in self.chargers:
+            self._cell(ws, r, 1, c.get('id'), color=C_INPUT)
+            self._cell(ws, r, 2, c.get('name'), color=C_INPUT)
+            self._cell(ws, r, 3, _num(c.get('power_kw')), color=C_INPUT, fmt=FMT_KW)
+            r += 1
+        last = max(r - 1, hdr + 1)
+        self._table(ws, 'tblChargers', hdr, last, 1, 3)
+        self._named('Charger_id', 'Data', f'$A${hdr + 1}:$A${last}')
+        self._named('Charger_power', 'Data', f'$C${hdr + 1}:$C${last}')
+        r += 2
+
+        # --- SETTINGS (input, SINGLE-ROW table: one column per setting) ---
+        self._section(ws, r, 'SETTINGS', 'input — round-trippable')
+        r += 1
+        s = self.settings
+        rp = s.get('routingPadding') or {}
+        cols = [
+            ('Charge target', _num(s.get('chargeTarget')), FMT_PCT, 'Settings_chargeTarget'),
+            ('Tariff (EUR/kWh)', self.tariff, '€0.00', 'Settings_tariff'),
+            ('Routing padding', 'on' if rp.get('enabled') else 'off', None, None),
+            ('Padding factor', _num(rp.get('factor')) or 1.0, '0.00', None),
+            ('SID/STAR (km/leg)', _num(s.get('sidStarPaddingKm')) or 0, FMT_NUM, None),
+            ('Alternate reserve', 'on' if s.get('alternateReserve') else 'off', None, None),
+            ('Grid factor', _num(s.get('gridDemandFactor')) or 1.0, '0.00', None),
+            ('Day start', _clock(DAY_START_MIN), None, None),
+            ('Day end', _clock(DAY_END_MIN), None, None),
+            ('Realisation low', self.realisation_low, FMT_PCT, 'Settings_realisationLow'),
+            ('Realisation high', self.realisation_high, FMT_PCT, 'Settings_realisationHigh'),
+            ('Procurement (EUR/kWh)', self.procurement, '€0.00', 'Settings_procurement'),
+        ]
+        self._header_row(ws, r, [c[0] for c in cols])
+        hdr = r
+        r += 1
+        from openpyxl.utils import get_column_letter
+        for i, (_label, val, fmt, named) in enumerate(cols, start=1):
+            self._cell(ws, r, i, val, color=C_INPUT, fmt=fmt)
+            if named:
+                self._named(named, 'Data', f'${get_column_letter(i)}${r}')
+        self._table(ws, 'tblSettings', hdr, r, 1, len(cols))
         return ws
 
+    # ---- Overview --------------------------------------------------------------
     def _overview(self):
         ws = self.wb.create_sheet('Overview')
         ws.sheet_view.showGridLines = False
-        self._widths(ws, [30, 18, 18, 6, 30, 18])
-        self._title(ws, 1, 'Network overview', size=18)
-        n = self._ap_last
-        daily_col = '\'Airports\'!$E$2:$E$%d' % n
-        peak_col = '\'Airports\'!$F$2:$F$%d' % n
-        kpis = [
-            ('Total daily energy (kWh)', f'=SUM({daily_col})', FMT_NUM),
-            ('Peak demand (kW)', f'=MAX({peak_col})', FMT_NUM),
-            ('Annual energy (MWh)', f'=SUM({daily_col})*365/1000', FMT_NUM),
-            ('Gross revenue / year (EUR)', f'=SUM({daily_col})*365*Settings_tariff', FMT_EUR),
-            ('Revenue / year — low (EUR)', f'=SUM({daily_col})*365*Settings_tariff*Settings_realisationLow', FMT_EUR),
-            ('Revenue / year — high (EUR)', f'=SUM({daily_col})*365*Settings_tariff*Settings_realisationHigh', FMT_EUR),
-            ('Energy cost / year (EUR)', f'=SUM({daily_col})*365*Settings_procurement', FMT_EUR),
-            ('Gross margin / year (EUR)', f'=SUM({daily_col})*365*(Settings_tariff-Settings_procurement)', FMT_EUR),
+        ws.sheet_properties.tabColor = TAB_NAVY
+        self._widths(ws, [26, 15, 15, 18, 14, 3])
+        self._cell(ws, 1, 1, 'Network overview', bold=True, size=18, color=NAVY)
+
+        n_first, n_last = self._ap_first, self._ap_last
+        daily_col = f"'Data'!$E${n_first}:$E${n_last}"
+        peak_col = f"'Data'!$F${n_first}:$F${n_last}"
+
+        # --- KPI cards: 4 across, navy fill, big white numbers ---
+        cards = [
+            ('Daily energy', f'=SUM({daily_col})', FMT_KWH),
+            ('Peak demand', f'=MAX({peak_col})', FMT_KW),
+            ('Energy / year', f'=SUM({daily_col})*365/1000', '#,##0 "MWh"'),
+            ('Gross margin / yr', f'=SUM({daily_col})*365*(Settings_tariff-Settings_procurement)', FMT_EUR),
         ]
-        r = 3
-        for label, formula, fmt in kpis:
+        from openpyxl.styles import PatternFill, Font, Alignment
+        col = 1
+        for label, formula, fmt in cards:
+            for rr in (3, 4):       # fill both rows of the card area defensively
+                for cc in (col,):
+                    ws.cell(row=rr, column=cc).fill = PatternFill('solid', fgColor=NAVY)
+            num = self._cell(ws, 3, col, formula, bold=True, size=15, color=WHITE, fill=NAVY,
+                             fmt=fmt, align='center')
+            lab = self._cell(ws, 4, col, label, size=9, color=WHITE, fill=NAVY, align='center')
+            col += 1
+        ws.row_dimensions[3].height = 26
+        ws.row_dimensions[4].height = 14
+
+        # --- scenario lines (live formulas) ---
+        scen = [
+            ('Gross revenue / year', f'=SUM({daily_col})*365*Settings_tariff', FMT_EUR),
+            ('Revenue band (realisation)', f'=SUM({daily_col})*365*Settings_tariff*Settings_realisationLow',
+             FMT_EUR),
+            ('Energy cost / year', f'=SUM({daily_col})*365*Settings_procurement', FMT_EUR),
+        ]
+        r = 6
+        for label, formula, fmt in scen:
             self._cell(ws, r, 1, label, bold=True, color=NAVY)
             self._cell(ws, r, 2, formula, color=C_FORMULA, fmt=fmt)
+            if 'band' in label:
+                self._cell(ws, r, 3, f'=SUM({daily_col})*365*Settings_tariff*Settings_realisationHigh',
+                           color=C_FORMULA, fmt=FMT_EUR)
+                self._cell(ws, r, 4, 'low – high', size=9, color=C_MUTED)
             r += 1
-        # charts bound to the Airports table
-        self._add_bar(ws, 'Daily energy per airport (kWh)', col=5, anchor='A13')
-        self._add_bar(ws, 'Peak demand per airport (kW)', col=6, anchor='A30')
+
+        # --- hyperlinked airport index (busiest first, mirrors the Data table) ---
+        r += 1
+        self._cell(ws, r, 1, 'AIRPORTS', bold=True, color=NAVY)
+        self._cell(ws, r, 2, 'click a name to open its tab', italic=True, size=9, color=C_MUTED)
+        r += 1
+        self._header_row(ws, r, ['Airport', 'ICAO', 'Daily (kWh)', 'Peak (kW)', 'Revenue/day'])
+        r += 1
+        for ref, data_row in zip(self._airport_refs, self._ap_rows):
+            self._hyperlink(ws, r, 1, ref['name'], ref['sheet'])
+            self._cell(ws, r, 2, ref['ident'], color=C_MUTED)
+            self._cell(ws, r, 3, f"='Data'!E{data_row}", color=C_LINK, fmt=FMT_NUM)
+            self._cell(ws, r, 4, f"='Data'!F{data_row}", color=C_LINK, fmt=FMT_NUM)
+            self._cell(ws, r, 5, f"='Data'!H{data_row}", color=C_LINK, fmt=FMT_EUR)
+            r += 1
+
+        # --- brand bar charts (sorted desc already; horizontal reads better) ---
+        n = len(self._airport_refs)
+        if n >= 2:
+            self._add_airport_bar(ws, 'Daily energy per airport (kWh)', data_col=5, anchor='G3', n=n)
+            self._add_airport_bar(ws, 'Peak demand per airport (kW)', data_col=6,
+                                  anchor=f'G{6 + max(12, int(n * 1.1))}', n=n)
         return ws
 
     # ---- charts -------------------------------------------------------------
-    def _add_donut(self, ws, ident, first, last, anchor):
-        if not first or last < first:
+    def _add_donut(self, ws, first, last, anchor):
+        if not first or not last or last < first:
             return
         from openpyxl.chart import DoughnutChart, Reference
+        from openpyxl.chart.series import DataPoint
+        from openpyxl.chart.shapes import GraphicalProperties
         ch = DoughnutChart()
         ch.title = 'Energy by aircraft type'
-        ch.height, ch.width = 7.5, 11
+        ch.height, ch.width = 7.5, 12
+        ch.holeSize = 55
+        ch.varyColors = False
         data = Reference(ws, min_col=2, min_row=first - 1, max_row=last)
         cats = Reference(ws, min_col=1, min_row=first, max_row=last)
         ch.add_data(data, titles_from_data=True)
         ch.set_categories(cats)
+        # house palette per slice (instead of the rainbow default)
+        pts = []
+        for i in range(last - first + 1):
+            dp = DataPoint(idx=i)
+            dp.graphicalProperties = GraphicalProperties(solidFill=PALETTE[i % len(PALETTE)])
+            pts.append(dp)
+        ch.series[0].data_points = pts
         ws.add_chart(ch, anchor)
 
-    def _add_line(self, ws, first, last, anchor):
-        from openpyxl.chart import LineChart, Reference
-        ch = LineChart()
+    def _add_step_curve(self, ws, first, last, anchor):
+        """The load profile as a scatter-with-straight-lines over Excel-time x —
+        a true step on a time-proportional axis (a category line chart would
+        space unequal intervals equally and draw diagonals)."""
+        from openpyxl.chart import ScatterChart, Series, Reference
+        from openpyxl.chart.marker import Marker
+        ch = ScatterChart()
         ch.title = 'Daily load profile (kW)'
-        ch.height, ch.width = 7.5, 14
+        ch.height, ch.width = 8, 15
+        ch.scatterStyle = 'lineMarker'
+        ch.x_axis.number_format = FMT_TIME
+        ch.x_axis.delete = False
+        ch.y_axis.delete = False
         ch.y_axis.title = 'kW'
-        ch.x_axis.title = 'Time'
-        data = Reference(ws, min_col=2, min_row=first - 1, max_row=last)
-        cats = Reference(ws, min_col=1, min_row=first, max_row=last)
-        ch.add_data(data, titles_from_data=True)
-        ch.set_categories(cats)
         ch.legend = None
+        xref = Reference(ws, min_col=1, min_row=first, max_row=last)
+        yref = Reference(ws, min_col=2, min_row=first, max_row=last)
+        s = Series(yref, xref, title='kW')
+        s.marker = Marker(symbol='none')
+        s.smooth = False
+        self._solid_series(s, PALETTE[0], line=True)
+        ch.series.append(s)
         ws.add_chart(ch, anchor)
 
-    def _add_bar(self, ws, title, col, anchor):
+    def _add_airport_bar(self, ws, title, data_col, anchor, n):
+        """Horizontal brand-blue bars over the Data sheet's Airports table."""
         from openpyxl.chart import BarChart, Reference
-        aws = self.wb['Airports']
-        n = self._ap_last
-        if n < 2:
-            return
+        dws = self.wb['Data']
         ch = BarChart()
-        ch.type = 'col'
+        ch.type = 'bar'             # horizontal — 16 long airport names read sideways
         ch.title = title
-        ch.height, ch.width = 8, 16
+        ch.height = max(7, 1.2 + 0.55 * n)
+        ch.width = 15
         ch.legend = None
-        data = Reference(aws, min_col=col, min_row=1, max_row=n)
-        cats = Reference(aws, min_col=1, min_row=2, max_row=n)
+        ch.varyColors = False
+        ch.gapWidth = 45
+        data = Reference(dws, min_col=data_col, min_row=self._ap_first - 1, max_row=self._ap_last)
+        cats = Reference(dws, min_col=1, min_row=self._ap_first, max_row=self._ap_last)
         ch.add_data(data, titles_from_data=True)
         ch.set_categories(cats)
+        self._solid_series(ch.series[0], PALETTE[0])
         ws.add_chart(ch, anchor)
 
     # ---- assembly -----------------------------------------------------------
     def build(self):
         self.wb.remove(self.wb.active)   # drop the default sheet
-        self._about()
-        self._flights()
-        self._aircraft()
-        self._chargers()
-        self._settings()
-        for a in self.airports:
+        for a in self.airports:          # busiest first (sorted in __init__)
             self._airport_detail(a)
-        self._airports_summary()
+        self._data_sheet()
         self._overview()
-        # presentation order: About, Overview, Airports, inputs, per-airport tabs
-        order = ['About', 'Overview', 'Airports', 'Flights', 'Aircraft', 'Chargers', 'Settings']
-        order += [r['sheet'] for r in self._airport_refs]
+        # presentation order: Overview, Data, then the airport tabs
+        order = ['Overview', 'Data'] + [r['sheet'] for r in self._airport_refs]
         self.wb._sheets.sort(key=lambda s: order.index(s.title) if s.title in order else 999)
         self.wb.active = 0
         buf = io.BytesIO()
@@ -492,6 +619,14 @@ class SpreadsheetBuilder:
 
 
 # ---- small value coercers ---------------------------------------------------
+def _clock(minutes):
+    try:
+        m = max(0, int(round(float(minutes)))) % (24 * 60)
+        return f'{m // 60:02d}:{m % 60:02d}'
+    except (TypeError, ValueError):
+        return ''
+
+
 def _num(v):
     try:
         if v is None or v == '':
@@ -499,14 +634,6 @@ def _num(v):
         return float(v)
     except (TypeError, ValueError):
         return None
-
-
-def _clock(minutes):
-    try:
-        m = max(0, int(round(float(minutes)))) % (24 * 60)
-        return f'{m // 60:02d}:{m % 60:02d}'
-    except (TypeError, ValueError):
-        return ''
 
 
 def generate_xlsx(payload):

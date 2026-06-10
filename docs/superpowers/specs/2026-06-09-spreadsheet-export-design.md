@@ -169,3 +169,45 @@ opens (zip integrity) and the download round-trips through `/api/report.xlsx`.
 - openpyxl chart styling is coarser than the PDF SVGs — acceptable; these are
   native, editable charts by design.
 - Large plans → many tabs; tab-name dedupe must be solid.
+
+---
+
+## v2 revision (2026-06-10) — "CNS Workbook v2"
+
+User review of a real 16-airport export found a chart-overlap defect and an
+unappealing default look. Decisions locked with the user: all airport tabs stay
+(+ a hyperlinked index), full brand restyle, About merges into Data.
+
+**Structure** — sheets collapse from `About + Overview + Airports + 4 input
+tabs + N airports` to **`Overview | Data | N airport tabs`**:
+- `Data` opens with the About block (format / version / generated / scope /
+  how-to-read) and then stacks ALL five tables: `tblAirports` (computed,
+  tagged), `tblFlights`, `tblAircraft`, `tblChargers`, `tblSettings`. Tables
+  are addressed by NAME, so the import contract is placement-independent;
+  the version anchor is the defined name **`CNS_Version`** → `Data!$B$3`.
+- **Breaking:** `tblSettings` becomes a SINGLE-ROW table (one column per
+  setting) instead of key/value rows — hence the version bump to **v2**.
+- Airports sort busiest-first everywhere (tab order, index, charts, tables).
+
+**Overview** — navy KPI cards (daily energy, peak, energy/yr, gross
+margin/yr), live scenario lines (gross revenue, realisation band, energy
+cost), a **hyperlinked airport index** (click a name → its tab), and two
+**horizontal** brand-blue bar charts over the Data Airports table.
+
+**Defect fixes & chart restyle**
+- Airport-tab charts anchor at **column K** — clear of the A–I tables they
+  previously overlapped.
+- All charts: `varyColors` off, single house-palette colours (donut slices use
+  the PDF palette), donut `holeSize` 55.
+- The load curve is now a **true step on a time-proportional axis**: doubled
+  points (t, prev)+(t, new) charted as a straight-line scatter over Excel-time
+  x values (`t/1440`, `hh:mm` format) — replacing the misleading diagonal
+  category line chart.
+- Tab colours group the workbook: Overview navy, Data spreadsheet-green,
+  airport tabs light blue.
+
+**Verification (v2)** — structural asserts (sheet order; five tables on Data;
+single-row `tblSettings`; chart anchors ≥ col K; hyperlinks resolve), chart-XML
+asserts (brand fill present, `varyColors val="0"`, `smooth val="0"`,
+`holeSize 55`), step-series shape check, and an independent formula evaluation:
+**0 errors across 363 cells**, network totals correct.

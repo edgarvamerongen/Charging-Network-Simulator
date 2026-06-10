@@ -58,9 +58,12 @@ class TestSpreadsheet(unittest.TestCase):
 
     def test_sheet_structure(self):
         names = self.wb.sheetnames
-        for expected in ('About', 'Overview', 'Airports', 'Flights', 'Aircraft',
-                         'Chargers', 'Settings', 'EHLE'):
+        # Workbook v2: inputs + about collapse into the single Data sheet
+        # (tables addressed by NAME there, not by sheet placement).
+        for expected in ('Overview', 'Data', 'EHLE'):
             self.assertIn(expected, names)
+        for gone in ('About', 'Flights', 'Aircraft', 'Chargers', 'Settings'):
+            self.assertNotIn(gone, names)
 
     def test_hostile_tab_name_sanitised(self):
         for n in self.wb.sheetnames:
@@ -68,11 +71,14 @@ class TestSpreadsheet(unittest.TestCase):
         self.assertTrue(any(n.startswith('BadName') for n in self.wb.sheetnames),
                         self.wb.sheetnames)
 
-    def test_flights_sheet_row(self):
-        ws = self.wb['Flights']
-        self.assertEqual(ws.cell(row=1, column=1).value, 'Flight ID')
-        self.assertEqual(ws.cell(row=2, column=1).value, 't1')
-        self.assertEqual(ws.cell(row=2, column=3).value, 'Beta Alia')
+    def test_flights_table_row(self):
+        # v2: the flights table lives on Data, addressed by name (tblFlights).
+        ws = self.wb['Data']
+        tbl = ws.tables['tblFlights']
+        first_col, first_row = openpyxl.utils.range_boundaries(tbl.ref)[:2]
+        self.assertEqual(ws.cell(row=first_row, column=first_col).value, 'Flight ID')
+        self.assertEqual(ws.cell(row=first_row + 1, column=first_col).value, 't1')
+        self.assertEqual(ws.cell(row=first_row + 1, column=first_col + 2).value, 'Beta Alia')
 
     def test_airport_daily_total_is_formula(self):
         ws = self.wb['EHLE']
@@ -87,10 +93,11 @@ class TestSpreadsheet(unittest.TestCase):
         self.assertTrue(vals, 'expected revenue formulas bound to Settings_tariff')
 
     def test_tariff_value_round_trips(self):
-        ws = self.wb['Settings']
-        labels = {ws.cell(row=r, column=1).value: ws.cell(row=r, column=2).value
-                  for r in range(2, 16)}
-        self.assertAlmostEqual(labels['Charging tariff (EUR/kWh)'], 0.55)
+        # v2: settings are a single-row table on Data; the tariff cell carries
+        # the defined name Settings_tariff — resolve it, don't pin placement.
+        dn = self.wb.defined_names['Settings_tariff']
+        (sheet, ref), = dn.destinations
+        self.assertAlmostEqual(self.wb[sheet][ref].value, 0.55)
 
     def test_tab_name_collisions_get_suffix(self):
         b = SpreadsheetBuilder({})
