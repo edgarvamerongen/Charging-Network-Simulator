@@ -2114,6 +2114,13 @@
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <script src="/static/tour.js?v={{ asset_version }}"></script>
     <script>
+        // HTML-escape for every data string interpolated into an innerHTML
+        // template. Airport/catalog names are server data, but custom plane &
+        // charger NAMES are user input shared across all visitors — without
+        // this, a name like  <img src=x onerror=…>  is stored XSS.
+        const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g,
+            (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        window.escHtml = escHtml;   // shared with static/*.js renderers
         const CHARGERS = {{ chargers|tojson }};                  // mutated at runtime: custom chargers are pushed in
         const chargerById = Object.fromEntries(CHARGERS.map(c => [c.id, c]));
         // Catalog chargers now carry the power in their name (e.g. "250 kW DC
@@ -2352,7 +2359,7 @@
                 const traj = document.getElementById('trajInfo');
                 if (traj) {
                     traj.classList.remove('d-none');
-                    traj.innerHTML = `Stop <strong>${ap.name}</strong> added — pick a <strong>destination airport</strong> to plan the route.`;
+                    traj.innerHTML = `Stop <strong>${escHtml(ap.name)}</strong> added — pick a <strong>destination airport</strong> to plan the route.`;
                 }
             }
         };
@@ -2398,7 +2405,7 @@
                     }
                 }
                 const via = useStops ? ` <span class="text-muted">via ${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''}</span>` : '';
-                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${selected.origin.name} → ${selected.destination.name})</span>${via}${warn}`;
+                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${escHtml(selected.origin.name)} → ${escHtml(selected.destination.name)})</span>${via}${warn}`;
                 box.classList.toggle('traj-error', !!warn);
                 box.classList.remove('d-none');
             } else {
@@ -2676,8 +2683,8 @@
                 document.querySelector('.stops-title').textContent = 'Suggested route';
                 summaryEl.textContent = `Direct flight · ${fmtDist(_dispKm(t.origin, t.dest))}`;
                 listEl.innerHTML = `
-                    <li class="terminus"><span class="step">0</span><strong>${t.origin.name}</strong><span></span><span></span><span class="leg-dist">→ ${fmtDist(_dispKm(t.origin, t.dest))}</span></li>
-                    <li class="terminus"><span class="step">1</span>${_altHint(t.dest).open}${t.dest.name}</strong>${_altHint(t.dest).badge || '<span></span>'}<span></span><span></span></li>`;
+                    <li class="terminus"><span class="step">0</span><strong>${escHtml(t.origin.name)}</strong><span></span><span></span><span class="leg-dist">→ ${fmtDist(_dispKm(t.origin, t.dest))}</span></li>
+                    <li class="terminus"><span class="step">1</span>${_altHint(t.dest).open}${escHtml(t.dest.name)}</strong>${_altHint(t.dest).badge || '<span></span>'}<span></span><span></span></li>`;
                 hintEl.innerHTML = `Direct leg fits the aircraft's range — no stops needed. Use <strong>+ Add stop</strong> in the form above to insert one manually.`;
                 _wireStopRowActions(t);
                 return;
@@ -2701,7 +2708,7 @@
                 // strike-through on hover (replaces the old × button).
                 const nameOpen = !isTerm ? `<strong class="stop-removable" data-stop="${i - 1}" title="Click to remove this stop">` : '<strong>';
                 // Always 5 grid cells (step · name · alt · size · range) so the columns line up.
-                return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span>${nameOpen}${wp.name}</strong>${ah.badge || '<span></span>'}${tagHtml || '<span></span>'}${legDist || '<span></span>'}</li>`;
+                return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span>${nameOpen}${escHtml(wp.name)}</strong>${ah.badge || '<span></span>'}${tagHtml || '<span></span>'}${legDist || '<span></span>'}</li>`;
             }).join('');
 
             const sourceLabel = plannedSource === 'user' ? 'Edited route' : 'Suggested route';
@@ -2792,7 +2799,7 @@
                 if (addInp.value.trim().length < 2) { addLst.classList.add('d-none'); return; }
                 acCurrent = rankAirportMatches(addInp.value, allAirports, 30);
                 addLst.innerHTML = acCurrent.length
-                    ? acCurrent.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${ap.name}</strong> <small>${labelFor(ap)}</small></div>`).join('')
+                    ? acCurrent.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${escHtml(ap.name)}</strong> <small>${escHtml(labelFor(ap))}</small></div>`).join('')
                     : '<div class="ac-item text-muted">No matches.</div>';
                 addLst.classList.remove('d-none');
             });
@@ -2938,7 +2945,7 @@
             function render(matches) {
                 current = matches; activeIdx = -1;
                 if (!matches.length) { list.classList.add('d-none'); return; }
-                list.innerHTML = matches.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${ap.name}</strong> <small>${labelFor(ap)}</small></div>`).join('');
+                list.innerHTML = matches.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${escHtml(ap.name)}</strong> <small>${escHtml(labelFor(ap))}</small></div>`).join('');
                 list.classList.remove('d-none');
             }
             input.addEventListener('input', () => {
@@ -3093,7 +3100,7 @@
             function render(matches) {
                 current = matches; activeIdx = -1;
                 if (!matches.length) { list.classList.add('d-none'); return; }
-                list.innerHTML = matches.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${ap.name}</strong> <small>${labelFor(ap)}</small></div>`).join('');
+                list.innerHTML = matches.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${escHtml(ap.name)}</strong> <small>${escHtml(labelFor(ap))}</small></div>`).join('');
                 list.classList.remove('d-none');
             }
             input.addEventListener('input', () => {
@@ -4144,7 +4151,7 @@
             // populate filter (preserve selection)
             const sel = document.getElementById('airportFilter');
             const opts = ['<option value="all">All airports</option>']
-                .concat(list.map(a => `<option value="${a.ident}">${a.name}</option>`)).join('');
+                .concat(list.map(a => `<option value="${escHtml(a.ident)}">${escHtml(a.name)}</option>`)).join('');
             sel.innerHTML = opts;
             if (![...sel.options].some(o => o.value === calcFilter)) calcFilter = 'all';
             sel.value = calcFilter;
@@ -4223,13 +4230,14 @@
                         : c.role === 'stop'
                         ? `<span class="section-tag tag-stop">STOP</span>`
                         : `<span class="section-tag tag-dest">DESTINATION</span>`;
+                    const other = escHtml(c.other);
                     const dir =
-                        c.role === 'training' ? `${t.originName}` :
-                        c.role === 'origin'   ? `→ ${c.other}` :
-                        c.role === 'home'     ? `→ ${c.other} & back` :
-                        c.role === 'stop'     ? `on ${c.other}` :
-                                                `from ${c.other}`;
-                    const chargerName = asg.charger ? asg.charger.name : 'no charger';
+                        c.role === 'training' ? `${escHtml(t.originName)}` :
+                        c.role === 'origin'   ? `→ ${other}` :
+                        c.role === 'home'     ? `→ ${other} & back` :
+                        c.role === 'stop'     ? `on ${other}` :
+                                                `from ${other}`;
+                    const chargerName = escHtml(asg.charger ? asg.charger.name : 'no charger');
                     // A flight that pinned its charger (manual override) shows a
                     // small "pinned" badge so it's clear why it ignored the
                     // automatic biggest-with-biggest assignment.
@@ -4246,7 +4254,7 @@
                         : '';
                     return `<tr class="folder-trip${t.feasible === false ? ' folder-trip-infeasible' : ''}">
                         <td>${roleTag} ${dir}${infeasibleBadge}</td>
-                        <td>${t.planeName}</td>
+                        <td>${escHtml(t.planeName)}</td>
                         <td>${tripLabel}</td>
                         <td><div class="input-group input-group-sm" style="width:150px">
                             <input type="number" min="1" value="${t.freqN}" class="form-control trip-freq-n" data-id="${t.id}">
@@ -4286,7 +4294,7 @@
                 return `<div class="border rounded p-3 mb-3" data-dest="${ident}">
                     <div class="folder-head mb-3">
                         <div>
-                            <h5 class="mb-0 folder-airport-name">${a.name}</h5>
+                            <h5 class="mb-0 folder-airport-name">${escHtml(a.name)}</h5>
                             <div class="folder-airport-sub">${fpd} flights/day${nInfeasible ? ` · <span class="tag-infeasible" title="${nInfeasible} saved flight${nInfeasible > 1 ? 's' : ''} can't be routed at the current settings — open Route breakdown for the reason. Excluded from the totals.">⚠ ${nInfeasible} infeasible</span>` : ''}</div>
                         </div>
                         <button class="btn btn-sm btn-outline-primary" data-map="${ident}">View flights on map</button>
@@ -4559,8 +4567,8 @@
                     const n = a.contribs.length;
                     return `<label class="report-ap-row">
                         <input type="radio" name="reportAp" value="${a.ident}">
-                        <span class="report-ap-main"><span class="report-ap-name">${a.name}</span>
-                        <span class="report-ap-sub">${a.ident} · ${dStr} flights/day · ${n} route${n !== 1 ? 's' : ''}</span></span>
+                        <span class="report-ap-main"><span class="report-ap-name">${escHtml(a.name)}</span>
+                        <span class="report-ap-sub">${escHtml(a.ident)} · ${dStr} flights/day · ${n} route${n !== 1 ? 's' : ''}</span></span>
                     </label>`;
                 }).join('');
                 listEl.querySelectorAll('input[name="reportAp"]').forEach(r => {
@@ -4631,7 +4639,7 @@
             }
             const planeSel = document.getElementById('efPlane');
             planeSel.innerHTML = planes.map(p =>
-                `<option value="${p.id}">${p.name} — ${p.battery_kwh || '?'} kWh${customById[p.id] ? ' (custom)' : ''}</option>`).join('');
+                `<option value="${escHtml(p.id)}">${escHtml(p.name)} — ${p.battery_kwh || '?'} kWh${customById[p.id] ? ' (custom)' : ''}</option>`).join('');
             planeSel.value = t.planeId;
             _refreshEditThumb();
 
@@ -5055,7 +5063,7 @@
             const el = document.getElementById('cpList');
             const rows = planes.length
                 ? '<ul>' + planes.map(p =>
-                    `<li><span><strong>${p.name}</strong> <small>— ${fmtEnergy(p.battery_kwh)} · ${fmtDist(p.range_km)} · ${fmtSpeed(p.speed_kmh)}</small></span>` +
+                    `<li><span><strong>${escHtml(p.name)}</strong> <small>— ${fmtEnergy(p.battery_kwh)} · ${fmtDist(p.range_km)} · ${fmtSpeed(p.speed_kmh)}</small></span>` +
                     `<button class="cl-rm" type="button" title="Remove" data-rm-plane="${p.id}">×</button></li>`).join('') + '</ul>'
                 : '<div class="cl-empty">No custom aircraft yet.</div>';
             el.innerHTML =
@@ -5076,7 +5084,7 @@
             const el = document.getElementById('ccList');
             const rows = chargers.length
                 ? '<ul>' + chargers.map(c =>
-                    `<li><span><strong>${c.name}</strong> <small>— ${fmtPower(c.power_kw)}</small></span>` +
+                    `<li><span><strong>${escHtml(c.name)}</strong> <small>— ${fmtPower(c.power_kw)}</small></span>` +
                     `<button class="cl-rm" type="button" title="Remove" data-rm-charger="${c.id}">×</button></li>`).join('') + '</ul>'
                 : '<div class="cl-empty">No custom chargers yet.</div>';
             el.innerHTML =

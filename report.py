@@ -21,6 +21,7 @@ import math
 import mimetypes
 import os
 import platform
+import re
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -98,18 +99,12 @@ _macos_setup_weasyprint()
 # Heavy deps are imported lazily inside generate_pdf() so a misconfigured
 # environment surfaces a single clear error at request time rather than
 # breaking module import (and the whole Flask app).
-DAY_START = 7 * 60
-DAY_END = 23 * 60
+#
+# Operating day + revenue/cost assumptions are shared with spreadsheet.py via
+# economics.py so the PDF and XLSX exports never disagree.
+from economics import (DAY_START_MIN as DAY_START, DAY_END_MIN as DAY_END,
+                       REALISATION_LOW, REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH)
 
-# --- Revenue & cost scenario (clearly-labelled, tunable assumptions) ---------
-# Not every available kWh is billed at the headline tariff (off-peak sessions,
-# contracted rates, idle capacity), so annual revenue is shown as a realisation
-# BAND rather than a single figure.
-REALISATION_LOW = 0.70
-REALISATION_HIGH = 1.00
-# Wholesale energy procurement cost (EUR/kWh). Tariff minus this is the gross
-# margin, before grid fees, demand charges, and operating costs.
-PROCUREMENT_EUR_PER_KWH = 0.15
 # Bonus: auto-embed an airport photo on the cover (curated local first, then
 # Wikimedia). Flip to False to disable the network fallback entirely.
 AIRPORT_PHOTO_WIKIMEDIA = True
@@ -564,6 +559,11 @@ def _network_map_png(routes, airports, width=900, height=520):
 # ---------- Airport photo (bonus) -------------------------------------------
 _PHOTO_CACHE_DIR = os.path.join(PICS_DIR, 'airports', '_cache')
 _WIKI_UA = 'NRG2FLY-CNS/1.0 (https://nrg2fly.com; charging advisory report)'
+# The ident comes straight from the client-POSTed payload and is used to build
+# filesystem paths (curated pics + the download cache) and a SPARQL query. Only
+# an ICAO-shaped code is acceptable — anything else (e.g. ../../etc/passwd)
+# must be treated as "no ident" or it becomes a path-traversal read/write.
+_SAFE_IDENT_RE = re.compile(r'^[A-Za-z0-9_-]{2,8}$')
 
 def _http_get(url, timeout=6, accept_json=False, params=None):
     # Prefer requests (bundles certifi) — this framework Python's urllib has no
@@ -669,6 +669,8 @@ def _airport_photo(ident, name, lat, lon):
     failure is swallowed → the cover renders photo-less (the band is hidden)."""
     blank = {'uri': '', 'credit': ''}
     ident = (ident or '').strip()
+    if not _SAFE_IDENT_RE.match(ident):
+        ident = ''
 
     # 1) curated local, then a prior cached download
     for base in ([os.path.join(PICS_DIR, 'airports', ident)] if ident else []) + \

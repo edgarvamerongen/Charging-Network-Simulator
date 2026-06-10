@@ -21,6 +21,9 @@ exported as values; charts over them still redraw if the user edits the series.
 import io
 from datetime import datetime
 
+from economics import (DAY_START_MIN, DAY_END_MIN, REALISATION_LOW,
+                       REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH)
+
 FORMAT_NAME = 'NRG2FLY Charging Network Simulator — workbook'
 FORMAT_VERSION = 'CNS Workbook v1'
 
@@ -64,9 +67,9 @@ class SpreadsheetBuilder:
             self.tariff = float(self.p.get('chargeRate'))
         except (TypeError, ValueError):
             self.tariff = 0.60
-        self.realisation_low = 0.70
-        self.realisation_high = 1.00
-        self.procurement = 0.15
+        self.realisation_low = REALISATION_LOW
+        self.realisation_high = REALISATION_HIGH
+        self.procurement = PROCUREMENT_EUR_PER_KWH
         self._tab_names = set()
         # filled while building per-airport sheets, consumed by the summary
         self._airport_refs = []   # [{ident, name, lat, lon, sheet, daily, peak, installed}]
@@ -227,8 +230,8 @@ class SpreadsheetBuilder:
             ('SID/STAR padding (km/leg)', _num(s.get('sidStarPaddingKm')) or 0, FMT_NUM, None),
             ('Alternate reserve', ('on' if s.get('alternateReserve') else 'off'), None, None),
             ('Grid demand factor', _num(s.get('gridDemandFactor')) or 1.0, '0.00', None),
-            ('Operating day start', '07:00', None, None),
-            ('Operating day end', '23:00', None, None),
+            ('Operating day start', _clock(DAY_START_MIN), None, None),
+            ('Operating day end', _clock(DAY_END_MIN), None, None),
             ('Revenue realisation — low', self.realisation_low, FMT_PCT, 'Settings_realisationLow'),
             ('Revenue realisation — high', self.realisation_high, FMT_PCT, 'Settings_realisationHigh'),
             ('Energy procurement (EUR/kWh)', self.procurement, '€0.00', 'Settings_procurement'),

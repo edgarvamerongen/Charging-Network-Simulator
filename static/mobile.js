@@ -13,6 +13,12 @@
 (function () {
     'use strict';
 
+    // HTML-escape every data string interpolated into innerHTML below. Airport
+    // names are server data, but custom aircraft/charger names are user input —
+    // escaping keeps a hostile name from becoming markup.
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
     // ---------- State -------------------------------------------------------
     const selected = { origin: null, destination: null };
     let allAirports = [];
@@ -158,7 +164,7 @@
         if (!list) return;
         pickerMatches = matches;
         list.innerHTML = matches.length
-            ? matches.map((a, i) => `<div class="m-ac-item" data-i="${i}"><strong>${a.name}</strong><small>${a.ident || ''} ${a.municipality ? '· ' + a.municipality : ''}</small></div>`).join('')
+            ? matches.map((a, i) => `<div class="m-ac-item" data-i="${i}"><strong>${esc(a.name)}</strong><small>${esc(a.ident || '')} ${a.municipality ? '· ' + esc(a.municipality) : ''}</small></div>`).join('')
             : '<div class="m-ac-item text-muted">No matches</div>';
     }
 
@@ -601,13 +607,13 @@
         const battery = data.plane?.battery_kwh || 0;
 
         const metaRow = (label, value) =>
-            `<div class="m-stop-meta"><span class="lbl">${label}</span><span class="val">${value}</span></div>`;
+            `<div class="m-stop-meta"><span class="lbl">${esc(label)}</span><span class="val">${esc(value)}</span></div>`;
 
         const cardHtml = (name, code, metas) => `
             <div class="m-stop-card">
                 <div class="m-stop-head">
-                    <span class="m-stop-name">${name || '—'}</span>
-                    <span class="m-stop-code">${code || ''}</span>
+                    <span class="m-stop-name">${esc(name) || '—'}</span>
+                    <span class="m-stop-code">${esc(code) || ''}</span>
                 </div>
                 ${metas.join('')}
             </div>`;
@@ -654,11 +660,9 @@
         return (ident || (name || '').split(/\s+/)[0] || '').toUpperCase();
     }
 
-    function fmtDur(mins) {
-        const m = Math.round(mins || 0);
-        if (m < 60) return m + ' min';
-        return Math.floor(m / 60) + 'h ' + (m % 60 ? (m % 60) + 'min' : '');
-    }
+    // Duration formatting lives in CNSUnits — single source of truth shared with
+    // the desktop scheduler/animation (units.js loads before mobile.js).
+    const fmtDur = (mins) => CNSUnits.fmtDuration(mins);
 
     // Sampled-bezier "arc" between two lat/lons. `bend` is the offset of
     // the control point perpendicular to the chord (positive = up-left,
@@ -796,7 +800,7 @@
         empty.classList.add('d-none');
 
         const airports = Object.values(CNSDemand.computeAirports());
-        const flightsPerDay = t => (t.freqUnit === 'week' ? t.freqN / 7 : t.freqN);
+        const flightsPerDay = CNSDemand.flightsPerDay;   // single source of truth in demand.js
 
         airports.sort((a, b) =>
             b.contribs.reduce((s, c) => s + flightsPerDay(c.t), 0) -
@@ -822,7 +826,7 @@
                             : c.role === 'stop'  ? `on ${c.other}`
                             : `from ${c.other}`;
                 return `<div class="m-dc-flight">
-                    <span class="lbl"><strong>${role}</strong> · ${t.planeName} · ${t.freqN}/${t.freqUnit}</span>
+                    <span class="lbl"><strong>${esc(role)}</strong> · ${esc(t.planeName)} · ${esc(t.freqN)}/${esc(t.freqUnit)}</span>
                     <span class="val">${Math.round((c.base || 0) * flightsPerDay(t))} kWh</span>
                 </div>`;
             }).join('');
@@ -832,8 +836,8 @@
             card.innerHTML = `
                 <div class="m-dc-card-head" data-toggle="${idx}">
                     <div>
-                        <div class="m-dc-name">${a.name}</div>
-                        <div class="m-dc-sub">${a.contribs.length} flight contribution${a.contribs.length === 1 ? '' : 's'} · ${ident}</div>
+                        <div class="m-dc-name">${esc(a.name)}</div>
+                        <div class="m-dc-sub">${a.contribs.length} flight contribution${a.contribs.length === 1 ? '' : 's'} · ${esc(ident)}</div>
                     </div>
                     <span style="font-size:.9rem; color: var(--muted)">▾</span>
                 </div>

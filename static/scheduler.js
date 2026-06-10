@@ -39,9 +39,18 @@ window.CNSScheduler = (function () {
 
     const num = (t, k, d = 0) => { const v = Number(t[k]); return isFinite(v) ? v : d; };
     const batteryOf = (t) => t.battery != null ? num(t, 'battery') : 2 * num(t, 'legEnergy');
-    const fmtTime = (m) => { const c = Math.max(0, Math.round(m)); return String(Math.floor(c / 60)).padStart(2, '0') + ':' + String(c % 60).padStart(2, '0'); };
-    const fmtDur = (min) => { const m = Math.ceil(min - 1e-9) || 0; return m <= 60 ? m + ' min' : (m % 60 ? `${Math.floor(m / 60)}h ${m % 60}min` : `${m / 60}h`); };
     const shorten = (s, n = 16) => (s && s.length > n) ? s.slice(0, n - 1) + '…' : (s || '');
+    // Clock + duration formatting live in CNSUnits (single source of truth). They're
+    // only used in the DOM-render paths below, where units.js is always loaded first;
+    // referenced inline (not at module-eval) so the vm test harness, which loads this
+    // module without CNSUnits, never trips over them.
+    const fmtTime = (m) => CNSUnits.fmtClock(m);
+    const fmtDur = (m) => CNSUnits.fmtDuration(m);
+    // HTML-escape before interpolating a name into innerHTML. Custom aircraft
+    // names are user input; falls back to a local impl if the page didn't define
+    // a shared one.
+    const esc = (s) => (window.escHtml ? window.escHtml(s) : String(s ?? '').replace(/[&<>"']/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 
     function roleAt(trip, ident) {
         if (trip.destIdent === ident) return 'dest';
@@ -665,8 +674,8 @@ window.CNSScheduler = (function () {
             const subRight = row.planeIdx
                 ? `aircraft ${row.planeIdx} of ${row.planeTotal}`
                 : `${row.rotations.length}/day`;
-            label.innerHTML = `<div style="font-weight:600">${shorten(trip.originName)} → ${shorten(trip.destName)}</div>` +
-                `<div class="text-muted" style="font-size:.68rem">${trip.planeName} · ${roleLabel}${trip.multiLeg ? ' · multi-leg' : ''} · ${subRight}</div>`;
+            label.innerHTML = `<div style="font-weight:600">${esc(shorten(trip.originName))} → ${esc(shorten(trip.destName))}</div>` +
+                `<div class="text-muted" style="font-size:.68rem">${esc(trip.planeName)} · ${roleLabel}${trip.multiLeg ? ' · multi-leg' : ''} · ${subRight}</div>`;
             lane.appendChild(label);
 
             const track = document.createElement('div');
