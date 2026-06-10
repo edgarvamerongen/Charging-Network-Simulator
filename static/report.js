@@ -147,7 +147,7 @@ window.CNSReport = (function () {
         const rotations = rows.map(row => {
             const t = row.trip;
             const role = (t.destIdent === ident) ? 'dest'
-                       : (t.originIdent === ident && t.tripType === 'retour') ? 'home'
+                       : (t.originIdent === ident && (t.tripType === 'retour' || t.tripType === 'circular')) ? 'home'
                        : (t.originIdent === ident) ? 'origin'
                        : 'stop';
             const instances = row.rotations.map(rot => ({
@@ -162,7 +162,9 @@ window.CNSReport = (function () {
                 })),
             }));
             return {
-                route: `${_short(t.originName)} → ${_short(t.destName)}`,
+                route: t.tripType === 'circular'
+                    ? `${_short(t.originName)} → ${_short(t.destName)} → ${_short(t.originName)}`
+                    : `${_short(t.originName)} → ${_short(t.destName)}`,
                 planeName: t.planeName,
                 role,
                 multiLeg: !!t.multiLeg,

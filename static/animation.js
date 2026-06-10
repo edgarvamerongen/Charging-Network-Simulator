@@ -70,7 +70,9 @@ window.CNSAnimation = (function () {
         }
         const stops = (t.stops || []).map(s => [+s.lat, +s.lon]);
         const out = [o, ...stops, d];
-        return t.tripType === 'retour' ? out.concat(stops.slice().reverse(), [o]) : out;
+        if (t.tripType === 'retour') return out.concat(stops.slice().reverse(), [o]);
+        if (t.tripType === 'circular') return out.concat([o]);   // close the ring
+        return out;
     }
 
     function drawContext(ident) {
@@ -79,8 +81,10 @@ window.CNSAnimation = (function () {
         trips.forEach(t => {
             const o = [+t.originLat, +t.originLon], d = [+t.destLat, +t.destLon];
             if (t.multiLeg) {
-                // straight polyline through every waypoint; back-leg dashed for retour
+                // straight polyline through every waypoint; back-leg dashed for retour;
+                // circular closes the loop with the final leg back home
                 const chainOut = [o, ...(t.stops || []).map(s => [+s.lat, +s.lon]), d];
+                if (t.tripType === 'circular') chainOut.push(o);
                 L.polyline(chainOut, { color: '#9ab', weight: 2, opacity: .6 }).addTo(layer);
                 if (t.tripType === 'retour') {
                     L.polyline(chainOut.slice().reverse(), { color: '#9ab', weight: 2, opacity: .5, dashArray: '6 5' }).addTo(layer);

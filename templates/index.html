@@ -1541,9 +1541,11 @@
                     <select id="tripType" class="form-select">
                         <option value="one-way">One-Way</option>
                         <option value="retour">Retour (Round Trip)</option>
+                        <option value="circular">Circular (closed loop A → B → … → A)</option>
                         <option value="training">Training (circular pattern A→A)</option>
                     </select>
                     <p id="trainingHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a pattern around the origin for a fixed duration (matched to the aircraft's training range). Energy per flight is capped at the usable battery.</p>
+                    <p id="circularHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a closed loop: Departure → stop(s) → Destination → back to Departure. Needs at least one stop — for a simple there-and-back, pick Retour.</p>
                 </div>
 
                 <div class="field">
@@ -2063,6 +2065,7 @@
                             <select id="efTripType" class="form-select">
                                 <option value="one-way">One-way (A → B)</option>
                                 <option value="retour">Retour (A → B → A)</option>
+                                <option value="circular">Circular (A → B → … → A)</option>
                                 <option value="training">Training (loop at base)</option>
                             </select>
                         </div>
@@ -2400,13 +2403,15 @@
                 // Match the Suggested-route panel: with planned stops, show the actual
                 // routed distance (origin → stops → destination) via the SAME haversine
                 // the panel uses, not the direct great-circle — so the two never disagree.
-                const useStops = stopsOn && Array.isArray(plannedStops) && plannedStops.length;
+                const circular = _isCircularTrip();
+                const useStops = stopsOn && Array.isArray(plannedStops) && (plannedStops.length || circular);
                 let km;
                 if (useStops) {
                     const chain = [O, ...plannedStops.map(s => ({ lat: s.lat, lon: s.lon })), D];
+                    if (circular) { closingStops.forEach(s => chain.push({ lat: s.lat, lon: s.lon })); chain.push(O); }
                     km = 0; for (let i = 0; i < chain.length - 1; i++) km += hk(chain[i], chain[i + 1]);
                 } else {
-                    km = hk(O, D);
+                    km = hk(O, D) * (circular ? 2 : 1);   // stop-less circular: show the full loop out-and-back
                 }
                 // Direct-flight range check against current Model settings —
                 // surfaces the over-range condition in the always-visible pill
@@ -2430,8 +2435,10 @@
                         warn = ` <span class="traj-warn">⚠ ${fmtDist(km + altKm - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
                 }
-                const via = useStops ? ` <span class="text-muted">via ${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''}</span>` : '';
-                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${escHtml(selected.origin.name)} → ${escHtml(selected.destination.name)})</span>${via}${warn}`;
+                const nVia = plannedStops.length + (circular ? closingStops.length : 0);
+                const via = useStops && nVia ? ` <span class="text-muted">via ${nVia} stop${nVia > 1 ? 's' : ''}</span>` : '';
+                const routeLabel = `${escHtml(selected.origin.name)} → ${escHtml(selected.destination.name)}${circular ? ' → ' + escHtml(selected.origin.name) : ''}`;
+                box.innerHTML = `<strong>Trajectory:</strong> ${fmtDist(km)} <span class="text-muted">(${routeLabel})</span>${via}${warn}`;
                 box.classList.toggle('traj-error', !!warn);
                 box.classList.remove('d-none');
             } else {
@@ -2450,6 +2457,17 @@
         let plannedError = null;
         let plannedSource = 'auto';      // 'auto' (algorithm) or 'user' (after manual edit)
         let plannedLegIssues = [];       // leg indices that exceed the aircraft's effective range
+        // Circular trips only: planner-inserted charging stops on the CLOSING leg
+        // (Destination → back to Departure). Kept separate from plannedStops so the
+        // form's origin→…→destination semantics (stop fields, removal, insertion)
+        // stay untouched; the ring chain below splices them in after the destination.
+        let closingStops = [];
+        const _isCircularTrip = () => document.getElementById('tripType').value === 'circular';
+        // The full chain the planner validates/renders: circular closes the loop
+        // back to the departure, with any closing-leg auto-stops in between.
+        const _ringChain = (t) => _isCircularTrip()
+            ? [t.origin, ...plannedStops, t.dest, ...closingStops, t.origin]
+            : [t.origin, ...plannedStops, t.dest];
         // Airports the operator explicitly removed from the chain (via × on
         // an auto-stop). The planner excludes these on every replan so the
         // removal sticks. Reset clears it; switching origin/destination does
@@ -2558,7 +2576,7 @@
                 const km = (full && full.alternate_km != null) ? +full.alternate_km : (+wp.alternate_km || 0);
                 return (isFinite(km) ? km : 0) / route;
             };
-            const chain = [t.origin, ...plannedStops, t.dest];
+            const chain = _ringChain(t);
             for (let i = 0; i < chain.length - 1; i++) {
                 const d = CNSRouting.haversineKm(chain[i], chain[i + 1]);
                 if (d + altReserveKm(chain[i + 1]) > maxLeg) plannedLegIssues.push(i);   // arrival node carries the divert reserve
@@ -2578,7 +2596,7 @@
         // (set/cleared in the withStops change handler) — gates the no-stops auto-off.
         let _stopsUserToggle = false;
         function recomputeRoute() {
-            plannedStops = []; plannedError = null; plannedLegIssues = [];
+            plannedStops = []; closingStops = []; plannedError = null; plannedLegIssues = [];
             plannedSource = 'auto';
             if (!document.getElementById('withStops').checked) {
                 validateRoute();      // direct-flight case still needs range check
@@ -2609,12 +2627,28 @@
             });
             if (chainRes.error && manual.length === 0) { plannedError = chainRes.error; renderStops(); return; }
             plannedStops = chainRes.stops;
+            // Circular: also plan the CLOSING leg (Destination → back to Departure)
+            // so an over-range hop home gets charging stops just like any other
+            // segment. Same per-segment pool rules as planChain: exclude airports
+            // already on the chain + the operator's blacklist.
+            if (_isCircularTrip()) {
+                const used = new Set([t.origin.ident, t.dest.ident, ...plannedStops.map(s => s && s.ident)].filter(Boolean));
+                const seg = CNSRouting.planRoute({
+                    origin: t.dest, destination: t.origin, plane,
+                    allAirports: allAirports.filter(ap => !used.has(ap.ident) && !_blacklistedStopIdents.has(ap.ident)),
+                    allowedTypes: _allowedTypes(), allowedIdents: _plannerAllowedIdents(),
+                    options: Object.assign({}, _routingOptions(), { maxLegKm: _availableRangeKm(plane) }),
+                });
+                if (seg.error) { if (!plannedError) plannedError = seg.error; }
+                else closingStops = (seg.stops || []).map(s => ({ ...s, _auto: true }));
+            }
             // Direct leg fits the range and the user pinned no stops → charging stops are
             // moot, so the toggle switches itself off and reads as the answer ("no charging
             // stops on this route"). NOT when the user just flipped it on themselves
             // (_stopsUserToggle) — snapping back inside their own click reads as broken.
-            // Forcing a stop anyway still works via the map's "Add as stop".
-            if (!_stopsUserToggle && manual.length === 0 && plannedStops.length === 0) {
+            // Forcing a stop anyway still works via the map's "Add as stop". Circular
+            // keeps the toggle on regardless: the closing leg always needs planning.
+            if (!_stopsUserToggle && manual.length === 0 && plannedStops.length === 0 && !_isCircularTrip()) {
                 const tg = document.getElementById('withStops');
                 if (tg.checked) { tg.checked = false; }
             }
@@ -2676,8 +2710,8 @@
             const t = _terminus(); const plane = _selectedPlane();
             if (!t || !plane) return null;
             const maxLeg = _availableRangeKm(plane);
-            const chain = [t.origin, ...plannedStops, t.dest];
-            const segments = plannedStops.length
+            const chain = _ringChain(t);
+            const segments = (plannedStops.length || _isCircularTrip())
                 ? plannedLegIssues.map(i => [chain[i], chain[i + 1]])
                 : [[t.origin, t.dest]];
             if (!segments.length) return null;
@@ -2742,7 +2776,9 @@
             // No auto-stops needed — direct leg fits. We still render the
             // section so the operator has access to + Add stop / Re-suggest
             // and sees the direct chain. Empty-state with the action row only.
-            if (!plannedStops.length) {
+            // (Circular always renders the full ring below, never this state —
+            // even stop-less it has a closing leg worth showing.)
+            if (!plannedStops.length && !_isCircularTrip()) {
                 section.classList.remove('d-none');
                 document.querySelector('.stops-title').textContent = 'Suggested route';
                 summaryEl.textContent = `Direct flight · ${fmtDist(_dispKm(t.origin, t.dest))}`;
@@ -2754,7 +2790,7 @@
                 return;
             }
 
-            const chain = [t.origin, ...plannedStops, t.dest];
+            const chain = _ringChain(t);
             let totalDist = 0; for (let i = 0; i < chain.length - 1; i++) totalDist += _dispKm(chain[i], chain[i + 1]);
 
             const lis = chain.map((wp, i) => {
@@ -2769,8 +2805,11 @@
                 }
                 const ah = i >= 1 ? _altHint(wp) : { open: '<strong>', badge: '' };   // arrival nodes only (not the origin)
                 // Removable stops (non-terminus): the NAME is the remove control — click to remove,
-                // strike-through on hover (replaces the old × button).
-                const nameOpen = !isTerm ? `<strong class="stop-removable" data-stop="${i - 1}" title="Click to remove this stop">` : '<strong>';
+                // strike-through on hover (replaces the old × button). Only nodes that map into
+                // plannedStops are removable — on a circular ring the destination and closing-leg
+                // auto-stops sit past that range (closing stops re-plan via the route fields).
+                const removable = !isTerm && (i - 1) < plannedStops.length;
+                const nameOpen = removable ? `<strong class="stop-removable" data-stop="${i - 1}" title="Click to remove this stop">` : '<strong>';
                 // Always 5 grid cells (step · name · alt · size · range) so the columns line up.
                 return `<li class="${isTerm ? 'terminus' : ''}"><span class="step">${i}</span>${nameOpen}${escHtml(wp.name)}</strong>${ah.badge || '<span></span>'}${tagHtml || '<span></span>'}${legDist || '<span></span>'}</li>`;
             }).join('');
@@ -2783,7 +2822,8 @@
             // managed by the form fields above, and the planner re-runs
             // automatically when those fields change.
             listEl.innerHTML = lis;
-            summaryEl.textContent = `${plannedStops.length} stop${plannedStops.length > 1 ? 's' : ''} · ${fmtDist(totalDist)} total`;
+            const nRingStops = plannedStops.length + (_isCircularTrip() ? closingStops.length : 0);
+            summaryEl.textContent = `${_isCircularTrip() ? 'Closed loop · ' : ''}${nRingStops} stop${nRingStops === 1 ? '' : 's'} · ${fmtDist(totalDist)} total`;
 
             // Hint / error line
             if (plannedError) {
@@ -3692,14 +3732,16 @@
             // before the tour can frame it intentionally.
             const shouldFit = data.fitBounds !== false && !window.__tourSuppressFit;
 
-            if (data.multi_leg && Array.isArray(data.stops) && data.stops.length) {
+            if ((data.multi_leg && Array.isArray(data.stops) && data.stops.length) || data.trip_type === 'circular') {
                 // Multi-leg: one polyline per leg so each can be coloured
                 // independently (red when over-range). For RETOUR we draw
                 // each leg as a gentle arc — outbound bows one way, return
                 // the other — so the two flight directions don't overlap
                 // along the same line (the previous "dashed-on-solid" trick
-                // was invisible at zoomed-out scales).
-                const chainOut = [p1, ...data.stops.map(s => [s.lat, s.lon]), p2];
+                // was invisible at zoomed-out scales). CIRCULAR appends the
+                // closing leg back to the departure, so the loop reads closed.
+                const chainOut = [p1, ...(data.stops || []).map(s => [s.lat, s.lon]), p2];
+                if (data.trip_type === 'circular') chainOut.push(p1);
                 const isRetour = data.trip_type === 'retour';
                 routeLayers = [];
                 for (let i = 0; i < chainOut.length - 1; i++) {
@@ -3741,7 +3783,7 @@
                 // fix to keep this migration behaviour-neutral. One-way single-leg uses the engine.
                 addFlightLabel(p1, p2, (_prof && data.trip_type !== 'retour' && _prof.legs[0]) || (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
             }
-            lastRouteChain = [selected.origin, ...plannedStops, selected.destination].filter(p => p && p.ident);
+            lastRouteChain = [selected.origin, ...plannedStops, selected.destination, ...(_isCircularTrip() ? closingStops : [])].filter(p => p && p.ident);
             refreshAlternates();
         }
         // Fit-bounds padding aware of the side rails (planner left, result
@@ -3781,8 +3823,19 @@
                 return;
             }
             if (!selected.destination) { clearRoute(); setRoute([]); return; }
-            // Any manual stops queued? Render as multi-leg chain.
-            const stops = (plannedStops || []).map(s => ({ ident: s.ident, name: s.name, lat: s.lat, lon: s.lon }));
+            // Any manual stops queued? Render as multi-leg chain. Circular also
+            // splices in the closing-leg auto-stops so the preview shows the
+            // same ring the Simulate payload will carry.
+            const wpOf = (s) => ({ ident: s.ident, name: s.name, lat: s.lat, lon: s.lon });
+            const stops = (plannedStops || []).map(wpOf);
+            const isCircular = tripType === 'circular';
+            const destWp = { ident: selected.destination.ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
+            // Uniform ring contract (matches the Simulate payload): destination =
+            // the LAST ring node; everything else (incl. the named destination
+            // when closing stops follow it) rides in `stops`.
+            const ring = isCircular ? [...stops, destWp, ...(closingStops || []).map(wpOf)] : null;
+            const previewStops = isCircular ? ring.slice(0, -1) : stops;
+            const previewDest  = isCircular ? ring[ring.length - 1] : destWp;
             // Compute which legs are over-range so drawRoute can colour them
             // red on the map (matches the over-range ⚠ in the Suggested route
             // chain). When validateRoute has already populated plannedLegIssues
@@ -3795,10 +3848,11 @@
                     const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
                     const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
                     const chain = [
-                        { lat: selected.origin.latitude_deg,      lon: selected.origin.longitude_deg },
-                        ...stops,
-                        { lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg },
+                        { lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg },
+                        ...previewStops,
+                        previewDest,
                     ];
+                    if (isCircular) chain.push(chain[0]);
                     for (let i = 0; i < chain.length - 1; i++) {
                         if (CNSRouting.haversineKm(chain[i], chain[i + 1]) > maxLeg) legIssues.push(i);
                     }
@@ -3806,10 +3860,10 @@
             }
             drawRoute({
                 trip_type: tripType,
-                multi_leg: stops.length > 0,
-                origin:      { lat: selected.origin.latitude_deg,      lon: selected.origin.longitude_deg,      name: selected.origin.name },
-                destination: { lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg, name: selected.destination.name },
-                stops,
+                multi_leg: previewStops.length > 0,
+                origin:      { lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg, name: selected.origin.name },
+                destination: { lat: previewDest.lat, lon: previewDest.lon, name: previewDest.name },
+                stops: previewStops,
                 legIssues,
                 fitBounds: false,    // never auto-zoom during planning — distracting
             });
@@ -3895,7 +3949,7 @@
                 `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico">⚡</span>Charge at ${_esc(name)}${isDest ? '<span class="dest-badge">turnaround</span>' : ''}</div>` +
                 `<div class="step-sub">+${fmtDuration(min)} · ${fmtEnergy(energy)}</div></td></tr>`;
             const _typeLabel = isTraining ? `Training pattern (${Math.round(flightMin)} min)`
-                : (isRetour ? 'Round Trip (Retour)' : 'One-Way')
+                : (data.trip_type === 'circular' ? 'Circular (closed loop)' : isRetour ? 'Round Trip (Retour)' : 'One-Way')
                   + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
             const _steps = [`<tr class="step-head"><td>Trip type</td><td>${_esc(_typeLabel)}</td></tr>`];
             const _destNm = (data._dest && data._dest.name) || '', _originNm = (data._origin && data._origin.name) || '';
@@ -3944,7 +3998,7 @@
             // same bug - terminals ignore the target; it only governs en-route stops.)
             const _chargeToFrac = Math.max(0, Math.min(1, arrivalSoc + (bd.terminalKwh || 0) / (p.battery_kwh || 1)));
             const _tgtLabel = (_chargeToFrac < 0.999) ? `${Math.round(_chargeToFrac * 100)}%` : 'full';
-            const _finalLabel = isRetour ? 'Back at base' : (isTraining ? 'Recharge at' : 'Final destination');
+            const _finalLabel = (isRetour || data.trip_type === 'circular') ? 'Back at base' : (isTraining ? 'Recharge at' : 'Final destination');
             const _crows = [`<tr><td>${_finalLabel}</td><td>${_esc(terminalName)}</td></tr>`];
             if (terminalMin > 0.5) {
                 _crows.push(`<tr><td>Arrival charge</td><td>${Math.round(arrivalSoc * 100)}%</td></tr>`);
@@ -4151,9 +4205,24 @@
             if (window.CNSChargers && CNSChargers.get(chargerId)) payload.charger = CNSChargers.get(chargerId);
             // Multi-leg trip: include the planned stops if "Plan with charging stops" is on
             // (not applicable to training mode — patterns don't take stops).
-            if (!isTraining && document.getElementById('withStops').checked && plannedStops.length) {
+            const stopShape = s => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type });
+            if (tripType === 'circular') {
                 if (plannedError) { errDiv.textContent = plannedError; errDiv.classList.remove('d-none'); return; }
-                payload.stops = plannedStops.map(s => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type }));
+                // Uniform ring contract: every ring node (planned stops, the named
+                // destination, closing-leg auto-stops) travels in chain order — the
+                // LAST one is the payload destination, the rest are stops. The
+                // backend appends the origin to close the ring.
+                const ringStops = [...plannedStops.map(stopShape), stopShape(toCoord(selected.destination)), ...closingStops.map(stopShape)];
+                payload.destination = ringStops[ringStops.length - 1];
+                payload.stops = ringStops.slice(0, -1);
+                if (!payload.stops.length) {
+                    document.getElementById('result').classList.add('d-none');
+                    errDiv.textContent = 'A circular trip needs at least one stop — for a simple there-and-back, pick Retour.';
+                    errDiv.classList.remove('d-none'); return;
+                }
+            } else if (!isTraining && document.getElementById('withStops').checked && plannedStops.length) {
+                if (plannedError) { errDiv.textContent = plannedError; errDiv.classList.remove('d-none'); return; }
+                payload.stops = plannedStops.map(stopShape);
             }
             const response = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const data = await response.json();
@@ -4162,16 +4231,26 @@
                 errDiv.textContent = data.error; errDiv.classList.remove('d-none'); return;
             }
             data._origin = { ident: selected.origin.ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg };
-            data._dest = isTraining ? data._origin : { ident: selected.destination.ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
+            // Circular: the payload destination is the LAST ring node (may be a
+            // closing-leg auto-stop), not necessarily the named destination field.
+            data._dest = isTraining ? data._origin
+                : tripType === 'circular' ? { ident: payload.destination.ident, name: payload.destination.name, lat: payload.destination.lat, lon: payload.destination.lon }
+                : { ident: selected.destination.ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg };
+            // Circular: remember which ring node the user actually NAMED as the
+            // destination — addFolder anchors it _manual so a settings recompute
+            // can't re-plan it away (closing auto-stops are fair game).
+            if (tripType === 'circular') data._namedDestIdent = selected.destination.ident;
             data._chargerId = document.getElementById('charger').value;
             data._freqN = Math.max(1, parseInt(document.getElementById('freqN').value || '1', 10));
             data._freqUnit = document.getElementById('freqUnit').value;
             lastResult = data; renderResult(data); drawRoute(data);
         });
 
-        // Trip-type select: hide destination field + help text when "Training".
+        // Trip-type select: hide destination field + help text when "Training";
+        // force the stops planner on for "Circular" (a loop needs ≥1 stop).
         document.getElementById('tripType').addEventListener('change', (e) => {
             const isTraining = e.target.value === 'training';
+            const isCircular = e.target.value === 'circular';
             const destField = document.getElementById('destinationField');
             const stopsRow  = document.getElementById('withStops')?.closest('.field');
             const help      = document.getElementById('trainingHelp');
@@ -4188,6 +4267,7 @@
             document.getElementById('stopsContainer')?.classList.toggle('d-none', isTraining);
             document.getElementById('stopsSection')?.classList.toggle('d-none', isTraining);
             help.classList.toggle('d-none', !isTraining);
+            document.getElementById('circularHelp')?.classList.toggle('d-none', !isCircular);
             destInput.required = !isTraining;
             if (isTraining) {
                 selected.destination = null;
@@ -4199,8 +4279,23 @@
                 // longer applies in training mode).
                 plannedStops = []; plannedError = null; plannedSource = 'auto'; plannedLegIssues = [];
             }
+            // Circular: the loop has a closing leg (Destination → Departure)
+            // that the planner must route/validate, so the stops planner is
+            // forced ON and can't be switched off while circular is selected.
+            const ws = document.getElementById('withStops');
+            if (ws) {
+                if (isCircular) {
+                    ws.disabled = true;
+                    if (!ws.checked) { ws.checked = true; ws.dispatchEvent(new Event('change')); }
+                    else recomputeRoute();
+                } else {
+                    ws.disabled = false;
+                    // The chain shape changed (closing leg dropped) — re-plan.
+                    if (!isTraining && ws.checked) recomputeRoute();
+                }
+            }
             // Trip type change also reshapes the live preview (training =
-            // circle vs. one-way/retour = polyline).
+            // circle vs. one-way/retour = polyline vs. circular = closed loop).
             if (typeof drawLiveRoute === 'function') drawLiveRoute();
             updateFleetMode();
         });
@@ -4215,7 +4310,7 @@
             if (!row) return;
             const tripType = document.getElementById('tripType').value;
             const n = Math.max(1, parseInt(document.getElementById('freqN').value || '1', 10));
-            const show = (tripType === 'retour' || tripType === 'training') && n > 1;
+            const show = (tripType === 'retour' || tripType === 'training' || tripType === 'circular') && n > 1;
             row.classList.toggle('d-none', !show);
             row.querySelectorAll('.fm-n').forEach(el => { el.textContent = n; });
         }
@@ -4372,6 +4467,7 @@
                           + (pinned ? ` <span class="charger-pin" title="Charger pinned by you — overrides the automatic priority">📌</span>` : '');
                     const tripLabel =
                         t.tripType === 'training' ? `Training · ${Math.round((+t.flightTimeH || 0) * 60)} min`
+                        : t.tripType === 'circular' ? `Circular · ${(t.stops || []).length + 2} legs`
                         : (t.tripType === 'retour' ? 'Retour' : 'One-way') + (t.multiLeg ? ' · multi-leg' : '');
                     const infeasibleBadge = (t.feasible === false)
                         ? ` <span class="tag-infeasible" title="${(t.infeasibleReason || 'No valid route at the current settings').replace(/"/g, '&quot;')}">⚠ no route</span>`
@@ -4635,7 +4731,10 @@
                     multiLeg: true,
                     flightTimeH: d.total_flight_time_h,
                     rechargeEnergy: d.total_recharge_energy_kwh,   // legacy field — used as a fallback by older code
-                    stops: CNSRecompute.mergeManualFlags(d.stops, plannedStops),   // carry _manual (lost on the sim round-trip)
+                    stops: CNSRecompute.mergeManualFlags(d.stops,                  // carry _manual (lost on the sim round-trip);
+                        d.trip_type === 'circular' && d._namedDestIdent            // the circular NAMED destination rides in stops
+                            ? [...plannedStops, { ident: d._namedDestIdent, _manual: true }]   // when closing stops follow it — anchor it
+                            : plannedStops),
                     charges: d.charges,                            // [{at_index,name,lat,lon,ident,role,energy_kwh,charge_time_min,...}]
                     legs: d.legs,                                  // [{from,to,distance_km,flight_time_h,energy_kwh}]
                     totalDistanceKm: d.total_distance_km,
@@ -4669,7 +4768,9 @@
             setTimeout(() => { btn.classList.remove('is-added'); btn.textContent = '+ Add to demand calculator'; }, 1400);
 
             flashFolderCards([trip.originIdent, trip.destIdent]);
-            confirmRouteAdded(`${d._origin.name} → ${d._dest.name}`);
+            confirmRouteAdded(d.trip_type === 'circular'
+                ? `${d._origin.name} → ${d._dest.name} → ${d._origin.name}`
+                : `${d._origin.name} → ${d._dest.name}`);
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
         document.getElementById('exportSpreadsheet').addEventListener('click', (e) => CNSSpreadsheet.export(e.currentTarget));
@@ -4749,7 +4850,7 @@
         }
         function _updateEditFleetVisibility() {
             const tt = document.getElementById('efTripType').value;
-            document.getElementById('efFleetRow').classList.toggle('d-none', !(tt === 'retour' || tt === 'training'));
+            document.getElementById('efFleetRow').classList.toggle('d-none', !(tt === 'retour' || tt === 'training' || tt === 'circular'));
         }
 
         function openFlightEdit(tripId, ident) {
@@ -4759,7 +4860,9 @@
             if (!_editFlightModal) _editFlightModal = new bootstrap.Modal(document.getElementById('editFlightModal'));
 
             document.getElementById('efRoute').textContent =
-                t.tripType === 'training' ? `${t.originName} (training loop)` : `${t.originName} → ${t.destName}`;
+                t.tripType === 'training' ? `${t.originName} (training loop)`
+                : t.tripType === 'circular' ? `${t.originName} → ${t.destName} → ${t.originName}`
+                : `${t.originName} → ${t.destName}`;
             document.getElementById('efTripType').value = t.tripType || 'one-way';
 
             // Aircraft options (catalog + custom). Keep the trip's current plane in

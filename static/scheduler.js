@@ -54,7 +54,7 @@ window.CNSScheduler = (function () {
 
     function roleAt(trip, ident) {
         if (trip.destIdent === ident) return 'dest';
-        if (trip.originIdent === ident && trip.tripType === 'retour') return 'home';
+        if (trip.originIdent === ident && (trip.tripType === 'retour' || trip.tripType === 'circular')) return 'home';
         if (trip.originIdent === ident) return 'origin';   // one-way departure hub: take-off here at 100%, no charge
         if (trip.multiLeg && Array.isArray(trip.stops) && trip.stops.some(s => s && s.ident === ident)) return 'stop';
         return null;
@@ -64,15 +64,15 @@ window.CNSScheduler = (function () {
     // Does a freq>1 trip mean SEPARATE aircraft (a fleet, flying in parallel)
     // or ONE aircraft doing sequential rotations?
     //   • one-way  → always separate (the plane lands at the dest and stays).
-    //   • retour   → user's choice via trip.fleetMode; defaults to 'separate'
-    //                (an operator adding "3/day" usually means 3 tails).
+    //   • retour / circular → user's choice via trip.fleetMode; defaults to
+    //                'separate' (an operator adding "3/day" usually means 3 tails).
     //   • training → defaults to 'shared' (a school plane flies N sessions),
     //                unless the user picked 'separate'.
     function fleetSeparate(trip) {
         if (trip.tripType === 'one-way') return true;
         if (trip.fleetMode === 'separate') return true;
         if (trip.fleetMode === 'shared') return false;
-        return trip.tripType === 'retour';   // unset default
+        return trip.tripType === 'retour' || trip.tripType === 'circular';   // unset default
     }
 
     // Per-trip engine FlightProfile (CNSFlight), cached + busted on folder/cfg/settings

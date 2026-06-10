@@ -405,6 +405,13 @@ def simulate_flight():
             return jsonify({"error": "Origin and destination must differ "
                                      "(use trip_type='training' for circuit flights)."}), 400
 
+    # A circular trip without intermediate stops is just a retour; rejecting it
+    # here keeps the two types distinct (and the sim's single-leg path never
+    # sees 'circular').
+    if trip_type == 'circular' and not stops:
+        return jsonify({"error": "A circular trip needs at least one intermediate stop. "
+                                 "For a there-and-back flight, pick Retour."}), 400
+
     # Any uncaught exception below would otherwise render Flask's HTML 500 page,
     # which breaks the browser's JSON parser and surfaces as an opaque failure.
     # Keep the response shape consistent so the UI can show a real error.

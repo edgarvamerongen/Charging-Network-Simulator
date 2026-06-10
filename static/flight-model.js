@@ -55,6 +55,9 @@ window.CNSFlight = (function () {
             const back = stops.slice().reverse();
             return waypoints.concat(back, [waypoints[0]]);   // O..stops..D..reversed-stops..O
         }
+        if (tripType === 'circular') {
+            return waypoints.concat([waypoints[0]]);         // close the ring: O..stops..D..O
+        }
         return waypoints.slice();                            // one-way: O..stops..D  (training handled separately)
     }
 
@@ -122,7 +125,7 @@ window.CNSFlight = (function () {
             return profile;
         }
 
-        // ---- ONE-WAY / RETOUR: forward-SoC walk over the expanded chain --------------------------
+        // ---- ONE-WAY / RETOUR / CIRCULAR: forward-SoC walk over the expanded chain ---------------
         const chain = _expandChain(waypoints, tripType);
         profile.multiLeg = (waypoints.length > 2);
         const nLegs = chain.length - 1;
@@ -141,7 +144,7 @@ window.CNSFlight = (function () {
             if (overRange) errors.push({ kind: 'over-range', legIndex: i, energyKwh, usable });
             profile.legs.push({ fromIdent: a.ident, fromName: a.name, toIdent: b.ident, toName: b.name, rawKm, distKm, flightMin, energyKwh, socStartFrac: 0, socEndFrac: 0, overRange, legIndex: i });
         }
-        const retourMidIdx = (tripType === 'retour') ? (waypoints.length - 1) : -1;   // chain index of the turnaround (dest)
+        const turnIdx = (tripType === 'retour' || tripType === 'circular') ? (waypoints.length - 1) : -1;   // chain index of the turnaround (dest); for circular only the closing leg lies past it
 
         // origin node — departs FULL, billable:false (D6); multi-leg one-way bills no origin charge
         profile.nodes.push({ ident: origin.ident, name: origin.name, lat: +origin.lat, lon: +origin.lon, role: 'origin', departSocFrac: departSocFrac, billable: false });
@@ -170,9 +173,9 @@ window.CNSFlight = (function () {
                 departTo = Math.min(departTo, batt);
             }
             const chargeE = Math.max(0, departTo - arrival);      // [R9] no clamp to prev leg
-            const isReturn = (retourMidIdx >= 0) && (i + 1 > retourMidIdx);
-            const role = isTerminal ? (tripType === 'retour' ? 'home' : 'dest')
-                       : (i + 1 === retourMidIdx ? 'dest' : 'stop');
+            const isReturn = (turnIdx >= 0) && (i + 1 > turnIdx);
+            const role = isTerminal ? ((tripType === 'retour' || tripType === 'circular') ? 'home' : 'dest')
+                       : (i + 1 === turnIdx ? 'dest' : 'stop');
             const powerKw = _effectiveChargePower(getChargerKw(node.ident), batt, cRate);
             const chargeMin = _chargeTimeMin(chargeE, powerKw, batt, batt > 0 ? arrival / batt : 0);   // [R7] SoC-aware
             const targetFrac = (isTerminal && terminusToFull) ? 1 : (getTarget(node.ident) != null ? getTarget(node.ident) : (batt > 0 ? Math.min(1, departTo / batt) : 0));
@@ -182,7 +185,7 @@ window.CNSFlight = (function () {
                 arrivalSocFrac: batt > 0 ? arrival / batt : 0, targetSocFrac: targetFrac, departSocFrac: batt > 0 ? (arrival + chargeE) / batt : 0,
                 energyKwh: chargeE, gridKwh: chargeE * grid, powerKw, chargeMin, isTerminal,
             });
-            if (chargeMin > 0) { profile.phases.push({ kind: 'charge', chargeIndex: profile.charges.length - 1, start: off, dur: chargeMin, ident: node.ident, label: (isTerminal && tripType === 'retour' ? 'Recharge @ ' : 'Charge @ ') + node.name }); off += chargeMin; }
+            if (chargeMin > 0) { profile.phases.push({ kind: 'charge', chargeIndex: profile.charges.length - 1, start: off, dur: chargeMin, ident: node.ident, label: (isTerminal && (tripType === 'retour' || tripType === 'circular') ? 'Recharge @ ' : 'Charge @ ') + node.name }); off += chargeMin; }
             socKwh = arrival + chargeE;
         }
 

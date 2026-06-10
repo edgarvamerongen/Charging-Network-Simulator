@@ -27,7 +27,7 @@ window.CNSDemand = (function () {
     // Role this trip plays at `ident`:
     //   'training' — training pattern based at this airport (origin = destination)
     //   'dest'     — the trip arrives here (one-way or retour destination)
-    //   'home'     — the trip's home base (retour origin only)
+    //   'home'     — the trip's home base (retour/circular origin only)
     //   'origin'   — a one-way departure hub: the aircraft leaves FULL, so it
     //                contributes no charging demand here — listed for completeness.
     //   'stop'     — an intermediate charging stop on a multi-leg trip
@@ -37,7 +37,7 @@ window.CNSDemand = (function () {
             return trip.originIdent === ident ? 'training' : null;
         }
         if (trip.destIdent === ident) return 'dest';
-        if (trip.originIdent === ident && trip.tripType === 'retour') return 'home';
+        if (trip.originIdent === ident && (trip.tripType === 'retour' || trip.tripType === 'circular')) return 'home';
         if (trip.originIdent === ident) return 'origin';   // one-way departure hub (departs full → 0 charging)
         if (trip.multiLeg && Array.isArray(trip.stops) && trip.stops.some(s => s && s.ident === ident)) return 'stop';
         return null;
@@ -93,11 +93,11 @@ window.CNSDemand = (function () {
                 // back. (Energy can also differ between visits because the plane
                 // arrives with different remaining battery each time.)
                 const nStops = (t.stops || []).length;
-                const retourMidIdx = (t.tripType === 'retour') ? nStops + 1 : null;
+                const turnIdx = (t.tripType === 'retour' || t.tripType === 'circular') ? nStops + 1 : null;
                 t.charges.forEach((c, idx) => {
                     if (!c) return;   // keep real charge events even if they lack an ident — ensure() keys them by name/coords instead of dropping them
                     const a = ensure(c.ident, c.name, c.lat, c.lon);
-                    const isReturnVisit = (retourMidIdx !== null) && (Number(c.at_index) > retourMidIdx);
+                    const isReturnVisit = (turnIdx !== null) && (Number(c.at_index) > turnIdx);
                     const other =
                         c.role === 'home' ? t.destName :
                         c.role === 'dest' ? t.originName :
@@ -115,8 +115,8 @@ window.CNSDemand = (function () {
                 // contribution — and adding one here would double-count). It still
                 // gets a zero-energy 'origin' contribution so the departure hub is
                 // listed in the DC with its take-off rotation instead of vanishing.
-                // (Retour origins charge as 'home' via the charges loop above.)
-                if (t.tripType !== 'retour') {
+                // (Retour/circular origins charge as 'home' via the charges loop above.)
+                if (t.tripType !== 'retour' && t.tripType !== 'circular') {
                     ensure(t.originIdent, t.originName, t.originLat, t.originLon)
                         .contribs.push({ t, role: 'origin', other: t.destName, base: 0 });
                 }

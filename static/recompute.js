@@ -54,8 +54,31 @@ window.CNSRecompute = (function () {
         });
         if (chain.error) { t.feasible = false; t.infeasibleReason = chain.error; return t; }
 
+        // Circular: also re-plan the CLOSING leg (the loop closes dest → origin;
+        // per the ring contract the stored dest is the LAST ring node). New
+        // closing auto-stops extend the ring past the current dest, so the
+        // stored dest is folded into stops (anchored — it's a kept waypoint)
+        // and destIdent/destName shift to the new last ring node.
+        let ringDest = dest;
+        if (trip.tripType === 'circular') {
+            const used = new Set([origin.ident, dest.ident, ...chain.stops.map(s => s && s.ident)].filter(Boolean));
+            const seg = window.CNSRouting.planRoute({
+                origin: dest, destination: origin, plane,
+                allAirports: ctx.allAirports.filter(a => !used.has(a.ident)),
+                allowedTypes: ctx.allowedTypes, allowedIdents: ctx.allowedIdents,
+                options: Object.assign({}, ctx.routingOptions || {}, { maxLegKm: ctx.availableRangeKm(plane) }),
+            });
+            if (seg.error) { t.feasible = false; t.infeasibleReason = seg.error; return t; }
+            const closing = (seg.stops || []).map(s => ({ ...s, _auto: true }));
+            if (closing.length) {
+                const ring = [...chain.stops, { ...dest, _manual: true }, ...closing];
+                ringDest = ring[ring.length - 1];
+                chain.stops = ring.slice(0, -1);
+            }
+        }
+
         // Re-derive energy through the SAME client engine the DES/DC display uses.
-        const wps = [origin, ...chain.stops, dest].map(n => ({ ident: n.ident, name: n.name, lat: n.lat, lon: n.lon }));
+        const wps = [origin, ...chain.stops, ringDest].map(n => ({ ident: n.ident, name: n.name, lat: n.lat, lon: n.lon }));
         const prof = window.CNSFlight.simulateTrip(plane, wps, {
             tripType: trip.tripType,
             getTargetSoc: (id) => (window.CNSDemand && window.CNSDemand.resolveTargetSoc) ? window.CNSDemand.resolveTargetSoc((window.CNSDemand.loadCfg && window.CNSDemand.loadCfg()[id]) || null) : null,
@@ -69,7 +92,14 @@ window.CNSRecompute = (function () {
         }
         // Persist the refreshed route. Stop coords + tags from the chain; charges/legs from the engine.
         t.stops = chain.stops.map(s => ({ ident: s.ident, name: s.name, lat: s.lat, lon: s.lon, type: s.type, iata_code: s.iata_code || '', _manual: !!s._manual, _auto: !!s._auto }));
-        t.multiLeg = chain.stops.length > 0;
+        // A circular trip is structurally multi-leg (the closing leg exists even
+        // when a replan leaves zero intermediate stops) — every consumer reads
+        // its route from charges[]/legs[], which need the multiLeg path.
+        t.multiLeg = trip.tripType === 'circular' ? true : chain.stops.length > 0;
+        if (ringDest !== dest) {
+            t.destIdent = ringDest.ident; t.destName = ringDest.name;
+            t.destLat = ringDest.lat; t.destLon = ringDest.lon;
+        }
         t.charges = (prof.charges || []).filter(c => (c.energyKwh || 0) > 0).map(_storeCharge);
         t.legs = (prof.legs || []).map(_storeLeg);
         t.legEnergy = (prof.legs && prof.legs[0]) ? prof.legs[0].energyKwh : trip.legEnergy;

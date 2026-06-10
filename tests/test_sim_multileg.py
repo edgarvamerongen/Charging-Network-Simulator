@@ -224,5 +224,80 @@ class TestMultiLegOverRange(unittest.TestCase):
         self.assertIn("error", r)
 
 
+class TestMultiLegCircular(unittest.TestCase):
+    """Circular closes the ring without mirroring: chain = O,S,D,O.
+    EHAM -> EHRD (stop) -> LFPG -> back to EHAM; every leg (45/354/398 km)
+    stays inside Beta's 600 km range."""
+    def setUp(self):
+        self.sim = make_sim()
+        self.r = self.sim.simulate_by_coords(
+            "beta_plane", _coord("EHAM"), _coord("LFPG"),
+            "aircraft_charger", "circular", stops=[_coord("EHRD")])
+        self.assertTrue(self.r.get("success"), self.r)
+
+    def test_chain_length(self):
+        # O,S,D,O -> stops+2 = 3 legs, 3 charge events (origin start excluded)
+        self.assertEqual(len(self.r["legs"]), 3)
+        self.assertEqual(len(self.r["charges"]), 3)
+
+    def test_closing_leg_returns_to_origin(self):
+        last = self.r["legs"][-1]
+        self.assertEqual(last["from"]["name"], "LFPG")
+        self.assertEqual(last["to"]["name"], "EHAM")
+        d = ref_haversine(*AIRPORTS["LFPG"], *AIRPORTS["EHAM"])
+        self.assertAlmostEqual(last["distance_km"], d, delta=0.05)
+
+    def test_roles(self):
+        roles = [c["role"] for c in self.r["charges"]]
+        # S=stop, D=dest (last ring node before closing), final O=home
+        self.assertEqual(roles, ["stop", "dest", "home"])
+        self.assertEqual(self.r["charges"][-1]["ident"], "EHAM")
+
+    def test_terminal_tops_to_full_energy_conservation(self):
+        # Departs full, the closing 'home' charge tops to full -> charged == burned.
+        total_leg = sum(l["energy_kwh"] for l in self.r["legs"])
+        total_charge = sum(c["energy_kwh"] for c in self.r["charges"])
+        self.assertAlmostEqual(total_charge, total_leg, delta=0.05)
+
+    def test_charges_match_true_forward_walk(self):
+        batt = BETA["battery_kwh"]
+        leg_e = [l["energy_kwh"] for l in self.r["legs"]]
+        expected = _true_forward_walk_charges(batt, leg_e)
+        got = [c["energy_kwh"] for c in self.r["charges"]]
+        self.assertEqual(len(got), len(expected))
+        for i, (g, e) in enumerate(zip(got, expected)):
+            self.assertAlmostEqual(g, round(e, 2), delta=0.02, msg=f"charge[{i}]")
+
+    def test_no_mirrored_stops(self):
+        # Unlike retour, the stop is visited exactly once.
+        idents = [c["ident"] for c in self.r["charges"]]
+        self.assertEqual(idents.count("EHRD"), 1)
+
+
+class TestCircularGuards(unittest.TestCase):
+    def setUp(self):
+        self.sim = make_sim()
+
+    def test_zero_stops_rejected(self):
+        # A circular trip without stops is just a retour -> sim refuses rather
+        # than silently computing a one-way on the single-leg path.
+        r = self.sim.simulate_by_coords(
+            "beta_plane", _coord("EHAM"), _coord("LFPG"),
+            "aircraft_charger", "circular", stops=None)
+        self.assertIn("error", r)
+
+    def test_closing_leg_over_range_rejected(self):
+        # EHGG sits north-east; the ring EHAM -> EHGG -> ...Velis can't even fly
+        # the first leg, but the point here is a CLOSING leg violation: Beta to
+        # a far dest whose return leg breaks the range. Build it synthetically:
+        # O at 60N, stop+dest step ~400 km south -> closing leg ~800 km > 600.
+        wps = _colinear((60.0, 5.0), [0.0, 3.597, 2 * 3.597])
+        r = self.sim.simulate_by_coords(
+            "beta_plane", wps[0], wps[-1], "aircraft_charger", "circular",
+            stops=wps[1:-1])
+        self.assertIn("error", r)
+        self.assertIn("exceeds range", r["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

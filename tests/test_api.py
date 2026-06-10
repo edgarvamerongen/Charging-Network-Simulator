@@ -152,6 +152,45 @@ class TestSimulateAPI(unittest.TestCase):
         # sim returns {"error": ...} with HTTP 200 (no exception raised)
         self.assertIn("error", r)
 
+    def test_circular_via_api(self):
+        st, r = _post("/api/simulate", {
+            "origin": coord("EHAM"), "destination": coord("LFPG"),
+            "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
+            "trip_type": "circular",
+            "stops": [dict(coord("EHRD"), ident="EHRD")]})
+        self.assertEqual(st, 200, r)
+        self.assertTrue(r.get("success"), r)
+        self.assertTrue(r.get("multi_leg"))
+        # O,S,D,O -> stops+2 = 3 legs; the closing leg returns to the origin
+        self.assertEqual(len(r["legs"]), 3)
+        self.assertEqual(r["legs"][-1]["to"]["name"], r["origin"]["name"])
+        self.assertEqual(r["charges"][-1]["role"], "home")
+        self.assertAlmostEqual(r["total_distance_km"],
+                               round(sum(l["distance_km"] for l in r["legs"]), 2), delta=0.02)
+
+    def test_circular_zero_stops_rejected(self):
+        try:
+            st, r = _post("/api/simulate", {
+                "origin": coord("EHAM"), "destination": coord("LFPG"),
+                "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
+                "trip_type": "circular"})
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 400)
+            return
+        self.assertEqual(st, 400, r)
+
+    def test_circular_closing_leg_over_range_rejected(self):
+        # Velis (100 km): EHAM -> EHRD is in range, but the dest leg/closing
+        # legs are far over -> per-leg range check fires (JSON error, HTTP 200).
+        st, r = _post("/api/simulate", {
+            "origin": coord("EHAM"), "destination": coord("LFPG"),
+            "plane_id": "pipistrel_velis", "charger_id": LIVE_CHARGER,
+            "trip_type": "circular",
+            "stops": [dict(coord("EHRD"), ident="EHRD")]})
+        self.assertEqual(st, 200, r)
+        self.assertIn("error", r)
+        self.assertIn("exceeds range", r["error"])
+
     def test_same_origin_dest_rejected_for_oneway(self):
         try:
             st, r = _post("/api/simulate", {

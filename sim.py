@@ -214,6 +214,11 @@ class Simulator:
     def simulate_by_coords(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None, stops=None):
         if stops:
             return self._simulate_multi(plane_id, origin, destination, charger_id, trip_type, plane_obj, charger_obj, stops)
+        if trip_type == 'circular':
+            # Without this guard a stop-less circular would fall through to
+            # the single-leg path and silently compute a one-way A→B.
+            return {"error": "A circular trip needs at least one intermediate stop. "
+                             "For a there-and-back flight, use trip_type='retour'."}
         dist_km = haversine(
             origin['lat'], origin['lon'],
             destination['lat'], destination['lon']
@@ -259,7 +264,12 @@ class Simulator:
 
         # Build waypoint chain (caller passes stops in OUTBOUND order)
         outbound = [origin] + list(stops) + [destination]
-        chain = outbound + list(reversed(stops)) + [origin] if trip_type == 'retour' else outbound
+        if trip_type == 'retour':
+            chain = outbound + list(reversed(stops)) + [origin]
+        elif trip_type == 'circular':
+            chain = outbound + [origin]          # close the ring: O, S1..Sk, D, O
+        else:
+            chain = outbound
 
         # Compute legs
         legs = []
@@ -287,7 +297,12 @@ class Simulator:
 
         # Per-waypoint charge events (excluding origin)
         n = len(chain)
-        dest_idx = (n - 1) // 2 if trip_type == 'retour' else n - 1
+        if trip_type == 'retour':
+            dest_idx = (n - 1) // 2
+        elif trip_type == 'circular':
+            dest_idx = n - 2                     # last ring node, just before the closing origin
+        else:
+            dest_idx = n - 1
         charges = []
         for i in range(1, n):
             arrival = arrivals[i]
@@ -296,7 +311,7 @@ class Simulator:
                 charge_e = batt - arrival                                # top to full
             else:
                 charge_e = max(0.0, legs[i]['energy_kwh'] - arrival)     # enough for next leg
-            if trip_type == 'retour':
+            if trip_type in ('retour', 'circular'):
                 role = 'home' if is_terminal_final else ('dest' if i == dest_idx else 'stop')
             else:
                 role = 'dest' if is_terminal_final else 'stop'
