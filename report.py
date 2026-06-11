@@ -135,9 +135,24 @@ def _fmt_clock(minutes: float) -> str:
     return f'{m // 60:02d}:{m % 60:02d}'
 
 
+def _safe_pics_path(rel) -> str:
+    """Resolve a payload-supplied, pics-relative path, refusing anything that
+    escapes PICS_DIR (absolute paths or ../ traversal). The plane `image`/`svg`
+    fields come from the client-POSTed payload, so an unguarded os.path.join
+    would let `/etc/passwd` or `../../secret` be base64-embedded into the PDF.
+    Returns the absolute path, or '' if it isn't safely inside PICS_DIR."""
+    if not rel or not isinstance(rel, str):
+        return ''
+    base = os.path.realpath(PICS_DIR)
+    real = os.path.realpath(os.path.join(base, rel))
+    if real == base or real.startswith(base + os.sep):
+        return real
+    return ''
+
+
 def _file_data_uri(path: str) -> str:
     """Embed a local file as a data: URI so WeasyPrint doesn't have to fetch it."""
-    if not os.path.exists(path):
+    if not path or not os.path.exists(path):
         return ''
     mime = mimetypes.guess_type(path)[0] or 'application/octet-stream'
     with open(path, 'rb') as f:
@@ -241,7 +256,9 @@ def _xml_escape(s):
     return (str(s)
             .replace('&', '&amp;')
             .replace('<', '&lt;')
-            .replace('>', '&gt;'))
+            .replace('>', '&gt;')
+            .replace('"', '&quot;')
+            .replace("'", '&#39;'))
 
 
 def _nice_axis(vmax, target_ticks=4):
@@ -527,6 +544,7 @@ def _network_map_png(routes, airports, width=900, height=520):
         width, height,
         url_template='https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         headers={'User-Agent': 'NRG2FLY-CNS/1.0 (cns.ghettofaust.exposed)'},
+        tile_request_timeout=6,   # without this staticmap waits forever on a slow tile → hung worker
     )
     # routes (staticmap takes (lon, lat)). White casing + orange line so legs
     # read clearly over busy OSM tiles.
@@ -565,10 +583,31 @@ _WIKI_UA = 'NRG2FLY-CNS/1.0 (https://nrg2fly.com; charging advisory report)'
 # must be treated as "no ident" or it becomes a path-traversal read/write.
 _SAFE_IDENT_RE = re.compile(r'^[A-Za-z0-9_-]{2,8}$')
 
+# SSRF guard: the photo pipeline resolves an image URL from Wikidata/Wikipedia
+# responses (steered by the client-supplied airport name) and then fetches it.
+# Restrict every outbound _http_get to https on the Wikimedia family of hosts so
+# a crafted name can never make the server fetch an arbitrary/internal URL and
+# reflect its bytes back inside the PDF.
+_ALLOWED_FETCH_HOSTS = ('wikipedia.org', 'wikimedia.org', 'wikidata.org', 'wmcloud.org')
+
+
+def _fetch_host_allowed(url):
+    try:
+        parts = urllib.parse.urlparse(url)
+    except (ValueError, AttributeError):
+        return False
+    if parts.scheme != 'https':
+        return False
+    host = (parts.hostname or '').lower()
+    return any(host == d or host.endswith('.' + d) for d in _ALLOWED_FETCH_HOSTS)
+
+
 def _http_get(url, timeout=6, accept_json=False, params=None):
     # Prefer requests (bundles certifi) — this framework Python's urllib has no
     # CA bundle and fails SSL verification against Wikimedia. staticmap already
     # pulls requests in, so it's always available; urllib is a last resort.
+    if not _fetch_host_allowed(url):
+        raise ValueError(f'refusing to fetch disallowed URL host: {url!r}')
     try:
         import requests
         resp = requests.get(url, params=params, headers={'User-Agent': _WIKI_UA}, timeout=timeout)
@@ -678,6 +717,7 @@ def _satellite_photo(lat, lon, airport_type=None):
             url_template='https://server.arcgisonline.com/ArcGIS/rest/services/'
                          'World_Imagery/MapServer/tile/{z}/{y}/{x}',
             headers={'User-Agent': _WIKI_UA},
+            tile_request_timeout=6,   # bound the per-tile wait (see _network_map_png)
         )
         img = m.render(zoom=zoom, center=(float(lon), float(lat)))
         buf = io.BytesIO()
@@ -814,11 +854,13 @@ def generate_pdf(payload, css_url, request_root):
     donut_svg = _donut_svg(donut_slices, center_val, center_unit)
 
     # plane embeds (so WeasyPrint doesn't have to fetch them): photo + glyph.
+    # Paths come from the client payload, so resolve them through _safe_pics_path,
+    # which refuses anything that escapes PICS_DIR (path-traversal / abs paths).
     for p in planes:
         svg = p.get('svg')
-        p['svg_data_uri'] = _file_data_uri(os.path.join(PICS_DIR, 'plane_svgs', svg)) if svg else ''
+        p['svg_data_uri'] = _file_data_uri(_safe_pics_path(os.path.join('plane_svgs', svg))) if svg else ''
         img = p.get('image')
-        p['image_data_uri'] = _file_data_uri(os.path.join(PICS_DIR, img)) if img else ''
+        p['image_data_uri'] = _file_data_uri(_safe_pics_path(img)) if img else ''
 
     # network map — markers from EVERY route waypoint (so charging stops are
     # visible, not just the focus airport). Ends of a leg = terminal, middle

@@ -69,5 +69,47 @@ class TestAirportPhotoIdentGuard(unittest.TestCase):
             self.assertEqual(res, {'uri': '', 'credit': ''})
 
 
+class TestFetchHostAllowList(unittest.TestCase):
+    """SSRF guard: outbound _http_get is restricted to https Wikimedia hosts."""
+
+    def test_allows_wikimedia_family_over_https(self):
+        for ok in ('https://en.wikipedia.org/api/rest_v1/page/summary/X',
+                   'https://upload.wikimedia.org/x.jpg',
+                   'https://commons.wikimedia.org/wiki/Special:FilePath/X',
+                   'https://query.wikidata.org/sparql',
+                   'https://www.wikidata.org/w/api.php'):
+            self.assertTrue(report._fetch_host_allowed(ok), ok)
+
+    def test_blocks_other_hosts_schemes_and_lookalikes(self):
+        for bad in ('http://en.wikipedia.org/x',          # not https
+                    'https://evil.com/x',
+                    'https://169.254.169.254/latest/meta-data',  # cloud metadata
+                    'https://wikipedia.org.evil.com/x',     # suffix look-alike
+                    'https://localhost/x',
+                    'file:///etc/passwd',
+                    'gopher://x'):
+            self.assertFalse(report._fetch_host_allowed(bad), bad)
+
+    def test_http_get_refuses_disallowed_url(self):
+        with self.assertRaises(ValueError):
+            report._http_get('https://evil.example.com/x')
+
+
+class TestSafePicsPath(unittest.TestCase):
+    """Path-traversal guard for client-supplied plane image/svg paths."""
+
+    def test_traversal_and_absolute_rejected(self):
+        for bad in ('../app.py', '../../etc/passwd', '/etc/passwd', 'plane_svgs/../../app.py'):
+            self.assertEqual(report._safe_pics_path(bad), '', bad)
+
+    def test_benign_relative_stays_inside_pics(self):
+        p = report._safe_pics_path('plane_svgs/beta.svg')
+        self.assertTrue(p.startswith(os.path.realpath(report.PICS_DIR) + os.sep), p)
+
+    def test_empty_is_blank(self):
+        self.assertEqual(report._safe_pics_path(''), '')
+        self.assertEqual(report._safe_pics_path(None), '')
+
+
 if __name__ == '__main__':
     unittest.main()
