@@ -1624,7 +1624,7 @@
                 <div class="field" id="freqField">
                     <label>Expected frequency</label>
                     <div class="input-group">
-                        <input type="number" id="freqN" class="form-control" value="1" min="1" step="1">
+                        <input type="number" id="freqN" class="form-control" value="1" min="1" max="2000" step="1">
                         <span class="input-group-text">flights per</span>
                         <select id="freqUnit" class="form-select">
                             <option value="day">day</option>
@@ -2090,7 +2090,7 @@
                         <div class="col-6 mb-2">
                             <label class="form-label">Frequency</label>
                             <div class="input-group">
-                                <input id="efFreqN" type="number" min="1" step="1" class="form-control">
+                                <input id="efFreqN" type="number" min="1" max="2000" step="1" class="form-control">
                                 <select id="efFreqUnit" class="form-select">
                                     <option value="day">/day</option>
                                     <option value="week">/week</option>
@@ -4285,7 +4285,7 @@
             // can't re-plan it away (closing auto-stops are fair game).
             if (tripType === 'circular') data._namedDestIdent = selected.destination.ident;
             data._chargerId = document.getElementById('charger').value;
-            data._freqN = Math.max(1, parseInt(document.getElementById('freqN').value || '1', 10));
+            data._freqN = Math.min(2000, Math.max(1, parseInt(document.getElementById('freqN').value || '1', 10)));
             data._freqUnit = document.getElementById('freqUnit').value;
             lastResult = data; renderResult(data); drawRoute(data);
         });
@@ -4375,7 +4375,7 @@
             const row = document.getElementById('fleetModeRow');
             if (!row) return;
             const tripType = document.getElementById('tripType').value;
-            const n = Math.max(1, parseInt(document.getElementById('freqN').value || '1', 10));
+            const n = Math.min(2000, Math.max(1, parseInt(document.getElementById('freqN').value || '1', 10)));
             const show = (tripType === 'retour' || tripType === 'training' || tripType === 'circular') && n > 1;
             row.classList.toggle('d-none', !show);
             row.querySelectorAll('.fm-n').forEach(el => { el.textContent = n; });
@@ -4541,7 +4541,7 @@
                         <td>${escHtml(t.planeName)}</td>
                         <td>${tripLabel}</td>
                         <td><div class="input-group input-group-sm" style="width:150px">
-                            <input type="number" min="1" value="${t.freqN}" class="form-control trip-freq-n" data-id="${t.id}">
+                            <input type="number" min="1" max="2000" value="${t.freqN}" class="form-control trip-freq-n" data-id="${t.id}">
                             <select class="form-select trip-freq-unit" data-id="${t.id}">
                                 <option value="day" ${t.freqUnit === 'day' ? 'selected' : ''}>/day</option>
                                 <option value="week" ${t.freqUnit === 'week' ? 'selected' : ''}>/week</option>
@@ -4676,7 +4676,7 @@
             el.querySelectorAll('[data-rev-period]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); _dcRevenueYearly = b.dataset.revPeriod === 'year'; renderFolder(); }));
             el.querySelectorAll('[data-rm]').forEach(btn => btn.addEventListener('click', () => { saveFolder(loadFolder().filter(t => t.id !== btn.dataset.rm)); renderFolder(); }));
             el.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => openFlightEdit(btn.dataset.edit, btn.dataset.editIdent)));
-            el.querySelectorAll('.trip-freq-n').forEach(inp => inp.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqN: Math.max(1, parseInt(e.target.value || '1', 10)) })));
+            el.querySelectorAll('.trip-freq-n').forEach(inp => inp.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqN: Math.min(2000, Math.max(1, parseInt(e.target.value || '1', 10))) })));
             el.querySelectorAll('.trip-freq-unit').forEach(s => s.addEventListener('change', e => updateTrip(e.target.dataset.id, { freqUnit: e.target.value })));
             el.querySelectorAll('[data-dest]').forEach(card => {
                 const ident = card.dataset.dest;
@@ -5030,7 +5030,7 @@
 
             const newTripType = document.getElementById('efTripType').value;
             const newPlaneId  = document.getElementById('efPlane').value;
-            const freqN    = Math.max(1, parseInt(document.getElementById('efFreqN').value || '1', 10));
+            const freqN    = Math.min(2000, Math.max(1, parseInt(document.getElementById('efFreqN').value || '1', 10)));
             const freqUnit = document.getElementById('efFreqUnit').value === 'week' ? 'week' : 'day';
             const fleetMode = (document.querySelector('input[name="efFleetMode"]:checked') || {}).value
                 || prev.fleetMode || 'separate';

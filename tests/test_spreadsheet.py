@@ -15,7 +15,7 @@ try:
 except ImportError:
     HAVE_OPENPYXL = False
 
-from spreadsheet import generate_xlsx, SpreadsheetBuilder, _num, _clock
+from spreadsheet import generate_xlsx, SpreadsheetBuilder, _num, _clock, _safe_text
 
 
 PAYLOAD = {
@@ -104,6 +104,51 @@ class TestSpreadsheet(unittest.TestCase):
         self.assertEqual(b._tab('EHAM'), 'EHAM')
         self.assertEqual(b._tab('EHAM'), 'EHAM (2)')
         self.assertEqual(b._tab('eham'), 'eham (3)')   # uniqueness is case-insensitive
+
+
+@unittest.skipUnless(HAVE_OPENPYXL, 'openpyxl not installed')
+class TestFormulaInjection(unittest.TestCase):
+    """A user-named plane/charger/airport must never become a live formula in
+    the exported workbook (spreadsheet/CSV injection)."""
+
+    def test_malicious_names_are_neutralised_to_text(self):
+        evil = '=1+1'
+        ddE = '=cmd|\'/c calc\'!A0'
+        payload = {
+            'chargeRate': 0.6,
+            'airports': [{
+                'ident': 'EHAM', 'name': evil, 'lat': 52.3, 'lon': 4.76, 'peakKw': 100,
+                'chargers': [{'name': ddE, 'power_kw': 100, 'count': 1}],
+                'contribs': [{'role': 'origin', 'other': '=HYPERLINK("http://x")',
+                              'planeName': '@SUM(A1)', 'tripType': 'one-way',
+                              'freqN': 1, 'freqUnit': 'day', 'energyPerFlight': 10, 'chargeMin': 5}],
+            }],
+            'planes': [{'id': 'p', 'name': '+evil', 'battery_kwh': 100, 'range_km': 200, 'speed_kmh': 200}],
+            'chargers': [{'id': 'c', 'name': ddE, 'power_kw': 100}],
+            'flightsFull': [{'id': '-1+2', 'planeId': 'p', 'planeName': '@SUM(A1)',
+                             'originIdent': 'EHAM', 'originName': evil, 'destIdent': 'EDDF',
+                             'destName': 'Frankfurt', 'tripType': 'one-way',
+                             'chargerId': 'c', 'chargerName': ddE, 'freqN': 1, 'freqUnit': 'day'}],
+        }
+        wb = openpyxl.load_workbook(io.BytesIO(generate_xlsx(payload)))
+        live_formulas = []
+        for ws in wb.worksheets:
+            for row in ws.iter_rows():
+                for cell in row:
+                    if cell.data_type == 'f' and isinstance(cell.value, str):
+                        # an intended formula is fine; a user string leaking through is not
+                        if any(tok in cell.value for tok in ('cmd|', 'HYPERLINK', '1+1')):
+                            live_formulas.append((ws.title, cell.coordinate, cell.value))
+        self.assertEqual(live_formulas, [], f'user input became a live formula: {live_formulas}')
+
+    def test_safe_text_prefixes_only_dangerous_leads(self):
+        self.assertEqual(_safe_text('=1+1'), "'=1+1")
+        self.assertEqual(_safe_text('+1'), "'+1")
+        self.assertEqual(_safe_text('-1'), "'-1")
+        self.assertEqual(_safe_text('@x'), "'@x")
+        self.assertEqual(_safe_text('Lelystad'), 'Lelystad')   # normal names untouched
+        self.assertEqual(_safe_text(None), None)
+        self.assertEqual(_safe_text(42), 42)
 
 
 class TestCoercers(unittest.TestCase):

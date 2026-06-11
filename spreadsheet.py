@@ -155,7 +155,7 @@ class SpreadsheetBuilder:
     def _hyperlink(self, ws, r, c, text, target_sheet):
         """An internal hyperlink cell that jumps to another sheet."""
         from openpyxl.worksheet.hyperlink import Hyperlink
-        cell = self._cell(ws, r, c, text, color=BLUE)
+        cell = self._cell(ws, r, c, _safe_text(text), color=BLUE)
         from openpyxl.styles import Font
         cell.font = Font(name=FONT, color=BLUE, underline='single')
         cell.hyperlink = Hyperlink(ref=cell.coordinate, location=f"'{target_sheet}'!A1")
@@ -182,8 +182,8 @@ class SpreadsheetBuilder:
         ws.sheet_view.showGridLines = False
         ws.sheet_properties.tabColor = TAB_AIRPORT
         self._widths(ws, [30, 14, 16, 16, 14, 12, 12, 14, 14, 4])
-        self._cell(ws, 1, 1, name, bold=True, size=16, color=NAVY)
-        self._cell(ws, 2, 1, ident, bold=True, color=C_MUTED)
+        self._cell(ws, 1, 1, _safe_text(name), bold=True, size=16, color=NAVY)
+        self._cell(ws, 2, 1, _safe_text(ident), bold=True, color=C_MUTED)
         if a.get('lat') is not None:
             self._cell(ws, 2, 2, f"{_num(a.get('lat')):.4f}, {_num(a.get('lon')):.4f}", color=C_MUTED)
 
@@ -198,7 +198,7 @@ class SpreadsheetBuilder:
         ch_first = r + 1
         r += 1
         for c in chargers:
-            self._cell(ws, r, 1, c.get('name'), color=C_INPUT)
+            self._cell(ws, r, 1, _safe_text(c.get('name')), color=C_INPUT)
             self._cell(ws, r, 2, _num(c.get('count')) or 1, color=C_INPUT, fmt=FMT_NUM)
             self._cell(ws, r, 3, _num(c.get('power_kw')), color=C_INPUT, fmt=FMT_NUM)
             self._cell(ws, r, 4, f'=B{r}*C{r}', color=C_FORMULA, fmt=FMT_KW)
@@ -224,11 +224,11 @@ class SpreadsheetBuilder:
             route = {'HOME': f'{role} → {other} & back', 'ORIGIN': f'{role} → {other}',
                      'STOP': f'{role} on {other}'}.get(role, f'{role} from {other}')
             trip = ('Retour' if c.get('tripType') == 'retour' else 'One-way') + (' · multi-leg' if c.get('multiLeg') else '')
-            self._cell(ws, r, 1, route)
-            self._cell(ws, r, 2, c.get('planeName'))
+            self._cell(ws, r, 1, _safe_text(route))
+            self._cell(ws, r, 2, _safe_text(c.get('planeName')))
             self._cell(ws, r, 3, trip)
             self._cell(ws, r, 4, _num(c.get('freqN')), color=C_INPUT, fmt=FMT_NUM)
-            self._cell(ws, r, 5, c.get('freqUnit'), color=C_INPUT)
+            self._cell(ws, r, 5, _safe_text(c.get('freqUnit')), color=C_INPUT)
             self._cell(ws, r, 6, _num(c.get('energyPerFlight')), color=C_INPUT, fmt=FMT_NUM)
             self._cell(ws, r, 7, _fpd_expr(f'D{r}', f'E{r}'), color=C_FORMULA, fmt='0.00')
             self._cell(ws, r, 8, f'=F{r}*G{r}', color=C_FORMULA, fmt=FMT_NUM)
@@ -265,7 +265,7 @@ class SpreadsheetBuilder:
         daily_rng = f'${_gcl(daily_col)}${cf_first}:${_gcl(daily_col)}${cf_last}'
         for t in types:
             if cf_last >= cf_first:
-                self._cell(ws, r, 1, t)
+                self._cell(ws, r, 1, _safe_text(t))
                 self._cell(ws, r, 2, f'=SUMIF({ac_rng},A{r},{daily_rng})', color=C_FORMULA, fmt=FMT_NUM)
                 self._cell(ws, r, 3, f'=IF({daily_total_cell}=0,0,B{r}/{daily_total_cell})', color=C_FORMULA, fmt=FMT_PCT)
                 r += 1
@@ -330,7 +330,7 @@ class SpreadsheetBuilder:
         self._cell(ws, 3, 2, FORMAT_VERSION, color=C_MUTED)
         self._named('CNS_Version', 'Data', '$B$3')
         self._cell(ws, 4, 1, 'Generated', bold=True, color=NAVY)
-        self._cell(ws, 4, 2, self.p.get('generatedAt') or datetime.now().strftime('%Y-%m-%d %H:%M'),
+        self._cell(ws, 4, 2, _safe_text(self.p.get('generatedAt') or datetime.now().strftime('%Y-%m-%d %H:%M')),
                    color=C_MUTED)
         self._cell(ws, 5, 1, 'Scope', bold=True, color=NAVY)
         self._cell(ws, 5, 2, f'{len(self.airports)} airports · {len(self.flights)} flights', color=C_MUTED)
@@ -358,8 +358,8 @@ class SpreadsheetBuilder:
         self._ap_rows = []
         for ref in self._airport_refs:
             q = f"'{ref['sheet']}'"
-            self._cell(ws, r, 1, ref['name'])
-            self._cell(ws, r, 2, ref['ident'])
+            self._cell(ws, r, 1, _safe_text(ref['name']))
+            self._cell(ws, r, 2, _safe_text(ref['ident']))
             self._cell(ws, r, 3, _num(ref['lat']), fmt=FMT_COORD)
             self._cell(ws, r, 4, _num(ref['lon']), fmt=FMT_COORD)
             self._cell(ws, r, 5, f"={q}!{ref['daily']}", color=C_LINK, fmt=FMT_NUM)
@@ -390,7 +390,7 @@ class SpreadsheetBuilder:
                     f.get('chargerId'), f.get('chargerName'), _num(f.get('freqN')), f.get('freqUnit')]
             for i, v in enumerate(vals, start=1):
                 fmt = FMT_COORD if i in (6, 7, 10, 11) else None
-                self._cell(ws, r, i, v, color=C_INPUT, fmt=fmt)
+                self._cell(ws, r, i, _safe_text(v), color=C_INPUT, fmt=fmt)
             r += 1
         self._table(ws, 'tblFlights', hdr, max(r - 1, hdr + 1), 1, len(cols))
         r += 2
@@ -406,7 +406,7 @@ class SpreadsheetBuilder:
             vals = [pl.get('id'), pl.get('name'), _num(pl.get('battery_kwh')), _num(pl.get('range_km')),
                     _num(pl.get('speed_kmh')), _num(pl.get('seats')), _num(pl.get('load_kg'))]
             for i, v in enumerate(vals, start=1):
-                self._cell(ws, r, i, v, color=C_INPUT, fmt=(FMT_NUM if i in (3, 4, 5, 7) else None))
+                self._cell(ws, r, i, _safe_text(v), color=C_INPUT, fmt=(FMT_NUM if i in (3, 4, 5, 7) else None))
             r += 1
         last = max(r - 1, hdr + 1)
         self._table(ws, 'tblAircraft', hdr, last, 1, len(cols))
@@ -422,8 +422,8 @@ class SpreadsheetBuilder:
         hdr = r
         r += 1
         for c in self.chargers:
-            self._cell(ws, r, 1, c.get('id'), color=C_INPUT)
-            self._cell(ws, r, 2, c.get('name'), color=C_INPUT)
+            self._cell(ws, r, 1, _safe_text(c.get('id')), color=C_INPUT)
+            self._cell(ws, r, 2, _safe_text(c.get('name')), color=C_INPUT)
             self._cell(ws, r, 3, _num(c.get('power_kw')), color=C_INPUT, fmt=FMT_KW)
             r += 1
         last = max(r - 1, hdr + 1)
@@ -520,7 +520,7 @@ class SpreadsheetBuilder:
         r += 1
         for ref, data_row in zip(self._airport_refs, self._ap_rows):
             self._hyperlink(ws, r, 1, ref['name'], ref['sheet'])
-            self._cell(ws, r, 2, ref['ident'], color=C_MUTED)
+            self._cell(ws, r, 2, _safe_text(ref['ident']), color=C_MUTED)
             self._cell(ws, r, 3, f"='Data'!E{data_row}", color=C_LINK, fmt=FMT_NUM)
             self._cell(ws, r, 4, f"='Data'!F{data_row}", color=C_LINK, fmt=FMT_NUM)
             self._cell(ws, r, 5, f"='Data'!H{data_row}", color=C_LINK, fmt=FMT_EUR)
@@ -634,6 +634,22 @@ def _num(v):
         return float(v)
     except (TypeError, ValueError):
         return None
+
+
+# Spreadsheet (CSV/Excel) formula injection: a user-supplied string that starts
+# with a formula trigger becomes a live formula / DDE call when the workbook is
+# opened or re-exported to CSV. Neutralise by prefixing a single apostrophe so
+# the app treats the value as plain text. Only applied to USER-CONTROLLED values
+# (names, idents, free text) — never to the code's own intended formula strings,
+# so legitimate "=SUM(...)" cells keep working. Legitimate names never start with
+# these characters, so the prefix is effectively invisible in normal use.
+_FORMULA_LEAD = ('=', '+', '-', '@', '\t', '\r', '\n')
+
+
+def _safe_text(v):
+    if isinstance(v, str) and v[:1] in _FORMULA_LEAD:
+        return "'" + v
+    return v
 
 
 def generate_xlsx(payload):

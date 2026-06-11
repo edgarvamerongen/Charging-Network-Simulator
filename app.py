@@ -1,19 +1,24 @@
 import contextlib
+import hmac
 import json
 import math
 import os
 import re
+import secrets
 import subprocess
 import tempfile
+import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 try:
     import fcntl            # POSIX only; absent on Windows dev boxes
 except ImportError:
     fcntl = None
 
-from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, Response, redirect, make_response
+from flask import (Flask, render_template, request, jsonify, send_from_directory,
+                   url_for, Response, redirect, make_response, session)
+from werkzeug.security import check_password_hash
 from sim import Simulator
 from report import generate_pdf
 from spreadsheet import generate_xlsx
@@ -23,6 +28,103 @@ app = Flask(__name__)
 # otherwise planes.json/chargers.json/airports are read relative to wherever the
 # server happens to be launched from (e.g. a parent worktree), serving stale data.
 simulator = Simulator(base_dir=os.path.dirname(os.path.abspath(__file__)))
+
+# ---------------------------------------------------------------------------
+# Authentication & hardening
+# ---------------------------------------------------------------------------
+# The app is publicly reachable, so it sits behind a single shared password
+# (one client + a handful of trusted friends — no per-user accounts needed).
+# Configure it via the environment so no secret is ever committed:
+#
+#   CNS_PASSWORD_HASH  preferred — a werkzeug hash. Generate one with:
+#                      python -c "from werkzeug.security import generate_password_hash; \
+#                                 print(generate_password_hash('your-password'))"
+#   CNS_APP_PASSWORD   fallback — the plaintext password (kept only in the
+#                      service environment, e.g. a systemd EnvironmentFile).
+#   CNS_SECRET_KEY     signs the session cookie; set a stable random value so
+#                      logins survive restarts. Falls back to an ephemeral key.
+#   CNS_INSECURE_COOKIES=1   send the session cookie over plain HTTP (local dev
+#                            only; production is HTTPS via Cloudflare/bhosted).
+#
+# When NEITHER password var is set, auth is DISABLED (open app) and a loud
+# warning is logged — this keeps local dev and the offline test suite working
+# unchanged, but means a public deploy MUST set one of the two vars.
+_PASSWORD_HASH = os.environ.get('CNS_PASSWORD_HASH') or ''
+_PASSWORD_PLAIN = os.environ.get('CNS_APP_PASSWORD') or ''
+AUTH_ENABLED = bool(_PASSWORD_HASH or _PASSWORD_PLAIN)
+
+_secret_key = os.environ.get('CNS_SECRET_KEY')
+if not _secret_key:
+    # Ephemeral key: the app still works, but sessions reset on every restart.
+    _secret_key = secrets.token_hex(32)
+app.secret_key = _secret_key
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',            # blocks cross-site POSTs carrying the cookie (CSRF defence)
+    SESSION_COOKIE_SECURE=os.environ.get('CNS_INSECURE_COOKIES') != '1',
+    PERMANENT_SESSION_LIFETIME=timedelta(days=14),
+    # Reject oversized request bodies before they reach the JSON parser — a
+    # cheap cap on a memory/CPU-amplification vector (huge /api/report.* payloads).
+    MAX_CONTENT_LENGTH=int(os.environ.get('CNS_MAX_CONTENT_LENGTH', str(16 * 1024 * 1024))),
+)
+
+# Endpoints reachable WITHOUT a session. Everything else requires login when
+# AUTH_ENABLED. 'static' serves the login page's CSS/JS; 'healthz' lets an
+# uptime monitor probe the service without credentials.
+_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static'}
+
+# In-memory brute-force throttle for the login form. Per-worker (not shared
+# across gunicorn workers), which is fine for slowing guessing of a single
+# shared password; a determined attacker is further bounded by the password's
+# own entropy. For multi-instance deployments move this to Redis.
+_LOGIN_MAX_ATTEMPTS = 8
+_LOGIN_WINDOW_S = 300
+_login_attempts = {}                          # ip -> (count, window_start_ts)
+_login_lock = threading.Lock()
+
+
+def _login_blocked(ip):
+    now = time.time()
+    with _login_lock:
+        count, start = _login_attempts.get(ip, (0, now))
+        if now - start > _LOGIN_WINDOW_S:
+            return False                       # window elapsed → fresh slate
+        return count >= _LOGIN_MAX_ATTEMPTS
+
+
+def _login_record_failure(ip):
+    now = time.time()
+    with _login_lock:
+        count, start = _login_attempts.get(ip, (0, now))
+        if now - start > _LOGIN_WINDOW_S:
+            count, start = 0, now
+        _login_attempts[ip] = (count + 1, start)
+
+
+def _login_reset(ip):
+    with _login_lock:
+        _login_attempts.pop(ip, None)
+
+
+def _password_ok(candidate):
+    """Constant-time check of a submitted password against the configured one."""
+    candidate = candidate or ''
+    if _PASSWORD_HASH:
+        try:
+            return check_password_hash(_PASSWORD_HASH, candidate)
+        except Exception:
+            return False
+    if _PASSWORD_PLAIN:
+        return hmac.compare_digest(candidate, _PASSWORD_PLAIN)
+    return False
+
+
+def _safe_next(target):
+    """Only allow same-site relative redirects after login (no open redirect)."""
+    if target and target.startswith('/') and not target.startswith('//'):
+        return target
+    return url_for('index')
 
 
 def _compute_asset_version():
@@ -65,6 +167,7 @@ MAX_CUSTOMS = 5    # per type, keeps the UI tidy and the data file bounded
 LOG_FILES = {
     'planes':   os.path.join(DATA_DIR, 'planes_log.txt'),
     'chargers': os.path.join(DATA_DIR, 'chargers_log.txt'),
+    'auth':     os.path.join(DATA_DIR, 'auth_log.txt'),
 }
 
 
@@ -179,6 +282,92 @@ def _accept_client_id(client_id, data):
     if _CLIENT_ID_RE.match(cid) and not any(e.get('id') == cid for e in data):
         return cid
     return None
+
+
+@app.before_request
+def _require_login():
+    """Gate every endpoint behind the shared password when auth is enabled.
+    Public endpoints (login/logout/health/static) and an already-authenticated
+    session pass through. API calls get a JSON 401; page loads get redirected
+    to the login screen (preserving where they were headed)."""
+    if not AUTH_ENABLED:
+        return None
+    if request.endpoint in _PUBLIC_ENDPOINTS:
+        return None
+    if session.get('authed'):
+        return None
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Authentication required. Please log in.'}), 401
+    return redirect(url_for('login', next=request.path))
+
+
+@app.after_request
+def _security_headers(resp):
+    """Defence-in-depth response headers applied to every response."""
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    resp.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    resp.headers.setdefault('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+    # CSP scoped to the origins the app actually uses (Bootstrap/driver.js on
+    # jsDelivr, Leaflet on unpkg, Google Fonts, Carto map tiles, Esri satellite).
+    # 'unsafe-inline' is required by the app's inline scripts/styles; tightening
+    # that to nonces is a follow-up (see docs/SECURITY_REVIEW.md).
+    if os.environ.get('CNS_DISABLE_CSP') != '1':
+        resp.headers.setdefault('Content-Security-Policy', (
+            "default-src 'self'; "
+            "base-uri 'self'; "
+            "object-src 'none'; "
+            "frame-ancestors 'self'; "
+            "form-action 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
+            "https://unpkg.com https://cdn.jsdelivr.net https://cns.ghettofaust.exposed; "
+            "connect-src 'self' https://*.basemaps.cartocdn.com https://server.arcgisonline.com"
+        ))
+    return resp
+
+
+@app.route('/healthz')
+def healthz():
+    """Unauthenticated liveness probe for uptime monitoring."""
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not AUTH_ENABLED:
+        return redirect(url_for('index'))
+    if session.get('authed'):
+        return redirect(_safe_next(request.args.get('next')))
+
+    error = None
+    if request.method == 'POST':
+        ip = _client_ip()
+        if _login_blocked(ip):
+            _log('auth', 'BLOCK', reason='rate-limited')
+            return render_template('login.html',
+                                   error='Too many attempts. Wait a few minutes and try again.'), 429
+        if _password_ok(request.form.get('password', '')):
+            session.clear()
+            session['authed'] = True
+            session.permanent = True
+            _login_reset(ip)
+            _log('auth', 'LOGIN')
+            return redirect(_safe_next(request.form.get('next') or request.args.get('next')))
+        _login_record_failure(ip)
+        _log('auth', 'FAIL')
+        error = 'Incorrect password.'
+
+    return render_template('login.html', error=error,
+                           next=request.args.get('next', '')), (401 if error else 200)
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login') if AUTH_ENABLED else url_for('index'))
 
 
 @app.route('/')

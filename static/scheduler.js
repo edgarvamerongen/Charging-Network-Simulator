@@ -28,6 +28,13 @@ window.CNSScheduler = (function () {
     const FOLDER_KEY = 'cns_folder', SCHED_KEY = 'cns_schedule', CFG_KEY = 'cns_airport_cfg';
     const DAY_START = 7 * 60, DAY_END = 23 * 60, SPAN = DAY_END - DAY_START;
     const SNAP = 5, PX = 1.05, LANE_H = 46, LABEL_W = 150;
+    // Hard upper bound on rotations/day per trip. A frequency typo or paste
+    // (e.g. "10000") otherwise fans out into that many lanes, rotation records,
+    // DOM rows and animated map markers — with O(n^2) event-queue work — which
+    // locks up the browser tab. No real schedule needs anywhere near this many
+    // daily rotations, so we clamp here, the single chokepoint every entry
+    // point (desktop, mobile, restored localStorage) flows through.
+    const MAX_INSTANCES_PER_DAY = 200;
 
     let catalog = {};
     let onChange = null;
@@ -303,7 +310,12 @@ window.CNSScheduler = (function () {
 
     function instancesPerDay(trip) {
         const n = num(trip, 'freqN', 1);
-        return trip.freqUnit === 'week' ? Math.max(1, Math.round(n / 7)) : Math.max(1, Math.round(n));
+        const perDay = trip.freqUnit === 'week' ? Math.round(n / 7) : Math.round(n);
+        // Clamp to [1, MAX]: floors NaN/0/negatives to 1 and caps runaway
+        // frequencies so the scheduler/animation can never be asked to build an
+        // unbounded number of rotations (see MAX_INSTANCES_PER_DAY).
+        if (!(perDay >= 1)) return 1;
+        return Math.min(MAX_INSTANCES_PER_DAY, perDay);
     }
 
     // Take-off times are stored 1:1 with what's displayed (no hidden re-sequencing —
