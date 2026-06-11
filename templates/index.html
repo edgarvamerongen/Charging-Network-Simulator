@@ -2902,9 +2902,16 @@
                 if (el.dataset.ringFar) {
                     // The ring's far point IS the last filled stop field — remove that
                     // field; the planner re-derives the far point from the new last stop.
+                    // BLACKLIST it too: the closing-leg planner routes new-far-point →
+                    // home, and the removed airport usually sits exactly on that path —
+                    // without the blacklist it is instantly re-picked as a closing auto
+                    // and the removal looks ignored ("the final stop can't be removed").
                     const filled = [...document.querySelectorAll('#stopsContainer .stop-field .stop-input')].filter(i => i.dataset.ident);
                     const last = filled[filled.length - 1];
-                    if (last) { last.closest('.stop-field').remove(); _renumberStops(); }
+                    if (last) {
+                        _blacklistedStopIdents.add(last.dataset.ident);
+                        last.closest('.stop-field').remove(); _renumberStops();
+                    }
                     smartReplan();
                     drawLiveRoute();
                     return;
@@ -2912,15 +2919,17 @@
                 const idx = +el.dataset.stop;
                 const removed = plannedStops[idx];
                 if (removed && removed.ident) {
+                    // EVERY explicit removal blacklists the airport — "remove this stop"
+                    // means "don't route through here", so the gap-filler must not
+                    // immediately re-pick the same field as an auto stop. The blacklist
+                    // clears on plan reset.
+                    _blacklistedStopIdents.add(removed.ident);
                     const formFieldExisted = !!document.querySelector(`#stopsContainer .stop-input[data-ident="${removed.ident}"]`);
                     if (formFieldExisted) {
                         document.querySelectorAll('#stopsContainer .stop-input').forEach(inp => {
                             if (inp.dataset.ident === removed.ident) inp.closest('.stop-field').remove();
                         });
                         _renumberStops();
-                    } else {
-                        // Auto stop — blacklist it so it stays gone.
-                        _blacklistedStopIdents.add(removed.ident);
                     }
                 }
                 smartReplan();
