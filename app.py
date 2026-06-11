@@ -80,7 +80,10 @@ app.config.update(
 # Endpoints reachable WITHOUT a session. Everything else requires login when
 # AUTH_ENABLED. 'static' serves the login page's CSS/JS; 'healthz' lets an
 # uptime monitor probe the service without credentials.
-_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static'}
+# 'pics' is public so link scrapers (WhatsApp/LinkedIn) can fetch the og share
+# card + icons after being bounced to /login — it serves only brand/catalog
+# images, never user data.
+_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics'}
 
 # In-memory brute-force throttle for the login form. Per-worker (not shared
 # across gunicorn workers), which is fine for slowing guessing of a single
