@@ -18,12 +18,20 @@ except ImportError:
 
 from flask import (Flask, render_template, request, jsonify, send_from_directory,
                    url_for, Response, redirect, make_response, session)
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 from sim import Simulator
 from report import generate_pdf
 from spreadsheet import generate_xlsx
 
 app = Flask(__name__)
+# Behind the local reverse proxy (Caddy on the VPS) every request reaches gunicorn
+# from 127.0.0.1 — trust ONE hop of X-Forwarded-For/-Proto so the brute-force
+# throttle buckets REAL client IPs (otherwise one bad actor's 8 failures lock the
+# login for every visitor) and the auth log records who actually knocked. Opt-in
+# via env: forwarded headers must never be trusted when the app is exposed directly.
+if os.environ.get('CNS_BEHIND_PROXY') == '1':
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 # Anchor catalog/data loading to this file's directory, not the process cwd —
 # otherwise planes.json/chargers.json/airports are read relative to wherever the
 # server happens to be launched from (e.g. a parent worktree), serving stale data.
