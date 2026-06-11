@@ -4474,14 +4474,12 @@
                 const plan = CNSCharging.planCharging(fleet, aircraftList);
 
                 let dailyEnergy = 0, dailyHours = 0;
-                // Daily charging hours — per-rotation + SoC-aware via CNSScheduler.dailyChargeMinutesAt
-                // (interim-deficit: a shared >1x/day lane charges less between rotations). Once per trip.
-                const _seenHrs = new Set();
-                a.contribs.forEach(c => {
-                    if (_seenHrs.has(c.t.id) || c.t.feasible === false || !(window.CNSScheduler && CNSScheduler.dailyChargeMinutesAt)) return;
-                    _seenHrs.add(c.t.id);
-                    dailyHours += CNSScheduler.dailyChargeMinutesAt(c.t, a.ident) / 60;
-                });
+                // Daily charging hours come from the DES summary below (sInfo.chargeMin) —
+                // the SAME charge phases the rotation scheduler draws, so the figure always
+                // matches the sum of the 'charging here' bars. (The old per-trip
+                // dailyChargeMinutesAt estimate priced charges at each trip's STORED charger
+                // power and ignored the airport's actual charger fleet — adding a fast
+                // charger shrank the bars but not the number.)
                 const rows = a.contribs.map((c, i) => {
                     const t = c.t;
                     const asg = plan.assignments[i];
@@ -4549,7 +4547,8 @@
                     </tr>`;
                 }).join('');
 
-                const sInfo = (window.CNSScheduler ? CNSScheduler.summary(ident) : { peakKw: plan.peakPower, overflow: false, latestEnd: 0 });
+                const sInfo = (window.CNSScheduler ? CNSScheduler.summary(ident) : { peakKw: plan.peakPower, overflow: false, latestEnd: 0, chargeMin: 0 });
+                dailyHours = (sInfo.chargeMin || 0) / 60;
                 // The scheduler currently only sees single-leg trips (multi-leg integration = Phase 2).
                 // At airports that host only multi-leg traffic the scheduler peak is 0; fall back to the
                 // simple charger-fleet plan peak (a sensible upper-bound) so the card stays meaningful.

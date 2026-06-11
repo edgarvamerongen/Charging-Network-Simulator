@@ -582,6 +582,7 @@ window.CNSScheduler = (function () {
         const g = runGlobal();
         const evs = [];
         let latest = DAY_START;
+        let chargeMin = 0;   // Σ charge-phase minutes here — the SAME bars the Gantt draws
         g.lanes.forEach(L => {
             const role = roleAt(L.trip, ident);
             if (!role) return;
@@ -590,6 +591,7 @@ window.CNSScheduler = (function () {
                     if (ph.kind === 'charge' && ph.ident === ident && ph.dur > 0 && ph.power) {
                         evs.push({ tm: ph.start, d: ph.power });
                         evs.push({ tm: ph.start + ph.dur, d: -ph.power });
+                        chargeMin += ph.dur;
                     }
                 });
                 // A one-way ORIGIN only sees the take-off here (the plane departs and
@@ -602,7 +604,7 @@ window.CNSScheduler = (function () {
         evs.sort((a, b) => a.tm - b.tm || a.d - b.d);
         let cur = 0, peak = 0;
         evs.forEach(e => { cur += e.d; if (cur > peak) peak = cur; });
-        return { peakKw: peak, latestEnd: latest, overflow: latest > DAY_END };
+        return { peakKw: peak, latestEnd: latest, overflow: latest > DAY_END, chargeMin };
     }
     function peakPowerKw(ident) { return summary(ident).peakKw; }
 
