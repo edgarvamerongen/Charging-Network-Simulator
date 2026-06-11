@@ -126,18 +126,14 @@ window.CNSReport = (function () {
             };
         });
 
-        // Daily charging hours — per-rotation + SoC-aware via CNSScheduler.dailyChargeMinutesAt
-        // (interim-deficit: a shared >1x/day lane charges less between rotations). Summed ONCE per
-        // trip touching this airport (a twice-visited stop is already covered inside the helper).
-        const _seenHrs = new Set();
-        a.contribs.forEach(c => {
-            if (_seenHrs.has(c.t.id) || !(window.CNSScheduler && CNSScheduler.dailyChargeMinutesAt)) return;
-            _seenHrs.add(c.t.id);
-            dailyChargingHours += CNSScheduler.dailyChargeMinutesAt(c.t, a.ident) / 60;
-        });
-
         const sInfo = CNSScheduler.summary(ident);
         const peakKw = sInfo.peakKw || plan.peakPower || 0;
+        // Daily charging hours come from the DES summary (chargeMin = Σ charge-phase
+        // minutes here — the very bars the Gantt below draws), so the PDF figure always
+        // matches the scheduler. The old per-trip dailyChargeMinutesAt estimate priced
+        // charges at each trip's STORED charger power, blind to the airport's actual
+        // charger fleet (and to infeasible flights, which runGlobal already excludes).
+        dailyChargingHours = (sInfo.chargeMin || 0) / 60;
 
         // Rotations — read straight from the global simulation's per-airport
         // view (CNSScheduler.rotationsAt). The phases are already actual-timed
