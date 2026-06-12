@@ -454,6 +454,9 @@
             position: fixed; top: 90px; left: 16px; z-index: 10;
             width: 360px; max-height: calc(100vh - 114px);
             overflow-y: auto; padding-right: 6px;
+            /* The scrollport cuts panels square as they scroll past its edges; rounding
+               the cut keeps the sticky caps' corners curvy mid-scroll. */
+            clip-path: inset(0 round var(--radius));
             display: flex; flex-direction: column; gap: 12px;
             pointer-events: none;       /* let map drags through gaps */
             scrollbar-width: thin;
@@ -785,6 +788,7 @@
             position: fixed; top: 90px; right: 16px; z-index: 10;
             width: 360px; max-height: calc(100vh - 114px);
             overflow-y: auto; padding-left: 6px;
+            clip-path: inset(0 round var(--radius));   /* rounded scrollport cut — see .rail-left */
             display: flex; flex-direction: column; gap: 12px;
             pointer-events: none;
             scrollbar-width: thin;
