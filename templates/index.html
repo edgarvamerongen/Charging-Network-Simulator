@@ -3468,8 +3468,14 @@
                 if (t.tripType === 'circular') push(t.originLat, t.originLon);
                 else push(t.destLat, t.destLon);
                 if (pts.length < 2) return;
+                // White casing under the navy line so the overlay reads on BOTH
+                // basemaps (a bare 1.5px navy line vanishes on satellite imagery).
                 savedRoutesLayer.addLayer(L.polyline(pts, {
-                    color: '#2b2f5a', weight: 1.5, opacity: .45,
+                    color: '#ffffff', weight: 3.5, opacity: .4,
+                    pane: 'savedRoutesPane', interactive: false,
+                }));
+                savedRoutesLayer.addLayer(L.polyline(pts, {
+                    color: '#2b2f5a', weight: 1.75, opacity: .8,
                     pane: 'savedRoutesPane', interactive: false,
                 }));
             });
