@@ -495,12 +495,12 @@
         #result.minimized .headline-box:hover::after { color: #fff; }
         .panel-head {
             display: flex; align-items: center; justify-content: space-between;
-            position: sticky; top: -16px; z-index: 7;   /* -16px: cancel the panel padding so it pins flush */
+            position: sticky; top: 0; z-index: 7;   /* pin INSIDE the scrollport — never clipped */
             background: var(--panel-strong);
             backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
             margin: -16px -16px 14px; padding: 14px 16px 12px;
             border-bottom: 1px solid var(--panel-border);
-            border-radius: var(--radius) var(--radius) 0 0;
+            border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;   /* nests inside the panel's 1px border arc */
         }
         .panel-title {
             font-size: 1.02rem; margin: 0; font-weight: 700; letter-spacing: -.01em;
@@ -619,7 +619,7 @@
         .headline-box {
             /* Pinned while the panel scrolls: the figures stay in view over the
                route/charging detail (its solid ink bg covers what slides under). */
-            position: sticky; top: -16px; z-index: 7;
+            position: sticky; top: 0; z-index: 7;
             /* Flat brand ink + neutral shadow — the gradient + orange glow read as
                restless next to the gold stats, green revenue and orange CTAs. */
             background: var(--brand-ink);
@@ -1411,17 +1411,17 @@
            enough to find when you need to clear the form quickly. */
         .sim-row {
             display: flex; gap: 8px; align-items: stretch;
-            position: sticky; bottom: -16px; z-index: 7;   /* -16px: cancel the panel padding */
+            position: sticky; bottom: 0; z-index: 7;   /* pin INSIDE the scrollport — never clipped */
             background: var(--panel-strong);
             backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
             margin: 14px -16px -16px; padding: 12px 16px 14px;
             border-top: 1px solid var(--panel-border);
-            border-radius: 0 0 var(--radius) var(--radius);
+            border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
         }
         .sim-btn { flex: 1; min-width: 0; }
         /* Bottom-pinned CTA inside a scrolling panel: the halo paints panel-tone
            around the button so content never peeks past its rounded corners. */
-        .sticky-cta { position: sticky; bottom: -8px; z-index: 7; box-shadow: 0 0 0 10px var(--panel-strong); }
+        .sticky-cta { position: sticky; bottom: 0; z-index: 7; box-shadow: 0 0 0 10px var(--panel-strong); }
         .sim-reset {
             flex: 0 0 auto; width: 42px;
             display: inline-flex; align-items: center; justify-content: center;
@@ -1843,7 +1843,7 @@
 
             <button type="button" id="toggleCalc" class="btn-cns-ghost mt-3">Show calculation</button>
             <div id="calcPanel" class="mt-2 d-none"></div>
-            <button type="button" id="addFolder" class="btn-cns-success mt-3 sticky-cta">+ Add to demand calculator</button>
+            <button type="button" id="addFolder" class="btn-cns mt-3 sticky-cta">+ Add to demand calculator</button>
         </section>
     </aside>
 
