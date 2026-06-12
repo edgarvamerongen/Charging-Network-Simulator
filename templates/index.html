@@ -3292,7 +3292,7 @@
             const host = document.getElementById('planePicker');
             if (!host) return;
             const sel = document.getElementById('plane').value;
-            const customs = (typeof customById !== 'undefined') ? Object.values(customById) : [];
+            let customs = []; try { customs = Object.values(customById); } catch (e) { /* pre-init: customs not loaded yet */ }
             const planes = BUILTIN_PLANES.concat(customs);
             host.innerHTML = planes.map(p => {
                 const specs = _planeSpecsLine(p);
@@ -3305,6 +3305,7 @@
                 '<button type="button" class="plane-card plane-add" data-plane="__custom__" title="Add custom aircraft" aria-label="Add custom aircraft">＋</button>';
             host.querySelectorAll('.plane-card').forEach(el => el.addEventListener('click', () => {
                 const sel2 = document.getElementById('plane');
+                if (sel2.value === el.dataset.plane) return;   // same-value re-pick: a native select wouldn't fire change either
                 sel2.value = el.dataset.plane;
                 sel2.dispatchEvent(new Event('change'));
             }));
@@ -3331,11 +3332,15 @@
             const seg = document.getElementById('tripTypeSeg');
             if (!sel || !seg) return;
             const hint = document.getElementById('tripTypeHint');
-            const sync = () => seg.querySelectorAll('.trip-seg-btn').forEach(b => {
-                const on = b.dataset.trip === sel.value;
-                b.classList.toggle('active', on);
-                if (on && hint) hint.textContent = b.dataset.hint || '';
-            });
+            const sync = () => {
+                seg.querySelectorAll('.trip-seg-btn').forEach(b => {
+                    const on = b.dataset.trip === sel.value;
+                    b.classList.toggle('active', on);
+                    if (on && hint) hint.textContent = b.dataset.hint || '';
+                });
+                // circular/training show their richer dedicated paragraphs — don't stack two hints
+                if (hint) hint.classList.toggle('d-none', sel.value === 'circular' || sel.value === 'training');
+            };
             seg.querySelectorAll('.trip-seg-btn').forEach(b => b.addEventListener('click', () => {
                 if (sel.value === b.dataset.trip) return;
                 sel.value = b.dataset.trip;
@@ -3358,7 +3363,6 @@
             else thumb.classList.add('d-none');
             document.getElementById('psName').textContent = spec.name;
             _refreshSpecStats(spec);
-            _renderReachBar(spec);
             // Prefill the override with the current available range so the operator
             // sees the value they're editing (blank = use the computed default).
             const _av = _availRangeShownKm(spec);
@@ -3366,6 +3370,7 @@
             card.classList.toggle('overridden', _availRangeOverride != null);
         }
         function _refreshSpecStats(spec) {
+            _renderReachBar(spec);   // the bar IS the visible 'available range' — every stat refresh updates it
             document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
             document.getElementById('psBattery').textContent = fmtEnergy(spec.battery_kwh || 0);
             document.getElementById('psSpeed').textContent = (typeof fmtSpeed === 'function') ? fmtSpeed(spec.speed_kmh) : (spec.speed_kmh + ' km/h');
@@ -5581,6 +5586,8 @@
         planeSelect.addEventListener('change', () => {
             if (planeSelect.value === '__custom__') {
                 planeSelect.value = prevPlaneValue;
+                // tiles mirror the select via the change reflector — without this the ＋ tile stays pressed
+                planeSelect.dispatchEvent(new Event('change'));
                 ['cpName', 'cpBattery', 'cpRange', 'cpSpeed', 'cpSeats', 'cpLoad'].forEach(id => document.getElementById(id).value = '');
                 document.getElementById('cpError').classList.add('d-none');
                 customPlaneModal.show();
@@ -5608,7 +5615,10 @@
             const opt = planeSelect.querySelector(`option[value="${CSS.escape(id)}"]`);
             if (opt) opt.remove();
             delete customById[id];
-            if (planeSelect.value === id) { planeSelect.value = planeSelect.options[0].value; prevPlaneValue = planeSelect.value; }
+            if (planeSelect.value === id) {
+                planeSelect.value = planeSelect.options[0].value; prevPlaneValue = planeSelect.value;
+                planeSelect.dispatchEvent(new Event('change'));
+            }
             renderPlanePicker();
         }
         function removeChargerFromUI(id) {
@@ -5689,8 +5699,9 @@
             try {
                 const p = await CNSPlanes.add(draft);
                 customById[p.id] = p;
-                addPlaneOption(p);
                 planeSelect.value = p.id; prevPlaneValue = p.id;
+                addPlaneOption(p);   // rebuilds the picker — value already points at the new plane
+                planeSelect.dispatchEvent(new Event('change'));   // grid + spec card + replan follow
                 customPlaneModal.hide();
             } catch (e) {
                 err.textContent = e.message || 'Could not add plane.';
