@@ -72,11 +72,20 @@
             --radius-sm:    8px;
         }
         * { box-sizing: border-box; }
+        /* 15px root: every rem-based size (incl. Bootstrap controls/modals) renders
+           ~6% denser — the professional, instrument-panel feel without per-rule churn. */
+        html { font-size: 15px; }
         html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
             font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
             color: var(--ink); background: var(--bg);
             -webkit-font-smoothing: antialiased;
         }
+        /* Figures align like instruments: fixed-width digits everywhere numbers stack. */
+        .big, .hl-rev-amt, .hl-rev-sub, .agg-hero-num, .agg-small-num, .leg-dist,
+        .stops-summary, .reach-label strong, .spec-table td, .folder-trip td,
+        .result-stat b, #calcPanel { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+        /* Compact form controls (Bootstrap defaults read chunky next to the new chrome) */
+        .form-control, .form-select { font-size: .875rem; padding: .45rem .7rem; }
         /* Silky paper texture — subtle SVG turbulence on the cream background.
            Visible only where the map doesn't cover (topbar, gaps around panels)
            and through the cream-tinted glass blur. Very low contrast so it
@@ -462,7 +471,7 @@
             border: 1px solid var(--panel-border);
             border-radius: var(--radius);
             box-shadow: var(--shadow);
-            padding: 18px;
+            padding: 16px;
         }
         /* ---- Results panel: hover-reveal minimize / click-to-expand ---- */
         #result { position: relative; }
@@ -504,7 +513,7 @@
            Form fields (override Bootstrap subtly)
            ========================================================= */
         .field { margin-bottom: 12px; position: relative; }
-        .field > label { display: block; font-size: .7rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 5px; letter-spacing: .04em; text-transform: uppercase; }
+        .field > label { display: block; font-size: .7rem; font-weight: 700; color: var(--ink-soft); margin-bottom: 5px; letter-spacing: .05em; text-transform: uppercase; }
         .field .form-control, .field .form-select, .input-group .form-control, .input-group .form-select {
             border-radius: var(--radius-sm); border-color: #e2e8f0; font-size: .9rem; color: var(--ink);
         }
