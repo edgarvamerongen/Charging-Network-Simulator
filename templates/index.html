@@ -1302,6 +1302,20 @@
         .soc-row .opt-check input[type=radio]:checked + span { color: var(--ink); font-weight: 600; }
         .soc-panel .rs-help { margin-top: 6px; font-size: .76rem; }
 
+        /* Map color system — one meaning per hue:
+           navy = the airport world (dots + clusters + saved network)
+           blue = the ACTIVE route (solid out, dashed return)
+           orange = NRG2FLY assets only (charger discs)
+           green/amber/red = semantic states, never cartography. */
+        .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
+            background: rgba(43, 47, 90, .28) !important;
+        }
+        .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
+            background: var(--brand-ink) !important; color: #fff !important;
+            font-family: inherit !important; font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
         /* Aircraft photo-grid picker (drives the hidden #plane select) */
         .plane-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px; }
         .plane-card {
@@ -3561,8 +3575,11 @@
         function _airportDot(ap) {
             // Dot size encodes the airport class at a glance (large > medium > small);
             // white stroke keeps them crisp on both street and satellite tiles.
+            // Navy = the airport world; orange is reserved for NRG2FLY assets (the
+            // charger discs), so brand color MEANS brand on this map.
             const DOT_R = { large_airport: 8.5, medium_airport: 6.5, small_airport: 4 };
-            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: DOT_R[ap.type] || 6.5, fillColor: "#ff7800", color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.85 });
+            const DOT_C = { large_airport: '#2b2f5a', medium_airport: '#2b2f5a', small_airport: '#4a4f76' };
+            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: DOT_R[ap.type] || 6.5, fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.9 });
             m.on('mouseover', function (e) {
                 _apCancelClose();
                 const popup = L.popup({ closeButton: false }).setLatLng(e.latlng).setContent(`
@@ -3781,7 +3798,7 @@
         function flightLayers(p1, p2, tripType) {
             if (tripType === 'retour') return [
                 L.polyline(arcPoints(p1, p2, BEND), { color: '#0d6efd', weight: 3 }),
-                L.polyline(arcPoints(p1, p2, -BEND), { color: '#198754', weight: 2, dashArray: '8 6' })
+                L.polyline(arcPoints(p1, p2, -BEND), { color: '#0d6efd', weight: 2, dashArray: '8 6' })
             ];
             return [L.polyline([p1, p2], { color: 'blue', weight: 4 })];
         }
@@ -4035,7 +4052,7 @@
             // hop exceeds the aircraft's range. Default blue otherwise.
             const issueSet = new Set(Array.isArray(data.legIssues) ? data.legIssues : []);
             const legStyle = (i) => issueSet.has(i)
-                ? { color: '#dc2626', weight: 2, dashArray: '6 4', opacity: .95 }
+                ? { color: '#0d6efd', weight: 2, dashArray: '6 4', opacity: .9 }
                 : { color: '#0d6efd', weight: 3 };
             // Auto-zoom is OFF for live preview (data.fitBounds === false). It
             // was distracting during planning — the map would jump on every
