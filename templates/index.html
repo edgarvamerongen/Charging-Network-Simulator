@@ -484,7 +484,10 @@
         }
         #result:hover .result-min { opacity: 1; }
         .result-min:hover { background: rgba(255,255,255,.34); }
-        #result.minimized > :not(.headline-box) { display: none !important; }
+        /* Minimized: keep the figures AND the one action that matters — adding the
+           flight to the demand calculator — visible; everything else collapses. */
+        #result.minimized > :not(.headline-box):not(#addFolder) { display: none !important; }
+        #result.minimized #addFolder { margin-top: 10px; }
         #result.minimized .headline-box { cursor: pointer; position: relative; padding-bottom: 22px; }
         /* Expand hint: bottom-centre, in reserved padding — never over the stat labels
            (top-right overlapped "CHARGE TIME" and was too faint to read as a control). */
