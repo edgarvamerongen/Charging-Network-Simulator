@@ -3429,7 +3429,10 @@
         function _apCancelClose() { if (_apPopupTimer) { clearTimeout(_apPopupTimer); _apPopupTimer = null; } }
         function _apScheduleClose() { _apCancelClose(); _apPopupTimer = setTimeout(() => map.closePopup(), 240); }
         function _airportDot(ap) {
-            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: 7, fillColor: "#ff7800", color: "#000", weight: 1, opacity: 1, fillOpacity: 0.85 });
+            // Dot size encodes the airport class at a glance (large > medium > small);
+            // white stroke keeps them crisp on both street and satellite tiles.
+            const DOT_R = { large_airport: 8.5, medium_airport: 6.5, small_airport: 4 };
+            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: DOT_R[ap.type] || 6.5, fillColor: "#ff7800", color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.85 });
             m.on('mouseover', function (e) {
                 _apCancelClose();
                 const popup = L.popup({ closeButton: false }).setLatLng(e.latlng).setContent(`
