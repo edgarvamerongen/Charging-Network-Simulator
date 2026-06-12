@@ -1534,6 +1534,7 @@
                         <label class="opt-check"><input type="checkbox" id="flightLabelToggle" checked><span>Leg labels</span></label>
                         <label class="opt-check opt-sub" id="flightLabelExpandRow"><input type="checkbox" id="flightLabelExpand" checked><span>Expand labels</span></label>
                         <label class="opt-check"><input type="checkbox" id="fAlternates"><span>Alternates</span></label>
+                        <label class="opt-check"><input type="checkbox" id="fSavedRoutes" checked><span>Saved flights</span></label>
                         <label class="opt-check"><input type="checkbox" id="hideAirportsOnRoute"><span>Hide airports when route is planned</span></label>
                     </div>
                     <div class="opt-group">
@@ -2262,6 +2263,9 @@
         // so a dot never covers a teardrop's tail — the marker flows on top of the dot.
         map.createPane('teardropPane');
         map.getPane('teardropPane').style.zIndex = 660;
+        map.createPane('savedRoutesPane');              // saved demand flights: subtle context UNDER the live route
+        map.getPane('savedRoutesPane').style.zIndex = 645;
+        map.getPane('savedRoutesPane').style.pointerEvents = 'none';
         map.createPane('legLabelPane');                 // leg pins: the top layer — labels readable over any marker
         map.getPane('legLabelPane').style.zIndex = 665; // ABOVE routePane 650 + teardropPane 660 (labels readable over any marker), below hover tooltips (670)
         // Tooltips (charger info boxes) default to z-index 650 — i.e. BEHIND the
@@ -3443,6 +3447,35 @@
         let _apPopupTimer = null;
         function _apCancelClose() { if (_apPopupTimer) { clearTimeout(_apPopupTimer); _apPopupTimer = null; } }
         function _apScheduleClose() { _apCancelClose(); _apPopupTimer = setTimeout(() => map.closePopup(), 240); }
+        // ---------- saved demand flights on the main map ----------
+        // Every feasible saved flight draws as a thin navy line (origin → stops →
+        // dest; circular closes the ring) so the planned NETWORK is always visible
+        // while building the next route. Non-interactive + under the live route,
+        // so it never steals hovers. Redrawn from renderFolder (the single choke
+        // point every folder mutation flows through) + the Map Options toggle.
+        const savedRoutesLayer = L.layerGroup().addTo(map);
+        function drawSavedRoutes() {
+            savedRoutesLayer.clearLayers();
+            const cb = document.getElementById('fSavedRoutes');
+            if (cb && !cb.checked) return;
+            if (!(window.CNSDemand && CNSDemand.loadFolder)) return;
+            CNSDemand.loadFolder().forEach(t => {
+                if (!t || t.feasible === false || t.tripType === 'training') return;
+                const pts = [];
+                const push = (lat, lon) => { if (isFinite(+lat) && isFinite(+lon)) pts.push([+lat, +lon]); };
+                push(t.originLat, t.originLon);
+                (t.stops || []).forEach(st => st && push(st.lat, st.lon));
+                if (t.tripType === 'circular') push(t.originLat, t.originLon);
+                else push(t.destLat, t.destLon);
+                if (pts.length < 2) return;
+                savedRoutesLayer.addLayer(L.polyline(pts, {
+                    color: '#2b2f5a', weight: 1.5, opacity: .45,
+                    pane: 'savedRoutesPane', interactive: false,
+                }));
+            });
+        }
+        document.getElementById('fSavedRoutes')?.addEventListener('change', drawSavedRoutes);
+
         // ---------- header airport search ----------
         // Same ranked matcher as the form autocompletes; picking a result flies the
         // map there and opens the standard action popup (Departure/Destination/Stop).
@@ -4648,6 +4681,7 @@
 
         let _dcRevenueYearly = true;    // Demand-calc revenue hero: false = per day, true = per year — yearly by default (the headline figure)
         function renderFolder() {
+            drawSavedRoutes();   // keep the main-map network overlay in lockstep with the folder
             const el = document.getElementById('folder');
             const airports = computeAirports();
             let list = Object.values(airports);
