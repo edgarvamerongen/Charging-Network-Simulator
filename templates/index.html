@@ -150,6 +150,16 @@
            Topbar tools + Options dropdown
            ========================================================= */
         .topbar-tools { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: flex-end; }
+        /* Header airport search — jump the map anywhere, then act from the popup */
+        .topbar-search { position: relative; }
+        .topbar-search .ac-input {
+            width: 230px; padding: 6px 12px 6px 30px; font-size: .82rem;
+            border: 1px solid var(--panel-border); border-radius: 999px;
+            background: rgba(255,255,255,.7);
+        }
+        .topbar-search .ac-input:focus { background: #fff; }
+        .topbar-search .search-ico { position: absolute; left: 11px; top: 5px; color: var(--muted); pointer-events: none; }
+        .topbar-search .ac-list { left: 0; right: 0; top: calc(100% + 4px); }
         .options-wrap { position: relative; }
 
         /* B4 — NRG2fly platform buttons (onepager download + back-to-platform).
@@ -1496,6 +1506,11 @@
         <div class="topbar-tools">
             <!-- Help / tour trigger — runs the guided walkthrough on demand.
                  Also auto-fires on first visit (cns_tour_done localStorage flag). -->
+            <div class="topbar-search ac-wrap" id="topbarSearch">
+                <span class="search-ico" aria-hidden="true">⌕</span>
+                <input type="text" id="airportSearch" class="ac-input" placeholder="Find airport — ICAO, IATA or name" autocomplete="off" aria-label="Find airport">
+                <div id="airportSearchList" class="ac-list d-none"></div>
+            </div>
             <button id="tourBtn" class="options-btn help-btn" type="button" title="Take the guided tour">
                 <span class="help-glyph" aria-hidden="true">?</span> <span>Tour</span>
             </button>
@@ -3428,6 +3443,50 @@
         let _apPopupTimer = null;
         function _apCancelClose() { if (_apPopupTimer) { clearTimeout(_apPopupTimer); _apPopupTimer = null; } }
         function _apScheduleClose() { _apCancelClose(); _apPopupTimer = setTimeout(() => map.closePopup(), 240); }
+        // ---------- header airport search ----------
+        // Same ranked matcher as the form autocompletes; picking a result flies the
+        // map there and opens the standard action popup (Departure/Destination/Stop).
+        (function () {
+            const input = document.getElementById('airportSearch');
+            const list = document.getElementById('airportSearchList');
+            if (!input || !list) return;
+            let current = [], activeIdx = -1;
+            function render(matches) {
+                current = matches; activeIdx = -1;
+                if (!matches.length) { list.classList.add('d-none'); return; }
+                list.innerHTML = matches.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${escHtml(ap.name)}</strong> <small>${escHtml(labelFor(ap))}</small></div>`).join('');
+                list.classList.remove('d-none');
+            }
+            function pick(ap) {
+                list.classList.add('d-none'); input.value = ap.name; input.blur();
+                const ll = [ap.latitude_deg, ap.longitude_deg];
+                map.flyTo(ll, Math.max(map.getZoom(), 8), { duration: .8 });
+                L.popup({ closeButton: true }).setLatLng(ll).setContent(`
+                    <strong>${escHtml(ap.name)}</strong><br>
+                    <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${escHtml(ap.ident)}')">Set as Departure</button>
+                    <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${escHtml(ap.ident)}')">Set as Destination</button>
+                    <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${escHtml(ap.ident)}')">Set as Stop</button>`).openOn(map);
+            }
+            input.addEventListener('input', () => {
+                if (input.value.trim().length < 2) { list.classList.add('d-none'); return; }
+                render(rankAirportMatches(input.value, allAirports, 8));
+            });
+            input.addEventListener('keydown', (e) => {
+                const items = [...list.querySelectorAll('.ac-item')];
+                if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, items.length - 1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); }
+                else if (e.key === 'Enter') { e.preventDefault(); if (current.length) pick(current[Math.max(activeIdx, 0)]); return; }
+                else if (e.key === 'Escape') { list.classList.add('d-none'); input.blur(); return; }
+                else return;
+                items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+            });
+            list.addEventListener('mousedown', (e) => {
+                const item = e.target.closest('.ac-item');
+                if (item) pick(current[+item.dataset.i]);
+            });
+            input.addEventListener('blur', () => setTimeout(() => list.classList.add('d-none'), 150));
+        })();
+
         function _airportDot(ap) {
             // Dot size encodes the airport class at a glance (large > medium > small);
             // white stroke keeps them crisp on both street and satellite tiles.
