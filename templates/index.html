@@ -608,6 +608,16 @@
         .headline-box .lbl { min-height: 2.4em; line-height: 1.2; display: flex; align-items: flex-start; justify-content: center; }
         .headline-box .big { font-size: 1.3rem; font-weight: 800; line-height: 1.15; margin: 3px 0; letter-spacing: -.02em; color: var(--brand-gold); }
         .headline-box .unit { font-size: .65rem; opacity: .7; letter-spacing: .04em; }
+        /* Fly/charge phase strip under the headline tiles */
+        #phaseStrip { margin: 10px 2px 0; }
+        .phase-strip { display: flex; height: 14px; border-radius: 7px; overflow: hidden; }
+        .phase-strip .ph { min-width: 3px; }
+        .phase-strip .ph.fly { background: var(--brand-ink); }
+        .phase-strip .ph.charge { background: var(--primary); }
+        .phase-legend { display: flex; gap: 14px; font-size: .7rem; color: var(--muted); margin-top: 5px; }
+        .phase-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+        .phase-legend .leg-fly { background: var(--brand-ink); }
+        .phase-legend .leg-charge { background: var(--primary); }
         .headline-box .col-4 { padding: 0 4px; }
         /* Revenue band — the headline business figure, larger than the stat tiles. */
         .hl-revenue {
@@ -1741,6 +1751,10 @@
                     <span class="hl-rev-sub" id="hlRevenueSub"></span>
                 </div>
             </div>
+
+            <!-- Fly/charge phase strip: the whole trip as one proportional timeline.
+                 Built from the SAME bd.phases the Route/Charging tables read. -->
+            <div id="phaseStrip" class="d-none"></div>
 
             <div class="result-groups">
                 <!-- Aircraft: photo + name side by side (name to the right). Full
@@ -4052,6 +4066,24 @@
             // Every per-trip number comes from ONE place: the unified engine. _breakdownFromProfile
             // maps the FlightProfile to the shape this panel reads, so the panel == the DES (both engine).
             const bd = _breakdownFromProfile(_engineProfile(data));
+            // Phase strip: flex-grow = minutes, so each segment's width is its share
+            // of total trip time. Tooltips name the leg/stop; numbers can't disagree
+            // with the tables because both read bd.phases.
+            (function () {
+                const host = document.getElementById('phaseStrip');
+                if (!host) return;
+                const phases = (bd.phases || []).filter(ph => (ph.dur || 0) > 0.05);
+                if (!phases.length) { host.classList.add('d-none'); host.innerHTML = ''; return; }
+                host.classList.remove('d-none');
+                host.innerHTML = '<div class="phase-strip" role="img" aria-label="Fly and charge phases across the trip">' +
+                    phases.map(ph => {
+                        const title = ph.kind === 'fly'
+                            ? `Fly ${ph.fromName || ''} → ${ph.toName || ''} — ${fmtDuration(ph.dur)}`
+                            : `Charge at ${ph.name || '—'} — ${fmtDuration(ph.dur)}`;
+                        return `<div class="ph ${ph.kind === 'fly' ? 'fly' : 'charge'}" style="flex-grow:${Math.max(ph.dur, 0.01).toFixed(2)}" title="${escHtml(title)}"></div>`;
+                    }).join('') + '</div>' +
+                    '<div class="phase-legend"><span><i class="leg-fly"></i>Fly</span><span><i class="leg-charge"></i>Charge</span></div>';
+            })();
             const usedKwh      = bd.energyUsedKwh;
             const rechargeKwh  = bd.energyUsedKwh;        // recharged == consumed (energy conservation)
             const flightMin    = bd.flightMin;
