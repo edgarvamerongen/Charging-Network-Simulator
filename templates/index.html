@@ -1266,6 +1266,44 @@
         .soc-row .opt-check input[type=radio]:checked + span { color: var(--ink); font-weight: 600; }
         .soc-panel .rs-help { margin-top: 6px; font-size: .76rem; }
 
+        /* Aircraft photo-grid picker (drives the hidden #plane select) */
+        .plane-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px; }
+        .plane-card {
+            position: relative; border: 1.5px solid var(--panel-border); border-radius: var(--radius-sm);
+            padding: 0; cursor: pointer; background: #f4f1e8; aspect-ratio: 4 / 3; overflow: hidden;
+            transition: border-color .12s, box-shadow .12s;
+        }
+        .plane-card:hover { border-color: var(--brand-ink); }
+        .plane-card[aria-pressed="true"] { border-color: var(--brand-ink); box-shadow: 0 0 0 3px rgba(43,47,90,.18); }
+        .plane-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .18s ease; }
+        .plane-card:hover img { transform: scale(1.05); }
+        .plane-card .plane-overlay {
+            position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 9px 7px;
+            background: linear-gradient(transparent, rgba(43,47,90,.55) 35%, rgba(43,47,90,.94));
+            opacity: 0; transform: translateY(6px); transition: opacity .15s ease, transform .15s ease;
+            text-align: left; pointer-events: none;
+        }
+        .plane-card:hover .plane-overlay, .plane-card:focus-visible .plane-overlay,
+        .plane-card[aria-pressed="true"] .plane-overlay { opacity: 1; transform: none; }
+        .plane-card .plane-name { font-size: .76rem; font-weight: 700; line-height: 1.25; color: #fff; }
+        .plane-card .plane-specs { font-size: .66rem; color: rgba(255,255,255,.8); margin-top: 1px; line-height: 1.3; }
+        .plane-card .custom-tag { position: absolute; top: 6px; right: 6px; z-index: 1; font-size: .6rem; font-weight: 800; letter-spacing: .05em; color: #fff; background: var(--primary); border-radius: 999px; padding: 2px 6px; }
+        .plane-card.plane-add { display: flex; align-items: center; justify-content: center; border-style: dashed; color: var(--muted); font-size: 1.5rem; background: transparent; }
+        .plane-card.plane-add:hover { color: var(--primary); border-color: var(--primary); }
+        .plane-card .plane-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-ink); font-size: 2rem; }
+        /* Usable-reach bar (in the slimmed spec card; photo/name/stats live on the tiles) */
+        .ps-id-hidden, .ps-stat-hide { display: none !important; }
+        .reach-row { margin: 2px 0 6px; }
+        .reach-label { font-size: .76rem; color: var(--ink-soft); margin-bottom: 4px; }
+        .reach-label strong { color: var(--ink); }
+        .reach-bar { height: 8px; border-radius: 999px; background: rgba(43,47,90,.10); overflow: hidden; }
+        .reach-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--brand-orange-1), var(--brand-orange-3)); transition: width .25s ease; }
+        /* Trip-type segmented control (drives the hidden #tripType select) */
+        .trip-seg { display: flex; border: 1px solid var(--panel-border); border-radius: 999px; padding: 3px; background: #fffdf7; gap: 2px; }
+        .trip-seg-btn { flex: 1 1 0; border: none; background: transparent; border-radius: 999px; padding: 6px 4px; font-size: .78rem; font-weight: 600; color: var(--ink-soft); cursor: pointer; transition: background .12s, color .12s; white-space: nowrap; }
+        .trip-seg-btn:hover { color: var(--ink); }
+        .trip-seg-btn.active { background: var(--brand-ink); color: #fff; }
+
         /* Charging-stops toggle + advanced section + suggested route list */
         .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 8px; flex-wrap: wrap; }   /* narrow rail: the settings pill drops below the toggle instead of cramming */
         /* `.field > label` (block + uppercase, for field captions) would override the
@@ -1513,6 +1551,49 @@
                 <span class="est-pill" title="All calculated figures are rough estimates, rounded up for planning headroom.">Estimates</span>
             </div>
             <form id="simForm">
+                <div class="field">
+                    <label>Aircraft</label>
+                    <select id="plane" class="form-select d-none" tabindex="-1" aria-hidden="true">
+                        {% for p in planes %}
+                        <option value="{{ p.id }}">{{ p.name }} — {% if p.battery_kwh >= 1000 %}{{ '%.2f'|format(p.battery_kwh / 1000) }} MWh{% else %}{{ p.battery_kwh }} kWh{% endif %}</option>
+                        {% endfor %}
+                        <option value="__custom__">➕ Add custom plane…</option>
+                    </select>
+                    <!-- Photo-grid picker drives the hidden select above (value + change
+                         event), so both existing #plane listeners keep working. -->
+                    <div id="planePicker" class="plane-picker" role="group" aria-label="Choose aircraft"></div>
+                    <!-- Selected-aircraft spec card: thumbnail + key specs, with a
+                         collapsible per-flight override (never touches the catalog). -->
+                    <div id="planeSpecCard" class="plane-spec-card d-none">
+                        <img id="psThumb" class="ps-thumb ps-id-hidden d-none" alt="">
+                        <div class="ps-main">
+                            <div class="ps-name ps-id-hidden" id="psName"></div>
+                            <div class="reach-row">
+                                <div class="reach-label">Usable reach: <strong id="reachVal">—</strong> of <span id="reachCat">—</span> catalog range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></div>
+                                <div class="reach-bar"><div class="reach-fill" id="reachFill"></div></div>
+                            </div>
+                            <div class="ps-stats">
+                                <span class="ps-stat ps-stat-hide"><strong id="psRange"></strong><span class="ps-stat-l">range</span></span>
+                                <span class="ps-stat ps-stat-hide"><strong id="psBattery"></strong><span class="ps-stat-l">battery</span></span>
+                                <span class="ps-stat ps-stat-hide"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
+                                <span class="ps-stat ps-stat-hide"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
+                                <span class="ps-stat"><strong id="psUsage"></strong><span class="ps-stat-l">avg usage</span></span>
+                                <span class="ps-stat ps-stat-avail ps-stat-hide"><strong id="psAvail"></strong><span class="ps-stat-l">available range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></span></span>
+                            </div>
+                            <button type="button" id="psOverrideToggle" class="ps-override-toggle">Edit for this flight <span class="chev">▾</span></button>
+                        </div>
+                        <div id="psOverride" class="ps-override d-none">
+                            <div class="ps-override-grid">
+                                <label>Available range <span class="ps-u">km</span><input type="number" id="psoAvailRange" min="1" step="any" class="form-control form-control-sm" placeholder="auto"></label>
+                            </div>
+                            <div class="ps-override-foot">
+                                <span class="ps-override-note">Sets the usable range for this flight only — press Enter to apply.</span>
+                                <button type="button" id="psoReset" class="ps-reset">↺ reset to catalog</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="field ac-wrap">
                     <!-- + Add stop sits inline on the Departure label row so
                          Departure and Destination stay visually adjacent and the
@@ -1538,50 +1619,23 @@
 
                 <div class="field">
                     <label>Trip type</label>
-                    <select id="tripType" class="form-select">
+                    <select id="tripType" class="form-select d-none" tabindex="-1" aria-hidden="true">
                         <option value="one-way">One-Way</option>
                         <option value="retour">Retour (Round Trip)</option>
                         <option value="circular">Circular (closed loop A → B → … → A)</option>
                         <option value="training">Training (circular pattern A→A)</option>
                     </select>
+                    <!-- Segmented control drives the hidden select (value + change event),
+                         so every existing tripType reader keeps working. -->
+                    <div id="tripTypeSeg" class="trip-seg" role="group" aria-label="Trip type">
+                        <button type="button" class="trip-seg-btn" data-trip="one-way" data-hint="A to B; charge to full at the destination.">One-way</button>
+                        <button type="button" class="trip-seg-btn" data-trip="retour" data-hint="There and back; the destination supplies only the deficit to fly home.">Retour</button>
+                        <button type="button" class="trip-seg-btn" data-trip="circular" data-hint="Closed loop through your stops, back to Departure.">Circular</button>
+                        <button type="button" class="trip-seg-btn" data-trip="training" data-hint="Pattern flying around a single airport.">Training</button>
+                    </div>
+                    <p id="tripTypeHint" class="est-note mb-0 mt-1"></p>
                     <p id="trainingHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a pattern around the origin for a fixed duration (matched to the aircraft's training range). Energy per flight is capped at the usable battery.</p>
                     <p id="circularHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a closed loop: Departure → stop(s) → back to Departure. Add at least one stop — the last stop is the loop's far point. For a simple there-and-back, pick Retour.</p>
-                </div>
-
-                <div class="field">
-                    <label>Aircraft</label>
-                    <select id="plane" class="form-select">
-                        {% for p in planes %}
-                        <option value="{{ p.id }}">{{ p.name }} — {% if p.battery_kwh >= 1000 %}{{ '%.2f'|format(p.battery_kwh / 1000) }} MWh{% else %}{{ p.battery_kwh }} kWh{% endif %}</option>
-                        {% endfor %}
-                        <option value="__custom__">➕ Add custom plane…</option>
-                    </select>
-                    <!-- Selected-aircraft spec card: thumbnail + key specs, with a
-                         collapsible per-flight override (never touches the catalog). -->
-                    <div id="planeSpecCard" class="plane-spec-card d-none">
-                        <img id="psThumb" class="ps-thumb d-none" alt="">
-                        <div class="ps-main">
-                            <div class="ps-name" id="psName"></div>
-                            <div class="ps-stats">
-                                <span class="ps-stat"><strong id="psRange"></strong><span class="ps-stat-l">range</span></span>
-                                <span class="ps-stat"><strong id="psBattery"></strong><span class="ps-stat-l">battery</span></span>
-                                <span class="ps-stat"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
-                                <span class="ps-stat"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
-                                <span class="ps-stat"><strong id="psUsage"></strong><span class="ps-stat-l">avg usage</span></span>
-                                <span class="ps-stat ps-stat-avail"><strong id="psAvail"></strong><span class="ps-stat-l">available range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></span></span>
-                            </div>
-                            <button type="button" id="psOverrideToggle" class="ps-override-toggle">Edit for this flight <span class="chev">▾</span></button>
-                        </div>
-                        <div id="psOverride" class="ps-override d-none">
-                            <div class="ps-override-grid">
-                                <label>Available range <span class="ps-u">km</span><input type="number" id="psoAvailRange" min="1" step="any" class="form-control form-control-sm" placeholder="auto"></label>
-                            </div>
-                            <div class="ps-override-foot">
-                                <span class="ps-override-note">Sets the usable range for this flight only — press Enter to apply.</span>
-                                <button type="button" id="psoReset" class="ps-reset">↺ reset to catalog</button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Charging stops: when on, an over-range route is auto-split into legs
@@ -3188,6 +3242,76 @@
         document.getElementById('plane').addEventListener('change', () => { _planeOverride = null; _availRangeOverride = null; renderPlaneSpecCard(); smartReplan(); drawLiveRoute(); });
 
         // ---- Selected-aircraft spec card + per-flight override --------------
+        // ---------- Aircraft photo-grid picker ----------
+        // Tiles mirror the hidden #plane select: clicking sets its value and fires
+        // 'change', so both existing listeners (override-reset + custom-sentinel/
+        // default-charger) keep working untouched. The grid re-renders when custom
+        // planes load/add/delete and when the unit system flips.
+        function _planeSpecsLine(p) {
+            const bits = [];
+            if (p.seats != null) bits.push(p.seats + ' seats');
+            if (p.battery_kwh != null) bits.push(fmtEnergy(+p.battery_kwh));
+            if (p.range_km != null) bits.push(fmtDist(+p.range_km));
+            if (p.speed_kmh != null) bits.push(fmtSpeed(+p.speed_kmh));
+            return bits.join(' · ');
+        }
+        function renderPlanePicker() {
+            const host = document.getElementById('planePicker');
+            if (!host) return;
+            const sel = document.getElementById('plane').value;
+            const customs = (typeof customById !== 'undefined') ? Object.values(customById) : [];
+            const planes = BUILTIN_PLANES.concat(customs);
+            host.innerHTML = planes.map(p => {
+                const specs = _planeSpecsLine(p);
+                const isCustom = !BUILTIN_PLANES_BY_ID[p.id];
+                return `<button type="button" class="plane-card" data-plane="${escHtml(p.id)}" aria-pressed="${String(p.id === sel)}" title="${escHtml(p.name + ' — ' + specs)}" aria-label="${escHtml(p.name)}">` +
+                    (isCustom ? '<span class="custom-tag">CUSTOM</span>' : '') +
+                    (p.image ? `<img src="/pics/${escHtml(p.image)}" alt="">` : '<div class="plane-glyph">✈</div>') +
+                    `<div class="plane-overlay"><div class="plane-name">${escHtml(p.name)}</div><div class="plane-specs">${escHtml(specs)}</div></div></button>`;
+            }).join('') +
+                '<button type="button" class="plane-card plane-add" data-plane="__custom__" title="Add custom aircraft" aria-label="Add custom aircraft">＋</button>';
+            host.querySelectorAll('.plane-card').forEach(el => el.addEventListener('click', () => {
+                const sel2 = document.getElementById('plane');
+                sel2.value = el.dataset.plane;
+                sel2.dispatchEvent(new Event('change'));
+            }));
+        }
+        // Reflect ANY select change on the tiles (tour, default prefill, modal revert).
+        document.getElementById('plane').addEventListener('change', () => {
+            const v = document.getElementById('plane').value;
+            document.querySelectorAll('#planePicker .plane-card').forEach(el =>
+                el.setAttribute('aria-pressed', String(el.dataset.plane === v)));
+        });
+        // ---------- usable-reach bar (refilled by renderPlaneSpecCard) ----------
+        function _renderReachBar(spec) {
+            const fill = document.getElementById('reachFill');
+            if (!fill || !spec) return;
+            const avail = _availRangeShownKm(spec);
+            const cat = +spec.range_km || 0;
+            document.getElementById('reachVal').textContent = (avail == null) ? '—' : fmtDist(avail);
+            document.getElementById('reachCat').textContent = cat ? fmtDist(cat) : '—';
+            fill.style.width = (cat > 0 && avail != null ? Math.max(0, Math.min(100, avail / cat * 100)) : 0) + '%';
+        }
+        // ---------- trip-type segmented control ----------
+        (function () {
+            const sel = document.getElementById('tripType');
+            const seg = document.getElementById('tripTypeSeg');
+            if (!sel || !seg) return;
+            const hint = document.getElementById('tripTypeHint');
+            const sync = () => seg.querySelectorAll('.trip-seg-btn').forEach(b => {
+                const on = b.dataset.trip === sel.value;
+                b.classList.toggle('active', on);
+                if (on && hint) hint.textContent = b.dataset.hint || '';
+            });
+            seg.querySelectorAll('.trip-seg-btn').forEach(b => b.addEventListener('click', () => {
+                if (sel.value === b.dataset.trip) return;
+                sel.value = b.dataset.trip;
+                sel.dispatchEvent(new Event('change'));
+            }));
+            sel.addEventListener('change', sync);
+            sync();
+        })();
+
         function renderPlaneSpecCard() {
             const card = document.getElementById('planeSpecCard');
             if (!card) return;
@@ -3201,6 +3325,7 @@
             else thumb.classList.add('d-none');
             document.getElementById('psName').textContent = spec.name;
             _refreshSpecStats(spec);
+            _renderReachBar(spec);
             // Prefill the override with the current available range so the operator
             // sees the value they're editing (blank = use the computed default).
             const _av = _availRangeShownKm(spec);
@@ -5288,6 +5413,7 @@
             updateTrajectory();
             if (lastResult) renderResult(lastResult);
             renderPlaneSpecCard();
+            renderPlanePicker();    // tile spec lines carry distances/speeds
             renderFolder();
             renderStops();          // Suggested-route panel: per-leg + total distances
             refreshAlternates();    // divert markers on the map ("EHRD · 46 km" tooltips)
@@ -5307,6 +5433,7 @@
             opt.value = p.id;
             opt.textContent = `${p.name} — ${fmtEnergy(p.battery_kwh)} (custom)`;
             planeSelect.insertBefore(opt, planeSelect.querySelector('option[value="__custom__"]'));
+            renderPlanePicker();
         }
         function addChargerOption(c) {
             const opt = document.createElement('option');
@@ -5348,6 +5475,7 @@
             if (opt) opt.remove();
             delete customById[id];
             if (planeSelect.value === id) { planeSelect.value = planeSelect.options[0].value; prevPlaneValue = planeSelect.value; }
+            renderPlanePicker();
         }
         function removeChargerFromUI(id) {
             const opt = chargerSelect.querySelector(`option[value="${CSS.escape(id)}"]`);
@@ -5491,6 +5619,7 @@
             if (window.CNSAnimation) CNSAnimation.init();
             renderFolder();
             updateDrawerSub();
+            renderPlanePicker();
             renderPlaneSpecCard();
             _applyDefaultFlight();
         })();

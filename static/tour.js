@@ -340,12 +340,12 @@ window.CNSTour = (function () {
             },
             // 7. Trip type
             {
-                element: '#tripType',
+                element: '#tripTypeSeg',
                 popover: { title: 'Trip type', description: 'One-way, Retour (round trip), or Training (an A→A loop with a fixed pattern radius).', side: 'right' },
             },
             // 8. Aircraft
             {
-                element: '#plane',
+                element: '#planePicker',
                 popover: { title: 'Aircraft', description: 'Pick a model. The card shows its catalog range and the model-adjusted <strong>available range</strong>, plus battery, cruise speed and seats. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
             },
             // 9. Model settings — surfaced BEFORE the route so the factors that
