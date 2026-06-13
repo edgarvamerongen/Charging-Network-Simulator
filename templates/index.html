@@ -64,6 +64,7 @@
             --danger:       #c33d3d;
             --panel:        rgba(255,250,242,0.88);
             --panel-strong: rgba(255,251,244,0.96);
+            --panel-solid:  #fffbf4;                 /* opaque cream — sticky caps use this, not blur */
             --panel-border: rgba(43,47,90,0.10);
             --shadow-sm:    0 1px 2px rgba(43,47,90,.05), 0 1px 3px rgba(43,47,90,.06);
             --shadow:       0 12px 32px rgba(43,47,90,.10), 0 2px 6px rgba(43,47,90,.06);
@@ -454,9 +455,6 @@
             position: fixed; top: 90px; left: 16px; z-index: 10;
             width: 360px; max-height: calc(100vh - 114px);
             overflow-y: auto; padding-right: 6px;
-            /* The scrollport cuts panels square as they scroll past its edges; rounding
-               the cut keeps the sticky caps' corners curvy mid-scroll. */
-            clip-path: inset(0 round var(--radius));
             display: flex; flex-direction: column; gap: 12px;
             pointer-events: none;       /* let map drags through gaps */
             /* Scrollbar hidden: a reserved classic bar sat in the right gutter, and the
@@ -503,9 +501,11 @@
         #result.minimized .headline-box:hover::after { color: #fff; }
         .panel-head {
             display: flex; align-items: center; justify-content: space-between;
-            position: sticky; top: 0; z-index: 7;   /* pin INSIDE the scrollport — never clipped */
-            background: var(--panel-strong);
-            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            position: sticky; top: 0; z-index: 7;
+            /* Opaque cream, NO backdrop-filter: a blurred sticky cap repaints every
+               scroll frame in Safari (visible jitter) and its translucency let field
+               corners bleed through. Solid bg sits cleanly over the glass panel body. */
+            background: var(--panel-solid);
             margin: -16px -16px 14px; padding: 14px 16px 12px;
             border-bottom: 1px solid var(--panel-border);
             border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;   /* nests inside the panel's 1px border arc */
@@ -790,7 +790,6 @@
             position: fixed; top: 90px; right: 16px; z-index: 10;
             width: 360px; max-height: calc(100vh - 114px);
             overflow-y: auto; padding-left: 6px;
-            clip-path: inset(0 round var(--radius));   /* rounded scrollport cut — see .rail-left */
             display: flex; flex-direction: column; gap: 12px;
             pointer-events: none;
             scrollbar-width: thin;
@@ -1422,9 +1421,8 @@
            enough to find when you need to clear the form quickly. */
         .sim-row {
             display: flex; gap: 8px; align-items: stretch;
-            position: sticky; bottom: 0; z-index: 7;   /* pin INSIDE the scrollport — never clipped */
-            background: var(--panel-strong);
-            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            position: sticky; bottom: 0; z-index: 7;
+            background: var(--panel-solid);   /* opaque, no blur — see .panel-head */
             margin: 14px -16px -16px; padding: 12px 16px 14px;
             border-top: 1px solid var(--panel-border);
             border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
@@ -1432,7 +1430,7 @@
         .sim-btn { flex: 1; min-width: 0; }
         /* Bottom-pinned CTA inside a scrolling panel: the halo paints panel-tone
            around the button so content never peeks past its rounded corners. */
-        .sticky-cta { position: sticky; bottom: 0; z-index: 7; box-shadow: 0 0 0 10px var(--panel-strong); }
+        .sticky-cta { position: sticky; bottom: 0; z-index: 7; box-shadow: 0 0 0 10px var(--panel-solid); }
         .sim-reset {
             flex: 0 0 auto; width: 42px;
             display: inline-flex; align-items: center; justify-content: center;
