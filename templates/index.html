@@ -3568,14 +3568,15 @@
             if (have instanceof Promise) return have;
             if (have !== undefined) return Promise.resolve(have);
             const pr = fetch('/api/airport-photo/' + encodeURIComponent(ident)).then(r => {
-                if (!r.ok) throw 0;
+                if (r.status === 404) { _apPhotoStore(ident, null); return null; }   // definitive: no photo
+                if (!r.ok) throw 0;                                                  // 503 busy / 5xx: transient
                 const credit = decodeURIComponent(r.headers.get('X-Photo-Credit') || '');
                 return r.blob().then(b => {
                     const val = { url: URL.createObjectURL(b), credit };
                     _apPhotoStore(ident, val);
                     return val;
                 });
-            }).catch(() => { _apPhotoStore(ident, null); return null; });
+            }).catch(() => { _apPhoto.delete(ident); return null; });   // transient -> drop so the next hover/preload retries
             _apPhoto.set(ident, pr);          // in-flight; final value stored on settle
             return pr;
         }
@@ -3600,10 +3601,10 @@
                 .filter(a => a && a.ident && a.latitude_deg && a.longitude_deg
                     && !_apPhoto.has(a.ident) && b.contains([a.latitude_deg, a.longitude_deg]))
                 .sort((x, y) => map.distance(c, [x.latitude_deg, x.longitude_deg]) - map.distance(c, [y.latitude_deg, y.longitude_deg]))
-                .slice(0, 10)
+                .slice(0, 3)
                 .forEach(a => _loadApPhoto(a.ident));
         }
-        map.on('moveend zoomend', () => { clearTimeout(_apPreloadTimer); _apPreloadTimer = setTimeout(_preloadVisiblePhotos, 500); });
+        map.on('moveend zoomend', () => { clearTimeout(_apPreloadTimer); _apPreloadTimer = setTimeout(_preloadVisiblePhotos, 700); });
         // ---------- saved demand flights on the main map ----------
         // Every feasible saved flight draws as a thin navy line (origin → stops →
         // dest; circular closes the ring) so the planned NETWORK is always visible

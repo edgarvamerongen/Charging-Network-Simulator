@@ -448,6 +448,10 @@ def airport_photo(ident):
         ap['ident'], ap.get('name', ''),
         ap.get('latitude_deg'), ap.get('longitude_deg'), ap.get('type'))
     if not data:
+        if credit == '__busy__':
+            # cold-build slots full — ask the client to retry (it must NOT cache
+            # this as "no photo"), rather than queueing behind a held worker.
+            return Response(status=503, headers={'Retry-After': '2'})
         abort(404)   # no usable image — the client falls back to the plain popup
     resp = Response(data, mimetype='image/webp')
     # Fetched once, then served from the on-disk thumbnail cache; let the browser

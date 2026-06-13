@@ -22,6 +22,7 @@ import mimetypes
 import os
 import platform
 import re
+import threading
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -577,6 +578,12 @@ def _network_map_png(routes, airports, width=900, height=520):
 # ---------- Airport photo (bonus) -------------------------------------------
 _PHOTO_CACHE_DIR = os.path.join(PICS_DIR, 'airports', '_cache')
 _WIKI_UA = 'NRG2FLY-CNS/1.0 (https://nrg2fly.com; charging advisory report)'
+# Bound concurrent COLD hover-thumbnail builds (a Wikidata/Esri fetch + render that
+# holds a worker for 1-2s) so a map pan firing several preloads at once can't tie up
+# every gunicorn worker. Non-blocking: over the cap the build returns the '__busy__'
+# sentinel immediately (the route answers 503 and the client retries) — no worker is
+# ever held waiting on the lock. Per-process; the on-disk cache makes it one-time.
+_THUMB_SEM = threading.BoundedSemaphore(2)
 # The ident comes straight from the client-POSTed payload and is used to build
 # filesystem paths (curated pics + the download cache) and a SPARQL query. Only
 # an ICAO-shaped code is acceptable — anything else (e.g. ../../etc/passwd)
@@ -819,7 +826,7 @@ def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360):
         except OSError:
             return ''
 
-    # fast path: thumbnail already built on a prior hover/preload
+    # fast path: thumbnail already built on a prior hover/preload (no lock — instant)
     if thumb and os.path.exists(thumb):
         try:
             with open(thumb, 'rb') as f:
@@ -827,6 +834,20 @@ def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360):
         except OSError:
             pass
 
+    # cold build: reserve one of the bounded slots, or report busy so the caller
+    # (route -> 503) lets the client retry instead of us queueing a held worker.
+    if not _THUMB_SEM.acquire(blocking=False):
+        return None, '__busy__'
+    try:
+        return _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, _read)
+    finally:
+        _THUMB_SEM.release()
+
+
+def _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, _read):
+    """The cold path of airport_photo_thumb: resolve a source image (curated /
+    Wikidata / small satellite), bomb-guard the decode, downscale to WebP, cache.
+    Runs under _THUMB_SEM. Returns (webp_bytes, credit) or (None, '')."""
     raw, credit = b'', ''
     # 1) reuse a curated photo or the PDF's cached source (same image — just downscale)
     for base in ([os.path.join(PICS_DIR, 'airports', safe),
@@ -862,10 +883,19 @@ def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360):
     if not raw:
         return None, ''
 
-    # downscale → WebP
+    # downscale → WebP. Bound the decode: a legitimately huge upstream image
+    # (Wikipedia infobox photos can be 100M+ px) would otherwise inflate to a
+    # multi-hundred-MB RGB buffer on a worker. Promote the decompression-bomb
+    # warning to an error so an oversized image degrades to "no photo" (404).
     try:
         from PIL import Image
-        im = Image.open(io.BytesIO(raw)).convert('RGB')
+        im = Image.open(io.BytesIO(raw))
+        # Reject an oversized upstream image (Wikipedia infobox photos can be 100M+
+        # px) by its header dimensions BEFORE decoding, so it can't inflate to a
+        # multi-hundred-MB RGB buffer on a worker. Thread-safe (no global filter).
+        if (im.size[0] * im.size[1]) > 40_000_000:
+            return None, ''
+        im = im.convert('RGB')
         im.thumbnail((box, box))
         buf = io.BytesIO()
         im.save(buf, format='WEBP', quality=80, method=4)
