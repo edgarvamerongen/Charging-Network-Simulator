@@ -459,11 +459,13 @@
             clip-path: inset(0 round var(--radius));
             display: flex; flex-direction: column; gap: 12px;
             pointer-events: none;       /* let map drags through gaps */
-            scrollbar-width: thin;
+            /* Scrollbar hidden: a reserved classic bar sat in the right gutter, and the
+               rounded clip sliced its top/bottom — reading as a broken right corner.
+               Trackpad/wheel scroll still works. */
+            scrollbar-width: none;
         }
         .rail-left > * { pointer-events: auto; }
-        .rail-left::-webkit-scrollbar { width: 6px; }
-        .rail-left::-webkit-scrollbar-thumb { background: rgba(43,47,90,.18); border-radius: 999px; }
+        .rail-left::-webkit-scrollbar { display: none; }
 
         /* =========================================================
            Glass panel
@@ -794,8 +796,10 @@
             scrollbar-width: thin;
         }
         .rail-right > * { pointer-events: auto; }
-        .rail-right::-webkit-scrollbar { width: 6px; }
-        .rail-right::-webkit-scrollbar-thumb { background: rgba(15,23,41,.15); border-radius: 999px; }
+        /* Right rail: scrollbar hidden — its track sat flush against the right clip edge,
+           showing as a thin line in the corner. Trackpad/wheel scroll still works. */
+        .rail-right { scrollbar-width: none; }
+        .rail-right::-webkit-scrollbar { display: none; }
         .rail-right:empty, .rail-right .d-none + .d-none:last-child { display: none; }
 
         /* =========================================================
@@ -1588,8 +1592,8 @@
                     <div class="opt-group">
                         <div class="opt-label">Basemap</div>
                         <div class="seg-row" role="group" aria-label="Basemap">
-                            <button class="seg-btn active" type="button" data-basemap="satellite">Satellite</button>
-                            <button class="seg-btn" type="button" data-basemap="voyager">Street</button>
+                            <button class="seg-btn" type="button" data-basemap="satellite">Satellite</button>
+                            <button class="seg-btn active" type="button" data-basemap="voyager">Street</button>
                         </div>
                     </div>
                 </div>
@@ -2321,7 +2325,7 @@
         // info box always reads on top, while staying under interactive popups (700).
         map.getPane('tooltipPane').style.zIndex = 670;
 
-        // Swappable basemaps. Satellite is the default; the segmented control toggles to Carto Voyager.
+        // Swappable basemaps. Street (Carto Voyager) is the default; the segmented control toggles to Esri satellite.
         const BASEMAPS = {
             satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', opts: { attribution: 'Tiles &copy; Esri', maxZoom: 19 } },
             voyager:   { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',                       opts: { attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd', maxZoom: 19 } }
@@ -2334,7 +2338,7 @@
             activeBasemap = L.tileLayer(b.url, b.opts).addTo(map);
             document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.classList.toggle('active', btn.dataset.basemap === name));
         }
-        setBasemap('satellite');
+        setBasemap('voyager');
 
         let routeLayers = [];                 // polylines, leg labels, training circle
         let routeEndpointMarkers = [];        // origin / destination / stop markers (blue pin or blue-halo)
