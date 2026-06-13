@@ -6,6 +6,9 @@ staticmap==0.5.7
 openpyxl==3.1.5
 # Direct dependencies that previously only rode in transitively — report.py
 # imports requests for the Wikimedia photo fetch (stdlib urllib lacks a CA
-# bundle on some platforms), and the one-pager PDF append needs pypdf.
+# bundle on some platforms), pypdf for the one-pager PDF append, and Pillow
+# (PIL) directly for the airport hover-photo thumbnailing (rode in via
+# staticmap/weasyprint before).
 requests==2.34.2
 pypdf==6.13.1
+Pillow==12.2.0

@@ -701,19 +701,21 @@ def _wiki_lead_image(title):
     return '', ''
 
 
-def _satellite_photo(lat, lon, airport_type=None):
+def _satellite_photo(lat, lon, airport_type=None, size=(1500, 600)):
     """Esri World Imagery centred on the field — the deterministic last-resort
     cover. Every airport has coordinates and a runway is always on-topic,
     unlike the old Commons geosearch lottery (which could return any nearby
     photo). Same imagery as the in-app map's satellite layer; rendered with
-    the staticmap dependency the network map already uses. Returns JPEG bytes
-    or b'' (any failure ⇒ the cover falls back to its clean photo-less form)."""
+    the staticmap dependency the network map already uses. `size` is the output
+    canvas in px — the PDF cover keeps the wide default; the live-map hover
+    thumbnail passes a small size so only a couple of tiles are fetched. Returns
+    JPEG bytes or b'' (any failure ⇒ the cover falls back to its photo-less form)."""
     try:
         from staticmap import StaticMap
         # large fields don't fit at z15 (~5 km across); everything else does
         zoom = 14 if 'large' in str(airport_type or '').lower() else 15
         m = StaticMap(
-            1500, 600,
+            size[0], size[1],
             url_template='https://server.arcgisonline.com/ArcGIS/rest/services/'
                          'World_Imagery/MapServer/tile/{z}/{y}/{x}',
             headers={'User-Agent': _WIKI_UA},
@@ -795,6 +797,92 @@ def _airport_photo(ident, name, lat, lon, airport_type=None):
                 'credit': credit}
     except Exception:
         return blank
+
+
+def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360):
+    """A small WebP thumbnail of the airport for the live map's hover preview.
+    Same resolution order as the PDF cover (_airport_photo): curated local →
+    Wikidata/Wikipedia lead image → an Esri satellite render of the field — but
+    rendered and cached SMALL so a hover is cheap (the satellite fallback pulls a
+    couple of tiles, not the cover's 1500x600). Caches separately as
+    <ICAO>_thumb.webp so it never overwrites the full-res cover source. Returns
+    (webp_bytes, credit) or (None, '')."""
+    ident = (ident or '').strip()
+    safe = ident if _SAFE_IDENT_RE.match(ident) else ''
+    thumb = os.path.join(_PHOTO_CACHE_DIR, f'{safe}_thumb.webp') if safe else None
+    credf = os.path.join(_PHOTO_CACHE_DIR, f'{safe}_thumb.txt') if safe else None
+
+    def _read(p):
+        try:
+            with open(p, encoding='utf-8') as f:
+                return f.read().strip()
+        except OSError:
+            return ''
+
+    # fast path: thumbnail already built on a prior hover/preload
+    if thumb and os.path.exists(thumb):
+        try:
+            with open(thumb, 'rb') as f:
+                return f.read(), (_read(credf) if credf else '')
+        except OSError:
+            pass
+
+    raw, credit = b'', ''
+    # 1) reuse a curated photo or the PDF's cached source (same image — just downscale)
+    for base in ([os.path.join(PICS_DIR, 'airports', safe),
+                  os.path.join(_PHOTO_CACHE_DIR, safe)] if safe else []):
+        for ext in ('jpg', 'jpeg', 'png', 'webp'):
+            p = f'{base}.{ext}'
+            if os.path.exists(p):
+                try:
+                    with open(p, 'rb') as f:
+                        raw = f.read()
+                    credit = _read(f'{base}.txt')
+                    break
+                except OSError:
+                    pass
+        if raw:
+            break
+    # 2) Wikidata/Wikipedia lead image — by ICAO, then by name
+    if not raw and AIRPORT_PHOTO_WIKIMEDIA:
+        img_url, credit = _wikidata_image(safe, name)
+        if img_url:
+            if not credit:
+                fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')
+                credit = f'{os.path.splitext(fn)[0]} — Wikimedia Commons'
+            try:
+                raw = _http_get(img_url)
+            except Exception:
+                raw = b''
+    # 3) deterministic last resort: a SMALL Esri satellite render of the field
+    if not raw and lat is not None and lon is not None:
+        raw = _satellite_photo(lat, lon, airport_type, size=(box * 2, box * 2 * 9 // 16))
+        if raw:
+            credit = 'Satellite imagery © Esri — World Imagery'
+    if not raw:
+        return None, ''
+
+    # downscale → WebP
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(raw)).convert('RGB')
+        im.thumbnail((box, box))
+        buf = io.BytesIO()
+        im.save(buf, format='WEBP', quality=80, method=4)
+        data = buf.getvalue()
+    except Exception:
+        return None, ''
+    if thumb:
+        try:
+            os.makedirs(_PHOTO_CACHE_DIR, exist_ok=True)
+            with open(thumb, 'wb') as f:
+                f.write(data)
+            if credf:
+                with open(credf, 'w', encoding='utf-8') as f:
+                    f.write(credit or '')
+        except OSError:
+            pass
+    return data, (credit or '')
 
 
 # ---------- main entry -------------------------------------------------------

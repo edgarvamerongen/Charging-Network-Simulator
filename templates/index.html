@@ -123,6 +123,25 @@
         #folderMap { height: 520px; width: 100%; border-radius: var(--radius-sm); }
         .leaflet-container { font-family: inherit; background: #e9eef7; }
         .popup-btn { font-size: .78rem; padding: .25rem .5rem; margin-top: 5px; width: 100%; border-radius: 6px; }
+        /* Airport hover-popup photo (Wikipedia/Wikidata or Esri satellite — /api/airport-photo). */
+        .ap-popup .leaflet-popup-content { width: 220px; margin: 12px 14px; }
+        .ap-photo-wrap {
+            position: relative; width: 100%; aspect-ratio: 16 / 9; margin-bottom: 9px;
+            border-radius: 8px; overflow: hidden;
+            background: linear-gradient(100deg, #eceff4 30%, #e1e6ef 50%, #eceff4 70%);
+            background-size: 220% 100%; animation: ap-shimmer 1.15s linear infinite;
+        }
+        .ap-photo-wrap.is-empty { display: none; }
+        .ap-photo-wrap.is-loaded { animation: none; background: #e1e6ef; }
+        .ap-photo { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .25s ease; }
+        .ap-photo-wrap.is-loaded .ap-photo { opacity: 1; }
+        .ap-photo-credit {
+            position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 7px 3px;
+            font-size: 8.5px; line-height: 1.15; color: #fff; text-align: right;
+            background: linear-gradient(transparent, rgba(0,0,0,.5)); pointer-events: none;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        @keyframes ap-shimmer { to { background-position: -220% 0; } }
 
         /* =========================================================
            Top bar
@@ -3523,6 +3542,68 @@
         let _apPopupTimer = null;
         function _apCancelClose() { if (_apPopupTimer) { clearTimeout(_apPopupTimer); _apPopupTimer = null; } }
         function _apScheduleClose() { _apCancelClose(); _apPopupTimer = setTimeout(() => map.closePopup(), 240); }
+        // ---------- airport hover photo (Wikipedia/Wikidata, satellite fallback) ----------
+        // /api/airport-photo/<ICAO> returns a small WebP — the field's Wikipedia/
+        // Wikidata lead image if it has one, else an Esri satellite render (the same
+        // source + resolution order the PDF cover uses). Loaded blobs are kept in
+        // memory (LRU) so a preloaded or already-seen airport shows instantly; the
+        // nearest in-view dots are warmed on every pan. No image -> the popup just
+        // shows the name + buttons, exactly as before.
+        const _apPhoto = new Map();          // ident -> {url,credit} | Promise | null
+        const _apPhotoLRU = [];
+        const _AP_PHOTO_MAX = 80;
+        function _apPhotoStore(ident, val) {
+            _apPhoto.set(ident, val);
+            _apPhotoLRU.push(ident);
+            while (_apPhotoLRU.length > _AP_PHOTO_MAX) {
+                const old = _apPhotoLRU.shift();
+                const v = _apPhoto.get(old);
+                if (v && v.url) URL.revokeObjectURL(v.url);
+                _apPhoto.delete(old);
+            }
+        }
+        function _loadApPhoto(ident) {
+            if (!ident) return Promise.resolve(null);
+            const have = _apPhoto.get(ident);
+            if (have instanceof Promise) return have;
+            if (have !== undefined) return Promise.resolve(have);
+            const pr = fetch('/api/airport-photo/' + encodeURIComponent(ident)).then(r => {
+                if (!r.ok) throw 0;
+                const credit = decodeURIComponent(r.headers.get('X-Photo-Credit') || '');
+                return r.blob().then(b => {
+                    const val = { url: URL.createObjectURL(b), credit };
+                    _apPhotoStore(ident, val);
+                    return val;
+                });
+            }).catch(() => { _apPhotoStore(ident, null); return null; });
+            _apPhoto.set(ident, pr);          // in-flight; final value stored on settle
+            return pr;
+        }
+        function _fillApPhoto(wrap, ident) {
+            const apply = (val) => {
+                if (!wrap.isConnected) return;            // popup already closed
+                if (!val) { wrap.classList.add('is-empty'); return; }
+                const img = wrap.querySelector('.ap-photo');
+                img.onload = () => wrap.classList.add('is-loaded');
+                img.src = val.url;
+                if (val.credit) { const c = wrap.querySelector('.ap-photo-credit'); if (c) c.textContent = val.credit; }
+            };
+            const have = _apPhoto.get(ident);
+            if (have !== undefined && !(have instanceof Promise)) apply(have);   // cached -> instant
+            else _loadApPhoto(ident).then(apply);
+        }
+        let _apPreloadTimer = null;
+        function _preloadVisiblePhotos() {
+            if (!allAirports || !allAirports.length || map.getZoom() < 6) return;
+            const b = map.getBounds(), c = map.getCenter();
+            allAirports
+                .filter(a => a && a.ident && a.latitude_deg && a.longitude_deg
+                    && !_apPhoto.has(a.ident) && b.contains([a.latitude_deg, a.longitude_deg]))
+                .sort((x, y) => map.distance(c, [x.latitude_deg, x.longitude_deg]) - map.distance(c, [y.latitude_deg, y.longitude_deg]))
+                .slice(0, 10)
+                .forEach(a => _loadApPhoto(a.ident));
+        }
+        map.on('moveend zoomend', () => { clearTimeout(_apPreloadTimer); _apPreloadTimer = setTimeout(_preloadVisiblePhotos, 500); });
         // ---------- saved demand flights on the main map ----------
         // Every feasible saved flight draws as a thin navy line (origin → stops →
         // dest; circular closes the ring) so the planned NETWORK is always visible
@@ -3612,13 +3693,18 @@
             const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: DOT_R[ap.type] || 6.5, fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.9 });
             m.on('mouseover', function (e) {
                 _apCancelClose();
-                const popup = L.popup({ closeButton: false }).setLatLng(e.latlng).setContent(`
+                const popup = L.popup({ closeButton: false, className: 'ap-popup' }).setLatLng(e.latlng).setContent(`
+                    <div class="ap-photo-wrap"><img class="ap-photo" alt=""><span class="ap-photo-credit"></span></div>
                     <strong>${ap.name}</strong><br>
                     <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as Departure</button>
                     <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>
                     <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${ap.ident}')">Set as Stop</button>`).openOn(map);
                 const el = popup.getElement();
-                if (el) { el.addEventListener('mouseenter', _apCancelClose); el.addEventListener('mouseleave', _apScheduleClose); }
+                if (el) {
+                    el.addEventListener('mouseenter', _apCancelClose); el.addEventListener('mouseleave', _apScheduleClose);
+                    const _apw = el.querySelector('.ap-photo-wrap');
+                    if (_apw) _fillApPhoto(_apw, ap.ident);
+                }
             });
             m.on('mouseout', _apScheduleClose);
             return m;

@@ -16,11 +16,13 @@ try:
 except ImportError:
     fcntl = None
 
+from urllib.parse import quote
 from flask import (Flask, render_template, request, jsonify, send_from_directory,
-                   url_for, Response, redirect, make_response, session)
+                   url_for, Response, redirect, make_response, session, abort)
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 from sim import Simulator
+import report
 from report import generate_pdf
 from spreadsheet import generate_xlsx
 
@@ -414,6 +416,46 @@ def pics(filename):
 @app.route('/api/airports', methods=['GET'])
 def get_airports():
     return jsonify(simulator.get_all_airports())
+
+
+# ---- airport hover photo (live-map preview) ---------------------------------
+# A small WebP thumbnail per airport for the map's hover popup. Reuses the PDF
+# cover's exact resolution pipeline (report.airport_photo_thumb -> curated photo /
+# Wikidata-Wikipedia lead image / Esri satellite fallback) and its on-disk cache,
+# so the hover image is literally "just like in the PDF". Auth-gated like the rest
+# of the app (only logged-in users hovering the map reach it), which also bounds
+# the outbound Wikimedia/Esri fetches to authenticated callers.
+_airport_idx = None
+
+
+def _airport_by_ident(ident):
+    ident = (ident or '').strip().upper()
+    if not report._SAFE_IDENT_RE.match(ident):
+        return None
+    global _airport_idx
+    if _airport_idx is None:
+        _airport_idx = {a['ident'].upper(): a
+                        for a in simulator.get_all_airports() if a.get('ident')}
+    return _airport_idx.get(ident)
+
+
+@app.route('/api/airport-photo/<ident>', methods=['GET'])
+def airport_photo(ident):
+    ap = _airport_by_ident(ident)
+    if ap is None:
+        abort(404)
+    data, credit = report.airport_photo_thumb(
+        ap['ident'], ap.get('name', ''),
+        ap.get('latitude_deg'), ap.get('longitude_deg'), ap.get('type'))
+    if not data:
+        abort(404)   # no usable image — the client falls back to the plain popup
+    resp = Response(data, mimetype='image/webp')
+    # Fetched once, then served from the on-disk thumbnail cache; let the browser
+    # hold it too so a re-hover never re-requests.
+    resp.headers['Cache-Control'] = 'public, max-age=604800'
+    if credit:
+        resp.headers['X-Photo-Credit'] = quote(credit)   # may carry non-ASCII (—, ©)
+    return resp
 
 
 # ---- airport-resident chargers (real-world NRG2FLY install data) -------------
