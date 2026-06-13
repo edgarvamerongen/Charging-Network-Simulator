@@ -1396,7 +1396,9 @@
            with the link as a discrete affordance on the side. */
         /* Departure label + inline "+ Add stop" share one row. */
         .field-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-        .field-label-row label { margin: 0; }
+        /* Caption style is bound to `.field > label`; this label is nested in the row,
+           so the `>` skips it — restate the caption treatment to match the others. */
+        .field-label-row label { margin: 0; font-size: .7rem; font-weight: 700; color: var(--ink-soft); letter-spacing: .05em; text-transform: uppercase; }
         .addstop-link {
             background: none; border: none; padding: 2px 8px;
             font-size: .76rem; color: var(--brand-orange-3); font-weight: 600;
