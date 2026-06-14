@@ -637,6 +637,14 @@ def _commons_filepath(filename):
     return 'https://commons.wikimedia.org/wiki/Special:FilePath/' + urllib.parse.quote(filename.replace(' ', '_'))
 
 
+def _is_svg_url(url):
+    """A vector source — usually an airport crest/logo arriving via Wikidata P18.
+    The hover thumbnail rasterizes through PIL (which can't read SVG) and the PDF
+    cover would embed the logo as-is; skip it so the satellite aerial wins instead.
+    (PNG renders like Name.svg.png end in .png and are kept.)"""
+    return (url or '').lower().split('?')[0].rstrip('/').endswith('.svg')
+
+
 def _wikidata_image(ident, name):
     """Resolve an airport to a representative photo, by ICAO code (P239) first
     — exact and language-independent — then by name. Within each match, prefer
@@ -770,6 +778,8 @@ def _airport_photo(ident, name, lat, lon, airport_type=None):
     # 2) Wikidata-resolved image — by ICAO, then by name (article lead image
     #    preferred; P18 fallback comes back credit-less)
     img_url, credit = _wikidata_image(ident, name)
+    if img_url and _is_svg_url(img_url):
+        img_url, credit = '', ''   # vector logo/crest — skip so the satellite render wins
     if img_url and not credit:
         fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')
         credit = f'{os.path.splitext(fn)[0]} — Wikimedia Commons'
@@ -867,6 +877,8 @@ def _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, 
     # 2) Wikidata/Wikipedia lead image — by ICAO, then by name
     if not raw and AIRPORT_PHOTO_WIKIMEDIA:
         img_url, credit = _wikidata_image(safe, name)
+        if img_url and _is_svg_url(img_url):
+            img_url, credit = '', ''   # vector logo/crest — skip so the satellite render wins
         if img_url:
             if not credit:
                 fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')

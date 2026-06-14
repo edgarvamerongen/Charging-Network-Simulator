@@ -124,7 +124,28 @@
         .leaflet-container { font-family: inherit; background: #e9eef7; }
         .popup-btn { font-size: .78rem; padding: .25rem .5rem; margin-top: 5px; width: 100%; border-radius: 6px; }
         /* Airport hover-popup photo (Wikipedia/Wikidata or Esri satellite — /api/airport-photo). */
-        .ap-popup .leaflet-popup-content { width: 220px; margin: 12px 14px; }
+        /* Airport CLICK card (Eindhoven-style): full-bleed photo banner + name +
+           ICAO·IATA·municipality + Divert + Origin/Destination/Add stop. Opens on dot
+           click (× to close); hover only preloads the photo so it's instant on open. */
+        .ap-card .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; border-radius: 13px; }
+        .ap-card .leaflet-popup-content { margin: 0; width: 230px; }
+        .ap-card .ap-photo-wrap { border-radius: 0; margin: 0; }
+        .ap-card-name { font-weight: 700; font-size: .92rem; color: var(--ink); padding: 9px 12px 0; letter-spacing: -.01em; }
+        .ap-card-meta { color: var(--muted); font-size: .72rem; padding: 2px 12px 0; }
+        .ap-card-divert { color: var(--muted); font-size: .72rem; padding: 4px 12px 0; }
+        .ap-card-actions { display: flex; gap: 6px; padding: 10px 12px 12px; }
+        .ap-card-btn {
+            flex: 1; padding: 5px 4px; font-size: .72rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+            color: var(--ink-soft); background: #fff; border: 1px solid var(--panel-border); border-radius: 7px;
+            transition: background .12s, border-color .12s, color .12s;
+        }
+        .ap-card-btn:hover { background: #f1f5f9; border-color: #cbd5e1; color: var(--ink); }
+        .ap-card .leaflet-popup-close-button {
+            top: 7px; right: 7px; width: 22px; height: 22px; padding: 0;
+            background: rgba(20,24,40,.5); color: #fff; border-radius: 50%;
+            font: 700 15px/22px sans-serif; text-align: center;
+        }
+        .ap-card .leaflet-popup-close-button:hover { background: rgba(20,24,40,.72); color: #fff; }
         .ap-photo-wrap {
             position: relative; width: 100%; aspect-ratio: 16 / 9; margin-bottom: 9px;
             border-radius: 8px; overflow: hidden;
@@ -3536,12 +3557,6 @@
 
         // One orange airport dot with the Dep/Dest/Stop hover popup. Shared by the
         // size-cluster layers and the NRG2fly network layer.
-        // The airport hover popup (Set as Departure/Destination/Stop) closes a short
-        // moment after the pointer leaves BOTH the dot and the popup — the grace
-        // period lets the user travel from the dot onto the popup's buttons.
-        let _apPopupTimer = null;
-        function _apCancelClose() { if (_apPopupTimer) { clearTimeout(_apPopupTimer); _apPopupTimer = null; } }
-        function _apScheduleClose() { _apCancelClose(); _apPopupTimer = setTimeout(() => map.closePopup(), 240); }
         // ---------- airport hover photo (Wikipedia/Wikidata, satellite fallback) ----------
         // /api/airport-photo/<ICAO> returns a small WebP — the field's Wikipedia/
         // Wikidata lead image if it has one, else an Esri satellite render (the same
@@ -3658,11 +3673,9 @@
                 list.classList.add('d-none'); input.value = ap.name; input.blur();
                 const ll = [ap.latitude_deg, ap.longitude_deg];
                 map.flyTo(ll, Math.max(map.getZoom(), 8), { duration: .8 });
-                L.popup({ closeButton: true }).setLatLng(ll).setContent(`
-                    <strong>${escHtml(ap.name)}</strong><br>
-                    <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${escHtml(ap.ident)}')">Set as Departure</button>
-                    <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${escHtml(ap.ident)}')">Set as Destination</button>
-                    <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${escHtml(ap.ident)}')">Set as Stop</button>`).openOn(map);
+                _loadApPhoto(ap.ident);
+                const popup = L.popup({ closeButton: true, className: 'ap-card', minWidth: 230, maxWidth: 230 }).setLatLng(ll).setContent(_airportCardHtml(ap)).openOn(map);
+                _fillApCard(popup, ap.ident);
             }
             input.addEventListener('input', () => {
                 if (input.value.trim().length < 2) { list.classList.add('d-none'); return; }
@@ -3684,6 +3697,33 @@
             input.addEventListener('blur', () => setTimeout(() => list.classList.add('d-none'), 150));
         })();
 
+        // The airport CLICK card: a full-bleed photo banner (filled on open) + name +
+        // ICAO·IATA·municipality + Divert + Origin/Destination/Add stop. Shared by the
+        // dot click and the header search; buttons reuse setOrigin/setDest/setStop then close.
+        function _airportCardHtml(ap) {
+            const meta = [ap.ident, ap.iata_code, ap.municipality].filter(Boolean).map(escHtml).join(' · ');
+            let divert = '';
+            if (ap.alternate_ident && ap.alternate_km != null && isFinite(+ap.alternate_km)) {
+                divert = `<div class="ap-card-divert">Divert: ${escHtml(ap.alternate_ident)}, ${fmtDist(+ap.alternate_km)}</div>`;
+            }
+            const id = escHtml(ap.ident);
+            return `<div class="ap-photo-wrap"><img class="ap-photo" alt=""><span class="ap-photo-credit"></span></div>`
+                + `<div class="ap-card-name">${escHtml(ap.name)}</div>`
+                + `<div class="ap-card-meta">${meta}</div>`
+                + divert
+                + `<div class="ap-card-actions">`
+                + `<button type="button" class="ap-card-btn" onclick="setOrigin('${id}');closeAirportCard()">Origin</button>`
+                + `<button type="button" class="ap-card-btn" onclick="setDest('${id}');closeAirportCard()">Destination</button>`
+                + `<button type="button" class="ap-card-btn" onclick="setStop('${id}');closeAirportCard()">Add stop</button>`
+                + `</div>`;
+        }
+        function closeAirportCard() { map.closePopup(); }
+        function _fillApCard(popup, ident) {
+            const el = popup && popup.getElement && popup.getElement();
+            const w = el && el.querySelector('.ap-photo-wrap');
+            if (w) _fillApPhoto(w, ident);
+        }
+
         function _airportDot(ap) {
             // Dot size encodes the airport class at a glance (large > medium > small);
             // white stroke keeps them crisp on both street and satellite tiles.
@@ -3692,22 +3732,10 @@
             const DOT_R = { large_airport: 8.5, medium_airport: 6.5, small_airport: 4 };
             const DOT_C = { large_airport: '#2b2f5a', medium_airport: '#2b2f5a', small_airport: '#4a4f76' };
             const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: DOT_R[ap.type] || 6.5, fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.9 });
-            m.on('mouseover', function (e) {
-                _apCancelClose();
-                const popup = L.popup({ closeButton: false, className: 'ap-popup' }).setLatLng(e.latlng).setContent(`
-                    <div class="ap-photo-wrap"><img class="ap-photo" alt=""><span class="ap-photo-credit"></span></div>
-                    <strong>${ap.name}</strong><br>
-                    <button class="btn btn-sm btn-outline-primary popup-btn" onclick="setOrigin('${ap.ident}')">Set as Departure</button>
-                    <button class="btn btn-sm btn-outline-success popup-btn" onclick="setDest('${ap.ident}')">Set as Destination</button>
-                    <button class="btn btn-sm btn-outline-secondary popup-btn" onclick="setStop('${ap.ident}')">Set as Stop</button>`).openOn(map);
-                const el = popup.getElement();
-                if (el) {
-                    el.addEventListener('mouseenter', _apCancelClose); el.addEventListener('mouseleave', _apScheduleClose);
-                    const _apw = el.querySelector('.ap-photo-wrap');
-                    if (_apw) _fillApPhoto(_apw, ap.ident);
-                }
-            });
-            m.on('mouseout', _apScheduleClose);
+            // Click opens the card; hover only warms the photo so it is instant on open.
+            m.bindPopup(() => _airportCardHtml(ap), { closeButton: true, className: 'ap-card', minWidth: 230, maxWidth: 230, autoPanPadding: [26, 26] });
+            m.on('popupopen', (e) => _fillApCard(e.popup, ap.ident));
+            m.on('mouseover', () => _loadApPhoto(ap.ident));
             return m;
         }
         async function loadAirports() {
