@@ -20,7 +20,8 @@
     "range_km": 500,
     "speed_kmh": 250,
     "image": "beta.png",
-    "svg": "beta.svg"
+    "svg": "beta.svg",
+    "default_charger_id": "dc_320"
   },
   {
     "id": "vaeridion",
@@ -31,7 +32,8 @@
     "range_km": 500,
     "speed_kmh": 400,
     "image": "vaeridion.jpg",
-    "svg": "vaeridion.svg"
+    "svg": "vaeridion.svg",
+    "default_charger_id": "dc_1000"
   },
   {
     "id": "vaeridion_light",
@@ -42,7 +44,8 @@
     "range_km": 687.5,
     "speed_kmh": 400,
     "image": "vaeridion.jpg",
-    "svg": "vaeridion.svg"
+    "svg": "vaeridion.svg",
+    "default_charger_id": "dc_1000"
   },
   {
     "id": "elysian_e9x",

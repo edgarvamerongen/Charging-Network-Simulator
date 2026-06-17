@@ -1,52 +1,100 @@
 [
   {
     "id": "dc_22",
-    "name": "22 kW DC charger",
-    "power_kw": 22
+    "name": "Pipistrel 22 kW",
+    "power_kw": 22,
+    "type": "Pipistrel",
+    "image": "chargers/Pipistrel-22kW.jpg"
   },
   {
     "id": "dc_40",
-    "name": "40 kW DC charger",
-    "power_kw": 40
+    "name": "NRG2fly 40 kW",
+    "power_kw": 40,
+    "type": "NRG2fly",
+    "image": "chargers/NRG2fly-Charger_40kW.jpg"
   },
   {
-    "id": "dc_44",
-    "name": "44 kW DC charger",
-    "power_kw": 44
+    "id": "dc_mobile_40",
+    "name": "NRG2fly Mobile 40 kW",
+    "power_kw": 40,
+    "type": "NRG2fly Mobile",
+    "image": "chargers/NRG2fly-Mobile_Charger_40kW.jpg"
   },
   {
-    "id": "dc_60",
-    "name": "60 kW DC charger",
-    "power_kw": 60
+    "id": "dc_beta_40",
+    "name": "Beta Mini-Cube 40 kW",
+    "power_kw": 40,
+    "type": "Beta Mini-Cube",
+    "image": "chargers/Beta-Mini-Cube_40kW.jpg"
+  },
+  {
+    "id": "dc_50",
+    "name": "NRG2fly 50 kW",
+    "power_kw": 50,
+    "type": "NRG2fly",
+    "image": "chargers/NRG2fly-Charger_50kW.jpg"
+  },
+  {
+    "id": "dc_beta_65",
+    "name": "Beta Mini-Cube 65 kW",
+    "power_kw": 65,
+    "type": "Beta Mini-Cube",
+    "image": "chargers/Beta-Mini-Cube_65kW.jpg"
   },
   {
     "id": "dc_100",
-    "name": "100 kW DC charger",
-    "power_kw": 100
+    "name": "NRG2fly 100 kW",
+    "power_kw": 100,
+    "type": "NRG2fly",
+    "image": "chargers/NRG2fly-Charger_100kW.jpg"
+  },
+  {
+    "id": "dc_mobile_100",
+    "name": "NRG2fly Mobile 100 kW",
+    "power_kw": 100,
+    "type": "NRG2fly Mobile",
+    "image": "chargers/NRG2fly-Mobile_Charger_100kW.jpg"
   },
   {
     "id": "dc_250",
-    "name": "250 kW DC charger",
-    "power_kw": 250
+    "name": "NRG2fly 250 kW",
+    "power_kw": 250,
+    "type": "NRG2fly",
+    "image": "chargers/NRG2fly-Charger_250kW.jpg"
+  },
+  {
+    "id": "dc_320",
+    "name": "Beta Cube 320 kW",
+    "power_kw": 320,
+    "type": "Beta Cube",
+    "image": "chargers/Beta-Cube_320kW.jpg"
   },
   {
     "id": "dc_400",
-    "name": "400 kW DC charger",
-    "power_kw": 400
+    "name": "NRG2fly 400 kW",
+    "power_kw": 400,
+    "type": "NRG2fly",
+    "image": "chargers/NRG2fly-Charger_400kW.jpg"
+  },
+  {
+    "id": "dc_800",
+    "name": "Beta Thermal Cube 800 kW",
+    "power_kw": 800,
+    "type": "Beta Thermal Cube",
+    "image": "chargers/Beta-Thermal-Management-Cube_800kW.jpg"
   },
   {
     "id": "dc_1000",
-    "name": "1 MW DC charger",
-    "power_kw": 1000
+    "name": "Vaeridion 1 MW",
+    "power_kw": 1000,
+    "type": "Vaeridion",
+    "image": "chargers/Vaeridion-NRG2fly-1MW.jpg"
   },
   {
     "id": "dc_2400",
-    "name": "2.4 MW DC charger",
-    "power_kw": 2400
-  },
-  {
-    "id": "dc_3750",
-    "name": "3.75 MW DC charger",
-    "power_kw": 3750
+    "name": "Vaeridion 2.4 MW",
+    "power_kw": 2400,
+    "type": "Vaeridion",
+    "image": "chargers/Vaeridion-NRG2fly-2.4MW.jpg"
   }
 ]

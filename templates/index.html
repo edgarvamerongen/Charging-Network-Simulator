@@ -171,16 +171,17 @@
             position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 30;
             display: flex; align-items: center; justify-content: space-between;
             padding: 0 20px;
-            /* Subtle cream-tinted blur over the map so the brand reads cleanly */
-            background: linear-gradient(to bottom, rgba(246,239,222,.95), rgba(246,239,222,.78));
+            /* Soft white brand bar — airy blur over the map; nav items integrate into it */
+            background: linear-gradient(to bottom, rgba(255,255,255,.94), rgba(255,255,255,.82));
             backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
             border-bottom: 1px solid var(--panel-border);
+            box-shadow: 0 1px 6px rgba(15,23,41,.05);
         }
         .brand {
             display: flex; align-items: center; gap: 12px;
             color: var(--ink); text-decoration: none; line-height: 1;
         }
-        .brand-wide { height: 34px; display: block; }
+        .brand-wide { height: 32px; display: block; }
         .brand-tagline {
             font-weight: 600; font-size: .82rem; color: var(--ink-soft);
             padding-left: 12px; border-left: 1px solid var(--panel-border);
@@ -190,7 +191,7 @@
                tagline reads ~3px high next to it. Nudge down to the wordmark's centre. */
             transform: translateY(3px);
         }
-        .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: .82rem; color: var(--ink-soft); user-select: none; }
+        .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: .82rem; font-weight: 600; color: var(--ink-soft); user-select: none; padding: 0 6px; }
         .switch input { appearance: none; width: 34px; height: 20px; background: #cbd5e1; border-radius: 999px; position: relative; transition: background .2s; cursor: pointer; }
         .switch input:checked { background: var(--primary); }
         .switch input::before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
@@ -199,16 +200,18 @@
         /* =========================================================
            Topbar tools + Options dropdown
            ========================================================= */
-        .topbar-tools { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: flex-end; }
+        .topbar-tools { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; justify-content: flex-end; }
         /* Header airport search — jump the map anywhere, then act from the popup */
         .topbar-search { position: relative; }
         .topbar-search .ac-input {
-            width: 230px; padding: 6px 12px 6px 30px; font-size: .82rem;
-            border: 1px solid var(--panel-border); border-radius: 999px;
-            background: rgba(255,255,255,.7);
+            width: 210px; padding: 7px 12px 7px 30px; font-size: .82rem;
+            border: 1px solid transparent; border-radius: 8px;
+            background: rgba(15,23,41,.055); color: var(--ink);
+            transition: background .15s, border-color .15s;
         }
-        .topbar-search .ac-input:focus { background: #fff; }
-        .topbar-search .search-ico { position: absolute; left: 11px; top: 5px; color: var(--muted); pointer-events: none; }
+        .topbar-search .ac-input::placeholder { color: var(--muted); font-weight: 500; }
+        .topbar-search .ac-input:focus { background: #fff; border-color: var(--panel-border); }
+        .topbar-search .search-ico { position: absolute; left: 11px; top: 6px; color: var(--muted); pointer-events: none; }
         .topbar-search .ac-list { left: 0; right: 0; top: calc(100% + 4px); }
         .options-wrap { position: relative; }
 
@@ -216,14 +219,16 @@
            Outline/secondary by default; the CTA variant gets the brand-orange
            gradient fill so it reads as the primary "return" action. Pill shape
            + flex-wrap on .topbar-tools lets both stack gracefully on narrow nav. */
+        /* Onepager uses the exact ghost-control look (see .options-btn) so the whole
+           tools row reads as ONE set — one tone, one size, one radius, one hover. */
         .cns-brand-btn {
             display: inline-flex; align-items: center; gap: 6px;
-            background: #fff; border: 1px solid var(--brand-orange-3); color: var(--brand-orange-3);
+            background: transparent; border: 1px solid transparent; color: var(--ink-soft);
             font-size: .82rem; font-weight: 600; line-height: 1; white-space: nowrap;
-            padding: 7px 13px; border-radius: 999px; cursor: pointer; text-decoration: none;
-            transition: background .15s, box-shadow .15s, border-color .15s, color .15s;
+            padding: 7px 10px; border-radius: 8px; cursor: pointer; text-decoration: none;
+            transition: background .15s, color .15s;
         }
-        .cns-brand-btn:hover { background: rgba(229,120,80,.10); box-shadow: var(--shadow-sm); }
+        .cns-brand-btn:hover { background: rgba(15,23,41,.06); color: var(--ink); }
         .cns-brand-btn-cta {
             background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3));
             border-color: var(--brand-orange-3); color: #fff;
@@ -267,24 +272,32 @@
         @media (prefers-reduced-motion: reduce) {
             .cns-ticker-track { animation: none; }
         }
+        /* Map Options → Display → Show news ticker. When hidden, drop the band and
+           lift the rails up under the topbar so no empty gap is left behind. */
+        body.ticker-off .cns-ticker { display: none; }
+        body.ticker-off .rail-left,
+        body.ticker-off .rail-right { top: 62px; }
+        body.ticker-off .rail-left .panel { max-height: calc(100vh - 86px); }
         .options-btn {
-            display: inline-flex; align-items: center; gap: 7px;
-            background: #fff; border: 1px solid var(--panel-border); color: var(--ink);
+            display: inline-flex; align-items: center; gap: 6px;
+            background: transparent; border: 1px solid transparent; color: var(--ink-soft);
             font-size: .82rem; font-weight: 600;
-            padding: 6px 12px; border-radius: 999px; cursor: pointer;
-            transition: background .15s, box-shadow .15s, border-color .15s;
+            padding: 7px 10px; border-radius: 8px; cursor: pointer;
+            transition: background .15s, color .15s;
         }
-        .options-btn .gear { font-size: 1rem; line-height: 1; transition: transform .25s; }
-        .options-btn:hover { background: #f8fafc; box-shadow: var(--shadow-sm); border-color: var(--border-strong, #cbd5e1); }
-        /* "? Tour" button — same pill shape, gold accent so it reads as the
-           help/onboarding affordance. */
-        .help-btn { color: var(--brand-ink); }
+        .options-btn .gear { font-size: .95rem; line-height: 1; opacity: .85; transition: transform .25s; }
+        .options-btn:hover { background: rgba(15,23,41,.06); color: var(--ink); }
+        .options-btn[aria-expanded="true"] { background: rgba(15,23,41,.09); color: var(--ink); }
+        /* Help "?" — same ink tone + size as every other glyph: a quiet outlined
+           circle, no special accent, so Tour matches Map Options and Onepager. */
+        .help-btn { color: var(--ink-soft); }
         .help-btn .help-glyph {
             display: inline-flex; align-items: center; justify-content: center;
-            width: 16px; height: 16px; border-radius: 50%;
-            background: var(--brand-gold); color: var(--brand-ink); font-weight: 800; font-size: .72rem;
+            width: 15px; height: 15px; border-radius: 50%;
+            border: 1.5px solid currentColor; background: transparent;
+            color: inherit; font-weight: 700; font-size: .6rem;
         }
-        .help-btn:hover { background: rgba(230,193,73,.12); border-color: rgba(230,193,73,.45); }
+        .help-btn:hover { background: rgba(15,23,41,.06); color: var(--ink); }
 
         /* Driver.js popover: re-skinned to match the NRG2fly palette. */
         .cns-tour-popover.driver-popover {
@@ -527,6 +540,14 @@
            curve, never squared off). No position:sticky on the form -> nothing lags,
            nothing shifts; the bands are genuinely stationary. */
         .rail-left .panel { display: flex; flex-direction: column; max-height: calc(100vh - 114px); overflow: hidden; }
+        /* Create-a-route panel -> white, to match the soft-white header. Re-point the
+           panel bg tokens locally so the body AND the sticky head/footer bands (which
+           all read var(--panel-solid/--panel-strong)) turn white in one place. */
+        .rail-left .panel {
+            --panel-solid: #ffffff;
+            --panel-strong: #ffffff;
+            --panel: rgba(255,255,255,.90);
+        }
         .rail-left .panel > #simForm { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .form-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
         .form-scroll { scrollbar-width: none; }
@@ -1408,6 +1429,33 @@
         .plane-card.plane-add { display: flex; align-items: center; justify-content: center; border-style: dashed; color: var(--muted); font-size: 1.5rem; background: transparent; }
         .plane-card.plane-add:hover { color: var(--primary); border-color: var(--primary); }
         .plane-card .plane-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-ink); font-size: 2rem; }
+        /* Charger carousel — full-bleed image of the selected charger; chevrons float on
+           top with a side hover-shade; navigation loops. Drives the hidden #charger select. */
+        .charger-carousel { position: relative; margin-top: 2px; border-radius: var(--radius-sm); overflow: hidden; border: 1.5px solid var(--panel-border); }
+        .charger-stage { position: relative; aspect-ratio: 1494 / 1236; background: #f4f1e8; }
+        .charger-stage .charger-card { position: absolute; inset: 0; display: block; border: 0; padding: 0; background: none; animation: charger-fade .22s ease; }
+        @keyframes charger-fade { from { opacity: .35; } to { opacity: 1; } }
+        .charger-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+        .charger-stage .charger-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-ink); font-size: 2.4rem; }
+        .charger-stage .charger-overlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 9px; text-align: left; pointer-events: none; background: linear-gradient(transparent, rgba(43,47,90,.55) 45%, rgba(43,47,90,.92)); }
+        .charger-stage .charger-power { font-size: 1.1rem; font-weight: 800; color: #fff; line-height: 1.05; letter-spacing: -.01em; }
+        .charger-stage .charger-type { font-size: .6rem; color: rgba(255,255,255,.82); margin-top: 2px; text-transform: uppercase; letter-spacing: .07em; }
+        .charger-nav { position: absolute; top: 0; bottom: 0; width: 30%; z-index: 2; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; color: #fff; font-size: 26px; line-height: 1; padding: 0 5px; transition: background .16s ease; }
+        .charger-nav span { text-shadow: 0 1px 5px rgba(0,0,0,.6); opacity: .82; transition: opacity .16s ease; }
+        .charger-nav:hover span { opacity: 1; }
+        .charger-prev { left: 0; justify-content: flex-start; }
+        .charger-next { right: 0; justify-content: flex-end; }
+        .charger-prev:hover { background: linear-gradient(to right, rgba(43,47,90,.5), rgba(43,47,90,0)); }
+        .charger-next:hover { background: linear-gradient(to left, rgba(43,47,90,.5), rgba(43,47,90,0)); }
+        .charger-custom-link { margin-top: 6px; width: 100%; background: none; border: 1px dashed var(--panel-border); color: var(--muted); border-radius: var(--radius-sm); padding: 5px; font-size: .72rem; font-weight: 600; cursor: pointer; transition: color .12s, border-color .12s; }
+        .charger-custom-link:hover { color: var(--primary); border-color: var(--primary); }
+        /* Compact expected-frequency: narrow number + day/week segment (mirrors #freqUnit). */
+        .freq-compact { display: flex; align-items: center; gap: 8px; }
+        .freq-compact .freq-n { width: 60px; flex: 0 0 auto; text-align: center; }
+        .freq-sep { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+        .freq-seg { display: inline-flex; background: #eef1f6; border-radius: 8px; padding: 2px; gap: 2px; }
+        .freq-seg-btn { border: none; background: transparent; color: var(--ink-soft); font-size: .8rem; font-weight: 600; padding: 4px 13px; border-radius: 6px; cursor: pointer; }
+        .freq-seg-btn[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: var(--shadow-sm); }
         /* Usable-reach bar (in the slimmed spec card; photo/name/stats live on the tiles) */
         .ps-id-hidden, .ps-stat-hide { display: none !important; }
         .reach-row { margin: 2px 0 6px; }
@@ -1590,15 +1638,23 @@
         .custom-list .cl-rm { border: none; background: transparent; color: var(--danger); cursor: pointer; padding: 0 6px; border-radius: 4px; font-size: 1.1rem; line-height: 1; }
         .custom-list .cl-rm:hover { background: rgba(239,68,68,.1); }
 
-        /* Narrow screens: rail spans full width */
+        /* Single-row topbar that condenses instead of wrapping: progressively drop
+           non-essential items as width shrinks so the bar never breaks onto two rows. */
+        @media (max-width: 1180px) { .topbar-search .ac-input { width: 170px; } }
+        @media (max-width: 1040px) { .brand-tagline { display: none; } }
+        @media (max-width: 900px) {
+            .topbar-search { display: none; }
+            .switch span { display: none; }
+        }
         @media (max-width: 720px) {
             .rail-left { left: 8px; right: 8px; width: auto; max-height: 60vh; }
             .map-controls { top: 64px; right: 8px; }
             .control-pill .pill-label { display: none; }
-            /* Tighter topbar gaps + compact brand buttons so the wrapped tools
-               row stays as shallow as possible when .topbar-tools flex-wraps. */
-            .topbar-tools { gap: 8px 10px; }
-            .cns-brand-btn { padding: 5px 10px; font-size: .76rem; }
+            .topbar { padding: 0 12px; }
+            .topbar-tools { gap: 2px; }
+            /* keep the controls uniform when compacting */
+            .options-btn, .cns-brand-btn { padding: 6px 8px; font-size: .78rem; }
+            .switch { font-size: .78rem; padding: 0 4px; }
         }
     </style>
 </head>
@@ -1613,16 +1669,11 @@
             <span class="brand-tagline">Charging Network Simulator</span>
         </a>
         <div class="topbar-tools">
-            <!-- Help / tour trigger — runs the guided walkthrough on demand.
-                 Also auto-fires on first visit (cns_tour_done localStorage flag). -->
             <div class="topbar-search ac-wrap" id="topbarSearch">
                 <span class="search-ico" aria-hidden="true">⌕</span>
                 <input type="text" id="airportSearch" class="ac-input" placeholder="Find airport — ICAO, IATA or name" autocomplete="off" aria-label="Find airport">
                 <div id="airportSearchList" class="ac-list d-none"></div>
             </div>
-            <button id="tourBtn" class="options-btn help-btn" type="button" title="Take the guided tour">
-                <span class="help-glyph" aria-hidden="true">?</span> <span>Tour</span>
-            </button>
             <div class="options-wrap">
                 <button id="optionsBtn" class="options-btn" type="button" aria-haspopup="true" aria-expanded="false">
                     <span class="gear">⚙</span> <span>Map Options</span>
@@ -1649,9 +1700,13 @@
                     <div class="opt-group">
                         <div class="opt-label">Basemap</div>
                         <div class="seg-row" role="group" aria-label="Basemap">
-                            <button class="seg-btn" type="button" data-basemap="satellite">Satellite</button>
-                            <button class="seg-btn active" type="button" data-basemap="voyager">Street</button>
+                            <button class="seg-btn active" type="button" data-basemap="satellite">Satellite</button>
+                            <button class="seg-btn" type="button" data-basemap="voyager">Street</button>
                         </div>
+                    </div>
+                    <div class="opt-group">
+                        <div class="opt-label">Display</div>
+                        <label class="opt-check"><input type="checkbox" id="tickerToggle" checked><span>Show news ticker</span></label>
                     </div>
                 </div>
             </div>
@@ -1660,7 +1715,11 @@
                 <span>Nautical (nm / kn)</span>
             </label>
             <!-- Onepager download (outline). Wraps on narrow nav widths. -->
-            <a class="cns-brand-btn" href="/static/NRG2fly_onepager.pdf" download>Download NRG2fly onepager</a>
+            <a class="cns-brand-btn" href="/static/NRG2fly_onepager.pdf" download title="Download NRG2fly onepager"><span aria-hidden="true">↓</span> <span class="btn-text">Onepager</span></a>
+            <!-- Help / tour trigger — guided walkthrough; auto-fires on first visit (cns_tour_done). -->
+            <button id="tourBtn" class="options-btn help-btn" type="button" title="Take the guided tour">
+                <span class="help-glyph" aria-hidden="true">?</span> <span>Tour</span>
+            </button>
         </div>
     </header>
 
@@ -1813,13 +1872,17 @@
 
                 <div class="field" id="freqField">
                     <label>Expected frequency</label>
-                    <div class="input-group">
-                        <input type="number" id="freqN" class="form-control" value="1" min="1" max="2000" step="1">
-                        <span class="input-group-text">flights per</span>
-                        <select id="freqUnit" class="form-select">
+                    <div class="freq-compact">
+                        <input type="number" id="freqN" class="form-control freq-n" value="1" min="1" max="2000" step="1" aria-label="Flights">
+                        <span class="freq-sep">routes /</span>
+                        <select id="freqUnit" class="form-select d-none" tabindex="-1" aria-hidden="true">
                             <option value="day">day</option>
                             <option value="week">week</option>
                         </select>
+                        <div class="freq-seg" role="group" aria-label="Per period">
+                            <button type="button" class="freq-seg-btn" data-unit="day">day</button>
+                            <button type="button" class="freq-seg-btn" data-unit="week">week</button>
+                        </div>
                     </div>
                     <!-- Fleet-mode selector: only meaningful for retour / training
                          when freq>1 (one-way is always separate aircraft). It
@@ -1832,12 +1895,18 @@
                 </div>
                 <div class="field">
                     <label>Charger</label>
-                    <select id="charger" class="form-select">
+                    <select id="charger" class="form-select d-none" tabindex="-1" aria-hidden="true">
                         {% for c in chargers %}
-                        <option value="{{ c.id }}">{{ c.name }}{% if 'kW' not in c.name and 'MW' not in c.name %} ({{ c.power_kw }} kW){% endif %}</option>
+                        <option value="{{ c.id }}" data-image="{{ c.image }}" data-power="{{ c.power_kw }}" data-type="{{ c.type }}">{{ c.name }}{% if 'kW' not in c.name and 'MW' not in c.name %} ({{ c.power_kw }} kW){% endif %}</option>
                         {% endfor %}
                         <option value="__custom_charger__">➕ Add custom charger…</option>
                     </select>
+                    <div class="charger-carousel">
+                        <div id="chargerPicker" class="charger-stage" aria-live="polite" aria-label="Selected charger"></div>
+                        <button type="button" class="charger-nav charger-prev" data-dir="-1" aria-label="Previous charger"><span>‹</span></button>
+                        <button type="button" class="charger-nav charger-next" data-dir="1" aria-label="Next charger"><span>›</span></button>
+                    </div>
+                    <button type="button" id="addCustomCharger" class="charger-custom-link">＋ Add custom charger</button>
                 </div>
                 </div><!-- /.form-scroll -->
                 <div class="sim-row">
@@ -2384,7 +2453,7 @@
         // info box always reads on top, while staying under interactive popups (700).
         map.getPane('tooltipPane').style.zIndex = 670;
 
-        // Swappable basemaps. Street (Carto Voyager) is the default; the segmented control toggles to Esri satellite.
+        // Swappable basemaps. Satellite is the default; the segmented control toggles to Carto Voyager.
         const BASEMAPS = {
             satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', opts: { attribution: 'Tiles &copy; Esri', maxZoom: 19 } },
             voyager:   { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',                       opts: { attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd', maxZoom: 19 } }
@@ -2397,7 +2466,7 @@
             activeBasemap = L.tileLayer(b.url, b.opts).addTo(map);
             document.querySelectorAll('.seg-btn[data-basemap]').forEach(btn => btn.classList.toggle('active', btn.dataset.basemap === name));
         }
-        setBasemap('voyager');
+        setBasemap('satellite');
 
         let routeLayers = [];                 // polylines, leg labels, training circle
         let routeEndpointMarkers = [];        // origin / destination / stop markers (blue pin or blue-halo)
@@ -3427,6 +3496,50 @@
             document.querySelectorAll('#planePicker .plane-card').forEach(el =>
                 el.setAttribute('aria-pressed', String(el.dataset.plane === v)));
         });
+        // ---------- charger carousel (single full-bleed image; loops; mirrors #charger) ----------
+        function renderChargerPicker() {
+            const host = document.getElementById('chargerPicker');
+            const sel = document.getElementById('charger');
+            if (!host || !sel) return;
+            const o = sel.selectedOptions[0];
+            if (!o || o.value === '__custom_charger__') return;   // sentinel: keep the current image
+            const img = o.dataset.image;
+            const src = img ? '/pics/' + img.split('/').map(encodeURIComponent).join('/') : '';
+            const pw = +o.dataset.power, power = (isFinite(pw) && pw > 0) ? fmtPower(pw) : (o.textContent || '').trim();
+            host.innerHTML = `<div class="charger-card" title="${escHtml((o.textContent || '').trim())}">` +
+                (src ? `<img src="${src}" alt="" loading="lazy">` : '<div class="charger-glyph">⚡</div>') +
+                `<div class="charger-overlay"><div class="charger-power">${escHtml(power)}</div><div class="charger-type">${escHtml(o.dataset.type || 'DC charger')}</div></div></div>`;
+        }
+        // Any #charger change (pick / plane default / custom add-remove) re-renders the stage.
+        document.getElementById('charger').addEventListener('change', renderChargerPicker);
+        // ‹ › step to prev/next charger, LOOPING (wrap around both ways).
+        document.querySelectorAll('.charger-nav').forEach(btn => btn.addEventListener('click', () => {
+            const sel = document.getElementById('charger');
+            const opts = [...sel.options].filter(o => o.value !== '__custom_charger__');
+            if (!opts.length) return;
+            let i = opts.findIndex(o => o.value === sel.value); if (i < 0) i = 0;
+            i = (i + (+btn.dataset.dir) + opts.length) % opts.length;
+            sel.value = opts[i].value; sel.dispatchEvent(new Event('change'));
+        }));
+        // + Add custom charger -> existing modal flow (select sentinel).
+        document.getElementById('addCustomCharger').addEventListener('click', () => {
+            const sel = document.getElementById('charger');
+            sel.value = '__custom_charger__'; sel.dispatchEvent(new Event('change'));
+        });
+        renderChargerPicker();
+        // ---------- compact frequency period (day/week) mirrors hidden #freqUnit ----------
+        (function () {
+            const sel = document.getElementById('freqUnit');
+            const seg = document.querySelector('.freq-seg');
+            if (!sel || !seg) return;
+            const sync = () => seg.querySelectorAll('.freq-seg-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.unit === sel.value)));
+            seg.querySelectorAll('.freq-seg-btn').forEach(b => b.addEventListener('click', () => {
+                if (sel.value === b.dataset.unit) return;
+                sel.value = b.dataset.unit; sel.dispatchEvent(new Event('change'));
+            }));
+            sel.addEventListener('change', sync);
+            sync();
+        })();
         // ---------- usable-reach bar (refilled by renderPlaneSpecCard) ----------
         function _renderReachBar(spec) {
             const fill = document.getElementById('reachFill');
@@ -5736,12 +5849,28 @@
         unitToggle.addEventListener('change', () => {
             CNSUnits.set(unitToggle.checked ? 'nautical' : 'metric');
         });
+        // News ticker show/hide (Map Options -> Display). Persisted; hiding it lifts
+        // the rails up under the topbar via body.ticker-off (no leftover gap).
+        (function () {
+            const t = document.getElementById('tickerToggle');
+            if (!t) return;
+            const KEY = 'cns_ticker_hidden';
+            const apply = (hidden) => document.body.classList.toggle('ticker-off', hidden);
+            let hidden = false;
+            try { hidden = localStorage.getItem(KEY) === '1'; } catch (e) {}
+            t.checked = !hidden; apply(hidden);
+            t.addEventListener('change', () => {
+                const h = !t.checked; apply(h);
+                try { localStorage.setItem(KEY, h ? '1' : '0'); } catch (e) {}
+            });
+        })();
         CNSUnits.onChange(() => {
             unitToggle.checked = isNautical();
             updateTrajectory();
             if (lastResult) renderResult(lastResult);
             renderPlaneSpecCard();
             renderPlanePicker();    // tile spec lines carry distances/speeds
+            renderChargerPicker();  // charger strip syncs to the default/selected charger
             renderFolder();
             renderStops();          // Suggested-route panel: per-leg + total distances
             refreshAlternates();    // divert markers on the map ("EHRD · 46 km" tooltips)
@@ -5766,8 +5895,10 @@
         function addChargerOption(c) {
             const opt = document.createElement('option');
             opt.value = c.id;
+            opt.dataset.power = c.power_kw;
             opt.textContent = `${chargerLabel(c)} (custom)`;
             chargerSelect.insertBefore(opt, chargerSelect.querySelector('option[value="__custom_charger__"]'));
+            renderChargerPicker();
         }
 
         // Open the right modal when the picker hits the "add custom" sentinel.
@@ -5785,7 +5916,7 @@
                 const planeDef = BUILTIN_PLANES_BY_ID[planeSelect.value];
                 if (planeDef && planeDef.default_charger_id) {
                     const opt = chargerSelect.querySelector(`option[value="${CSS.escape(planeDef.default_charger_id)}"]`);
-                    if (opt) { chargerSelect.value = planeDef.default_charger_id; prevChargerValue = chargerSelect.value; }
+                    if (opt) { chargerSelect.value = planeDef.default_charger_id; prevChargerValue = chargerSelect.value; renderChargerPicker(); }
                 }
             }
         });
@@ -5816,6 +5947,7 @@
             delete chargerById[id];
             const i = CHARGERS.findIndex(c => c.id === id); if (i >= 0) CHARGERS.splice(i, 1);
             if (chargerSelect.value === id) { chargerSelect.value = chargerSelect.options[0].value; prevChargerValue = chargerSelect.value; }
+            renderChargerPicker();
         }
 
         function renderPlanesList() {
@@ -5972,8 +6104,7 @@
                 planeSel.value = 'beta_plane';
                 planeSel.dispatchEvent(new Event('change'));
             }
-            const chgSel = document.getElementById('charger');
-            if (chgSel && [...chgSel.options].some(op => op.value === 'dc_250')) chgSel.value = 'dc_250';
+            // (charger follows the plane: Beta -> its default 320 kW, set by the plane change above)
             const stops = document.getElementById('withStops');
             if (stops && !stops.checked) { stops.checked = true; stops.dispatchEvent(new Event('change')); }
             if (typeof pickAirport === 'function') {

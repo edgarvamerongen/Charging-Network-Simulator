@@ -12,16 +12,16 @@ const NETWORK = [
   { id:'t-ow', plane:'beta_plane', o:'EHAM', d:'LFPG', trip:'one-way', charger:'dc_250' },
   { id:'t-ret', plane:'beta_plane', o:'EHAM', d:'EHGG', trip:'retour', charger:'dc_250' },
   { id:'t-multi', plane:'beta_plane', o:'EHAM', d:'EGLL', trip:'one-way', stops:['EHRD'], charger:'dc_250' },
-  { id:'t-train', plane:'pipistrel_velis', o:'EHAM', d:'EHAM', trip:'training', charger:'dc_60' },
+  { id:'t-train', plane:'pipistrel_velis', o:'EHAM', d:'EHAM', trip:'training', charger:'dc_50' },
 ];
 async function sim(c){ const dest=c.trip==='training'?c.o:c.d; const p={origin:co(c.o),destination:co(dest),plane_id:c.plane,charger_id:c.charger,trip_type:c.trip}; if(c.stops)p.stops=c.stops.map(co); return (await fetch(BASE+'/api/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)})).json(); }
-function savedTrip(c,data){ const P=PLANES[c.plane], dest=c.trip==='training'?c.o:c.d; const t={id:c.id,planeId:c.plane,planeName:P.name,tripType:c.trip,originIdent:c.o,originName:AP[c.o].name,originLat:AP[c.o].lat,originLon:AP[c.o].lon,destIdent:dest,destName:AP[dest].name,destLat:AP[dest].lat,destLon:AP[dest].lon,battery:P.battery_kwh,range_km:P.range_km,speed_kmh:P.speed_kmh,c_rate:P.c_rate,chargerId:c.charger,chargerName:c.charger,chargerPower:c.charger==='dc_250'?250:60,legEnergy:data.leg_energy_kwh,flightTimeH:data.multi_leg?data.total_flight_time_h:data.flight_time_h,freqN:1,freqUnit:'day',fleetMode:'separate'}; if(data.multi_leg)Object.assign(t,{multiLeg:true,stops:(c.stops||[]).map(co),legs:data.legs,charges:data.charges,totalFlightTimeH:data.total_flight_time_h}); else if(c.trip==='training')t.trainingRangeKm=data.training_range_km; return t; }
+function savedTrip(c,data){ const P=PLANES[c.plane], dest=c.trip==='training'?c.o:c.d; const t={id:c.id,planeId:c.plane,planeName:P.name,tripType:c.trip,originIdent:c.o,originName:AP[c.o].name,originLat:AP[c.o].lat,originLon:AP[c.o].lon,destIdent:dest,destName:AP[dest].name,destLat:AP[dest].lat,destLon:AP[dest].lon,battery:P.battery_kwh,range_km:P.range_km,speed_kmh:P.speed_kmh,c_rate:P.c_rate,chargerId:c.charger,chargerName:c.charger,chargerPower:c.charger==='dc_250'?250:50,legEnergy:data.leg_energy_kwh,flightTimeH:data.multi_leg?data.total_flight_time_h:data.flight_time_h,freqN:1,freqUnit:'day',fleetMode:'separate'}; if(data.multi_leg)Object.assign(t,{multiLeg:true,stops:(c.stops||[]).map(co),legs:data.legs,charges:data.charges,totalFlightTimeH:data.total_flight_time_h}); else if(c.trip==='training')t.trainingRangeKm=data.training_range_km; return t; }
 async function capture(){
   const S=loadStack(); S.CNSSettings.reset();
   const trips=[]; for(const c of NETWORK){ const data=await sim(c); if(data.error){console.log('SKIP',c.id,data.error);continue;} trips.push(savedTrip(c,data)); }
   S.localStorage.setItem('cns_folder',JSON.stringify(trips));
   S.localStorage.setItem('cns_airport_cfg',JSON.stringify({}));
-  S.CNSScheduler.init({chargers:{dc_250:{id:'dc_250',name:'250 kW DC',power_kw:250},dc_60:{id:'dc_60',name:'60 kW DC',power_kw:60}}});
+  S.CNSScheduler.init({chargers:{dc_250:{id:'dc_250',name:'250 kW DC',power_kw:250},dc_50:{id:'dc_50',name:'50 kW DC',power_kw:50}}});
   const g=S.CNSScheduler.runGlobal();
   const lanes=(g.lanes||[]).map(L=>({trip:L.trip&&L.trip.id,rotations:(L.rotations||[]).map(r=>({takeoff:round(r.takeoff),end:round(r.end),phases:(r.phases||[]).map(p=>({kind:p.kind,ident:p.ident||null,start:round(p.start),dur:round(p.dur),energy:round(p.energy)}))}))}));
   const airports={}; for(const id of ['EHAM','LFPG','EHGG','EGLL','EHRD']){ const s=S.CNSScheduler.summary(id); airports[id]={peakKw:round(s.peakKw),latestEnd:round(s.latestEnd)}; }
