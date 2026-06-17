@@ -685,16 +685,16 @@ def _wikidata_image(ident, name, iso_country=''):
                           timeout=12, params={'format': 'json', 'query': q})
             rows = (j.get('results') or {}).get('bindings') or []
             if rows:
-                article = (rows[0].get('article') or {}).get('value')
-                if article:
-                    url, credit = _wiki_lead_image(urllib.parse.unquote(article.rsplit('/', 1)[-1]))
-                    if url:
-                        return url, credit
                 dom_article = (rows[0].get('domArticle') or {}).get('value')
                 if dom_article and domestic:
                     url, credit = _wiki_lead_image(
                         urllib.parse.unquote(dom_article.rsplit('/', 1)[-1]),
                         lang=domestic)
+                    if url:
+                        return url, credit
+                article = (rows[0].get('article') or {}).get('value')
+                if article:
+                    url, credit = _wiki_lead_image(urllib.parse.unquote(article.rsplit('/', 1)[-1]))
                     if url:
                         return url, credit
                 img = (rows[0].get('img') or {}).get('value', '').replace('http://', 'https://', 1)
@@ -721,14 +721,14 @@ def _wikidata_image(ident, name, iso_country=''):
                 for i in ids:
                     ent = ents.get(i) or {}
                     sitelinks = ent.get('sitelinks') or {}
-                    title = (sitelinks.get('enwiki') or {}).get('title')
-                    if title:
-                        url, credit = _wiki_lead_image(title)
-                        if url:
-                            return url, credit
                     dom_title = (sitelinks.get(domestic + 'wiki') or {}).get('title') if domestic else None
                     if dom_title:
                         url, credit = _wiki_lead_image(dom_title, lang=domestic)
+                        if url:
+                            return url, credit
+                    title = (sitelinks.get('enwiki') or {}).get('title')
+                    if title:
+                        url, credit = _wiki_lead_image(title)
                         if url:
                             return url, credit
                     p18 = (ent.get('claims') or {}).get('P18')
