@@ -639,10 +639,11 @@ def _commons_filepath(filename):
 
 def _is_svg_url(url):
     """A vector source — usually an airport crest/logo arriving via Wikidata P18.
-    The hover thumbnail rasterizes through PIL (which can't read SVG) and the PDF
-    cover would embed the logo as-is; skip it so the satellite aerial wins instead.
-    (PNG renders like Name.svg.png end in .png and are kept.)"""
-    return (url or '').lower().split('?')[0].rstrip('/').endswith('.svg')
+    Also catches Wikimedia SVG thumbnails (rasterised as PNG but sourced from an
+    SVG — URL pattern: .../Name.svg/250px-Name.svg.png). These are logos/crests
+    that look wrong as a cover photo."""
+    path = (url or '').lower().split('?')[0].rstrip('/')
+    return path.endswith('.svg') or '.svg/' in path
 
 
 _ISO_TO_WIKI = {
