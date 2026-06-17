@@ -797,7 +797,7 @@
         .sec-header:hover .sec-chev { color: var(--brand-ink); }
         .result-group.collapsed .sec-chev { transform: rotate(-90deg); }
         .result-group.collapsed .spec-table { display: none; }
-        /* return divider + destination (turnaround) highlight */
+        /* return divider + destination highlight */
         .step-return td { width: auto; font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--brand-ink); background: #eef1f8; border-radius: 4px; padding: 5px 8px !important; border-bottom: none; }
         .ret-ico { margin-right: 6px; font-size: 1.05em; }
         .step-dest { background: #fff7e6; }
@@ -3798,7 +3798,7 @@
                 const push = (lat, lon) => { if (isFinite(+lat) && isFinite(+lon)) pts.push([+lat, +lon]); };
                 push(t.originLat, t.originLon);
                 (t.stops || []).forEach(st => st && push(st.lat, st.lon));
-                if (t.tripType === 'circular') push(t.originLat, t.originLon);
+                if (t.tripType === 'circular') { push(t.destLat, t.destLon); push(t.originLat, t.originLon); }  // dest = loop's far point (final node), then close back to origin
                 else push(t.destLat, t.destLon);
                 if (pts.length < 2) return;
                 // White casing under the navy line so the overlay reads on BOTH
@@ -4600,7 +4600,7 @@
                 `<tr class="step"><td colspan="2"><div class="step-main"><span class="step-ico step-fly">✈</span>${_esc(from)} → ${_esc(to)}</div>` +
                 `<div class="step-sub">${fmtDist(distKm)} · ${fmtDuration(durMin)} · ${fmtEnergy(energyKwh)}</div></td></tr>`;
             const _chgRow = (name, min, energy, isDest) =>
-                `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico">⚡</span>Charge at ${_esc(name)}${isDest ? '<span class="dest-badge">turnaround</span>' : ''}</div>` +
+                `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico">⚡</span>Charge at ${_esc(name)}${isDest ? '<span class="dest-badge">destination</span>' : ''}</div>` +
                 `<div class="step-sub">+${fmtDuration(min)} · ${fmtEnergy(energy)}</div></td></tr>`;
             const _typeLabel = isTraining ? `Training pattern (${Math.round(flightMin)} min)`
                 : (data.trip_type === 'circular' ? 'Circular (closed loop)' : isRetour ? 'Round Trip (Retour)' : 'One-Way')
