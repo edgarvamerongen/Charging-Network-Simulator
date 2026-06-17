@@ -645,28 +645,55 @@ def _is_svg_url(url):
     return (url or '').lower().split('?')[0].rstrip('/').endswith('.svg')
 
 
-def _wikidata_image(ident, name):
+_ISO_TO_WIKI = {
+    'NL': 'nl', 'DE': 'de', 'FR': 'fr', 'ES': 'es', 'IT': 'it', 'PT': 'pt',
+    'BE': 'nl', 'AT': 'de', 'CH': 'de', 'SE': 'sv', 'NO': 'no', 'DK': 'da',
+    'FI': 'fi', 'PL': 'pl', 'CZ': 'cs', 'SK': 'sk', 'HU': 'hu', 'RO': 'ro',
+    'BG': 'bg', 'HR': 'hr', 'SI': 'sl', 'RS': 'sr', 'GR': 'el', 'TR': 'tr',
+    'IE': 'ga', 'IS': 'is', 'LT': 'lt', 'LV': 'lv', 'EE': 'et',
+    'JP': 'ja', 'KR': 'ko', 'CN': 'zh', 'TW': 'zh', 'TH': 'th', 'ID': 'id',
+    'BR': 'pt', 'AR': 'es', 'MX': 'es', 'CL': 'es', 'CO': 'es',
+}
+
+
+def _wikidata_image(ident, name, iso_country=''):
     """Resolve an airport to a representative photo, by ICAO code (P239) first
     — exact and language-independent — then by name. Within each match, prefer
     the linked Wikipedia ARTICLE's lead image (editorially curated; what a
     reader sees as "the photo on the page") over Wikidata's P18 image property,
     which is community-set and often a montage/crest (e.g. RAF Lakenheath).
+    When the English Wikipedia has no lead image, try the domestic-language
+    Wikipedia (derived from iso_country) before falling back to P18.
     Returns (image_url, credit) or ('', ''). Each step is best-effort."""
+    domestic = _ISO_TO_WIKI.get((iso_country or '').upper(), '')
     # by ICAO — the canonical identifier (matches the right airport every time)
     if ident:
         try:
-            q = ('SELECT ?img ?article WHERE { ?i wdt:P239 "%s" . '
+            domestic_clause = ''
+            if domestic:
+                domestic_clause = (
+                    'OPTIONAL { ?domArticle schema:about ?i ; '
+                    'schema:isPartOf <https://%s.wikipedia.org/> } ' % domestic)
+            q = ('SELECT ?img ?article ?domArticle WHERE { ?i wdt:P239 "%s" . '
                  'OPTIONAL { ?i wdt:P18 ?img } '
                  'OPTIONAL { ?article schema:about ?i ; '
-                 'schema:isPartOf <https://en.wikipedia.org/> } } LIMIT 1'
-                 % ident.replace('"', ''))
+                 'schema:isPartOf <https://en.wikipedia.org/> } '
+                 '%s} LIMIT 1'
+                 % (ident.replace('"', ''), domestic_clause))
             j = _http_get('https://query.wikidata.org/sparql', accept_json=True,
-                          params={'format': 'json', 'query': q})
+                          timeout=12, params={'format': 'json', 'query': q})
             rows = (j.get('results') or {}).get('bindings') or []
             if rows:
                 article = (rows[0].get('article') or {}).get('value')
                 if article:
                     url, credit = _wiki_lead_image(urllib.parse.unquote(article.rsplit('/', 1)[-1]))
+                    if url:
+                        return url, credit
+                dom_article = (rows[0].get('domArticle') or {}).get('value')
+                if dom_article and domestic:
+                    url, credit = _wiki_lead_image(
+                        urllib.parse.unquote(dom_article.rsplit('/', 1)[-1]),
+                        lang=domestic)
                     if url:
                         return url, credit
                 img = (rows[0].get('img') or {}).get('value', '').replace('http://', 'https://', 1)
@@ -682,15 +709,25 @@ def _wikidata_image(ident, name):
                                   'format': 'json', 'type': 'item', 'limit': 5})
             ids = [h['id'] for h in (s.get('search') or [])]
             if ids:
+                sitelink_props = 'enwiki'
+                if domestic:
+                    sitelink_props += '|' + domestic + 'wiki'
                 e = _http_get('https://www.wikidata.org/w/api.php', accept_json=True,
                               params={'action': 'wbgetentities', 'ids': '|'.join(ids),
-                                      'props': 'claims|sitelinks', 'format': 'json'})
+                                      'props': 'claims|sitelinks', 'sitefilter': sitelink_props,
+                                      'format': 'json'})
                 ents = e.get('entities') or {}
                 for i in ids:
                     ent = ents.get(i) or {}
-                    title = ((ent.get('sitelinks') or {}).get('enwiki') or {}).get('title')
+                    sitelinks = ent.get('sitelinks') or {}
+                    title = (sitelinks.get('enwiki') or {}).get('title')
                     if title:
                         url, credit = _wiki_lead_image(title)
+                        if url:
+                            return url, credit
+                    dom_title = (sitelinks.get(domestic + 'wiki') or {}).get('title') if domestic else None
+                    if dom_title:
+                        url, credit = _wiki_lead_image(dom_title, lang=domestic)
                         if url:
                             return url, credit
                     p18 = (ent.get('claims') or {}).get('P18')
@@ -701,16 +738,17 @@ def _wikidata_image(ident, name):
     return '', ''
 
 
-def _wiki_lead_image(title):
-    """The lead (infobox) image of an English Wikipedia article, via the REST
-    page summary. Returns (image_url, credit) or ('', '')."""
+def _wiki_lead_image(title, lang='en'):
+    """The lead (infobox) image of a Wikipedia article, via the REST page
+    summary. Skips SVG sources. Returns (image_url, credit) or ('', '')."""
     try:
-        j = _http_get('https://en.wikipedia.org/api/rest_v1/page/summary/'
+        j = _http_get('https://%s.wikipedia.org/api/rest_v1/page/summary/' % lang
                       + urllib.parse.quote(str(title).replace(' ', '_'), safe=''),
                       accept_json=True)
         src = (j.get('originalimage') or j.get('thumbnail') or {}).get('source')
-        if src:
-            return src, f'{j.get("title", title)} — Wikipedia'
+        if src and not _is_svg_url(src):
+            wiki_name = {'en': 'Wikipedia'}.get(lang, lang + '.wikipedia')
+            return src, f'{j.get("title", title)} — {wiki_name}'
     except Exception:
         pass
     return '', ''
@@ -744,7 +782,7 @@ def _satellite_photo(lat, lon, airport_type=None, size=(1500, 600)):
         return b''
 
 
-def _airport_photo(ident, name, lat, lon, airport_type=None):
+def _airport_photo(ident, name, lat, lon, airport_type=None, iso_country=''):
     """Return {'uri': <data-uri>, 'credit': <str>} for the chosen airport, or
     blanks. Order: curated local pics/airports/<ICAO>.* → cache → (when
     AIRPORT_PHOTO_WIKIMEDIA) Wikidata image by ICAO then by name → an Esri
@@ -777,7 +815,7 @@ def _airport_photo(ident, name, lat, lon, airport_type=None):
 
     # 2) Wikidata-resolved image — by ICAO, then by name (article lead image
     #    preferred; P18 fallback comes back credit-less)
-    img_url, credit = _wikidata_image(ident, name)
+    img_url, credit = _wikidata_image(ident, name, iso_country=iso_country)
     if img_url and _is_svg_url(img_url):
         img_url, credit = '', ''   # vector logo/crest — skip so the satellite render wins
     if img_url and not credit:
@@ -816,7 +854,7 @@ def _airport_photo(ident, name, lat, lon, airport_type=None):
         return blank
 
 
-def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360):
+def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360, iso_country=''):
     """A small WebP thumbnail of the airport for the live map's hover preview.
     Same resolution order as the PDF cover (_airport_photo): curated local →
     Wikidata/Wikipedia lead image → an Esri satellite render of the field — but
@@ -849,12 +887,12 @@ def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360):
     if not _THUMB_SEM.acquire(blocking=False):
         return None, '__busy__'
     try:
-        return _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, _read)
+        return _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, _read, iso_country=iso_country)
     finally:
         _THUMB_SEM.release()
 
 
-def _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, _read):
+def _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, _read, iso_country=''):
     """The cold path of airport_photo_thumb: resolve a source image (curated /
     Wikidata / small satellite), bomb-guard the decode, downscale to WebP, cache.
     Runs under _THUMB_SEM. Returns (webp_bytes, credit) or (None, '')."""
@@ -876,7 +914,7 @@ def _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, 
             break
     # 2) Wikidata/Wikipedia lead image — by ICAO, then by name
     if not raw and AIRPORT_PHOTO_WIKIMEDIA:
-        img_url, credit = _wikidata_image(safe, name)
+        img_url, credit = _wikidata_image(safe, name, iso_country=iso_country)
         if img_url and _is_svg_url(img_url):
             img_url, credit = '', ''   # vector logo/crest — skip so the satellite render wins
         if img_url:
@@ -1058,7 +1096,8 @@ def generate_pdf(payload, css_url, request_root):
     photo = _airport_photo((focus or {}).get('ident'),
                            payload.get('focusAirport') or (focus or {}).get('name'),
                            (focus or {}).get('lat'), (focus or {}).get('lon'),
-                           airport_type=(focus or {}).get('type'))
+                           airport_type=(focus or {}).get('type'),
+                           iso_country=(focus or {}).get('iso_country'))
 
     # ---- Render template + PDF ---------------------------------------------
     env = current_app.jinja_env

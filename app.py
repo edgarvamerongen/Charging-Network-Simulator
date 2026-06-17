@@ -446,7 +446,8 @@ def airport_photo(ident):
         abort(404)
     data, credit = report.airport_photo_thumb(
         ap['ident'], ap.get('name', ''),
-        ap.get('latitude_deg'), ap.get('longitude_deg'), ap.get('type'))
+        ap.get('latitude_deg'), ap.get('longitude_deg'), ap.get('type'),
+        iso_country=ap.get('iso_country', ''))
     if not data:
         if credit == '__busy__':
             # cold-build slots full — ask the client to retry (it must NOT cache

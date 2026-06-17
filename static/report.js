@@ -168,11 +168,14 @@ window.CNSReport = (function () {
             };
         });
 
+        const dbRec = (window.airportByIdent || {})[ident] || {};
         return {
             ident,
             name: a.name,
             lat: a.lat,
             lon: a.lon,
+            type: dbRec.type || '',
+            iso_country: dbRec.iso_country || '',
             fullCharge,
             chargers,
             contribs,
