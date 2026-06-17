@@ -666,10 +666,10 @@ def _wikidata_image(ident, name):
             if rows:
                 article = (rows[0].get('article') or {}).get('value')
                 if article:
-                    url, credit = _wiki_lead_image(article.rsplit('/', 1)[-1])
+                    url, credit = _wiki_lead_image(urllib.parse.unquote(article.rsplit('/', 1)[-1]))
                     if url:
                         return url, credit
-                img = (rows[0].get('img') or {}).get('value')
+                img = (rows[0].get('img') or {}).get('value', '').replace('http://', 'https://', 1)
                 if img:
                     return img, ''   # caller builds a Commons credit from the filename
         except Exception:
