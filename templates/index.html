@@ -1449,6 +1449,14 @@
         .charger-next:hover { background: linear-gradient(to left, rgba(43,47,90,.5), rgba(43,47,90,0)); }
         .charger-custom-link { margin-top: 6px; width: 100%; background: none; border: 1px dashed var(--panel-border); color: var(--muted); border-radius: var(--radius-sm); padding: 5px; font-size: .72rem; font-weight: 600; cursor: pointer; transition: color .12s, border-color .12s; }
         .charger-custom-link:hover { color: var(--primary); border-color: var(--primary); }
+        /* discoverability rail — mini thumbnail strip under the hero (client ask); edge fade hints "more to scroll". */
+        .charger-strip { position: relative; display: flex; gap: 6px; overflow-x: auto; margin-top: 6px; padding: 1px; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
+        .charger-strip::-webkit-scrollbar { height: 0; }
+        .charger-thumb { flex: 0 0 auto; width: 46px; height: 38px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: #f4f1e8; opacity: .55; cursor: pointer; transition: opacity .14s ease, border-color .14s ease; }
+        .charger-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .charger-thumb:hover { opacity: 1; }
+        .charger-thumb[aria-selected="true"] { opacity: 1; border-color: var(--brand-ink, #2b2f5a); }
+        .charger-thumb-glyph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--brand-ink, #2b2f5a); }
         /* Compact expected-frequency: narrow number + day/week segment (mirrors #freqUnit). */
         .freq-compact { display: flex; align-items: center; gap: 8px; }
         .freq-compact .freq-n { width: 60px; flex: 0 0 auto; text-align: center; }
@@ -1712,7 +1720,7 @@
             </div>
             <label class="switch">
                 <input type="checkbox" id="unitToggle">
-                <span>Nautical (nm / kn)</span>
+                <span>Nautical (NM / kts)</span>
             </label>
             <!-- Onepager download (outline). Wraps on narrow nav widths. -->
             <a class="cns-brand-btn" href="/static/NRG2fly_onepager.pdf" download title="Download NRG2fly onepager"><span aria-hidden="true">↓</span> <span class="btn-text">Onepager</span></a>
@@ -1747,7 +1755,7 @@
             <form id="simForm">
                 <div class="form-scroll">
                 <div class="field">
-                    <label>Aircraft</label>
+                    <label>Choose your aircraft</label>
                     <select id="plane" class="form-select d-none" tabindex="-1" aria-hidden="true">
                         {% for p in planes %}
                         <option value="{{ p.id }}">{{ p.name }} — {% if p.battery_kwh >= 1000 %}{{ '%.2f'|format(p.battery_kwh / 1000) }} MWh{% else %}{{ p.battery_kwh }} kWh{% endif %}</option>
@@ -1894,7 +1902,7 @@
                     </div>
                 </div>
                 <div class="field">
-                    <label>Charger</label>
+                    <label>Choose your charger</label>
                     <select id="charger" class="form-select d-none" tabindex="-1" aria-hidden="true">
                         {% for c in chargers %}
                         <option value="{{ c.id }}" data-image="{{ c.image }}" data-power="{{ c.power_kw }}" data-type="{{ c.type }}">{{ c.name }}{% if 'kW' not in c.name and 'MW' not in c.name %} ({{ c.power_kw }} kW){% endif %}</option>
@@ -1906,6 +1914,7 @@
                         <button type="button" class="charger-nav charger-prev" data-dir="-1" aria-label="Previous charger"><span>‹</span></button>
                         <button type="button" class="charger-nav charger-next" data-dir="1" aria-label="Next charger"><span>›</span></button>
                     </div>
+                    <div id="chargerStrip" class="charger-strip" role="tablist" aria-label="All chargers"></div>
                     <button type="button" id="addCustomCharger" class="charger-custom-link">＋ Add custom charger</button>
                 </div>
                 </div><!-- /.form-scroll -->
@@ -2254,7 +2263,7 @@
                             <input id="cpCRate" type="number" min="0.1" max="10" step="any" class="form-control" placeholder="e.g. 2.0"></div>
                     </div>
                     <div id="cpError" class="text-danger small d-none"></div>
-                    <p class="est-note mb-0 mt-2">Enter metric values (kWh, km, km/h) regardless of the nm/kn display toggle.</p>
+                    <p class="est-note mb-0 mt-2">Enter metric values (kWh, km, km/h) regardless of the NM/kts display toggle.</p>
                     <div id="cpList" class="custom-list mt-3"></div>
                 </div>
                 <div class="modal-footer">
@@ -3509,6 +3518,44 @@
             host.innerHTML = `<div class="charger-card" title="${escHtml((o.textContent || '').trim())}">` +
                 (src ? `<img src="${src}" alt="" loading="lazy">` : '<div class="charger-glyph">⚡</div>') +
                 `<div class="charger-overlay"><div class="charger-power">${escHtml(power)}</div><div class="charger-type">${escHtml(o.dataset.type || 'DC charger')}</div></div></div>`;
+            syncChargerStrip();
+        }
+        // mini thumbnail strip under the hero: signals there are many chargers and
+        // doubles as direct navigation. Mirrors #charger; rebuilds when the option
+        // set changes (custom add/remove), otherwise just re-highlights + centers.
+        function _chargerStripOpts() {
+            const sel = document.getElementById('charger');
+            return sel ? [...sel.options].filter(o => o.value !== '__custom_charger__') : [];
+        }
+        function renderChargerStrip() {
+            const strip = document.getElementById('chargerStrip');
+            const sel = document.getElementById('charger');
+            if (!strip || !sel) return;
+            strip.innerHTML = _chargerStripOpts().map(o => {
+                const img = o.dataset.image;
+                const src = img ? '/pics/' + img.split('/').map(encodeURIComponent).join('/') : '';
+                const pw = +o.dataset.power, lbl = (isFinite(pw) && pw > 0) ? fmtPower(pw) : (o.textContent || '').trim();
+                return `<button type="button" class="charger-thumb" role="tab" data-val="${escHtml(o.value)}" aria-selected="${String(o.value === sel.value)}" title="${escHtml(lbl + ' \u00b7 ' + (o.dataset.type || 'DC charger'))}" aria-label="${escHtml(lbl)}">`
+                    + (src ? `<img src="${src}" alt="" loading="lazy">` : '<span class="charger-thumb-glyph">\u26a1</span>')
+                    + `</button>`;
+            }).join('');
+            strip.querySelectorAll('.charger-thumb').forEach(t => t.addEventListener('click', () => {
+                if (sel.value === t.dataset.val) return;
+                sel.value = t.dataset.val; sel.dispatchEvent(new Event('change'));
+            }));
+        }
+        function syncChargerStrip() {
+            const strip = document.getElementById('chargerStrip');
+            const sel = document.getElementById('charger');
+            if (!strip || !sel) return;
+            if (strip.children.length !== _chargerStripOpts().length) renderChargerStrip();
+            let active = null;
+            strip.querySelectorAll('.charger-thumb').forEach(t => {
+                const on = t.dataset.val === sel.value;
+                t.setAttribute('aria-selected', String(on));
+                if (on) active = t;
+            });
+            if (active) strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
         }
         // Any #charger change (pick / plane default / custom add-remove) re-renders the stage.
         document.getElementById('charger').addEventListener('change', renderChargerPicker);
@@ -5874,6 +5921,10 @@
             renderFolder();
             renderStops();          // Suggested-route panel: per-leg + total distances
             refreshAlternates();    // divert markers on the map ("EHRD · 46 km" tooltips)
+            // F5 per-leg pins + route polylines are drawn imperatively (not through
+            // renderResult), so redraw them to flip the on-map distances too.
+            // fitBounds:false → a unit toggle never re-zooms/pans the map.
+            if (lastResult) drawRoute({ ...lastResult, fitBounds: false }); else drawLiveRoute();
         });
 
         // ---------- custom planes & chargers (data layer: CNSPlanes / CNSChargers; UI wiring below) ----------

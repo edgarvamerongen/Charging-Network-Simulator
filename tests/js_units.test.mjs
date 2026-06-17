@@ -48,12 +48,12 @@ test('metric formatting (defaults)', () => {
   assert.equal(U.fmtUsage(39.4), '40 kWh/100km');
 });
 
-test('nautical: distances convert km → nm with the nm label', () => {
+test('nautical: distances convert km → NM with the NM label', () => {
   const U = loadUnits(); U.set('nautical');
-  assert.equal(U.fmtDist(54), '30 nm');        // 54 / 1.852 = 29.2 → ceil 30
-  assert.equal(U.fmtDist(46), '25 nm');        // the alternate-label case from the bug report
-  assert.equal(U.fmtSpeed(150), '81 kn');      // 150 / 1.852 = 81.0 → 81
-  assert.equal(U.fmtUsage(37.04), '69 kWh/100nm'); // 37.04 × 1.852 = 68.6 → ceil 69
+  assert.equal(U.fmtDist(54), '30 NM');        // 54 / 1.852 = 29.2 → ceil 30
+  assert.equal(U.fmtDist(46), '25 NM');        // the alternate-label case from the bug report
+  assert.equal(U.fmtSpeed(150), '81 kts');      // 150 / 1.852 = 81.0 → 81
+  assert.equal(U.fmtUsage(37.04), '69 kWh/100NM'); // 37.04 × 1.852 = 68.6 → ceil 69
 });
 
 test('energy/power/duration are unit-system independent', () => {

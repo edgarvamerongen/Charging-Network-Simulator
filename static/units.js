@@ -30,9 +30,9 @@ window.CNSUnits = (function () {
     const r = n => Math.ceil(n - 1e-9) || 0;
     const num = n => r(n).toLocaleString('en-US');
 
-    const fmtDist = (km) => num(isNautical() ? km * NM_PER_KM : km) + (isNautical() ? ' nm' : ' km');
-    const fmtSpeed = (kmh) => num(isNautical() ? kmh * NM_PER_KM : kmh) + (isNautical() ? ' kn' : ' km/h');
-    const fmtUsage = (per100km) => num(isNautical() ? per100km / NM_PER_KM : per100km) + (isNautical() ? ' kWh/100nm' : ' kWh/100km');
+    const fmtDist = (km) => num(isNautical() ? km * NM_PER_KM : km) + (isNautical() ? ' NM' : ' km');
+    const fmtSpeed = (kmh) => num(isNautical() ? kmh * NM_PER_KM : kmh) + (isNautical() ? ' kts' : ' km/h');
+    const fmtUsage = (per100km) => num(isNautical() ? per100km / NM_PER_KM : per100km) + (isNautical() ? ' kWh/100NM' : ' kWh/100km');
     const fmtEnergy = (kwh) => kwh >= 1000 ? (kwh / 1000).toFixed(2) + ' MWh' : num(kwh) + ' kWh';
     const fmtPower = (kw) => kw >= 1000 ? (kw / 1000).toFixed(2) + ' MW' : num(kw) + ' kW';
     // Charging durations switch to h:min once they exceed 60 minutes.

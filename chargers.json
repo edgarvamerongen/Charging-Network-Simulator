@@ -96,5 +96,12 @@
     "power_kw": 2400,
     "type": "Vaeridion",
     "image": "chargers/Vaeridion-NRG2fly-2.4MW.jpg"
+  },
+  {
+    "id": "dc_3750",
+    "name": "Vaeridion 3.75 MW",
+    "power_kw": 3750,
+    "type": "Vaeridion",
+    "image": "chargers/Vaeridion-NRG2fly-2.4MW.jpg"
   }
 ]
