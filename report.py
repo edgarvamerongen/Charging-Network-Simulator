@@ -637,13 +637,15 @@ def _commons_filepath(filename):
     return 'https://commons.wikimedia.org/wiki/Special:FilePath/' + urllib.parse.quote(filename.replace(' ', '_'))
 
 
-def _is_svg_url(url):
-    """A vector source — usually an airport crest/logo arriving via Wikidata P18.
-    Also catches Wikimedia SVG thumbnails (rasterised as PNG but sourced from an
-    SVG — URL pattern: .../Name.svg/250px-Name.svg.png). These are logos/crests
-    that look wrong as a cover photo."""
+def _is_unsuitable_photo(url):
+    """Skip images that aren't real airport photos: SVG vectors, SVG thumbnails
+    rasterised as PNG (.../Name.svg/250px-Name.svg.png), and logos/crests saved
+    as raster formats (filename contains 'logo')."""
     path = (url or '').lower().split('?')[0].rstrip('/')
-    return path.endswith('.svg') or '.svg/' in path
+    if path.endswith('.svg') or '.svg/' in path:
+        return True
+    filename = path.rsplit('/', 1)[-1]
+    return 'logo' in filename
 
 
 _ISO_TO_WIKI = {
@@ -747,7 +749,7 @@ def _wiki_lead_image(title, lang='en'):
                       + urllib.parse.quote(str(title).replace(' ', '_'), safe=''),
                       accept_json=True)
         src = (j.get('originalimage') or j.get('thumbnail') or {}).get('source')
-        if src and not _is_svg_url(src):
+        if src and not _is_unsuitable_photo(src):
             wiki_name = {'en': 'Wikipedia'}.get(lang, lang + '.wikipedia')
             return src, f'{j.get("title", title)} — {wiki_name}'
     except Exception:
@@ -817,7 +819,7 @@ def _airport_photo(ident, name, lat, lon, airport_type=None, iso_country=''):
     # 2) Wikidata-resolved image — by ICAO, then by name (article lead image
     #    preferred; P18 fallback comes back credit-less)
     img_url, credit = _wikidata_image(ident, name, iso_country=iso_country)
-    if img_url and _is_svg_url(img_url):
+    if img_url and _is_unsuitable_photo(img_url):
         img_url, credit = '', ''   # vector logo/crest — skip so the satellite render wins
     if img_url and not credit:
         fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')
@@ -916,7 +918,7 @@ def _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, 
     # 2) Wikidata/Wikipedia lead image — by ICAO, then by name
     if not raw and AIRPORT_PHOTO_WIKIMEDIA:
         img_url, credit = _wikidata_image(safe, name, iso_country=iso_country)
-        if img_url and _is_svg_url(img_url):
+        if img_url and _is_unsuitable_photo(img_url):
             img_url, credit = '', ''   # vector logo/crest — skip so the satellite render wins
         if img_url:
             if not credit:
