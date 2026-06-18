@@ -567,8 +567,8 @@
         .result-min:hover { background: rgba(255,255,255,.34); }
         /* Minimized: keep the figures AND the one action that matters — adding the
            flight to the demand calculator — visible; everything else collapses. */
-        #result.minimized > :not(.headline-box):not(#addFolder) { display: none !important; }
-        #result.minimized #addFolder { margin-top: 10px; }
+        #result.minimized > :not(.headline-box):not(.cta-row) { display: none !important; }
+        #result.minimized .cta-row { margin-top: 10px; }
         #result.minimized .headline-box { cursor: pointer; position: relative; padding-bottom: 22px; }
         /* Expand hint: bottom-centre, in reserved padding — never over the stat labels
            (top-right overlapped "CHARGE TIME" and was too faint to read as a control). */
@@ -577,6 +577,13 @@
             font-size: 16px; line-height: 1; color: rgba(255,255,255,.75); pointer-events: none;
         }
         #result.minimized .headline-box:hover::after { color: #fff; }
+        /* Share-route button (paired with Add-to-DC) + copy toast */
+        .cta-row { display: flex; gap: 8px; align-items: stretch; }
+        .cta-row #addFolder { flex: 1 1 auto; margin-top: 0; }
+        .btn-share { flex: 0 0 auto; width: 46px; display: grid; place-items: center; border: 1.5px solid var(--panel-border); background: #fff; border-radius: var(--radius-sm); cursor: pointer; color: var(--brand-ink, #2b2f5a); transition: background .14s ease, border-color .14s ease, color .14s ease; }
+        .btn-share:hover { border-color: var(--primary); color: var(--primary); background: rgba(43,47,90,.05); }
+        .cns-share-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(8px); background: var(--brand-ink, #2b2f5a); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: .82rem; font-weight: 600; box-shadow: 0 6px 22px rgba(0,0,0,.28); opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 9999; }
+        .cns-share-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
         .panel-head {
             display: flex; align-items: center; justify-content: space-between;
             flex: 0 0 auto;
@@ -1991,7 +1998,10 @@
 
             <button type="button" id="toggleCalc" class="btn-cns-ghost mt-3">Show calculation</button>
             <div id="calcPanel" class="mt-2 d-none"></div>
-            <button type="button" id="addFolder" class="btn-cns mt-3 sticky-cta">+ Add to demand calculator</button>
+            <div class="cta-row mt-3">
+                <button type="button" id="addFolder" class="btn-cns sticky-cta">+ Add to demand calculator</button>
+                <button type="button" id="shareRoute" class="btn-share" title="Copy a shareable link to this route" aria-label="Share this route"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false"><g fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="5.5"/><line x1="6" y1="12" x2="18" y2="18.5"/><circle cx="6" cy="12" r="3.1" stroke="none"/><circle cx="18" cy="5.5" r="3.1" stroke="none"/><circle cx="18" cy="18.5" r="3.1" stroke="none"/></g></svg></button>
+            </div>
         </section>
     </aside>
 
@@ -2413,6 +2423,7 @@
     <script src="/static/spreadsheet.js?v={{ asset_version }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <script src="/static/tour.js?v={{ asset_version }}"></script>
+    <script src="/static/share.js?v={{ asset_version }}"></script>
     <script>
         // HTML-escape for every data string interpolated into an innerHTML
         // template. Airport/catalog names are server data, but custom plane &
@@ -6138,7 +6149,8 @@
             updateDrawerSub();
             renderPlanePicker();
             renderPlaneSpecCard();
-            _applyDefaultFlight();
+            // Shared link? restore that route instead of the default prefill.
+            if (window.CNSShare && CNSShare.hasLink()) CNSShare.init(); else _applyDefaultFlight();
         })();
 
         // First-load convenience: prefill a realistic example (Lelystad → Frankfurt
@@ -6164,6 +6176,9 @@
             }
             renderPlaneSpecCard();
         }
+
+        // Share button: copy a link that restores this route (result panel).
+        document.getElementById('shareRoute')?.addEventListener('click', () => { if (window.CNSShare) CNSShare.copyLink(); });
 
         // News ticker — populate the marquee from static/ticker.json (edit that
         // file to update the headlines; it's read fresh on each load). Falls back
