@@ -77,13 +77,6 @@
     "image": "chargers/NRG2fly-Charger_400kW.jpg"
   },
   {
-    "id": "dc_800",
-    "name": "Beta Thermal Cube 800 kW",
-    "power_kw": 800,
-    "type": "Beta Thermal Cube",
-    "image": "chargers/Beta-Thermal-Management-Cube_800kW.jpg"
-  },
-  {
     "id": "dc_1000",
     "name": "Vaeridion 1 MW",
     "power_kw": 1000,
