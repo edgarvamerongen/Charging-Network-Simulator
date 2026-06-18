@@ -341,12 +341,12 @@ window.CNSTour = (function () {
             // 7. Trip type
             {
                 element: '#tripTypeSeg',
-                popover: { title: 'Trip type', description: 'One-way, Retour (round trip), or Training (an A→A loop with a fixed pattern radius).', side: 'right' },
+                popover: { title: 'Trip type', description: 'Four patterns: One-way (A to B), Retour (there and back), Circular (a closed loop through your stops, returning to Departure) and Training (pattern flying around a single airport). The selection sets how the route and its charging are calculated.', side: 'right' },
             },
             // 8. Aircraft
             {
                 element: '#planePicker',
-                popover: { title: 'Aircraft', description: 'Pick a model. The card shows its catalog range and the model-adjusted <strong>available range</strong>, plus battery, cruise speed and seats. "Override for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
+                popover: { title: 'Aircraft', description: 'Pick an aircraft from the visual grid; each tile is a model. The <strong>Usable reach</strong> bar below shows its effective range, after the model\'s reserve and padding, against the catalog maximum. "Edit for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
             },
             // 9. Model settings — surfaced BEFORE the route so the factors that
             // shape it (and force a stop) are understood first.
@@ -388,10 +388,11 @@ window.CNSTour = (function () {
                 element: '#freqField',
                 popover: { title: 'Expected frequency', description: 'How often this route runs. For retour or training flights you can also choose whether one aircraft cycles the rotations or a fleet of separate planes flies them, which changes how many chargers each airport needs.', side: 'right' },
             },
-            // 13. Charger
+            // 13. Charger — now a carousel + strip; #charger is a hidden mirror select.
             {
-                element: '#charger',
-                popover: { title: 'Charger', description: 'The charger model offered at the airports on this route. Its power and the aircraft\'s battery (and C-rate) set the per-flight charge time.', side: 'right' },
+                element: '.charger-carousel',
+                popover: { title: 'Charger', description: 'Pick a charger from the carousel; the chevrons cycle through models, or tap one in the strip below. Its power and the aircraft\'s battery set the per-flight charge time.', side: 'right' },
+                onHighlightStarted: async () => { const el = document.querySelector('.charger-carousel'); if (el && el.scrollIntoView) { el.scrollIntoView({ block: 'center', behavior: 'auto' }); await _wait(300); } },
             },
             // 14. Simulate — fires the simulate then we step to the map
             {
@@ -440,7 +441,7 @@ window.CNSTour = (function () {
             // visible (it sits below the trip-calculated table).
             {
                 element: '#addFolder',
-                popover: { title: 'Add to demand calculator', description: 'Saves the flight to the network. The <strong>Demand Calculator</strong> pill at the bottom briefly confirms it. Demand at each airport the trip touches (Departure, Destination, every stop) is attributed and aggregated across every saved flight.', side: 'left' },
+                popover: { title: 'Add to demand calculator', description: 'Saves the flight to the network. The <strong>Demand Calculator</strong> pill at the bottom briefly confirms it. The share icon beside this button copies a link that reopens the planner with this exact route, handy for sending a plan to a colleague. Demand at each airport the trip touches (Departure, Destination, every stop) is attributed and aggregated across every saved flight.', side: 'left' },
                 onHighlightStarted: async () => {
                     await _ensureSimulated(); await _ensureInFolder();
                     // The Add button is the LAST element in the result panel, which
