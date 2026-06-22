@@ -61,5 +61,96 @@ class TestResolveAirport(unittest.TestCase):
         self.assertIsNone(r)
 
 
+class TestEncodeShareState(unittest.TestCase):
+
+    def test_roundtrip_matches_js_format(self):
+        """base64url encoding: no +, no /, no trailing =."""
+        state = {'v': 1, 'o': 'EHAM', 'd': 'EDDF', 'a': 'beta_plane',
+                 't': 'one-way', 'f': {'n': 1, 'u': 'day'}, 'c': 'dc_320', 'w': False, 's': []}
+        blob = cns_app.encode_share_state(state)
+        self.assertNotIn('+', blob)
+        self.assertNotIn('/', blob)
+        self.assertNotIn('=', blob)
+        # Decode back
+        import base64, json
+        padded = blob.replace('-', '+').replace('_', '/')
+        padded += '=' * (-len(padded) % 4)
+        decoded = json.loads(base64.b64decode(padded).decode())
+        self.assertEqual(decoded['v'], 1)
+        self.assertEqual(decoded['o'], 'EHAM')
+
+    def test_empty_state(self):
+        blob = cns_app.encode_share_state({'v': 1})
+        self.assertIsInstance(blob, str)
+        self.assertTrue(len(blob) > 0)
+
+
+class TestEmbedRoute(unittest.TestCase):
+
+    def setUp(self):
+        cns_app.app.config['TESTING'] = True
+        self.client = cns_app.app.test_client()
+
+    # ── Security headers ───────────────────────────────────────────────────
+
+    def test_embed_allows_framing(self):
+        """X-Frame-Options must NOT be SAMEORIGIN on /embed."""
+        r = self.client.get('/embed')
+        self.assertNotEqual(r.headers.get('X-Frame-Options'), 'SAMEORIGIN')
+
+    def test_embed_csp_frame_ancestors_star(self):
+        r = self.client.get('/embed')
+        csp = r.headers.get('Content-Security-Policy', '')
+        self.assertIn('frame-ancestors *', csp)
+
+    def test_embed_cache_control(self):
+        r = self.client.get('/embed')
+        cc = r.headers.get('Cache-Control', '')
+        self.assertIn('public', cc)
+
+    def test_other_routes_still_sameorigin(self):
+        """Non-embed routes must keep SAMEORIGIN."""
+        r = self.client.get('/')
+        self.assertEqual(r.headers.get('X-Frame-Options'), 'SAMEORIGIN')
+
+    # ── Response basics ────────────────────────────────────────────────────
+
+    def test_embed_returns_200(self):
+        r = self.client.get('/embed')
+        self.assertEqual(r.status_code, 200)
+
+    def test_embed_no_auth_required(self):
+        """Should work without logging in."""
+        r = self.client.get('/embed')
+        self.assertNotEqual(r.status_code, 302)  # not redirect to login
+
+    # ── Tier detection ─────────────────────────────────────────────────────
+
+    def test_network_tier_no_params(self):
+        r = self.client.get('/embed')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b'network', r.data.lower())  # tier marker in template
+
+    def test_range_tier_with_origin(self):
+        r = self.client.get('/embed?origin=EHAM')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b'range', r.data.lower())
+
+    def test_route_tier_with_origin_and_dest(self):
+        r = self.client.get('/embed?origin=EHAM&destination=EDDF')
+        self.assertEqual(r.status_code, 200)
+
+    def test_fuzzy_origin_resolves(self):
+        r = self.client.get('/embed?origin=den+helder')
+        self.assertEqual(r.status_code, 200)
+        # Should resolve to EHKD — check the click-through link contains it
+        self.assertIn(b'EHKD', r.data)
+
+    def test_unknown_origin_degrades_to_network(self):
+        r = self.client.get('/embed?origin=nonexistent')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b'network', r.data.lower())
+
+
 if __name__ == '__main__':
     unittest.main()
