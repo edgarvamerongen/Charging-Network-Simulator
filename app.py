@@ -1,3 +1,4 @@
+import base64
 import contextlib
 import hmac
 import json
@@ -90,7 +91,7 @@ app.config.update(
 # 'pics' is public so link scrapers (WhatsApp/LinkedIn) can fetch the og share
 # card + icons after being bounced to /login — it serves only brand/catalog
 # images, never user data.
-_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics'}
+_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics', 'embed'}
 
 # In-memory brute-force throttle for the login form. Per-worker (not shared
 # across gunicorn workers), which is fine for slowing guessing of a single
@@ -322,28 +323,42 @@ def _require_login():
 @app.after_request
 def _security_headers(resp):
     """Defence-in-depth response headers applied to every response."""
+    is_embed = request.path == '/embed'
+
     resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
-    resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    if not is_embed:
+        resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
     resp.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
     resp.headers.setdefault('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
-    # CSP scoped to the origins the app actually uses (Bootstrap/driver.js on
-    # jsDelivr, Leaflet on unpkg, Google Fonts, Carto map tiles, Esri satellite).
-    # 'unsafe-inline' is required by the app's inline scripts/styles; tightening
-    # that to nonces is a follow-up (see docs/SECURITY_REVIEW.md).
+
     if os.environ.get('CNS_DISABLE_CSP') != '1':
-        resp.headers.setdefault('Content-Security-Policy', (
-            "default-src 'self'; "
-            "base-uri 'self'; "
-            "object-src 'none'; "
-            "frame-ancestors 'self'; "
-            "form-action 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; "
-            "font-src 'self' data: https://fonts.gstatic.com; "
-            "img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
-            "https://unpkg.com https://cdn.jsdelivr.net https://cns.ghettofaust.exposed; "
-            "connect-src 'self' https://*.basemaps.cartocdn.com https://server.arcgisonline.com"
-        ))
+        if is_embed:
+            resp.headers.setdefault('Content-Security-Policy', (
+                "default-src 'none'; "
+                "script-src 'unsafe-inline' https://unpkg.com; "
+                "style-src 'unsafe-inline' https://unpkg.com; "
+                "img-src data: https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://unpkg.com; "
+                "connect-src https://*.basemaps.cartocdn.com https://server.arcgisonline.com; "
+                "frame-ancestors *"
+            ))
+        else:
+            # CSP scoped to the origins the app actually uses (Bootstrap/driver.js on
+            # jsDelivr, Leaflet on unpkg, Google Fonts, Carto map tiles, Esri satellite).
+            # 'unsafe-inline' is required by the app's inline scripts/styles; tightening
+            # that to nonces is a follow-up (see docs/SECURITY_REVIEW.md).
+            resp.headers.setdefault('Content-Security-Policy', (
+                "default-src 'self'; "
+                "base-uri 'self'; "
+                "object-src 'none'; "
+                "frame-ancestors 'self'; "
+                "form-action 'self'; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; "
+                "font-src 'self' data: https://fonts.gstatic.com; "
+                "img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
+                "https://unpkg.com https://cdn.jsdelivr.net https://cns.ghettofaust.exposed; "
+                "connect-src 'self' https://*.basemaps.cartocdn.com https://server.arcgisonline.com"
+            ))
     return resp
 
 
@@ -418,6 +433,122 @@ def share_open(slug):
     ))
 
 
+@app.route('/embed')
+def embed():
+    """Public embed page — serves a lightweight, iframe-embeddable preview card."""
+    origin_q    = request.args.get('origin', '').strip()
+    dest_q      = request.args.get('destination', '').strip()
+    plane_id    = request.args.get('plane', '').strip()
+    charger_id  = request.args.get('charger', '').strip()
+    trip_type   = request.args.get('tripType', 'one-way')
+    theme       = request.args.get('theme', 'light')
+    utm_source  = request.args.get('utm_source', '')
+
+    airports = simulator.get_all_airports()
+
+    origin = resolve_airport(origin_q, airports) if origin_q else None
+    destination = resolve_airport(dest_q, airports) if dest_q else None
+
+    # Resolve plane (fallback: first catalog plane)
+    plane = None
+    for p in simulator.planes:
+        if p['id'] == plane_id:
+            plane = p
+            break
+    if not plane:
+        # Prefer beta_plane (mid-size, showcase aircraft) as embed default
+        for p in simulator.planes:
+            if p['id'] == 'beta_plane':
+                plane = p
+                break
+        if not plane:
+            plane = simulator.planes[0]
+
+    # Resolve charger (fallback: plane's default, then first catalog charger)
+    charger = None
+    for ch in simulator.chargers:
+        if ch['id'] == (charger_id or plane.get('default_charger_id', '')):
+            charger = ch
+            break
+    if not charger:
+        charger = simulator.chargers[0]
+
+    # Determine tier and optionally simulate
+    sim_result = None
+    if origin and destination:
+        tier = 'full' if plane_id else 'route'
+        try:
+            sim_result = simulator.simulate(
+                plane['id'], origin['ident'], destination['ident'],
+                charger['id'], trip_type)
+        except Exception:
+            sim_result = None
+    elif origin:
+        tier = 'range'
+    else:
+        tier = 'network'
+
+    # Build share state for click-through URL
+    share_state = {'v': 1}
+    if origin:
+        share_state['o'] = origin['ident']
+    if destination:
+        share_state['d'] = destination['ident']
+    share_state['a'] = plane['id']
+    share_state['c'] = charger['id']
+    share_state['t'] = trip_type
+    share_state['f'] = {'n': 1, 'u': 'day'}
+    share_state['w'] = True
+    share_state['s'] = []
+
+    cns_base = request.host_url.rstrip('/')
+    if origin or destination:
+        click_url = cns_base + '/#r=' + encode_share_state(share_state)
+    else:
+        click_url = cns_base + '/'
+
+    # Reachable airports for range tier
+    reachable = []
+    if tier == 'range':
+        range_km = plane.get('range_km', 500)
+        olat, olon = origin['latitude_deg'], origin['longitude_deg']
+        for ap in airports:
+            if ap['ident'] == origin['ident']:
+                continue
+            d = _haversine(olat, olon, ap['latitude_deg'], ap['longitude_deg'])
+            if d <= range_km:
+                reachable.append({
+                    'ident': ap['ident'], 'name': ap['name'],
+                    'lat': ap['latitude_deg'], 'lon': ap['longitude_deg'],
+                    'type': ap['type'], 'dist': round(d, 1),
+                })
+
+    # Airports for network tier (medium+ only to keep the map fast)
+    network_airports = []
+    if tier == 'network':
+        network_airports = [
+            {'ident': ap['ident'], 'name': ap['name'],
+             'lat': ap['latitude_deg'], 'lon': ap['longitude_deg']}
+            for ap in airports
+            if ap.get('type') in ('large_airport', 'medium_airport')
+        ]
+
+    resp = make_response(render_template(
+        'embed.html',
+        tier=tier, theme=theme,
+        origin=origin, destination=destination,
+        plane=plane, charger=charger,
+        sim_result=sim_result,
+        reachable=reachable,
+        network_airports=network_airports,
+        click_url=click_url,
+        utm_source=utm_source,
+    ))
+    resp.headers['Cache-Control'] = 'public, max-age=3600'
+    resp.headers['Vary'] = 'Accept-Encoding'
+    return resp
+
+
 @app.route('/m/')
 def index_mobile():
     """Mobile-first variant: full-screen map + Google-Maps-style bottom
@@ -456,6 +587,63 @@ def _airport_by_ident(ident):
         _airport_idx = {a['ident'].upper(): a
                         for a in simulator.get_all_airports() if a.get('ident')}
     return _airport_idx.get(ident)
+
+
+# ── Airport resolution (used by /embed) ────────────────────────────────────
+_TYPE_RANK = {'large_airport': 0, 'medium_airport': 1, 'small_airport': 2}
+
+def resolve_airport(query, airports):
+    """Resolve a fuzzy airport name or ICAO/IATA code to an airport record.
+
+    Matching priority: exact ICAO → exact IATA → exact municipality →
+    substring on name (prefer larger type) → substring on municipality
+    (prefer larger type).  Returns None if no match.
+    """
+    q = (query or '').strip()
+    if not q:
+        return None
+    q_upper = q.upper()
+    q_lower = q.lower()
+
+    for ap in airports:
+        if ap['ident'].upper() == q_upper:
+            return ap
+
+    for ap in airports:
+        if (ap.get('iata_code') or '').upper() == q_upper:
+            return ap
+
+    for ap in airports:
+        if (ap.get('municipality') or '').lower() == q_lower:
+            return ap
+
+    hits = [ap for ap in airports if q_lower in ap['name'].lower()]
+    if hits:
+        return min(hits, key=lambda a: _TYPE_RANK.get(a.get('type'), 9))
+
+    hits = [ap for ap in airports if q_lower in (ap.get('municipality') or '').lower()]
+    if hits:
+        return min(hits, key=lambda a: _TYPE_RANK.get(a.get('type'), 9))
+
+    return None
+
+
+def encode_share_state(state):
+    """Encode a CNSShare-compatible state dict to a base64url string.
+
+    Matches the encoding in static/share.js: JSON → UTF-8 → base64url (no padding).
+    """
+    json_bytes = json.dumps(state, separators=(',', ':')).encode()
+    return base64.urlsafe_b64encode(json_bytes).rstrip(b'=').decode()
+
+
+def _haversine(lat1, lon1, lat2, lon2):
+    """Great-circle distance in km between two lat/lon points."""
+    R = 6371
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1))*math.cos(math.radians(lat2))*math.sin(dlon/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
 @app.route('/api/airport-photo/<ident>', methods=['GET'])
