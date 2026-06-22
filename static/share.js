@@ -1,12 +1,15 @@
 /*
  * CNSShare — shareable route links.
  *
- * Serialises the current planner state (aircraft, departure, destination,
- * manual stops, trip type, frequency, charger, charging-stops toggle, and any
- * NON-DEFAULT Model settings) into a compact base64url token carried in the
- * URL *hash* (#r=...). The hash is never sent to the server, so it survives the
- * site's auth 302 redirect — a shared link still restores the route after the
- * recipient logs in.
+ * Primary form: the planner state is POSTed to /api/share, stored server-side
+ * (shares.py / SQLite), and shared as a short https://<host>/s/<slug> link.
+ * createShortLink()/copyLink() build it; the server injects the saved state as
+ * window.__CNS_SHARE__ on open and the page restores it via apply().
+ *
+ * Legacy form (still supported): the state is serialised into a compact
+ * base64url token in the URL *hash* (#r=...). The hash is never sent to the
+ * server, so these older links still survive the auth 302 redirect. copyLink()
+ * falls back to this hash link whenever the /api/share POST fails.
  *
  * Auto charging stops are NOT stored: apply() replays the planner's recompute,
  * so they re-plan fresh (and stay correct if the catalog / settings change).
@@ -145,8 +148,26 @@ window.CNSShare = (function () {
         return true;
     }
 
+    // POST the state to the server, which stores it and returns a short
+    // /s/<slug> URL. _fetch is injectable for tests; defaults to window.fetch.
+    async function createShortLink(state, _fetch) {
+        const f = _fetch || (typeof fetch !== 'undefined' ? fetch : null);
+        if (!f) throw new Error('no fetch available');
+        const resp = await f('/api/share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state }),
+        });
+        if (!resp.ok) throw new Error('share request failed: ' + resp.status);
+        const data = await resp.json();
+        if (!data || !data.url) throw new Error('share response missing url');
+        return data.url;
+    }
+
     async function copyLink() {
-        const url = shareUrl();
+        let url;
+        try { url = await createShortLink(currentState()); }
+        catch (e) { url = shareUrl(); }   // server unavailable → the long hash link still works
         try { await navigator.clipboard.writeText(url); toast('Link copied'); }
         catch (e) { window.prompt('Copy this shareable link:', url); }
         return url;
@@ -163,5 +184,5 @@ window.CNSShare = (function () {
         _toastTimer = setTimeout(() => _toastEl && _toastEl.classList.remove('show'), ms || 2200);
     }
 
-    return { encode, decode, currentState, apply, hasLink, shareUrl, init, copyLink, toast, SCHEMA };
+    return { encode, decode, currentState, apply, hasLink, shareUrl, init, createShortLink, copyLink, toast, SCHEMA };
 })();
