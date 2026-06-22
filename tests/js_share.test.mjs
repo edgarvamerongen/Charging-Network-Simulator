@@ -55,3 +55,23 @@ test('SCHEMA version is exposed for migration guards', () => {
   const S = loadShare();
   assert.equal(S.SCHEMA, 1);
 });
+
+test('createShortLink POSTs the state and returns the server url', async () => {
+  const S = loadShare();
+  const calls = [];
+  const stubFetch = async (url, opts) => {
+    calls.push({ url, opts });
+    return { ok: true, json: async () => ({ slug: 'Ab3xZ9', url: 'https://h/s/Ab3xZ9' }) };
+  };
+  const url = await S.createShortLink({ v: 1, o: 'EHLE' }, stubFetch);
+  assert.equal(url, 'https://h/s/Ab3xZ9');
+  assert.equal(calls[0].url, '/api/share');
+  assert.equal(calls[0].opts.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].opts.body), { state: { v: 1, o: 'EHLE' } });
+});
+
+test('createShortLink rejects on a non-ok response (caller falls back to hash)', async () => {
+  const S = loadShare();
+  const stubFetch = async () => ({ ok: false, status: 500, json: async () => ({}) });
+  await assert.rejects(() => S.createShortLink({ v: 1 }, stubFetch));
+});
