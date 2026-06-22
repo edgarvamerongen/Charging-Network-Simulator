@@ -60,3 +60,26 @@ class ShareRoutesTest(unittest.TestCase):
         big = {'v': 1, 'pad': 'x' * (16 * 1024 + 1)}
         r = self.client.post('/api/share', json={'state': big})
         self.assertEqual(r.status_code, 413)
+
+    # ---- GET /s/<slug> ----
+    def test_open_injects_state(self):
+        self._login()
+        slug = self.client.post(
+            '/api/share', json={'state': {'v': 1, 'mark': INJECT_MARK}}
+        ).get_json()['slug']
+        r = self.client.get('/s/' + slug)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b'window.__CNS_SHARE__ = ', r.data)  # the injection assignment
+        self.assertIn(INJECT_MARK.encode(), r.data)        # the stored blob
+
+    def test_open_unknown_slug_boots_without_injection(self):
+        self._login()
+        r = self.client.get('/s/zzzzzzz')
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn(b'window.__CNS_SHARE__ = ', r.data)  # no injection line
+
+    def test_open_requires_auth_via_redirect(self):
+        r = self.client.get('/s/zzzzzzz')
+        self.assertEqual(r.status_code, 302)
+        self.assertIn('/login', r.headers['Location'])
+        self.assertIn('next=/s/zzzzzzz', r.headers['Location'])

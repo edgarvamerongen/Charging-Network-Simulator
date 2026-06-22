@@ -404,6 +404,20 @@ def index():
     return resp
 
 
+@app.route('/s/<slug>')
+def share_open(slug):
+    """Open a shared route: serve the planner with the saved state injected so
+    the front-end restores it (the address bar stays /s/<slug>). Unknown slug →
+    the planner boots normally (no injection) and the UI shows a notice.
+    Desktop template only; mobile share handling is a follow-up."""
+    state = shares.load_state(slug)
+    return make_response(render_template(
+        'index.html',
+        planes=simulator.planes, chargers=simulator.chargers,
+        asset_version=ASSET_VERSION, share_state=state,
+    ))
+
+
 @app.route('/m/')
 def index_mobile():
     """Mobile-first variant: full-screen map + Google-Maps-style bottom
