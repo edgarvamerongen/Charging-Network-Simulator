@@ -13,8 +13,12 @@ import shares  # noqa: E402
 
 class SharesStoreTest(unittest.TestCase):
     def setUp(self):
-        # Dynamic path read means each test can rely on a clean, initialised DB.
         os.environ['CNS_SHARES_DB'] = os.path.join(_TMP, 'shares.db')
+        for suffix in ('', '-wal', '-shm'):
+            try:
+                os.remove(os.path.join(_TMP, 'shares.db' + suffix))
+            except FileNotFoundError:
+                pass
         shares.init_db()
 
     def test_init_db_is_idempotent(self):
@@ -43,6 +47,9 @@ class SharesStoreTest(unittest.TestCase):
 
     def test_unknown_slug_returns_none(self):
         self.assertIsNone(shares.load_state('zzzzzzz'))
+
+    def test_max_state_bytes_is_16kib(self):
+        self.assertEqual(shares.MAX_STATE_BYTES, 16 * 1024)
 
 
 if __name__ == '__main__':

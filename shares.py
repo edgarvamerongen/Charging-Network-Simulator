@@ -35,7 +35,7 @@ def _db_path():
 
 def _connect():
     path = _db_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     conn = sqlite3.connect(path)
     conn.execute('PRAGMA journal_mode=WAL')
     return conn
@@ -49,7 +49,7 @@ def init_db():
             'CREATE TABLE IF NOT EXISTS shares ('
             '  slug TEXT PRIMARY KEY,'
             '  state TEXT NOT NULL,'
-            '  content_hash TEXT,'
+            '  content_hash TEXT NOT NULL,'
             '  created_at TEXT NOT NULL'
             ')'
         )
@@ -78,7 +78,7 @@ def save_state(state):
         if row:
             return row[0]
         created = datetime.now(timezone.utc).isoformat()
-        while True:
+        for _attempt in range(10):
             slug = _new_slug()
             try:
                 conn.execute(
@@ -88,6 +88,7 @@ def save_state(state):
                 return slug
             except sqlite3.IntegrityError:
                 continue  # slug primary-key collision (astronomically rare) — retry
+        raise RuntimeError('shares: failed to generate a unique slug after 10 attempts')
 
 
 def load_state(slug):
