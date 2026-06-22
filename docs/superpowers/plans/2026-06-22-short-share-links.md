@@ -20,6 +20,7 @@
 - **Out of scope** — link expiry/cleanup; mobile (`/s/<slug>` serves the desktop template — a follow-up for the mobile-role session); analytics/link-management UI.
 - **Commits** — end every commit message with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 - Run the app with `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` and the **main checkout's** interpreter by absolute path (worktrees have no `venv/`): `/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python`.
+- **Test runner:** the project's canonical runner is stdlib `unittest` (the venv has **no pytest**). Run Python tests with `… venv/bin/python -m unittest tests.<module> -v`. The venv (not system `python3`) is what has Flask, so tests that import `app` MUST use the venv interpreter.
 
 ## File Structure
 
@@ -121,7 +122,7 @@ if __name__ == '__main__':
 
 - [ ] **Step 3: Run the tests to verify they fail.**
 
-Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m pytest tests/test_shares.py -q`
+Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m unittest tests.test_shares -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'shares'`.
 
 - [ ] **Step 4: Implement `shares.py`.** Create `shares.py`:
@@ -235,7 +236,7 @@ def load_state(slug):
 
 - [ ] **Step 5: Run the tests to verify they pass.**
 
-Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m pytest tests/test_shares.py -q`
+Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m unittest tests.test_shares -v`
 Expected: PASS (6 tests).
 
 - [ ] **Step 6: Commit.**
@@ -328,7 +329,7 @@ class ShareRoutesTest(unittest.TestCase):
 
 - [ ] **Step 2: Run the tests to verify they fail.**
 
-Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m pytest tests/test_share_routes.py -q`
+Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m unittest tests.test_share_routes -v`
 Expected: FAIL — `/api/share` returns 404 (route not defined) so the 200/400/413 assertions fail.
 
 - [ ] **Step 3: Wire `shares` into `app.py`.** After line 27 (`from spreadsheet import generate_xlsx`) add:
@@ -370,7 +371,7 @@ def api_share_create():
 
 - [ ] **Step 5: Run the tests to verify they pass.**
 
-Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m pytest tests/test_share_routes.py -q`
+Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m unittest tests.test_share_routes -v`
 Expected: PASS (5 tests).
 
 - [ ] **Step 6: Commit.**
@@ -422,7 +423,7 @@ git commit -m "$(printf 'feat(share): POST /api/share creates short links\n\nSto
 
 - [ ] **Step 2: Run the new tests to verify they fail.**
 
-Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m pytest tests/test_share_routes.py -q`
+Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m unittest tests.test_share_routes -v`
 Expected: FAIL — `/s/zzzzzzz` returns 404 (logged in) / the injection assertions fail.
 
 - [ ] **Step 3: Add the `GET /s/<slug>` route.** Insert right after the `index()` route's closing `return resp` (line 399), before `@app.route('/m/')`:
@@ -464,7 +465,7 @@ with:
 
 - [ ] **Step 6: Run the route tests to verify they pass.**
 
-Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m pytest tests/test_share_routes.py -q`
+Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m unittest tests.test_share_routes -v`
 Expected: PASS (8 tests).
 
 - [ ] **Step 7: Commit.**
@@ -606,7 +607,7 @@ git commit -m "$(printf 'feat(share): copyLink POSTs for a short link, falls bac
 
 - [ ] **Step 1: Run the entire test suite.**
 
-Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m pytest tests/ -q && node tests/js_share.test.mjs`
+Run: `cd "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/.claude/worktrees/sad-kilby-8612cc" && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "/Users/edgar/Documents/NRG2FLY/Charging Network Simulator/venv/bin/python" -m unittest discover -s tests -p "test_*.py" && node tests/js_share.test.mjs`
 Expected: all pass. (`test_api.py` live-server tests self-skip when no server is up — that's fine.)
 
 - [ ] **Step 2: Browser end-to-end check.** Start the app via `.claude/launch.json` + `preview_start` (the only way preview reaches this Flask app), then:
