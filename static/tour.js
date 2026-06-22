@@ -341,7 +341,7 @@ window.CNSTour = (function () {
             // 7. Trip type
             {
                 element: '#tripTypeSeg',
-                popover: { title: 'Trip type', description: 'Four patterns: One-way (A to B), Retour (there and back), Circular (a closed loop through your stops, returning to Departure) and Training (pattern flying around a single airport). The selection sets how the route and its charging are calculated.', side: 'right' },
+                popover: { title: 'Trip type', description: 'Four patterns: One-way (A to B), Return (there and back), Circular (a closed loop through your stops, returning to Departure) and Training (pattern flying around a single airport). The selection sets how the route and its charging are calculated.', side: 'right' },
             },
             // 8. Aircraft
             {

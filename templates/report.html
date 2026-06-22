@@ -238,7 +238,7 @@
                     {% endif %}
                 </td>
                 <td>{{ c.planeName }}</td>
-                <td>{{ 'Retour' if c.tripType == 'retour' else ('Circular' if c.tripType == 'circular' else 'One-way') }}{% if c.multiLeg %} · multi-leg{% endif %}</td>
+                <td>{{ 'Return' if c.tripType == 'retour' else ('Circular' if c.tripType == 'circular' else 'One-way') }}{% if c.multiLeg %} · multi-leg{% endif %}</td>
                 <td>{{ c.freqN }} / {{ c.freqUnit }}</td>
                 <td>{{ c.energyPerFlight | fmt_energy }}</td>
                 <td>{{ c.chargeMin | round(0, 'common') | int }} min<br><small>on {{ c.chargerName }}</small></td>

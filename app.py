@@ -676,7 +676,7 @@ def simulate_flight():
     # sees 'circular').
     if trip_type == 'circular' and not stops:
         return jsonify({"error": "A circular trip needs at least one intermediate stop. "
-                                 "For a there-and-back flight, pick Retour."}), 400
+                                 "For a there-and-back flight, pick Return."}), 400
 
     # Any uncaught exception below would otherwise render Flask's HTML 500 page,
     # which breaks the browser's JSON parser and surfaces as an opaque failure.

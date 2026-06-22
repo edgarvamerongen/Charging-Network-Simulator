@@ -223,7 +223,7 @@ class SpreadsheetBuilder:
             other = c.get('other') or ''
             route = {'HOME': f'{role} → {other} & back', 'ORIGIN': f'{role} → {other}',
                      'STOP': f'{role} on {other}'}.get(role, f'{role} from {other}')
-            trip = ('Retour' if c.get('tripType') == 'retour' else 'One-way') + (' · multi-leg' if c.get('multiLeg') else '')
+            trip = ('Return' if c.get('tripType') == 'retour' else 'One-way') + (' · multi-leg' if c.get('multiLeg') else '')
             self._cell(ws, r, 1, _safe_text(route))
             self._cell(ws, r, 2, _safe_text(c.get('planeName')))
             self._cell(ws, r, 3, trip)
