@@ -458,6 +458,45 @@ def _airport_by_ident(ident):
     return _airport_idx.get(ident)
 
 
+# ── Airport resolution (used by /embed) ────────────────────────────────────
+_TYPE_RANK = {'large_airport': 0, 'medium_airport': 1, 'small_airport': 2}
+
+def resolve_airport(query, airports):
+    """Resolve a fuzzy airport name or ICAO/IATA code to an airport record.
+
+    Matching priority: exact ICAO → exact IATA → exact municipality →
+    substring on name (prefer larger type) → substring on municipality
+    (prefer larger type).  Returns None if no match.
+    """
+    q = (query or '').strip()
+    if not q:
+        return None
+    q_upper = q.upper()
+    q_lower = q.lower()
+
+    for ap in airports:
+        if ap['ident'].upper() == q_upper:
+            return ap
+
+    for ap in airports:
+        if (ap.get('iata_code') or '').upper() == q_upper:
+            return ap
+
+    for ap in airports:
+        if (ap.get('municipality') or '').lower() == q_lower:
+            return ap
+
+    hits = [ap for ap in airports if q_lower in ap['name'].lower()]
+    if hits:
+        return min(hits, key=lambda a: _TYPE_RANK.get(a.get('type'), 9))
+
+    hits = [ap for ap in airports if q_lower in (ap.get('municipality') or '').lower()]
+    if hits:
+        return min(hits, key=lambda a: _TYPE_RANK.get(a.get('type'), 9))
+
+    return None
+
+
 @app.route('/api/airport-photo/<ident>', methods=['GET'])
 def airport_photo(ident):
     ap = _airport_by_ident(ident)
