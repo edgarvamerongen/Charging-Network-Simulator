@@ -24,7 +24,7 @@ echo
 echo "=================================================================="
 echo "NODE  (browser-global calc modules):"
 echo "=================================================================="
-for f in tests/js_settings.test.mjs tests/js_units.test.mjs tests/js_charging.test.mjs tests/js_demand.test.mjs tests/js_flight_model.test.mjs tests/js_flight_padding.test.mjs tests/js_flight_adapter.test.mjs tests/js_interim_charging.test.mjs tests/js_routing.test.mjs tests/js_recompute.test.mjs tests/js_share.test.mjs; do
+for f in tests/js_settings.test.mjs tests/js_units.test.mjs tests/js_charging.test.mjs tests/js_demand.test.mjs tests/js_flight_model.test.mjs tests/js_flight_padding.test.mjs tests/js_flight_adapter.test.mjs tests/js_interim_charging.test.mjs tests/js_routing.test.mjs tests/js_recompute.test.mjs tests/js_share.test.mjs tests/js_range_graph.test.mjs; do
   echo "--- node $f ---"
   node "$f" || rc=1
   echo

@@ -146,6 +146,9 @@
             font: 700 15px/22px sans-serif; text-align: center;
         }
         .ap-card .leaflet-popup-close-button:hover { background: rgba(20,24,40,.72); color: #fff; }
+        /* range-graph airport labels (CNSRangeGraph) — navy ICAO, cream halo, no box */
+        .leaflet-div-icon.rg-lbl { background: none; border: none; width: auto !important; height: auto !important; }
+        .rg-lbl span { display: inline-block; transform: translate(8px, -50%); font: 700 10px/1 system-ui, sans-serif; color: var(--brand-ink); white-space: nowrap; text-shadow: 0 0 2px var(--brand-cream), 0 0 3px var(--brand-cream), 0 0 3px var(--brand-cream); }
         .ap-photo-wrap {
             position: relative; width: 100%; aspect-ratio: 16 / 9; margin-bottom: 9px;
             border-radius: 8px; overflow: hidden;
@@ -1699,6 +1702,7 @@
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
+                        <label class="opt-check"><input type="checkbox" id="fReachGraph"><span>Range graph</span></label>
                     </div>
                     <div class="opt-group">
                         <div class="opt-label">NRG2fly network (planning)</div>
@@ -1831,7 +1835,7 @@
                     <label>Trip type</label>
                     <select id="tripType" class="form-select d-none" tabindex="-1" aria-hidden="true">
                         <option value="one-way">One-Way</option>
-                        <option value="retour">Retour (Round Trip)</option>
+                        <option value="retour">Return</option>
                         <option value="circular">Circular (closed loop A → B → … → A)</option>
                         <option value="training">Training (circular pattern A→A)</option>
                     </select>
@@ -1839,13 +1843,13 @@
                          so every existing tripType reader keeps working. -->
                     <div id="tripTypeSeg" class="trip-seg" role="group" aria-label="Trip type">
                         <button type="button" class="trip-seg-btn" data-trip="one-way" data-hint="A to B; charge to full at the destination.">One-way</button>
-                        <button type="button" class="trip-seg-btn" data-trip="retour" data-hint="There and back; the destination supplies only the deficit to fly home.">Retour</button>
+                        <button type="button" class="trip-seg-btn" data-trip="retour" data-hint="There and back; the destination supplies only the deficit to fly home.">Return</button>
                         <button type="button" class="trip-seg-btn" data-trip="circular" data-hint="Closed loop through your stops, back to Departure.">Circular</button>
                         <button type="button" class="trip-seg-btn" data-trip="training" data-hint="Pattern flying around a single airport.">Training</button>
                     </div>
                     <p id="tripTypeHint" class="est-note mb-0 mt-1"></p>
                     <p id="trainingHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a pattern around the origin for a fixed duration (matched to the aircraft's training range). Energy per flight is capped at the usable battery.</p>
-                    <p id="circularHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a closed loop: Departure → stop(s) → back to Departure. Add at least one stop — the last stop is the loop's far point. For a simple there-and-back, pick Retour.</p>
+                    <p id="circularHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a closed loop: Departure → stop(s) → back to Departure. Add at least one stop — the last stop is the loop's far point. For a simple there-and-back, pick Return.</p>
                 </div>
 
                 <!-- Charging stops: when on, an over-range route is auto-split into legs
@@ -2347,7 +2351,7 @@
                             <label class="form-label">Flight type</label>
                             <select id="efTripType" class="form-select">
                                 <option value="one-way">One-way (A → B)</option>
-                                <option value="retour">Retour (A → B → A)</option>
+                                <option value="retour">Return (A → B → A)</option>
                                 <option value="circular">Circular (A → B → … → A)</option>
                                 <option value="training">Training (loop at base)</option>
                             </select>
@@ -2424,6 +2428,7 @@
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
     <script src="/static/tour.js?v={{ asset_version }}"></script>
     <script src="/static/share.js?v={{ asset_version }}"></script>
+    <script src="/static/range-graph.js?v={{ asset_version }}"></script>
     {% if share_state %}<script>window.__CNS_SHARE__ = {{ share_state|tojson }};</script>{% endif %}
     <script>
         // HTML-escape for every data string interpolated into an innerHTML
@@ -2649,6 +2654,7 @@
             // Live route preview — fire whenever a location changes so the
             // operator sees the chain on the map without clicking Simulate.
             if (typeof drawLiveRoute === 'function') drawLiveRoute();
+            if (ap && ap.ident && window.CNSRangeGraph) CNSRangeGraph.show(ap.ident);   // reach graph follows the route's last endpoint
         }
         window.setOrigin = function(ident) { pickAirport('origin', airportByIdent[ident]); map.closePopup(); };
         window.setDest = function(ident) {
@@ -2682,6 +2688,7 @@
                     traj.innerHTML = `Stop <strong>${escHtml(ap.name)}</strong> added — pick a <strong>destination airport</strong> to plan the route.`;
                 }
             }
+            if (window.CNSRangeGraph) CNSRangeGraph.show(ident);   // reach graph from the new stop
         };
 
         function updateTrajectory() {
@@ -4575,11 +4582,11 @@
             const flags = CNSSettings.activeFlags();
             document.getElementById('hlUsedLabel').textContent =
                 isTraining ? 'Energy used (per session)'
-                : isRetour ? 'Energy used (round trip)'
+                : isRetour ? 'Energy used'
                 : 'Energy used';
             document.getElementById('hlFlightLabel').textContent =
                 isTraining ? 'Pattern duration'
-                : isRetour ? 'Travel time (round trip)'
+                : isRetour ? 'Travel time'
                 : 'Total travel time';
             let tSub;
             if (isTraining) {
@@ -4615,7 +4622,7 @@
                 `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico">⚡</span>Charge at ${_esc(name)}${isDest ? '<span class="dest-badge">destination</span>' : ''}</div>` +
                 `<div class="step-sub">+${fmtDuration(min)} · ${fmtEnergy(energy)}</div></td></tr>`;
             const _typeLabel = isTraining ? `Training pattern (${Math.round(flightMin)} min)`
-                : (data.trip_type === 'circular' ? 'Circular (closed loop)' : isRetour ? 'Round Trip (Retour)' : 'One-Way')
+                : (data.trip_type === 'circular' ? 'Circular (closed loop)' : isRetour ? 'Return' : 'One-Way')
                   + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
             const _steps = [`<tr class="step-head"><td>Trip type</td><td>${_esc(_typeLabel)}</td></tr>`];
             const _destNm = (data._dest && data._dest.name) || '', _originNm = (data._origin && data._origin.name) || '';
@@ -4885,7 +4892,7 @@
                 payload.stops = ringStops.slice(0, -1);
                 if (!payload.stops.length) {
                     document.getElementById('result').classList.add('d-none');
-                    errDiv.textContent = 'A circular trip needs at least one stop — for a simple there-and-back, pick Retour.';
+                    errDiv.textContent = 'A circular trip needs at least one stop — for a simple there-and-back, pick Return.';
                     errDiv.classList.remove('d-none'); return;
                 }
             } else if (!isTraining && document.getElementById('withStops').checked && plannedStops.length) {
@@ -5157,7 +5164,7 @@
                     const tripLabel =
                         t.tripType === 'training' ? `Training · ${Math.round((+t.flightTimeH || 0) * 60)} min`
                         : t.tripType === 'circular' ? `Circular · ${(t.stops || []).length + 2} legs`
-                        : (t.tripType === 'retour' ? 'Retour' : 'One-way') + (t.multiLeg ? ' · multi-leg' : '');
+                        : (t.tripType === 'retour' ? 'Return' : 'One-way') + (t.multiLeg ? ' · multi-leg' : '');
                     const infeasibleBadge = (t.feasible === false)
                         ? ` <span class="tag-infeasible" title="${(t.infeasibleReason || 'No valid route at the current settings').replace(/"/g, '&quot;')}">⚠ no route</span>`
                         : '';
@@ -6146,6 +6153,7 @@
             await loadAirports();
             if (window.CNSScheduler) CNSScheduler.init({ chargers: chargerById, onChange: renderFolder });
             if (window.CNSAnimation) CNSAnimation.init();
+            if (window.CNSRangeGraph) CNSRangeGraph.init({ map, getReachKm: () => { try { const p = _selectedPlane(); return p ? (_availableRangeKm(p) || 0) : 0; } catch (e) { return 0; } }, airports: () => allAirports, allowedFor: () => { const types = new Set(_allowedTypes()); const idents = _plannerAllowedIdents(); return (ap) => types.has(ap.type) || idents.has(ap.ident); } });
             renderFolder();
             updateDrawerSub();
             renderPlanePicker();
