@@ -456,7 +456,13 @@ def embed():
             plane = p
             break
     if not plane:
-        plane = simulator.planes[0]
+        # Prefer beta_plane (mid-size, showcase aircraft) as embed default
+        for p in simulator.planes:
+            if p['id'] == 'beta_plane':
+                plane = p
+                break
+        if not plane:
+            plane = simulator.planes[0]
 
     # Resolve charger (fallback: plane's default, then first catalog charger)
     charger = None
