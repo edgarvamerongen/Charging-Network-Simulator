@@ -75,6 +75,7 @@ window.CNSRangeGraph = (function () {
         const reset = document.getElementById('planReset');
         if (reset) reset.addEventListener('click', () => { _lastIdent = null; clear(); });   // route cleared → graph cleared
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') clear(); });
+        _map.on('click', clear);   // click anywhere on the map (not an airport) → dismiss the graph
     }
 
     function clear() { if (_layer) _layer.clearLayers(); _activeIdent = null; }
