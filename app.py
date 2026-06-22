@@ -25,6 +25,7 @@ from sim import Simulator
 import report
 from report import generate_pdf
 from spreadsheet import generate_xlsx
+import shares
 
 app = Flask(__name__)
 # Behind the local reverse proxy (Caddy on the VPS) every request reaches gunicorn
@@ -38,6 +39,10 @@ if os.environ.get('CNS_BEHIND_PROXY') == '1':
 # otherwise planes.json/chargers.json/airports are read relative to wherever the
 # server happens to be launched from (e.g. a parent worktree), serving stale data.
 simulator = Simulator(base_dir=os.path.dirname(os.path.abspath(__file__)))
+
+# Short shareable-link store (SQLite at data/shares.db). Idempotent table
+# create at import so every gunicorn worker is ready; see shares.py.
+shares.init_db()
 
 # ---------------------------------------------------------------------------
 # Authentication & hardening
@@ -673,6 +678,26 @@ def simulate_flight():
         # break the browser's JSON parser. Surface it as JSON instead.
         return jsonify({"error": f"Simulation failed: {type(e).__name__}: {e}"}), 500
     return jsonify(result)
+
+
+@app.route('/api/share', methods=['POST'])
+def api_share_create():
+    """Persist the current route-state blob and return a short link to it.
+    Body is {"state": {...}} — the object CNSShare.currentState() emits. We
+    store it verbatim (schema-agnostic) keyed by a short slug."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not isinstance(body.get('state'), dict):
+        return jsonify({'error': 'Expected JSON body {"state": {...}}.'}), 400
+    state = body['state']
+    if len(json.dumps(state).encode('utf-8')) > shares.MAX_STATE_BYTES:
+        return jsonify({'error': 'Route state too large to share.'}), 413
+    try:
+        slug = shares.save_state(state)
+    except Exception:
+        app.logger.exception('Share save failed')
+        return jsonify({'error': 'Could not create share link.'}), 500
+    url = request.host_url.rstrip('/') + '/s/' + slug
+    return jsonify({'slug': slug, 'url': url})
 
 
 @app.route('/api/report.pdf', methods=['POST'])
