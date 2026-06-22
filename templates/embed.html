@@ -1,14 +1,166 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>CNS Embed</title></head>
-<body>
-<!-- tier: {{ tier }} -->
-<!-- network_airports: {{ network_airports | length }} -->
-<a href="{{ click_url }}" target="_blank" rel="noopener">
-  {% if origin %}{{ origin.ident }}{% endif %}
-  {% if destination %} → {{ destination.ident }}{% endif %}
-  {% if tier == 'network' %}network{% endif %}
-  {% if tier == 'range' %}range{% endif %}
-</a>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CNS Embed</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root {
+    --bg:      {{ '#FAF6EE' if theme == 'light' else '#1a1a1a' }};
+    --card:    {{ '#FFFFFF' if theme == 'light' else '#2a2a2a' }};
+    --border:  {{ '#E8E0D0' if theme == 'light' else '#3a3a3a' }};
+    --text-1:  {{ '#1a1a1a' if theme == 'light' else '#e8e8e8' }};
+    --text-2:  {{ '#555555' if theme == 'light' else '#aaaaaa' }};
+    --green:   #1D9E75;
+    --yellow:  #F5C842;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text-1);
+    display: flex; flex-direction: column;
+    cursor: pointer;
+  }
+  #map { flex: 1; min-height: 0; }
+  .leaflet-container { background: var(--bg); }
+  .leaflet-control-attribution { font-size: 9px; opacity: .6; }
+  .stat-bar {
+    display: flex; align-items: center; justify-content: center; gap: 24px;
+    padding: 10px 16px;
+    background: var(--card); border-top: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; color: var(--text-1);
+  }
+  .stat-bar .stat { display: flex; align-items: center; gap: 5px; }
+  .stat-bar .stat-icon { font-size: 14px; }
+  .stat-bar .stat-val { color: var(--green); }
+  .cta-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    background: var(--green); color: #fff;
+    font-size: 13px; font-weight: 600;
+  }
+  .cta-bar .cta-logo { height: 18px; opacity: .9; }
+  .cta-bar .cta-arrow { margin-left: auto; font-size: 16px; }
+  /* Range-tier airport dots */
+  .reach-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--yellow); border: 1px solid rgba(0,0,0,.15);
+  }
+  .origin-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--green); border: 2px solid #fff;
+    box-shadow: 0 0 4px rgba(0,0,0,.3);
+  }
+  .dest-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #e74c3c; border: 2px solid #fff;
+    box-shadow: 0 0 4px rgba(0,0,0,.3);
+  }
+</style>
+</head>
+<body onclick="window.open('{{ click_url }}','_blank')">
+
+<div id="map"></div>
+
+{% if tier in ('route', 'full') and sim_result and sim_result.success %}
+<div class="stat-bar">
+  <div class="stat"><span class="stat-icon">✈</span> <span class="stat-val">{{ sim_result.leg_distance_km | round(0) | int }} km</span></div>
+  <div class="stat"><span class="stat-icon">⚡</span> <span class="stat-val">{{ sim_result.leg_energy_kwh | round(1) }} kWh</span></div>
+  {% if tier == 'full' and sim_result.charge_time_min is defined %}
+  <div class="stat"><span class="stat-icon">⏱</span> <span class="stat-val">{{ sim_result.charge_time_min | round(0) | int }} min</span></div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="cta-bar">
+  <svg class="cta-logo" viewBox="0 0 100 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <text x="0" y="18" font-family="-apple-system,sans-serif" font-size="16" font-weight="700" fill="#fff">NRG2fly</text>
+  </svg>
+  <span>Explore in Charging Network Simulator</span>
+  <span class="cta-arrow">→</span>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function() {
+  var tier      = {{ tier | tojson }};
+  var origin    = {{ origin | tojson }};
+  var dest      = {{ destination | tojson }};
+  var reachable = {{ reachable | tojson }};
+  var networkAP = {{ network_airports | tojson }};
+  var plane     = {{ plane | tojson }};
+
+  var map = L.map('map', {
+    zoomControl: false,
+    attributionControl: true,
+    dragging: false,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    touchZoom: false,
+    boxZoom: false,
+    keyboard: false
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OSM &copy; CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(map);
+
+  function dot(cls) {
+    return L.divIcon({ className: '', html: '<div class="' + cls + '"></div>', iconSize: [12, 12], iconAnchor: [6, 6] });
+  }
+
+  if (tier === 'network') {
+    map.setView([50.0, 10.0], 5);
+    for (var i = 0; i < networkAP.length; i++) {
+      var ap = networkAP[i];
+      L.circleMarker([ap.lat, ap.lon], {
+        radius: 3, color: 'rgba(29,158,117,0.6)', fillColor: 'rgba(29,158,117,0.4)',
+        fillOpacity: 1, weight: 1
+      }).bindTooltip(ap.name, { direction: 'top', offset: [0, -5] }).addTo(map);
+    }
+  }
+
+  else if (tier === 'range') {
+    var oLatLng = [origin.latitude_deg, origin.longitude_deg];
+    L.marker(oLatLng, { icon: dot('origin-dot') })
+      .bindTooltip(origin.name, { permanent: true, direction: 'top', offset: [0, -8], className: '' })
+      .addTo(map);
+
+    // Range circle
+    var rangeKm = (plane && plane.range_km) || 500;
+    L.circle(oLatLng, { radius: rangeKm * 1000, color: 'rgba(29,158,117,0.3)', fillColor: 'rgba(29,158,117,0.07)', weight: 1 }).addTo(map);
+
+    // Reachable airports
+    var bounds = L.latLngBounds([oLatLng]);
+    for (var i = 0; i < reachable.length; i++) {
+      var ap = reachable[i];
+      var ll = [ap.lat, ap.lon];
+      L.marker(ll, { icon: dot('reach-dot') }).bindTooltip(ap.name, { direction: 'top', offset: [0, -5] }).addTo(map);
+      bounds.extend(ll);
+    }
+    map.fitBounds(bounds.pad(0.1));
+  }
+
+  else if (tier === 'route' || tier === 'full') {
+    var oLL = [origin.latitude_deg, origin.longitude_deg];
+    var dLL = [dest.latitude_deg, dest.longitude_deg];
+
+    L.marker(oLL, { icon: dot('origin-dot') })
+      .bindTooltip(origin.name, { permanent: true, direction: 'top', offset: [0, -8] })
+      .addTo(map);
+    L.marker(dLL, { icon: dot('dest-dot') })
+      .bindTooltip(dest.name, { permanent: true, direction: 'top', offset: [0, -8] })
+      .addTo(map);
+
+    L.polyline([oLL, dLL], { color: '#1D9E75', weight: 2.5, dashArray: '8 6', opacity: 0.8 }).addTo(map);
+
+    map.fitBounds(L.latLngBounds([oLL, dLL]).pad(0.25));
+  }
+})();
+</script>
 </body>
 </html>
