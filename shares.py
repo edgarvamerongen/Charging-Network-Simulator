@@ -39,6 +39,7 @@ def _connect():
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     conn = sqlite3.connect(path)
     conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA busy_timeout=3000')   # wait out a concurrent writer instead of erroring
     return conn
 
 
@@ -69,7 +70,7 @@ def init_db():
             ')'
         )
         conn.execute(
-            'CREATE INDEX IF NOT EXISTS idx_shares_hash ON shares(content_hash)'
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_shares_hash ON shares(content_hash)'
         )
 
 
@@ -83,26 +84,31 @@ def _new_slug():
 
 def save_state(state):
     """Persist a route-state dict and return its short slug. Identical states
-    (by canonical-JSON hash) reuse the existing slug."""
+    (by canonical-JSON hash) reuse the existing slug — atomically: content_hash
+    is UNIQUE, so concurrent saves of the same route converge on one slug rather
+    than racing past a SELECT and writing two rows."""
     blob = _canonical(state)
     digest = hashlib.sha256(blob.encode('utf-8')).hexdigest()
+    created = datetime.now(timezone.utc).isoformat()
     with _conn() as conn:
-        row = conn.execute(
-            'SELECT slug FROM shares WHERE content_hash = ? LIMIT 1', (digest,)
-        ).fetchone()
-        if row:
-            return row[0]
-        created = datetime.now(timezone.utc).isoformat()
         for _attempt in range(10):
             slug = _new_slug()
             try:
+                # content_hash is UNIQUE and we DO NOTHING on its conflict, so a
+                # concurrent save of the SAME route can't create a duplicate row;
+                # the SELECT below then returns whichever slug won the race.
                 conn.execute(
                     'INSERT INTO shares (slug, state, content_hash, created_at) '
-                    'VALUES (?, ?, ?, ?)', (slug, blob, digest, created)
+                    'VALUES (?, ?, ?, ?) ON CONFLICT(content_hash) DO NOTHING',
+                    (slug, blob, digest, created)
                 )
-                return slug
             except sqlite3.IntegrityError:
-                continue  # slug primary-key collision (astronomically rare) — retry
+                continue  # slug primary-key collision (astronomically rare) — new slug
+            row = conn.execute(
+                'SELECT slug FROM shares WHERE content_hash = ? LIMIT 1', (digest,)
+            ).fetchone()
+            if row:
+                return row[0]
         raise RuntimeError('shares: failed to generate a unique slug after 10 attempts')
 
 

@@ -1,6 +1,7 @@
 """Unit tests for shares.py — the SQLite short-link store. Offline; uses a
 throwaway DB via CNS_SHARES_DB so the real data/shares.db is never touched."""
 import os
+import sqlite3
 import tempfile
 import unittest
 
@@ -39,6 +40,21 @@ class SharesStoreTest(unittest.TestCase):
         a = shares.save_state({'v': 1, 'o': 'EHAM', 'd': 'LFPG'})
         b = shares.save_state({'d': 'LFPG', 'v': 1, 'o': 'EHAM'})  # key order differs
         self.assertEqual(a, b)  # canonical JSON → same hash → same slug
+
+    def test_content_hash_uniqueness_is_enforced(self):
+        # The UNIQUE(content_hash) constraint is what makes save_state atomic
+        # under a race: a second row for the same content must be rejected, so
+        # concurrent savers converge on one slug instead of writing duplicates.
+        slug = shares.save_state({'v': 1, 'o': 'EHAM', 'd': 'EDDF'})
+        with shares._conn() as conn:
+            digest = conn.execute(
+                'SELECT content_hash FROM shares WHERE slug = ?', (slug,)
+            ).fetchone()[0]
+            with self.assertRaises(sqlite3.IntegrityError):
+                conn.execute(
+                    'INSERT INTO shares (slug, state, content_hash, created_at) '
+                    'VALUES (?, ?, ?, ?)', ('zzz1234', '{}', digest, '2026-01-01T00:00:00+00:00')
+                )
 
     def test_different_states_get_different_slugs(self):
         a = shares.save_state({'v': 1, 'o': 'EHAM'})
