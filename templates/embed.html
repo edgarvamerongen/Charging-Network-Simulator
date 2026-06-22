@@ -60,7 +60,7 @@
   }
 </style>
 </head>
-<body onclick="window.open('{{ click_url }}','_blank')">
+<body onclick="window.open({{ click_url | tojson }},'_blank')">
 
 <div id="map"></div>
 
