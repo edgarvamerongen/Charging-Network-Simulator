@@ -15,6 +15,7 @@ survives deploys (git pull never touches data/). Override the path with
 CNS_SHARES_DB (the test suite points it at a temp file). The path is read
 dynamically per connection so tests can redirect it after import.
 """
+import contextlib
 import hashlib
 import json
 import os
@@ -41,10 +42,24 @@ def _connect():
     return conn
 
 
+@contextlib.contextmanager
+def _conn():
+    """Yield a connection and guarantee it closes. sqlite's own ``with conn:``
+    commits but never closes the connection, leaking the handle (a
+    ResourceWarning in tests, and file descriptors under a long-running
+    gunicorn). This wrapper commits on success and always closes."""
+    conn = _connect()
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def init_db():
     """Create the shares table if missing. Idempotent; safe to call at startup
     and from every gunicorn worker."""
-    with _connect() as conn:
+    with _conn() as conn:
         conn.execute(
             'CREATE TABLE IF NOT EXISTS shares ('
             '  slug TEXT PRIMARY KEY,'
@@ -71,7 +86,7 @@ def save_state(state):
     (by canonical-JSON hash) reuse the existing slug."""
     blob = _canonical(state)
     digest = hashlib.sha256(blob.encode('utf-8')).hexdigest()
-    with _connect() as conn:
+    with _conn() as conn:
         row = conn.execute(
             'SELECT slug FROM shares WHERE content_hash = ? LIMIT 1', (digest,)
         ).fetchone()
@@ -93,7 +108,7 @@ def save_state(state):
 
 def load_state(slug):
     """Return the stored route-state dict for a slug, or None if unknown."""
-    with _connect() as conn:
+    with _conn() as conn:
         row = conn.execute(
             'SELECT state FROM shares WHERE slug = ? LIMIT 1', (slug,)
         ).fetchone()
