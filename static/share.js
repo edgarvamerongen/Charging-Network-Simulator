@@ -167,7 +167,7 @@ window.CNSShare = (function () {
     async function copyLink() {
         let url;
         try { url = await createShortLink(currentState()); }
-        catch (e) { url = shareUrl(); }   // server unavailable → the long hash link still works
+        catch (e) { console.warn('[CNSShare] short-link request failed, using hash link', e); url = shareUrl(); }   // server unavailable → the long hash link still works
         try { await navigator.clipboard.writeText(url); toast('Link copied'); }
         catch (e) { window.prompt('Copy this shareable link:', url); }
         return url;
