@@ -47,7 +47,7 @@ window.CNSBuildShare = (function () {
             return rec;
         });
 
-        const blob = { v: SCHEMA, k: 'build', fl: JSON.parse(JSON.stringify(fl)) };
+        const blob = { v: SCHEMA, k: 'build', fl };
         const cfg = (D && D.loadCfg) ? D.loadCfg() : {};
         if (cfg && Object.keys(cfg).length) blob.cfg = cfg;
         const St = (typeof CNSState !== 'undefined') ? CNSState : null;

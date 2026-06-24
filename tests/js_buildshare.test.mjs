@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import assert from 'node:assert/strict';
+import assert from 'node:assert';
 import { test } from 'node:test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
