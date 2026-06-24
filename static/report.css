@@ -467,3 +467,15 @@ table { border-collapse: collapse; }
   color: var(--ink);
   font-weight: 600;
 }
+
+/* ---------- ported: About + advisory framing -------------------------------- */
+.about-cols { display: flex; gap: 4mm; margin: 4mm 0 2mm; page-break-inside: avoid; }
+.about-col  { flex: 1; background: var(--soft); border: 0.35mm solid var(--line); border-radius: 2mm; padding: 4mm; }
+.about-col-h{ color: var(--navy); font-weight: 700; font-size: 11pt; margin-bottom: 2mm; }
+.about-col p{ font-size: 9pt; color: var(--body); margin: 0; }
+
+/* ---------- ported: contact / questions box --------------------------------- */
+.questions-box { margin-top: 8mm; background: linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%); color: var(--cream); border-radius: 2.5mm; padding: 6mm 7mm; page-break-inside: avoid; }
+.questions-h   { font-size: 14pt; font-weight: 800; margin-bottom: 2mm; }
+.questions-box p { color: rgba(253, 249, 242, 0.92); margin: 1mm 0; }
+.questions-foot{ font-size: 9pt; opacity: 0.8; }
