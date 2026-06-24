@@ -479,3 +479,13 @@ table { border-collapse: collapse; }
 .questions-h   { font-size: 14pt; font-weight: 800; margin-bottom: 2mm; }
 .questions-box p { color: rgba(253, 249, 242, 0.92); margin: 1mm 0; }
 .questions-foot{ font-size: 9pt; opacity: 0.8; }
+
+/* ---------- ported: methodology prose --------------------------------------- */
+p.meth { font-size: 9pt; color: var(--body); margin: 1mm 0 2.5mm; }
+p.meth strong { color: var(--ink); }
+p.meth code { background: var(--soft); padding: 0.3mm 1.5mm; border-radius: 1mm; font-size: 8.5pt; color: var(--ink); }
+
+/* ---------- ported: per-airport verdict ------------------------------------- */
+.verdict      { margin-top: 4mm; padding: 3mm 4mm; border-radius: 1.5mm; font-size: 9.5pt; page-break-inside: avoid; }
+.verdict-ok   { background: #ecfdf5; border-left: 0.8mm solid #10b981; color: #065f46; }
+.verdict-warn { background: #fff7ed; border-left: 0.8mm solid #f59e0b; color: #9a3412; }
