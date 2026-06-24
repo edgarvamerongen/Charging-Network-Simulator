@@ -5939,6 +5939,43 @@
                 try { localStorage.setItem(KEY, h ? '1' : '0'); } catch (e) {}
             });
         })();
+        // Map Options persistence — keep the menu's display prefs across reloads
+        // (and across opening a shared build link, which is just a page load), the
+        // same way units (CNSUnits) and the ticker already persist. The range graph
+        // is intentionally excluded: it's a transient, origin-bound analysis overlay,
+        // not a durable view preference. Restore replays each control's OWN change/
+        // click event, so the map updates exactly as if the user had clicked it.
+        (function () {
+            const menu = document.getElementById('optionsMenu');
+            if (!menu) return;
+            const KEY = 'cns_map_options';
+            const CHECKS = ['fSmall', 'fMedium', 'fLarge', 'nrgChargerToggle',
+                'flightLabelToggle', 'flightLabelExpand', 'fAlternates',
+                'fSavedRoutes', 'hideAirportsOnRoute'];
+            const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } };
+            const write = (o) => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { /* quota / private mode */ } };
+            const snapshot = () => {
+                const o = {};
+                CHECKS.forEach((id) => { const el = document.getElementById(id); if (el) o[id] = el.checked; });
+                const bm = document.querySelector('.seg-btn[data-basemap].active');
+                if (bm) o.basemap = bm.dataset.basemap;
+                write(o);
+            };
+            // Restore: drive the controls' real events so their live handlers run.
+            const saved = read();
+            CHECKS.forEach((id) => {
+                if (!(id in saved)) return;
+                const el = document.getElementById(id);
+                if (el && el.checked !== saved[id]) { el.checked = saved[id]; el.dispatchEvent(new Event('change', { bubbles: true })); }
+            });
+            if (saved.basemap) {
+                const btn = document.querySelector('.seg-btn[data-basemap="' + saved.basemap + '"]');
+                if (btn && !btn.classList.contains('active')) btn.click();
+            }
+            // Persist on any later change (checkboxes fire change; basemap fires click).
+            menu.addEventListener('change', snapshot);
+            menu.addEventListener('click', (e) => { if (e.target.closest('.seg-btn[data-basemap]')) snapshot(); });
+        })();
         CNSUnits.onChange(() => {
             unitToggle.checked = isNautical();
             updateTrajectory();
