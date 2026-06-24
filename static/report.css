@@ -6,10 +6,10 @@
    ========================================================================== */
 
 :root {
-  --navy:       #2f3060;
-  --navy-deep:  #232450;
-  --coral:      #f08060;
-  --amber:      #f0c070;
+  --navy:       #2b2f5a;   /* app brand --brand-ink */
+  --navy-deep:  #1f2240;   /* darker brand navy for the cover gradient */
+  --coral:      #e57850;   /* app brand orange (--brand-orange-3 / --primary) */
+  --amber:      #e6c149;   /* app brand gold (--brand-gold) */
   --cream:      #fdf9f2;
   --ink:        #23244a;
   --body:       #43446b;
