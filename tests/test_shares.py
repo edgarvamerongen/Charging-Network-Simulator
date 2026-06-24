@@ -65,7 +65,25 @@ class SharesStoreTest(unittest.TestCase):
         self.assertIsNone(shares.load_state('zzzzzzz'))
 
     def test_max_state_bytes_is_16kib(self):
-        self.assertEqual(shares.MAX_STATE_BYTES, 16 * 1024)
+        # Updated to 64 KiB to accommodate multi-route build blobs (Task 1)
+        self.assertEqual(shares.MAX_STATE_BYTES, 64 * 1024)
+
+    def test_build_blob_round_trips_verbatim(self):
+        build = {
+            'v': 1, 'k': 'build',
+            'fl': [{'id': 'f1', 'p': 'beta_plane', 'c': 'dc_320', 't': 'oneway',
+                    'fn': 2, 'fu': 'day',
+                    'o': {'i': 'EHLE', 'la': 52.46, 'lo': 5.52, 'n': 'Lelystad'},
+                    'd': {'i': 'EDDF', 'la': 50.03, 'lo': 8.56, 'n': 'Frankfurt'}}],
+            'cfg': {'EDDF': {'chargers': ['dc_320'], 'targetDepartureSoc': 0.8}},
+            'sch': {'f1': ['08:00', '12:00']},
+            'ms': {'chargeTarget': {'enabled': True, 'value': 0.9}},
+        }
+        slug = shares.save_state(build)
+        self.assertEqual(shares.load_state(slug), build)
+
+    def test_cap_is_64k(self):
+        self.assertEqual(shares.MAX_STATE_BYTES, 64 * 1024)
 
 
 if __name__ == '__main__':

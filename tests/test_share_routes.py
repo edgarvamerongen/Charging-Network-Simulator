@@ -57,7 +57,7 @@ class ShareRoutesTest(unittest.TestCase):
 
     def test_create_rejects_oversize_state(self):
         self._login()
-        big = {'v': 1, 'pad': 'x' * (16 * 1024 + 1)}
+        big = {'v': 1, 'pad': 'x' * (64 * 1024 + 1)}
         r = self.client.post('/api/share', json={'state': big})
         self.assertEqual(r.status_code, 413)
 
@@ -83,3 +83,13 @@ class ShareRoutesTest(unittest.TestCase):
         self.assertEqual(r.status_code, 302)
         self.assertIn('/login', r.headers['Location'])
         self.assertIn('next=/s/zzzzzzz', r.headers['Location'])
+
+    def test_build_blob_creates_slug_and_injects_on_open(self):
+        self._login()
+        build = {'v': 1, 'k': 'build', 'fl': [{'id': 'f1', 'mark': INJECT_MARK}]}
+        slug = self.client.post('/api/share', json={'state': build}).get_json()['slug']
+        r = self.client.get('/s/' + slug)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(b'window.__CNS_SHARE__ = ', r.data)
+        self.assertIn(b'"k": "build"', r.data)
+        self.assertIn(INJECT_MARK.encode(), r.data)

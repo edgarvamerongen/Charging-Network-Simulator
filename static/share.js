@@ -184,5 +184,5 @@ window.CNSShare = (function () {
         _toastTimer = setTimeout(() => _toastEl && _toastEl.classList.remove('show'), ms || 2200);
     }
 
-    return { encode, decode, currentState, apply, hasLink, shareUrl, init, createShortLink, copyLink, toast, SCHEMA };
+    return { encode, decode, currentState, apply, hasLink, shareUrl, init, createShortLink, copyLink, toast, SCHEMA, settingsDelta: _settingsDelta };
 })();

@@ -92,30 +92,14 @@ window.CNSTour = (function () {
     // energy/charges are physically valid rather than faked. Sims run in parallel.
     function _seedWp(ap) { return { ident: ap.ident, name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg, type: ap.type }; }
 
-    // Map a /api/simulate response into a demand-folder entry — same shape the
-    // planner's "Add to demand calculator" builds (keep in sync with that code).
+    // Map a /api/simulate response into a demand-folder entry via the shared
+    // CNSFlightEntry mapper (static/flight-entry.js). Tour ids are 'tour_'+tag.
     function _entryFromSim(d, origin, dest, chargerId, freqN, freqUnit, tag) {
-        const e = {
-            id: 'tour_' + tag,
-            destIdent: dest.ident, destName: dest.name, destLat: dest.latitude_deg, destLon: dest.longitude_deg,
-            originIdent: origin.ident, originName: origin.name, originLat: origin.latitude_deg, originLon: origin.longitude_deg,
-            planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
-            chargerId: chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
-            legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
-            freqN: freqN, freqUnit: freqUnit, fleetMode: 'separate',
-        };
-        if (d.multi_leg) {
-            Object.assign(e, {
-                multiLeg: true, flightTimeH: d.total_flight_time_h,
-                rechargeEnergy: d.total_recharge_energy_kwh,
-                stops: d.stops, charges: d.charges, legs: d.legs,
-                totalDistanceKm: d.total_distance_km, totalFlightTimeH: d.total_flight_time_h,
-                totalChargeMin: d.total_charge_time_min, totalRechargeKwh: d.total_recharge_energy_kwh,
-            });
-        } else {
-            Object.assign(e, { rechargeEnergy: d.recharge_energy_kwh, flightTimeH: d.flight_time_h });
-        }
-        return e;
+        const norm = (ap) => ({ ident: ap.ident, name: ap.name, lat: ap.latitude_deg, lon: ap.longitude_deg });
+        return CNSFlightEntry.fromSim(d, {
+            origin: norm(origin), dest: norm(dest),
+            chargerId: chargerId, freqN: freqN, freqUnit: freqUnit, id: 'tour_' + tag,
+        });
     }
 
     async function _seedNetworkFlights() {

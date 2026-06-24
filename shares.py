@@ -27,7 +27,7 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 
 _SLUG_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 _SLUG_LEN = 7
-MAX_STATE_BYTES = 16 * 1024  # real blobs are <1 KB; cap stops arbitrary storage
+MAX_STATE_BYTES = 64 * 1024  # single routes are <1 KB; multi-route build blobs are larger but still small — cap stops arbitrary storage
 
 
 def _db_path():

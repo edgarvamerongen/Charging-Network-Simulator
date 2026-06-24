@@ -2042,6 +2042,7 @@
                     <button id="modelSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true">⚙</span> Model settings <span id="modelBadge" class="model-badge d-none">0</span></button>
                     <button id="generateReport" class="btn-cns btn-sm-cns btn-export" type="button" title="Generate a PDF report of the current plan"><span class="dl" aria-hidden="true">⤓</span> PDF</button>
                     <button id="exportSpreadsheet" class="btn-cns btn-sm-cns btn-export" type="button" title="Export the whole plan as an Excel spreadsheet (.xlsx)"><span class="dl" aria-hidden="true">⤓</span> XLSX</button>
+                    <button id="shareBuild" class="btn-cns btn-sm-cns" type="button" title="Copy a shareable link to this whole network — all flights, chargers &amp; schedule"><span aria-hidden="true">🔗</span> Share build</button>
                     <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
                 </div>
             </header>
@@ -2426,8 +2427,10 @@
     <script src="/static/report.js?v={{ asset_version }}"></script>
     <script src="/static/spreadsheet.js?v={{ asset_version }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+    <script src="/static/flight-entry.js?v={{ asset_version }}"></script>
     <script src="/static/tour.js?v={{ asset_version }}"></script>
     <script src="/static/share.js?v={{ asset_version }}"></script>
+    <script src="/static/buildshare.js?v={{ asset_version }}"></script>
     <script src="/static/range-graph.js?v={{ asset_version }}"></script>
     {% if share_state %}<script>window.__CNS_SHARE__ = {{ share_state|tojson }};</script>{% endif %}
     <script>
@@ -3831,6 +3834,11 @@
                     pane: 'savedRoutesPane', interactive: false,
                 }));
             });
+        }
+        // Fit the map to the saved-route network overlay (used after restoring a shared build).
+        function fitSavedRoutes() {
+            const ls = savedRoutesLayer.getLayers();
+            if (ls.length) { try { map.fitBounds(L.featureGroup(ls).getBounds(), _fitPadding()); } catch (e) { /* ignore */ } }
         }
         document.getElementById('fSavedRoutes')?.addEventListener('change', drawSavedRoutes);
 
@@ -5471,6 +5479,7 @@
         });
         document.getElementById('clearFolder').addEventListener('click', () => { if (confirm('Remove all saved flights?')) { saveFolder([]); saveCfg({}); renderFolder(); } });
         document.getElementById('exportSpreadsheet').addEventListener('click', (e) => CNSSpreadsheet.export(e.currentTarget));
+        document.getElementById('shareBuild')?.addEventListener('click', () => { if (window.CNSBuildShare) CNSBuildShare.copyBuildLink(); });
         // ---------- report airport picker (REQUIRED single-airport choice) ----------
         (function () {
             const genBtn = document.getElementById('generateReport');
@@ -6159,8 +6168,12 @@
             renderPlanePicker();
             renderPlaneSpecCard();
             // Shared link? restore that route instead of the default prefill.
-            if (window.__CNS_SHARE__ && window.CNSShare) {                                       // short /s/ link
-                if (window.__CNS_SHARE__.v === CNSShare.SCHEMA) CNSShare.apply(window.__CNS_SHARE__);
+            const _sh = window.__CNS_SHARE__;
+            if (_sh && _sh.k === 'build' && window.CNSBuildShare) {                              // multi-route build link
+                CNSBuildShare.applyBuild(_sh).then(() => { fitSavedRoutes(); demandDrawer.classList.add('open'); });
+            }
+            else if (_sh && window.CNSShare) {                                                   // short /s/ single-route link
+                if (_sh.v === CNSShare.SCHEMA) CNSShare.apply(_sh);
                 else { CNSShare.toast('This shared link is from a different version.'); _applyDefaultFlight(); }
             }
             else if (window.CNSShare && CNSShare.hasLink()) CNSShare.init();                     // legacy #r= hash link
