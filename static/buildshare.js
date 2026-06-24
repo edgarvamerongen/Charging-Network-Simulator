@@ -58,5 +58,83 @@ window.CNSBuildShare = (function () {
         return blob;
     }
 
-    return { currentBuild, SCHEMA };
+    // A stored flight's inputs → an /api/simulate request body.
+    function _simPayload(fl) {
+        const wp = (p) => ({ ident: p.i, name: p.n, lat: p.la, lon: p.lo });
+        const body = { plane_id: fl.p, charger_id: fl.c, trip_type: fl.t, origin: wp(fl.o) };
+        if (fl.d) body.destination = wp(fl.d);
+        if (fl.s && fl.s.length) body.stops = fl.s.map(wp);
+        return body;
+    }
+
+    // Re-simulate one stored flight → a folder entry (null if it can't fly now).
+    async function _restoreFlight(fl, _fetch) {
+        const f = _fetch || (typeof fetch !== 'undefined' ? fetch : null);
+        if (!f) return null;
+        let d;
+        try {
+            d = await f('/api/simulate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(_simPayload(fl)),
+            }).then((r) => r.json());
+        } catch (e) { return null; }
+        if (!d || d.error || !d.plane) return null;
+        const wp = (p) => ({ ident: p.i, name: p.n, lat: p.la, lon: p.lo });
+        const FE = (typeof CNSFlightEntry !== 'undefined') ? CNSFlightEntry : null;
+        if (!FE || !FE.fromSim) return null;
+        return FE.fromSim(d, {
+            origin: wp(fl.o), dest: fl.d ? wp(fl.d) : wp(fl.o),
+            chargerId: fl.c, freqN: fl.fn, freqUnit: fl.fu, id: fl.id,
+        });
+    }
+
+    // Restore a build blob: settings first, then re-simulate every flight in
+    // parallel, replace the folder, and reapply per-airport config + schedule.
+    async function applyBuild(st, _fetch) {
+        if (!st || st.k !== 'build') return { restored: 0, dropped: 0 };
+        if (st.ms && typeof CNSSettings !== 'undefined' && CNSSettings.save) {
+            try { CNSSettings.save(st.ms); } catch (e) { /* ignore */ }
+        }
+        const specs = Array.isArray(st.fl) ? st.fl : [];
+        const entries = await Promise.all(specs.map((fl) => _restoreFlight(fl, _fetch)));
+        const ok = entries.filter(Boolean);
+        const dropped = specs.length - ok.length;
+
+        if (typeof CNSDemand !== 'undefined') {
+            if (CNSDemand.saveFolder) CNSDemand.saveFolder(ok);
+            if (st.cfg && CNSDemand.saveCfg) CNSDemand.saveCfg(st.cfg);
+        }
+        if (st.sch && typeof CNSState !== 'undefined' && CNSState.setJSON) {
+            CNSState.setJSON(CNSState.KEYS.sched, st.sch);
+        }
+        if (typeof renderFolder === 'function') renderFolder();
+        if (dropped && typeof CNSShare !== 'undefined' && CNSShare.toast) {
+            CNSShare.toast(dropped + ' flight' + (dropped > 1 ? 's' : '') + ' couldn’t be restored — skipped', 4500);
+        }
+        return { restored: ok.length, dropped };
+    }
+
+    // POST the current network as a build and copy its /s/<slug> link. _deps is
+    // injectable for tests; defaults to CNSShare.createShortLink + the clipboard.
+    async function copyBuildLink(_deps) {
+        const deps = _deps || {};
+        const createShortLink = deps.createShortLink
+            || (typeof CNSShare !== 'undefined' ? CNSShare.createShortLink : null);
+        const writeText = deps.writeText
+            || ((typeof navigator !== 'undefined' && navigator.clipboard) ? navigator.clipboard.writeText.bind(navigator.clipboard) : null);
+        const toast = (m, ms) => { if (typeof CNSShare !== 'undefined' && CNSShare.toast) CNSShare.toast(m, ms); };
+
+        const folder = (typeof CNSDemand !== 'undefined' && CNSDemand.loadFolder) ? CNSDemand.loadFolder() : [];
+        if (!folder.length) { toast('Add at least one flight before sharing a build.', 3500); return null; }
+
+        let url;
+        try { url = await createShortLink(currentBuild()); }
+        catch (e) { toast('Couldn’t create a share link — try again.', 4000); return null; }   // build links are slug-only: no hash fallback
+
+        try { if (writeText) await writeText(url); toast('Build link copied'); }
+        catch (e) { if (typeof window !== 'undefined' && window.prompt) window.prompt('Copy this shareable build link:', url); }
+        return url;
+    }
+
+    return { currentBuild, applyBuild, copyBuildLink, _simPayload, SCHEMA };
 })();
