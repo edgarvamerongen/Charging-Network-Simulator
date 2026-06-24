@@ -21,6 +21,10 @@ window.CNSFlightEntry = (function () {
             planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
             chargerId: opts.chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
             legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
+            // Persist the effective plane spec: the demand-calc recompute rebuilds
+            // the routing plane from t.range_km/t.speed_kmh. Omitting them makes
+            // every restored/seeded flight "Aircraft has no range." → infeasible.
+            range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,
             freqN: opts.freqN, freqUnit: opts.freqUnit, fleetMode: 'separate',
         };
         if (d.multi_leg) {
