@@ -20,9 +20,8 @@
     </div>
 
     <div class="cover-titleblock">
-      <h1>Charging infrastructure plan</h1>
-      <div class="cover-airport">{{ focus_airport
-          or (airports[0].name if airports else 'Electric flight network') }}</div>
+      <h1>{% if focus_airport %}{{ focus_airport }}<br>as an Energy Hub{% else %}Your Airport<br>as an Energy Hub{% endif %}</h1>
+      <div class="cover-airport">{% if focus_airport %}Sizing the charging network for {{ focus_airport }}{% else %}Sizing the charging network for a first electric route{% endif %}</div>
       <div class="cover-rule"></div>
     </div>
 
