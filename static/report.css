@@ -1,222 +1,491 @@
-/* NRG2FLY Charging Network Plan — print stylesheet (WeasyPrint).
-   House style: muted base (white / grey / charcoal / navy) + a single accent
-   (orange), with royal-blue for data and green for energy throughput. */
-
-@page {
-    size: A4;
-    margin: 22mm;
-}
+/* ============================================================================
+   NRG2FLY — Charging infrastructure plan (PDF report)
+   A4 print stylesheet for WeasyPrint. All layout/branding lives here +
+   templates/report.html; report.py only supplies data and inline SVG charts.
+   Palette: deep navy #2f3060 · coral #f08060 · amber #f0c070 · cream paper.
+   ========================================================================== */
 
 :root {
-    /* house palette */
-    --navy:      #152455;
-    --blue:      #2563eb;   /* primary data */
-    --orange:    #F0892B;   /* ACCENT ONLY: rules, highlights, peak line, routes */
-    --green:     #10b981;   /* energy throughput */
-    --ink:       #0f1729;   /* headings */
-    --body:      #334155;   /* body text — dark grey, not pure black */
-    --muted:     #94a3b8;   /* captions */
-    --line:      #e2e8f0;   /* hairlines */
-    --bg-soft:   #f1f5f9;   /* table headers / panels */
-    /* legacy aliases (kept so existing rules keep working) */
-    --primary:   #2563eb;
-    --primary-2: #152455;
-    --ink-soft:  #334155;
-    --success:   #10b981;
-    --warn:      #f59e0b;
-    --danger:    #ef4444;
-    --border:    #e2e8f0;
-    --border-strong: #cbd5e1;
+  --navy:       #2b2f5a;   /* app brand --brand-ink */
+  --navy-deep:  #1f2240;   /* darker brand navy for the cover gradient */
+  --coral:      #e57850;   /* app brand orange (--brand-orange-3 / --primary) */
+  --amber:      #e6c149;   /* app brand gold (--brand-gold) */
+  --cream:      #fdf9f2;
+  --ink:        #23244a;
+  --body:       #43446b;
+  --muted:      #8d8fae;
+  --line:       #e3e0d6;
+  --soft:       #f6f3ec;
 }
+
+/* ---------- page boxes ---------------------------------------------------- */
+
+@page {
+  size: A4;
+  margin: 18mm 16mm 22mm 16mm;
+
+  @bottom-left {
+    content: "NRG2FLY — Charging infrastructure plan";
+    font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 7.5pt;
+    color: #8d8fae;
+  }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 7.5pt;
+    color: #8d8fae;
+  }
+}
+
+/* Full-bleed cover: no margins, no footer furniture. */
+@page :first {
+  margin: 0;
+  @bottom-left  { content: none; }
+  @bottom-right { content: none; }
+}
+
+/* ---------- base ----------------------------------------------------------- */
 
 * { box-sizing: border-box; }
 
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    color: var(--body);
-    font-size: 10.5pt;
-    line-height: 1.45;
-    margin: 0;
+  font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.45;
+  color: var(--body);
 }
 
-h1, h2, h3, h4 { color: var(--ink); font-weight: 700; margin: 0 0 .35em 0; line-height: 1.2; }
-h1 { font-size: 30pt; }
-h2 { font-size: 19pt; margin-top: 12mm; padding-bottom: .25em; border-bottom: 2px solid var(--orange); }
-h2:first-child, .cover h1, .ap-header h2 { margin-top: 0; }
-h3 { font-size: 12.5pt; margin-top: 6mm; color: var(--ink); letter-spacing: .02em; text-transform: uppercase; font-weight: 700; }
-
-p { margin: .35em 0 .8em 0; }
-.lede { color: var(--body); font-size: 11pt; }
-.mt-4 { margin-top: 12mm; }
-.chart-cap { font-size: 9pt; color: var(--muted); margin: 0 0 2mm 0; }
-code { background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; font-size: 9.5pt; color: var(--ink); }
-
-/* ---------- Page mechanics ---------- */
-.page {
-    page-break-after: always;
-    position: relative;
-    /* Stay safely under the A4 content height (297 − 2×22mm ≈ 253mm) so a page
-       never overflows by a hair into an empty trailing page (WeasyPrint then
-       crashes laying out a page whose only box is the running footer). */
-    min-height: 244mm;
-}
-.page:last-child { page-break-after: auto; }
-
-.page-foot {
-    position: running(footer);
-    font-size: 8pt;
-    color: var(--muted);
-    text-align: center;
-    padding-top: 6mm;
-    border-top: 1px solid var(--line);
-    margin-top: 8mm;
+h2 {
+  margin: 0 0 3mm;
+  font-size: 19pt;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--ink);
 }
 
-/* ---------- Cover ---------- */
-.cover { display: flex; flex-direction: column; min-height: 244mm; }
-.cover-head { padding-bottom: 6mm; }
-.cover-logo { height: 20mm; }
-.cover-photo-band {
-    height: 66mm;
-    border-radius: 12px;
-    overflow: hidden;
-    background-size: cover;
-    background-position: center;
-    position: relative;
-    margin-bottom: 8mm;
-    box-shadow: 0 1mm 4mm rgba(21, 36, 85, .20);
+h3 {
+  margin: 0 0 2.5mm;
+  font-size: 10.5pt;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--navy);
 }
+
+.lede {
+  font-size: 10pt;
+  color: var(--body);
+  margin: 0 0 5mm;
+}
+
+.lede strong { color: var(--ink); }
+
+.muted { color: var(--muted); font-weight: 400; font-size: 8pt; }
+
+.footnote {
+  margin: 2.5mm 0 0;
+  font-size: 7.5pt;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.avoid-break { page-break-inside: avoid; }
+
+/* Every content section starts on a fresh page. */
+section.page { page-break-before: always; }
+
+.section-kicker {
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--coral);
+  margin-bottom: 2mm;
+}
+
+/* ---------- cover ----------------------------------------------------------- */
+
+.cover {
+  width: 210mm;
+  height: 297mm;
+  background: linear-gradient(165deg, var(--navy) 0%, var(--navy-deep) 70%, #1d1e42 100%);
+  color: var(--cream);
+  overflow: hidden;
+}
+
+.cover-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 18mm 20mm 16mm;
+}
+
+.cover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16mm;
+}
+
+.cover-logo {
+  width: 52mm;
+  background: var(--cream);
+  padding: 3mm 4mm;
+  border-radius: 2.5mm;
+}
+
+.cover-logo-text {
+  font-size: 16pt;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--cream);
+}
+
+.cover-kicker {
+  font-size: 8.5pt;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.cover-titleblock h1 {
+  margin: 0;
+  font-size: 30pt;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  color: #ffffff;
+}
+
+.cover-airport {
+  margin-top: 3mm;
+  font-size: 15pt;
+  font-weight: 600;
+  color: var(--amber);
+}
+
+.cover-rule {
+  width: 38mm;
+  height: 1.6mm;
+  margin: 7mm 0 0;
+  border-radius: 1mm;
+  background: linear-gradient(90deg, var(--coral), var(--amber));
+}
+
+.cover-photo {
+  margin-top: 10mm;
+  page-break-inside: avoid;
+}
+
+.cover-photo img {
+  display: block;
+  width: 100%;
+  height: 62mm;
+  object-fit: cover;
+  border-radius: 2.5mm;
+}
+
 .photo-credit {
-    position: absolute; left: 4mm; bottom: 3mm;
-    font-size: 7.5pt; color: #fff;
-    background: rgba(21, 36, 85, .55);
-    padding: 1px 6px; border-radius: 4px;
+  margin-top: 1.5mm;
+  font-size: 6.5pt;
+  color: var(--muted);
+  text-align: right;
 }
-.cover-body { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
-.cover-overline {
-    font-size: 11pt; font-weight: 700; letter-spacing: .14em;
-    text-transform: uppercase; color: var(--orange); margin: 0 0 5mm 0;
+
+.cover .photo-credit { color: rgba(253, 249, 242, 0.55); }
+
+/* Headline KPI strip (table-based: reliable in print). */
+.cover-kpis {
+  width: 100%;
+  margin-top: auto;       /* pushed toward the bottom of the cover */
+  border-collapse: separate;
+  border-spacing: 2.5mm 0;
 }
-.cover-title { font-size: 38pt; line-height: 1.05; color: var(--navy); margin: 0 0 6mm 0; }
-.cover-sub { font-size: 14pt; color: var(--body); margin: 0 0 16mm 0; }
-.cover-stats { display: flex; gap: 4mm; margin-bottom: 14mm; }
-.cs {
-    flex: 1;
-    background: linear-gradient(135deg, var(--blue) 0%, var(--navy) 100%);
-    color: #fff; border-radius: 10px; padding: 8mm 6mm; text-align: center;
+
+.cover-kpis td {
+  width: 20%;
+  padding: 4.5mm 3mm;
+  background: rgba(253, 249, 242, 0.07);
+  border-top: 0.8mm solid var(--coral);
+  border-radius: 0 0 1.5mm 1.5mm;
+  text-align: center;
+  vertical-align: top;
 }
-.cs-n { font-size: 32pt; font-weight: 800; line-height: 1; margin-bottom: 3mm; }
-.cs-l { font-size: 9pt; text-transform: uppercase; letter-spacing: .08em; opacity: .85; }
-.cover-meta { color: var(--body); font-size: 10pt; border-top: 1px solid var(--line); padding-top: 5mm; }
 
-/* ---------- About + advisory framing ---------- */
-.about-cols { display: flex; gap: 4mm; margin: 4mm 0 2mm 0; }
-.about-col { flex: 1; background: var(--bg-soft); border-radius: 8px; padding: 4mm; }
-.about-col-h { color: var(--blue); font-weight: 700; font-size: 11pt; margin-bottom: 2mm; }
-.about-col p { font-size: 9.5pt; color: var(--body); margin: 0; }
-
-.questions-box {
-    margin-top: 8mm;
-    background: linear-gradient(135deg, var(--blue) 0%, var(--navy) 100%);
-    color: #fff; border-radius: 10px; padding: 6mm 7mm;
+.cover-kpis .kpi-value {
+  font-size: 14pt;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
 }
-.questions-h { font-size: 14pt; font-weight: 800; margin-bottom: 2mm; }
-.questions-box p { color: rgba(255, 255, 255, .92); margin: 1mm 0; }
-.questions-foot { font-size: 9pt; opacity: .8; }
 
-/* ---------- Charts ---------- */
-/* Explicit heights: without them WeasyPrint reserves the SVG viewBox height as
-   POINTS, making each chart box far taller than its rendered content. These
-   match the width-scaled aspect so the box hugs the chart. */
-.curve { display: block; width: 100%; height: 48mm; margin: 1mm 0 4mm 0; }
-.donut { display: block; width: 100%; height: 43mm; margin: 1mm 0 4mm 0; }
+.cover-kpis .kpi-label {
+  margin-top: 1mm;
+  font-size: 7pt;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(253, 249, 242, 0.65);
+}
 
-/* ---------- Assumptions & scenario panel ---------- */
-.panel { border: 1px solid var(--line); background: var(--bg-soft); border-radius: 10px; padding: 6mm; }
-.assump-grid { display: flex; gap: 8mm; }
-.assump-block { flex: 1; }
-.assump-block + .assump-block { border-left: 1px solid var(--line); padding-left: 8mm; }
-.assump-sub { font-weight: 700; font-size: 10.5pt; color: var(--ink); margin-bottom: 3mm; }
-.kv-table { width: 100%; border-collapse: collapse; }
-.kv-table th { text-align: left; font-weight: 400; color: var(--muted); font-size: 9.5pt; padding: 1.3mm 0; width: 46%; vertical-align: top; }
-.kv-table td { text-align: left; color: var(--ink); font-weight: 600; font-size: 9.5pt; padding: 1.3mm 0; vertical-align: top; }
-.assump-note { font-size: 9pt; color: var(--body); line-height: 1.5; margin: 0 0 2mm 0; }
-.scenario-table { width: 100%; border-collapse: collapse; margin-top: 1mm; }
-.scenario-table td { padding: 1.6mm 0; border-bottom: 1px solid var(--line); font-size: 9.5pt; }
-.scenario-table td:first-child { color: var(--body); }
-.scenario-table td:last-child { text-align: right; font-weight: 600; color: var(--ink); }
-.scenario-strong td { font-weight: 800; border-bottom: none; }
-.scenario-strong td:last-child { color: var(--green); }
+.cover-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10mm;
+  font-size: 8pt;
+  color: rgba(253, 249, 242, 0.6);
+}
 
-/* ---------- Network map ---------- */
-.map-page .net-map { display: block; width: 100%; border: 1px solid var(--line); border-radius: 8px; margin: 3mm 0 4mm 0; }
-.map-legend { font-size: 9.5pt; color: var(--body); display: flex; gap: 8mm; align-items: center; }
-.lg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 3px; vertical-align: middle; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
-.lg-term { background: var(--blue); }
-.lg-stop { background: var(--green); }
-.lg-line { display: inline-block; width: 22px; height: 4px; vertical-align: middle; margin-right: 3px; border-radius: 2px; }
-.lg-route { background: var(--orange); }
+/* ---------- cards ----------------------------------------------------------- */
 
-/* ---------- Kit (aircraft) ---------- */
-.kit-table { width: 100%; border-collapse: collapse; margin-top: 3mm; }
-.kit-table th, .kit-table td { padding: 3.5mm 3mm; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
-.kit-table th { background: var(--bg-soft); color: var(--body); font-weight: 600; font-size: 9.5pt; text-transform: uppercase; letter-spacing: .04em; }
-.kit-img { width: 30mm; }
-.kit-img img { width: 28mm; height: 17mm; object-fit: contain; }
-.kit-photo { border-radius: 6px; object-fit: cover; border: 1px solid var(--line); }
-.kit-name { font-weight: 600; color: var(--ink); }
+.card {
+  background: #ffffff;
+  border: 0.35mm solid var(--line);
+  border-radius: 2mm;
+  padding: 5mm 6mm;
+  margin: 0 0 5mm;
+}
 
-/* ---------- Airport pages ---------- */
-.ap-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4mm; padding-bottom: 4mm; border-bottom: 2px solid var(--orange); }
-.ap-name { font-size: 21pt; margin: 0; color: var(--navy); }
-.ap-meta { font-size: 9.5pt; color: var(--body); margin-top: 2mm; }
-.ap-meta > * { display: inline-block; margin-right: 4mm; }
-.ap-ident { background: var(--bg-soft); padding: 1px 6px; border-radius: 4px; font-weight: 600; color: var(--ink); }
-.ap-type { text-transform: uppercase; font-size: 8.5pt; letter-spacing: .05em; color: var(--muted); }
-.ap-headline { display: flex; gap: 4mm; }
-.ap-h { background: linear-gradient(135deg, var(--blue) 0%, var(--navy) 100%); color: #fff; border-radius: 8px; padding: 4mm 6mm; text-align: center; min-width: 28mm; }
-.ap-hn { font-size: 18pt; font-weight: 800; line-height: 1; }
-.ap-hl { font-size: 8pt; text-transform: uppercase; letter-spacing: .06em; opacity: .85; margin-top: 1mm; }
+.card.avoid-break, .gantt-card { page-break-inside: avoid; }
 
-/* ---------- Tables ---------- */
-.charger-table, .contrib-table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm 0; }
-.charger-table th, .charger-table td,
-.contrib-table th, .contrib-table td { padding: 2.5mm 3mm; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-.charger-table th, .contrib-table th { background: var(--bg-soft); color: var(--body); font-weight: 600; font-size: 9pt; text-transform: uppercase; letter-spacing: .04em; }
-.contrib-table td small { color: var(--muted); font-size: 8.5pt; }
-.total-row td { font-weight: 700; background: var(--bg-soft); color: var(--ink); }
-.contrib-table tr.has-legs td { border-bottom: none; }
+/* ---------- inline SVG charts (server-drawn) -------------------------------- */
 
-.role { display: inline-block; font-size: 7.5pt; font-weight: 700; letter-spacing: .08em; padding: 1px 5px; border-radius: 4px; margin-right: 3px; color: #fff; }
-.role-home { background: #6f42c1; }
-.role-dest { background: var(--orange); }
-.role-origin { background: #0ea5e9; }
-.role-stop { background: var(--blue); }
+svg.curve, svg.donut, svg.gantt, svg.bar-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 
-/* per-leg charging breakdown under a multi-leg contribution */
-.legs-row td { padding-top: 0; }
-.legs { display: flex; flex-wrap: wrap; gap: 3mm; align-items: center; padding: 0 0 1mm 0; }
-.legs-label { font-size: 8pt; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-.leg { font-size: 9pt; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 1.2mm 3mm; }
-.leg .leg-to { font-weight: 700; }
-.leg small { color: var(--muted); font-size: 8pt; margin-left: 3px; }
+/* ---------- tables ----------------------------------------------------------- */
 
-.note { background: #fffbe6; border-left: 3px solid var(--warn); color: #854d0e; padding: 2mm 4mm; margin: 3mm 0; font-size: 9.5pt; border-radius: 4px; }
+table { border-collapse: collapse; }
 
-/* ---------- Gantt ---------- */
-.gantt-legend { font-size: 9pt; color: var(--body); display: flex; gap: 5mm; align-items: center; margin: 2mm 0 2mm 0; }
-.lg-box { display: inline-block; width: 10px; height: 10px; margin-right: 3px; vertical-align: middle; border-radius: 2px; }
-.lg-fly { background: var(--blue); }
-.lg-charge { background: var(--green); }
-.lg-elsewhere { background: #9bd3ad; }
-.lg-wait { background: repeating-linear-gradient(45deg, #F0892B, #F0892B 3px, #fde9cf 3px, #fde9cf 6px); }
-.gantt { width: 100%; margin: 2mm 0 4mm 0; }
+.data-table {
+  width: 100%;
+  font-size: 8.5pt;
+  page-break-inside: avoid;
+}
 
-/* ---------- Verdict ---------- */
-.verdict { margin-top: 4mm; padding: 3mm 4mm; border-radius: 6px; font-size: 10pt; }
-.verdict-ok { background: #ecfdf5; border-left: 3px solid var(--success); color: #065f46; }
-.verdict-warn { background: #fff7ed; border-left: 3px solid var(--warn); color: #9a3412; }
+.data-table th {
+  padding: 1.8mm 2.5mm;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--muted);
+  border-bottom: 0.45mm solid var(--navy);
+}
 
-/* ---------- Methodology ---------- */
-.methodology h3 { margin-top: 8mm; }
-.methodology p { font-size: 10pt; }
+.data-table td {
+  padding: 1.8mm 2.5mm;
+  border-bottom: 0.25mm solid var(--line);
+  color: var(--body);
+}
+
+.data-table .num { text-align: right; white-space: nowrap; }
+
+.data-table tr { page-break-inside: avoid; }
+
+.data-table .row-strong td {
+  font-weight: 700;
+  color: var(--ink);
+  border-top: 0.45mm solid var(--navy);
+  border-bottom: none;
+}
+
+.data-table .row-accent td {
+  font-weight: 700;
+  color: var(--ink);
+  background: #fdf3e7;
+  border-bottom: none;
+}
+
+/* Definition table (appendix). */
+.def-table {
+  width: 100%;
+  font-size: 8.5pt;
+  page-break-inside: avoid;
+}
+
+.def-table th {
+  width: 42%;
+  padding: 1.8mm 2.5mm;
+  font-weight: 600;
+  text-align: left;
+  color: var(--ink);
+  border-bottom: 0.25mm solid var(--line);
+  vertical-align: top;
+}
+
+.def-table td {
+  padding: 1.8mm 2.5mm;
+  border-bottom: 0.25mm solid var(--line);
+  color: var(--body);
+  vertical-align: top;
+}
+
+/* ---------- airport pages ----------------------------------------------------- */
+
+.ident-badge {
+  display: inline-block;
+  margin-left: 2.5mm;
+  padding: 0.8mm 2.4mm;
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  background: var(--coral);
+  border-radius: 1.2mm;
+  vertical-align: 18%;
+}
+
+.kpi-row {
+  width: 100%;
+  margin: 3mm 0 5mm;
+  border-collapse: separate;
+  border-spacing: 2mm 0;
+  page-break-inside: avoid;
+}
+
+.kpi-row td {
+  width: 20%;
+  padding: 3.5mm 2.5mm;
+  background: var(--soft);
+  border-top: 0.8mm solid var(--navy);
+  border-radius: 0 0 1.5mm 1.5mm;
+  text-align: center;
+  vertical-align: top;
+}
+
+.kpi-row .kpi-value {
+  font-size: 12.5pt;
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.kpi-row .kpi-label {
+  margin-top: 1mm;
+  font-size: 6.8pt;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Gantt legend swatches (mirror report.py's phase colours). */
+.swatch {
+  display: inline-block;
+  width: 2.8mm;
+  height: 2.8mm;
+  border-radius: 0.6mm;
+  vertical-align: -0.4mm;
+}
+.sw-fly       { background: #2563eb; }
+.sw-charge    { background: #10b981; }
+.sw-elsewhere { background: #9bd3ad; }
+.sw-wait      { background: #F0892B; border: 0.3mm solid #fde9cf; }
+
+/* ---------- network map ----------------------------------------------------- */
+
+.map-frame {
+  margin: 0 0 5mm;
+  page-break-inside: avoid;
+}
+
+.map-img {
+  display: block;
+  width: 100%;
+  border: 0.35mm solid var(--line);
+  border-radius: 2mm;
+}
+
+/* ---------- fleet ----------------------------------------------------------- */
+
+.plane-card {
+  display: flex;
+  align-items: stretch;
+  background: #ffffff;
+  border: 0.35mm solid var(--line);
+  border-radius: 2mm;
+  margin: 0 0 4.5mm;
+  overflow: hidden;
+  page-break-inside: avoid;
+}
+
+.plane-media {
+  flex: 0 0 52mm;
+  background: var(--soft);
+}
+
+.plane-photo {
+  display: block;
+  width: 52mm;
+  height: 34mm;
+  object-fit: cover;
+}
+
+.plane-photo.plane-glyph {
+  object-fit: contain;
+  padding: 4mm;
+}
+
+.plane-body {
+  flex: 1 1 auto;
+  padding: 4mm 5mm;
+}
+
+.plane-body h3 { margin-bottom: 2mm; }
+
+.spec-table {
+  width: 100%;
+  font-size: 8.5pt;
+}
+
+.spec-table th {
+  width: 18%;
+  padding: 1mm 2mm 1mm 0;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.spec-table td {
+  width: 32%;
+  padding: 1mm 4mm 1mm 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------- ported: About + advisory framing -------------------------------- */
+.about-cols { display: flex; gap: 4mm; margin: 4mm 0 2mm; page-break-inside: avoid; }
+.about-col  { flex: 1; background: var(--soft); border: 0.35mm solid var(--line); border-radius: 2mm; padding: 4mm; }
+.about-col-h{ color: var(--navy); font-weight: 700; font-size: 11pt; margin-bottom: 2mm; }
+.about-col p{ font-size: 9pt; color: var(--body); margin: 0; }
+
+/* ---------- ported: contact / questions box --------------------------------- */
+.questions-box { margin-top: 8mm; background: linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%); color: var(--cream); border-radius: 2.5mm; padding: 6mm 7mm; page-break-inside: avoid; }
+.questions-h   { font-size: 14pt; font-weight: 800; margin-bottom: 2mm; }
+.questions-box p { color: rgba(253, 249, 242, 0.92); margin: 1mm 0; }
+.questions-foot{ font-size: 9pt; opacity: 0.8; }
+
+/* ---------- ported: methodology prose --------------------------------------- */
+p.meth { font-size: 9pt; color: var(--body); margin: 1mm 0 2.5mm; }
+p.meth strong { color: var(--ink); }
+p.meth code { background: var(--soft); padding: 0.3mm 1.5mm; border-radius: 1mm; font-size: 8.5pt; color: var(--ink); }
+
+/* ---------- ported: per-airport verdict ------------------------------------- */
+.verdict      { margin-top: 4mm; padding: 3mm 4mm; border-radius: 1.5mm; font-size: 9.5pt; page-break-inside: avoid; }
+.verdict-ok   { background: #ecfdf5; border-left: 0.8mm solid #10b981; color: #065f46; }
+.verdict-warn { background: #fff7ed; border-left: 0.8mm solid #f59e0b; color: #9a3412; }
