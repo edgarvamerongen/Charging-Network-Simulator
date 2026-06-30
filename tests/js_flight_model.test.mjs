@@ -66,15 +66,20 @@ let pass = 0, fail = 0, deltas = 0;
 //      (reach + pad == full range). (Default-OFF is covered by the goldens.)
 (function sidStarIntegration() {
   const S = loadStack();
-  const plane = PLANES[Object.keys(PLANES)[0]];
+  // Regime cutover: SID/STAR + routing padding are IFR-only, so use an IFR-capable plane
+  // (Beta). The reach the planner enforces is now the regime usableRange (gross×(1−min_soc)
+  // − reserve − divert), NOT the raw range — the pad is carved out of THAT.
+  const plane = PLANES['beta_plane'];
   const ePerKm = plane.battery_kwh / plane.range_km;
   const waypoints = [wp('EHAM'), wp('LFPG')];
-  const run = () => S.CNSFlight.simulateTrip(plane, waypoints, { tripType: 'one-way', getChargerKw: () => 250 });
-  // baseline: distance factors off -> route = 1, no pad, full usable range
-  S.CNSSettings.save({ routingPadding: { enabled: false }, landingReserve: { enabled: false }, sidStarPadding: { enabled: false } });
+  const run = () => S.CNSFlight.simulateTrip(plane, waypoints, { tripType: 'one-way', ruleMode: 'ifr', getChargerKw: () => 250 });
+  // the IFR planning reach before any SID/STAR pad (what avail0 must equal)
+  const usable = S.CNSPlaneSchema.usableRange(plane, 'ifr', null, { alternateKm: +plane.divert_km || 0 });
+  // baseline: SID/STAR + routing padding OFF -> leg == rawKm, reach == the usable planning range
+  S.CNSSettings.save({ routingPadding: { enabled: false }, sidStarPadding: { enabled: false } });
   const base = run();
   const rawKm = base.legs[0].rawKm, d0 = base.legs[0].distKm, e0 = base.legs[0].energyKwh, avail0 = base.availRangeKm;
-  // SID/STAR on at 30 km
+  // SID/STAR on at 30 km (IFR only)
   S.CNSSettings.save({ sidStarPadding: { enabled: true, km: 30 } });
   const padded = run();
   const d1 = padded.legs[0].distKm, e1 = padded.legs[0].energyKwh, avail1 = padded.availRangeKm;
@@ -84,9 +89,9 @@ let pass = 0, fail = 0, deltas = 0;
     [eq(d1, rawKm + 30), `SID/STAR 30km -> distKm == rawKm + 30 (${d1} vs ${rawKm + 30})`],
     [eq(e1, ePerKm * d1), `energy tracks padded distKm (${e1} vs ${ePerKm * d1})`],
     [e1 > e0 + 1e-6, `padded energy exceeds baseline (${e1} > ${e0})`],
-    [eq(avail0, plane.range_km), `reach (factors off) == range (${avail0} vs ${plane.range_km})`],
-    [eq(avail1, plane.range_km - 30), `reach RESERVES the pad — == range − 30 (${avail1} vs ${plane.range_km - 30})`],
-    [eq(avail1 + 30, plane.range_km), `reach + pad == full range — a padded leg still respects the max (${avail1 + 30} vs ${plane.range_km})`],
+    [eq(avail0, usable), `reach (no pad) == regime usable range (${avail0} vs ${usable})`],
+    [eq(avail1, usable - 30), `reach RESERVES the pad — == usable − 30 (${avail1} vs ${usable - 30})`],
+    [eq(avail1 + 30, usable), `reach + pad == full usable range — a padded leg still respects the max (${avail1 + 30} vs ${usable})`],
     // display↔engine parity: the planning-aid distance shown in the trajectory pill +
     // route list is _dispKm = CNSRouting.routedKm + sidStarPaddingKm. It must equal the
     // engine's per-leg distKm, so the SHOWN distance moves with the pad exactly like the

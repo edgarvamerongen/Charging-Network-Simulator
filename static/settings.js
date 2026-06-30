@@ -54,7 +54,7 @@ window.CNSSettings = (function () {
     // v5: alternate reserve + SID/STAR padding default ON (realistic ops out of the box).
     const KEY = 'cns_settings_v5';
     const DEFAULTS = Object.freeze({
-        landingReserve:    { enabled: true,  minLandingSoc: 0.20 },   // 0..1 — planes.json ranges are calibrated to this default
+        landingReserve:    { enabled: true,  minLandingSoc: 0.30 },   // 0..1 — advised industry floor (battery health); gross figures recalibrated to this
         alternateReserve:  { enabled: true },                        // divert-to-nearest-airport reserve; uses each airport's pre-baked alternate_km
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
         chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint

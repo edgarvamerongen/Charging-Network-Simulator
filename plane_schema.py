@@ -129,7 +129,7 @@ def ifr_capable(plane):
 # --------------------------------------------------------------------------- #
 # Regulatory final-reserve defaults (minutes); the engine overrides from settings.
 RESERVE_MIN = {"vfr": 30, "vfr_day": 30, "vfr_night": 45, "ifr": 45}
-DEFAULT_MIN_SOC = 0.20
+DEFAULT_MIN_SOC = 0.30
 
 
 def _min_soc(plane, override=None):

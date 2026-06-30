@@ -98,7 +98,7 @@ window.CNSPlaneSchema = (function () {
 
     // usable range: gross --x(1 - min_soc)--> usable battery --minus reserve--> planning range
     const RESERVE_MIN = { vfr: 30, vfr_day: 30, vfr_night: 45, ifr: 45 };
-    const DEFAULT_MIN_SOC = 0.20;
+    const DEFAULT_MIN_SOC = 0.30;
 
     function _minSoc(plane, override) {
         if (override != null) return override;

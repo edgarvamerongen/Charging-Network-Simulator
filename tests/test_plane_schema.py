@@ -146,15 +146,15 @@ class TestUsableRange(unittest.TestCase):
     BETA = {"id": "b", "name": "B", "battery_kwh": 225, "range_km": 630, "speed_kmh": 250}
 
     def test_vfr_build_down(self):
-        # 630 gross ×0.8 (min-SoC floor) = 504, − 125 (30 min @ 250) = 379
-        self.assertAlmostEqual(plane_schema.usable_range(self.BETA, "vfr"), 379.0, places=1)
+        # 630 gross ×0.7 (30% min-SoC floor) = 441, − 125 (30 min @ 250) = 316
+        self.assertAlmostEqual(plane_schema.usable_range(self.BETA, "vfr"), 316.0, places=1)
 
     def test_ifr_build_down(self):
-        # 504 − 187.5 (45 min @ 250) = 316.5
-        self.assertAlmostEqual(plane_schema.usable_range(self.BETA, "ifr"), 316.5, places=1)
+        # 441 − 187.5 (45 min @ 250) = 253.5
+        self.assertAlmostEqual(plane_schema.usable_range(self.BETA, "ifr"), 253.5, places=1)
 
     def test_ifr_alternate_and_routing_trim_further(self):
-        self.assertLess(plane_schema.usable_range(self.BETA, "ifr", alternate_km=50, routing_factor=1.05), 316.5)
+        self.assertLess(plane_schema.usable_range(self.BETA, "ifr", alternate_km=50, routing_factor=1.05), 253.5)
 
     def test_min_soc_override(self):
         # min_soc 0 → base = gross → vfr = 630 − 125 = 505
@@ -169,13 +169,13 @@ class TestUsableRange(unittest.TestCase):
 
     def test_catalog_beta_gross_630(self):
         beta = next(p for p in _catalog() if plane_schema.value(p, "id") == "beta_plane")
-        # live scalar stays 500 (engine goldens); the authoritative gross is a measurement
-        self.assertEqual(plane_schema.value(beta, "range_km"), 500)
+        # live scalar swapped to the 630 gross in the S2+S3 cutover (ePerKm = batt/range_km must match it)
+        self.assertEqual(plane_schema.value(beta, "range_km"), 630)
         gross = plane_schema.select_measurement(beta, "range_km", {})
         self.assertEqual(gross["value"], 630)
         self.assertEqual(gross["basis"], "gross")
-        self.assertAlmostEqual(plane_schema.usable_range(beta, "vfr"), 379.0, places=1)
-        self.assertAlmostEqual(plane_schema.usable_range(beta, "ifr"), 316.5, places=1)
+        self.assertAlmostEqual(plane_schema.usable_range(beta, "vfr"), 316.0, places=1)   # 630×0.7 − 125
+        self.assertAlmostEqual(plane_schema.usable_range(beta, "ifr"), 253.5, places=1)   # 441 − 187.5
 
 
 class TestMeasurementsValidation(unittest.TestCase):

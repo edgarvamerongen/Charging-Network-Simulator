@@ -61,9 +61,9 @@ def coord(code, name=None):
 VELIS = {"id": "pipistrel_velis", "name": "Velis Electro", "seats": 2,
          "battery_kwh": 22, "range_km": 87.5, "speed_kmh": 150, "training_range_km": 87.5}
 BETA = {"id": "beta_plane", "name": "Beta Alia CX300", "seats": 6, "load_kg": 500,
-        "battery_kwh": 225, "range_km": 500, "speed_kmh": 250}
+        "battery_kwh": 225, "range_km": 630, "speed_kmh": 250}
 VAERIDION = {"id": "vaeridion", "name": "Vaeridion", "seats": 9, "load_kg": 1000,
-             "battery_kwh": 600, "range_km": 500, "speed_kmh": 400}
+             "battery_kwh": 600, "range_km": 700, "speed_kmh": 435}
 
 CHARGER_172 = {"id": "aircraft_charger", "name": "Aircraft Charger", "power_kw": 172}
 CHARGER_22 = {"id": "mobile_aircraft", "name": "Mobile Aircraft Charger (GB/T)", "power_kw": 22}

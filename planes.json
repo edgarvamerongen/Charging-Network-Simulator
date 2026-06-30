@@ -21,8 +21,9 @@
     "seats": 6,
     "load_kg": 500,
     "battery_kwh": 225,
-    "range_km": 500,
+    "range_km": 630,
     "speed_kmh": 250,
+    "divert_km": 50,
     "image": "beta.png",
     "svg": "beta.svg",
     "default_charger_id": "dc_320",
@@ -38,8 +39,8 @@
     "seats": 9,
     "load_kg": 1000,
     "battery_kwh": 600,
-    "range_km": 500,
-    "speed_kmh": 400,
+    "range_km": 700,
+    "speed_kmh": 435,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg",
     "default_charger_id": "dc_1000",
@@ -48,6 +49,7 @@
     "surfaces_ok": ["paved", "grass"],
     "measurements": [
       { "quantity": "range_km", "value": 400, "conditions": { "regime": "ifr", "load": "mtow" }, "basis": "usable_incl_reserve", "source": "Vaeridion spec sheet 2026 (400 km / 215 nm + commercial IFR reserves @ MTOW)", "confidence": "manufacturer-stated" },
+      { "quantity": "range_km", "value": 700, "basis": "gross", "source": "internal operational estimate — energy balance (600 kWh batt, 30% floor, 45-min IFR reserve @190 kt + 80 km divert, <=40-min/800-kW turnaround) => ~700 km; internal ePerKm use only, NOT an OEM-published figure", "confidence": "estimated" },
       { "quantity": "takeoff_distance_m", "value": 800, "conditions": { "surface": "paved", "mass": "mtow" }, "source": "Vaeridion spec sheet 2026 (SL, ISA+0)", "confidence": "manufacturer-stated" },
       { "quantity": "takeoff_distance_m", "value": 1000, "conditions": { "surface": "grass", "mass": "mtow" }, "source": "Vaeridion spec sheet 2026 (SL, ISA+0)", "confidence": "manufacturer-stated" }
     ]

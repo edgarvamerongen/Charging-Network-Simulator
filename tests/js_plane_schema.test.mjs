@@ -112,10 +112,10 @@ test('select: case-insensitive conditions', () => {
   assert.equal(S.select(MEAS_PLANE, 'range_km', { regime: 'IFR' }), 400);
 });
 
-test('usableRange: VFR/IFR build-down from gross (×0.8 min-SoC, then reserve)', () => {
+test('usableRange: VFR/IFR build-down from gross (×0.7 min-SoC, then reserve)', () => {
   const beta = { id: 'b', name: 'B', battery_kwh: 225, range_km: 630, speed_kmh: 250 };
-  assert.ok(Math.abs(S.usableRange(beta, 'vfr') - 379) < 1e-6);     // 630×0.8 − 125
-  assert.ok(Math.abs(S.usableRange(beta, 'ifr') - 316.5) < 1e-6);   // 504 − 187.5
+  assert.ok(Math.abs(S.usableRange(beta, 'vfr') - 316) < 1e-6);     // 630×0.7 − 125
+  assert.ok(Math.abs(S.usableRange(beta, 'ifr') - 253.5) < 1e-6);   // 441 − 187.5 (no divert opt)
 });
 
 test('usableRange: explicit usable_incl_reserve measurement wins', () => {
@@ -129,7 +129,7 @@ test('catalog: Vaeridion IFR@MTOW range is 400, TODR grass 1000', () => {
   const planes = JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8'));
   const v = planes.find(p => S.value(p, 'id') === 'vaeridion');
   assert.equal(S.select(v, 'range_km', { regime: 'ifr', load: 'mtow' }), 400);
-  assert.equal(S.select(v, 'range_km'), 500);   // scalar default unchanged (additive)
+  assert.equal(S.select(v, 'range_km'), 700);   // live scalar swapped to 700 (gross, for ePerKm) in the cutover
   assert.equal(S.select(v, 'takeoff_distance_m', { surface: 'grass' }), 1000);
 });
 

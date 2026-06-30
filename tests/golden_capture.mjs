@@ -46,7 +46,7 @@ export function loadStack() {
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const f of ['settings.js', 'routing.js', 'flight-model.js', 'demand.js', 'recompute.js', 'scheduler.js']) {
+  for (const f of ['plane-schema.js', 'settings.js', 'routing.js', 'flight-model.js', 'demand.js', 'recompute.js', 'scheduler.js']) {
     vm.runInContext(fs.readFileSync(path.join(REPO, 'static', f), 'utf8'), sandbox);
   }
   return sandbox;
