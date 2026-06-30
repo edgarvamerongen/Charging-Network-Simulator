@@ -239,11 +239,28 @@ language.
 
 - Skill name: **`cns-import-flights`**, shipped as an installable plugin — no
   repo required.
-- Responsibilities: (1) read the user's file (xlsx / PDF / CSV / pasted text)
-  with available tools; (2) interpret it into the Component 1 schema, handling
-  the source's quirks (Dutch date ranges, dash-joined route strings, per-leg
-  passengers, positioning `(XXX)`, mixed code systems); (3) `POST /api/import`
-  with the token; (4) return the link + a plain-language report.
+- Responsibilities:
+  1. **Clarify first** — before reading or parsing anything, ask the user a
+     short, targeted set of questions and wait for answers, so it never burns
+     tokens parsing the wrong thing or guessing intent. It asks only what it
+     can't infer, keeps it to a handful, then proceeds.
+  2. read the user's file (xlsx / PDF / CSV / pasted text) with available tools;
+  3. interpret it into the Component 1 schema, handling the source's quirks
+     (Dutch date ranges, dash-joined route strings, per-leg passengers,
+     positioning `(XXX)`, mixed code systems);
+  4. `POST /api/import` with the token;
+  5. return the link + a plain-language report.
+- **Clarify-first questions** (the upfront step — ask only those not already
+  obvious from the request):
+  - Which file(s), and — for a multi-sheet workbook or multi-table PDF — which
+    sheet/section holds the flights?
+  - Default electric aircraft + charger to assign? (offer the catalog default,
+    `beta_plane`.)
+  - Frequency basis: **`actual`** (default) or `regular`?
+  - Keep positioning / empty ferry legs as waypoints, or drop them?
+  - Any rows to exclude (e.g. technical or positioning-only flights)?
+  - Scope to import — everything, or a specific quarter/year?
+  - Target environment + token, if not already configured.
 - One-time config the colleague provides: the **API token** (base URL defaults
   to `cns.nrg2fly.nl`).
 - Bundled assets: the **JSON Schema** (the LLM targets it and self-validates
@@ -291,14 +308,14 @@ language.
 
 ---
 
-## Open decision for review
+## Resolved decisions
 
-**Frequency default.** The spec defaults `freq_basis` to `"actual"` (average
-weekly rate over the dataset span — honest, but often fractional/small for
-sporadic government flights). The alternative `"regular"` models each unique
-route as 1 flight/week — better for a "what if this were a scheduled electric
-service" narrative. Both are supported via the knob; confirm which should be the
-default.
+**Frequency default = `"actual"`.** Imports use the real average weekly rate
+over the dataset span (honest, even when small/fractional for sporadic flights).
+The viewer can change any flight's frequency in the DC afterward, and the
+`"regular"` basis (1 flight/week per unique route) remains available via the
+knob. So the import stays truthful by default and the "scheduled electric
+service" framing is one edit away.
 
 ## Future extensions
 
