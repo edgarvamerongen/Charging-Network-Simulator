@@ -62,6 +62,7 @@ _FAKE = {
     'AMS': {'ident': 'EHAM', 'name': 'Schiphol', 'lat': 52.31, 'lon': 4.76},
     'BER': {'ident': 'EDDB', 'name': 'Berlin', 'lat': 52.36, 'lon': 13.50},
     'JFK': {'ident': 'KJFK', 'name': 'JFK', 'lat': 40.64, 'lon': -73.78},
+    'FRA': {'ident': 'EDDF', 'name': 'Frankfurt', 'lat': 50.03, 'lon': 8.57},
 }
 def _resolve(code):
     return _FAKE.get(str(code).strip().upper())
@@ -134,6 +135,59 @@ class BuildBlobTest(unittest.TestCase):
         payload = {'defaults': {'plane': 'nope'}, 'flights': [{'route': ['AMS', 'BER']}]}
         blob, _ = flight_import.build_blob(payload, _resolve, _PLANES)
         self.assertEqual(blob['fl'][0]['p'], 'beta_plane')
+
+    def test_oneway_with_stops_populates_s(self):
+        # 3-airport oneway: AMS -> FRA -> BER; FRA is the intermediate stop.
+        payload = {'flights': [
+            {'route': ['AMS', 'FRA', 'BER'], 'date': '2022-01-01'},
+            {'route': ['AMS', 'FRA', 'BER'], 'date': '2022-01-15'},
+        ]}
+        blob, _ = flight_import.build_blob(payload, _resolve, _PLANES)
+        entry = blob['fl'][0]
+        self.assertEqual(entry['t'], 'oneway')
+        self.assertIn('s', entry)
+        self.assertEqual(len(entry['s']), 1)
+        stop = entry['s'][0]
+        self.assertIn('i', stop)
+        self.assertIn('la', stop)
+        self.assertIn('lo', stop)
+        self.assertIn('n', stop)
+        self.assertEqual(stop['i'], 'EDDF')  # FRA resolves to EDDF
+
+    def test_multi_route_fn_computed_independently(self):
+        # Route A (AMS->BER): 3 occurrences; Route B (AMS->FRA): 1 occurrence.
+        # Date span: 2022-01-01 to 2022-01-22 = 21 days = 3 weeks exactly.
+        # fn_A = max(round(3/3, 2), 0.01) = 1.0
+        # fn_B = max(round(1/3, 2), 0.01) = max(0.33, 0.01) = 0.33
+        payload = {'flights': [
+            {'route': ['AMS', 'BER'], 'date': '2022-01-01'},
+            {'route': ['AMS', 'BER'], 'date': '2022-01-08'},
+            {'route': ['AMS', 'BER'], 'date': '2022-01-22'},
+            {'route': ['AMS', 'FRA'], 'date': '2022-01-15'},
+        ]}
+        blob, report = flight_import.build_blob(payload, _resolve, _PLANES)
+        self.assertEqual(report['routes_out'], 2)
+        # Find each entry by origin/destination idents
+        entry_ab = next(e for e in blob['fl'] if e['o']['i'] == 'EHAM' and e['d']['i'] == 'EDDB')
+        entry_af = next(e for e in blob['fl'] if e['o']['i'] == 'EHAM' and e['d']['i'] == 'EDDF')
+        # Span: max date 2022-01-22, min date 2022-01-01 = 21 days = 3.0 weeks
+        weeks = 21 / 7.0  # 3.0
+        expected_ab = max(round(3 / weeks, 2), 0.01)
+        expected_af = max(round(1 / weeks, 2), 0.01)
+        self.assertEqual(entry_ab['fn'], expected_ab)
+        self.assertEqual(entry_af['fn'], expected_af)
+        self.assertNotEqual(entry_ab['fn'], entry_af['fn'])
+
+    def test_frequency_floor_0_01(self):
+        # 2 occurrences 2800 days apart -> weeks = 400.0
+        # count/weeks = 2/400 = 0.005 -> round(0.005, 2) = 0.0 (banker's rounding)
+        # floor clamps it to 0.01
+        payload = {'flights': [
+            {'route': ['AMS', 'BER'], 'date': '2014-01-01'},
+            {'route': ['AMS', 'BER'], 'date': '2021-09-03'},  # 2800 days later
+        ]}
+        blob, _ = flight_import.build_blob(payload, _resolve, _PLANES)
+        self.assertEqual(blob['fl'][0]['fn'], 0.01)
 
 
 if __name__ == '__main__':
