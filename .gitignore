@@ -22,3 +22,12 @@ data/
 # Auto-downloaded Wikimedia airport cover photos (curated pics/airports/<ICAO>.jpg
 # are tracked; the network-fetched cache is not).
 pics/airports/_cache/
+
+# Stray spreadsheets / research data dumps — not part of the app (no .xlsx is tracked).
+*.xlsx
+# Marketing/asset scratch dropped in the repo root.
+/cta_dark.png
+/cta_light.png
+# OneDrive/Finder copy artifacts ("<name> 2.<ext>"): "embed 2.html",
+# "test_embed 2.py", "poster 4daagse 2.jpeg", etc.
+* 2.*
