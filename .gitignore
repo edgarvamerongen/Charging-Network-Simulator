@@ -25,6 +25,8 @@ pics/airports/_cache/
 
 # Docs are local scratch (plans, specs, notes) — not needed in the repo.
 docs/
+# Local demo/scratch JS files.
+static/demo*.js
 
 # Stray spreadsheets / research data dumps — not part of the app (no .xlsx is tracked).
 *.xlsx
