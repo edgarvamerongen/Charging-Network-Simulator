@@ -1,0 +1,85 @@
+{
+  "$comment": "Aircraft catalog contract for CNS (planes.json). Roadmap step 1 of docs/performance-engine.md. JSON-Schema-flavoured but validated by a stdlib-only checker (plane_schema.py / validate_planes.py) so no jsonschema dependency is required. PROVENANCE: ANY scalar field may instead be written as an object { value, basis?, source?, confidence? }; the validator and the JS/PY normalizers unwrap `.value` before type-checking, so a bare scalar X is equivalent to { value: X, confidence: 'assumed' }. All fields beyond the `required` list are OPTIONAL — absent fields fall back to documented defaults so adding data never changes existing behaviour (performance-engine.md P2). NOTE: planes.json is a top-level array and must stay one (sim.py / the frontend iterate it), so the schema version lives HERE, not in planes.json.",
+  "schema_version": "1.0.0",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "name", "battery_kwh", "range_km", "speed_kmh"],
+    "x-provenance": {
+      "confidence": ["certified", "manufacturer-stated", "estimated", "assumed"],
+      "note": "Drives the spec-sheet confidence badge (performance-engine.md §9). Never affects the math."
+    },
+    "x-domain-rules": [
+      "range_basis=incl_reserve requires reserve_included (else the reserve would be double-counted, §5.3)",
+      "ifr_capable absent -> inferred from class (trainer->false, else true); warning so it gets confirmed (§5.1)",
+      "unknown property -> warning (typo guard)"
+    ],
+    "properties": {
+      "id":                 { "type": "string", "note": "stable catalog id" },
+      "name":               { "type": "string" },
+      "seats":              { "type": "integer", "minimum": 1, "maximum": 1000 },
+      "battery_kwh":        { "type": "number", "gt": 0, "maximum": 100000, "x-unit": "kWh" },
+      "range_km":           { "type": "number", "gt": 0, "maximum": 50000, "x-unit": "km", "note": "interpreted per range_basis" },
+      "speed_kmh":          { "type": "number", "gt": 0, "maximum": 5000, "x-unit": "km/h" },
+      "load_kg":            { "type": "number", "minimum": 0, "maximum": 1000000, "x-unit": "kg", "note": "max payload" },
+      "training_range_km":  { "type": "number", "minimum": 0, "maximum": 50000, "x-unit": "km" },
+      "default_charger_id": { "type": "string" },
+      "image":              { "type": "string" },
+      "svg":                { "type": "string" },
+      "simultaneous_charging": { "type": "object", "note": "{enabled, max} — Elysian; scoped out of energy math (R10)" },
+      "c_rate":             { "type": "number", "gt": 0, "maximum": 10, "note": "RETIRED — max_kw replaces it (BACKLOG)" },
+      "max_kw":             { "type": "number", "gt": 0, "maximum": 100000, "x-unit": "kW", "note": "per-aircraft accepted charge-power cap (§8.4)" },
+
+      "class":              { "type": "string", "enum": ["trainer", "commuter", "regional", "evtol"], "note": "drives the ifr_capable default (§5.1)" },
+      "ifr_capable":        { "type": "boolean", "note": "IFR vs day-VFR; if absent inferred from class (§5.1)" },
+      "night_capable":      { "type": "boolean" },
+
+      "range_basis":        { "type": "string", "enum": ["gross", "incl_reserve"], "default": "gross", "note": "does range_km already include reserves? (§5.3)" },
+      "reserve_included":   { "type": "object", "note": "what range_basis=incl_reserve bakes in",
+                              "properties": {
+                                "regime":        { "type": "string", "enum": ["vfr_day", "vfr_night", "ifr"] },
+                                "diversion_km":  { "type": "number", "minimum": 0, "maximum": 50000, "x-unit": "km" },
+                                "loiter_min":    { "type": "number", "minimum": 0, "maximum": 600, "x-unit": "min" }
+                              } },
+      "reserve_min":        { "type": "object", "note": "final-reserve minutes per regime (§5.2)",
+                              "properties": {
+                                "vfr_day":   { "type": "number", "minimum": 0, "maximum": 600, "x-unit": "min" },
+                                "vfr_night": { "type": "number", "minimum": 0, "maximum": 600, "x-unit": "min" },
+                                "ifr":       { "type": "number", "minimum": 0, "maximum": 600, "x-unit": "min" }
+                              } },
+      "min_takeoff_soc":    { "type": "number", "minimum": 0, "maximum": 1, "note": "dispatch floor — may not launch below this SoC (Velis 0.50)" },
+      "min_landing_soc":    { "type": "number", "minimum": 0, "maximum": 1, "note": "doc-only under R8; per-aircraft reserve under R8-bis (§5.2)" },
+
+      "mtow_kg":            { "type": "number", "gt": 0, "maximum": 1000000, "x-unit": "kg" },
+      "oew_kg":             { "type": "number", "gt": 0, "maximum": 1000000, "x-unit": "kg", "note": "operating empty weight" },
+      "ref_payload_kg":     { "type": "number", "minimum": 0, "maximum": 1000000, "x-unit": "kg" },
+      "mass_sensitivity":   { "type": "number", "note": "Δrange %/100 kg, or an energy model (later rung, §6)" },
+
+      "takeoff_distance_m": { "type": "number", "minimum": 0, "maximum": 20000, "x-unit": "m", "note": "ref: MTOW, ISA, SL, dry paved (§7)" },
+      "landing_distance_m": { "type": "number", "minimum": 0, "maximum": 20000, "x-unit": "m", "note": "ref: MTOW, ISA, SL, dry paved (§7)" },
+      "surfaces_ok":        { "type": "array", "default": ["paved"], "items": { "enum": ["paved", "grass", "gravel", "dirt", "water"] }, "note": "runway surfaces the aircraft may use (§7)" },
+
+      "measurements":       { "type": "array",
+                              "note": "alternative data points for any numeric quantity above. The selector picks the best match for a flight's conditions; the inference layer fills gaps (§3.5). Each item.value is type-checked against the named quantity's own spec. Lets one aircraft carry e.g. an IFR-at-MTOW range AND a VFR range without splitting into separate catalog entries.",
+                              "items": {
+                                "type": "object",
+                                "required": ["quantity", "value"],
+                                "properties": {
+                                  "quantity":   { "type": "string", "note": "name of a property above, e.g. range_km / takeoff_distance_m / landing_distance_m / speed_kmh" },
+                                  "value":      { "note": "type-checked against the named quantity's spec" },
+                                  "conditions": { "type": "object", "properties": {
+                                                    "regime":      { "type": "string", "enum": ["vfr", "vfr_day", "vfr_night", "ifr"] },
+                                                    "load":        { "type": "string", "enum": ["mtow", "typical", "min"] },
+                                                    "load_kg":     { "type": "number", "minimum": 0, "maximum": 1000000 },
+                                                    "surface":     { "type": "string", "enum": ["paved", "grass", "gravel", "dirt", "water"] },
+                                                    "mass":        { "type": "string", "enum": ["mtow", "typical", "min"] },
+                                                    "altitude_ft": { "type": "number", "minimum": 0, "maximum": 60000 }
+                                                  } },
+                                  "basis":      { "type": "string", "enum": ["gross", "usable_incl_reserve"] },
+                                  "source":     { "type": "string" },
+                                  "confidence": { "type": "string", "enum": ["certified", "manufacturer-stated", "estimated", "assumed"] }
+                                }
+                              } }
+    }
+  }
+}

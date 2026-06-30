@@ -9,7 +9,11 @@
     "training_range_km": 87.5,
     "image": "pipistrel.jpg",
     "svg": "pepistrel.svg",
-    "default_charger_id": "dc_22"
+    "default_charger_id": "dc_22",
+    "class": "trainer",
+    "ifr_capable": { "value": false, "basis": "EASA Type Certificate EASA.A.573", "source": "EASA TCDS — day-VFR only (2020)", "confidence": "certified" },
+    "min_takeoff_soc": { "value": 0.50, "source": "Velis Electro POH — no takeoff below 50% SoC", "confidence": "manufacturer-stated" },
+    "surfaces_ok": ["paved", "grass"]
   },
   {
     "id": "beta_plane",
@@ -21,7 +25,12 @@
     "speed_kmh": 250,
     "image": "beta.png",
     "svg": "beta.svg",
-    "default_charger_id": "dc_320"
+    "default_charger_id": "dc_320",
+    "class": "commuter",
+    "surfaces_ok": ["paved"],
+    "measurements": [
+      { "quantity": "range_km", "value": 630, "basis": "gross", "source": "Beta Alia CX300 — ~336 nm demonstrated", "confidence": "estimated" }
+    ]
   },
   {
     "id": "vaeridion",
@@ -33,7 +42,15 @@
     "speed_kmh": 400,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg",
-    "default_charger_id": "dc_1000"
+    "default_charger_id": "dc_1000",
+    "class": "regional",
+    "mtow_kg": { "value": 5700, "source": "Vaeridion spec sheet 2026", "confidence": "manufacturer-stated" },
+    "surfaces_ok": ["paved", "grass"],
+    "measurements": [
+      { "quantity": "range_km", "value": 400, "conditions": { "regime": "ifr", "load": "mtow" }, "basis": "usable_incl_reserve", "source": "Vaeridion spec sheet 2026 (400 km / 215 nm + commercial IFR reserves @ MTOW)", "confidence": "manufacturer-stated" },
+      { "quantity": "takeoff_distance_m", "value": 800, "conditions": { "surface": "paved", "mass": "mtow" }, "source": "Vaeridion spec sheet 2026 (SL, ISA+0)", "confidence": "manufacturer-stated" },
+      { "quantity": "takeoff_distance_m", "value": 1000, "conditions": { "surface": "grass", "mass": "mtow" }, "source": "Vaeridion spec sheet 2026 (SL, ISA+0)", "confidence": "manufacturer-stated" }
+    ]
   },
   {
     "id": "vaeridion_light",
@@ -45,7 +62,9 @@
     "speed_kmh": 400,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg",
-    "default_charger_id": "dc_1000"
+    "default_charger_id": "dc_1000",
+    "class": "regional",
+    "surfaces_ok": ["paved"]
   },
   {
     "id": "elysian_e9x",
@@ -60,6 +79,9 @@
     "simultaneous_charging": {
       "enabled": true,
       "max": 2
-    }
+    },
+    "class": "regional",
+    "mtow_kg": { "value": 80000, "source": "FlightGlobal 2026-04 — MTOW raised above 80 t", "confidence": "estimated" },
+    "surfaces_ok": ["paved"]
   }
 ]
