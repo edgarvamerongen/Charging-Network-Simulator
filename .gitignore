@@ -23,6 +23,9 @@ data/
 # are tracked; the network-fetched cache is not).
 pics/airports/_cache/
 
+# Docs are local scratch (plans, specs, notes) — not needed in the repo.
+docs/
+
 # Stray spreadsheets / research data dumps — not part of the app (no .xlsx is tracked).
 *.xlsx
 # Marketing/asset scratch dropped in the repo root.
