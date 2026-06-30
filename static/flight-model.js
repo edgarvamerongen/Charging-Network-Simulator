@@ -35,6 +35,11 @@ window.CNSFlight = (function () {
     function _routingFactor() { const s = _settings(); return s && s.routingFactor ? s.routingFactor() : 1; }
     function _sidStarKm() { const s = _settings(); return s && s.sidStarPaddingKm ? s.sidStarPaddingKm() : 0; }
     function _usableFraction(plane) { const s = _settings(); return s && s.usableFraction ? s.usableFraction(plane) : 1; }
+    function _ruleMode() { const s = _settings(); return s && s.ruleMode ? s.ruleMode() : 'ifr'; }
+    function _ifrCapable(plane) { const ps = window.CNSPlaneSchema; return (ps && ps.ifrCapable) ? !!ps.ifrCapable(plane) : true; }
+    // Great-circle usable range for a regime: gross×(1−min_soc) − reserve(regime). Falls back to the old
+    // flat usableFraction reach if the schema module isn't loaded (keeps the pre-cutover node harness alive).
+    function _usableRangeKm(plane, regime) { const ps = window.CNSPlaneSchema; return (ps && ps.usableRange) ? ps.usableRange(plane, regime) : ((+plane.range_km || 0) * _usableFraction(plane)); }
     function _gridDemandFactor() { const s = _settings(); return s && s.gridDemandFactor ? s.gridDemandFactor() : 1; }
     function _chargeTargetDefault() { const s = _settings(); return s && s.chargeTargetDefault ? s.chargeTargetDefault() : null; }
     function _effectiveChargePower(kw, batt, cr) { const s = _settings(); return (s && s.effectiveChargePower) ? s.effectiveChargePower(kw, batt, cr) : (kw || 0); }
@@ -65,18 +70,22 @@ window.CNSFlight = (function () {
         opts = opts || {};
         const tripType = opts.tripType || 'one-way';
         const training = tripType === 'training';
-        const route = _routingFactor();
-        const sidStar = _sidStarKm();                                 // fixed km added to EACH leg (SID/STAR); 0 when off
+        // VFR/IFR regime — a PROFILE, not just a reserve. Per-route value when given, else the global
+        // default; VFR-only aircraft (ifr_capable=false) are forced VFR. Airways padding (routing extension
+        // + SID/STAR) is IFR-only; VFR flies near the great-circle, so both drop to identity in VFR.
+        const regime = _ifrCapable(plane) ? (opts.ruleMode || _ruleMode()) : 'vfr';
+        const route = (regime === 'ifr') ? _routingFactor() : 1.0;    // airways routing extension — IFR only
+        const sidStar = (regime === 'ifr') ? _sidStarKm() : 0;        // SID/STAR terminal pad (km/leg) — IFR only
         const grid = _gridDemandFactor();
         const batt = Math.max(0, +plane.battery_kwh || 0);
         const range = Math.max(0, +plane.range_km || 0);
         const speed = Math.max(0, +plane.speed_kmh || 0);
-        const usableFrac = _usableFraction(plane);
-        const usable = batt * usableFrac;
-        const reserve = batt - usable;
+        const planRangeKm = _usableRangeKm(plane, regime);            // great-circle usable range: gross×(1−min_soc) − reserve(regime). The divert/alternate stays per-node in CNSRouting.
         const ePerKm = range > 0 ? batt / range : 0;
+        const usable = ePerKm > 0 ? planRangeKm * ePerKm : batt;      // usable ENERGY after the regime build-down (planRange × energy/km)
+        const reserve = Math.max(0, batt - usable);
         const cRate = plane.c_rate;                                   // vestigial; effectiveChargePower handles null
-        const availRangeKm = (range > 0 && route > 0) ? Math.max(0, range * usableFrac - sidStar) / route : 0;   // great-circle reach the planner enforces: the fixed SID/STAR pad is carved out so a padded leg (rawKm·route + sidStar) still respects the plane's max range. The DISPLAYED available range stays the full range·usableFrac (pad shown in the LEG, not the headline reach).
+        const availRangeKm = (route > 0) ? Math.max(0, planRangeKm - sidStar) / route : 0;   // great-circle reach the planner enforces; the SID/STAR pad is carved out so a padded leg (rawKm·route + sidStar) still fits.
         const getTarget = (typeof opts.getTargetSoc === 'function') ? opts.getTargetSoc : (() => _chargeTargetDefault());
         const getChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => +opts.chargerKw || 0);
         // Interim-deficit charging (per-rotation opts supplied by the scheduler): a shared aircraft
