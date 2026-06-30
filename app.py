@@ -27,6 +27,8 @@ import report
 from report import generate_pdf
 from spreadsheet import generate_xlsx
 import shares
+import airport_resolver
+import flight_import
 
 app = Flask(__name__)
 # Behind the local reverse proxy (Caddy on the VPS) every request reaches gunicorn
@@ -67,6 +69,7 @@ shares.init_db()
 # unchanged, but means a public deploy MUST set one of the two vars.
 _PASSWORD_HASH = os.environ.get('CNS_PASSWORD_HASH') or ''
 _PASSWORD_PLAIN = os.environ.get('CNS_APP_PASSWORD') or ''
+_IMPORT_TOKEN = os.environ.get('CNS_IMPORT_TOKEN') or ''
 AUTH_ENABLED = bool(_PASSWORD_HASH or _PASSWORD_PLAIN)
 
 _secret_key = os.environ.get('CNS_SECRET_KEY')
@@ -91,7 +94,7 @@ app.config.update(
 # 'pics' is public so link scrapers (WhatsApp/LinkedIn) can fetch the og share
 # card + icons after being bounced to /login — it serves only brand/catalog
 # images, never user data.
-_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics', 'embed'}
+_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics', 'embed', 'api_import'}
 
 # In-memory brute-force throttle for the login form. Per-worker (not shared
 # across gunicorn workers), which is fine for slowing guessing of a single
@@ -900,6 +903,40 @@ def api_share_create():
         return jsonify({'error': 'Could not create share link.'}), 500
     url = request.host_url.rstrip('/') + '/s/' + slug
     return jsonify({'slug': slug, 'url': url})
+
+
+@app.route('/api/import', methods=['POST'])
+def api_import():
+    """Token-gated import: a normalized flight payload in, a build-share link out.
+    Public endpoint (bypasses the session gate) but enforces a bearer token so a
+    portable skill can post without the interactive login. Stores the assembled
+    build blob in the shares DB and returns the /s/<slug> link + a report."""
+    auth = request.headers.get('Authorization', '')
+    token = auth[7:] if auth.startswith('Bearer ') else ''
+    if not _IMPORT_TOKEN or not hmac.compare_digest(token, _IMPORT_TOKEN):
+        return jsonify({'error': 'Invalid or missing import token.'}), 401
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Expected a JSON object body.'}), 400
+    try:
+        flight_import.validate_normalized(payload)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    planes_by_id = {p['id']: p for p in simulator.planes}
+    blob, report = flight_import.build_blob(payload, airport_resolver.resolve, planes_by_id)
+
+    if len(json.dumps(blob).encode('utf-8')) > shares.MAX_STATE_BYTES:
+        return jsonify({'error': 'Imported build is too large to share.'}), 413
+    try:
+        slug = shares.save_state(blob)
+    except Exception:
+        app.logger.exception('Import share save failed')
+        return jsonify({'error': 'Could not create import link.'}), 500
+
+    url = request.host_url.rstrip('/') + '/s/' + slug
+    return jsonify({'url': url, 'slug': slug, 'report': report})
 
 
 @app.route('/api/report.pdf', methods=['POST'])
