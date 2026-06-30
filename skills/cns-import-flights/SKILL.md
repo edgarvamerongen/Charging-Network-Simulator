@@ -46,8 +46,10 @@ user provides once.
 
 On `200`, return the `url` and translate the `report` into plain language, e.g.:
 "Imported 53 routes from 216 flights. 9 dropped (7 codes unresolved: ADW, ZZA…).
-31 legs are infeasible for the Beta default — switch the aircraft in the DC to
-test electrifying them. Open: <url>".
+31 legs exceed the default electric aircraft's range and are skipped from the map
+when the link opens (they remain in the shared data). To model those longer legs,
+re-run the import with a longer-range `defaults.plane` set in the clarify-first
+step. Open: <url>".
 
 Handle errors: `401` = bad/missing token; `400` = the JSON didn't match the
 schema (fix and retry); `413` = too many routes to share in one link.

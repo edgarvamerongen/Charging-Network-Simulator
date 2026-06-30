@@ -10,8 +10,9 @@ os.environ['CNS_IMPORT_TOKEN'] = 'test-import-token'
 _DB = os.path.join(tempfile.mkdtemp(prefix='cns_import_route_'), 'shares.db')
 os.environ['CNS_SHARES_DB'] = _DB
 
-import app as cns_app  # noqa: E402
-import shares          # noqa: E402
+import airport_resolver  # noqa: E402
+import app as cns_app   # noqa: E402
+import shares            # noqa: E402
 
 _AUTH = {'Authorization': 'Bearer test-import-token'}
 
@@ -19,6 +20,11 @@ _AUTH = {'Authorization': 'Bearer test-import-token'}
 class ImportRouteTest(unittest.TestCase):
     def setUp(self):
         os.environ['CNS_SHARES_DB'] = _DB
+        # Ensure the resolver uses the real airports.csv regardless of what a
+        # prior test module may have set (e.g. test_airport_resolver.py points
+        # CNS_AIRPORTS_CSV at a 4-row fixture).
+        os.environ.pop('CNS_AIRPORTS_CSV', None)
+        airport_resolver._reset()
         cns_app.app.config['TESTING'] = True
         self.client = cns_app.app.test_client()
         # Patch the module-level token so the suite runs correctly even when

@@ -50,5 +50,11 @@ class AirportResolverTest(unittest.TestCase):
         self.assertIsNone(airport_resolver.resolve('NOC'))
 
 
+def tearDownModule():
+    """Restore global state so subsequent test modules see the real airports.csv."""
+    os.environ.pop('CNS_AIRPORTS_CSV', None)
+    airport_resolver._reset()
+
+
 if __name__ == '__main__':
     unittest.main()
