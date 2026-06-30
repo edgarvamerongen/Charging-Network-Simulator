@@ -205,5 +205,37 @@ test('activeFlags reports alternateReserve + anyOn', () => {
   assert.equal(f.anyOn, true);
 });
 
+// ---- ruleMode + reserveMin (Step-1 additive; nothing reads them until the Step-2 cutover) ----
+test('ruleMode default is "ifr"', () => {
+  const { S } = loadSettings();
+  assert.equal(S.ruleMode(), 'ifr');
+});
+test('ruleMode persists a saved value (vfr)', () => {
+  const { S } = loadSettings();
+  S.save({ ruleMode: { value: 'vfr' } });
+  assert.equal(S.ruleMode(), 'vfr');
+});
+test('ruleMode falls back to ifr for a bogus value', () => {
+  const { S } = loadSettings();
+  S.save({ ruleMode: { value: 'banana' } });
+  assert.equal(S.ruleMode(), 'ifr');
+});
+test('reserveMinFor: vfr->30 (day), vfr_night->45, ifr->45 by default', () => {
+  const { S } = loadSettings();
+  assert.equal(S.reserveMinFor('vfr'), 30);
+  assert.equal(S.reserveMinFor('vfr_day'), 30);
+  assert.equal(S.reserveMinFor('vfr_night'), 45);
+  assert.equal(S.reserveMinFor('ifr'), 45);
+});
+test('reserveMinFor: a saved override is honoured', () => {
+  const { S } = loadSettings();
+  S.save({ reserveMin: { ifr: 60 } });
+  assert.equal(S.reserveMinFor('ifr'), 60);
+});
+test('reserveMinFor: unknown regime falls back to ifr minutes', () => {
+  const { S } = loadSettings();
+  assert.equal(S.reserveMinFor('zzz'), 45);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

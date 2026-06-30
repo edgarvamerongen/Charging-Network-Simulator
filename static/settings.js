@@ -62,6 +62,8 @@ window.CNSSettings = (function () {
         sidStarPadding:    { enabled: true,  km: 10 },                // fixed km added to EACH leg (SID+STAR terminal track miles); additive on top of routingPadding
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
+        ruleMode:          { value: 'ifr' },                          // VFR/IFR regime — global default a new route inherits; per-route overrides; VFR-only aircraft (ifr_capable=false) are forced to VFR at the call site. ADDITIVE: nothing reads this until the Step-2 engine cutover.
+        reserveMin:        { vfr_day: 30, vfr_night: 45, ifr: 45 },   // final-reserve MINUTES per regime (EASA NCO / FAA 91.151), held WITHIN the usable battery — a SEPARATE buffer from the min-SoC floor. ADDITIVE until Step 2.
     });
 
     // Cloned so call sites can't mutate the frozen defaults via the returned object.
@@ -250,11 +252,31 @@ window.CNSSettings = (function () {
         };
     }
 
+    /** The VFR/IFR regime for planning — the global default a new route inherits
+     *  (the per-route value takes precedence once routes carry one, §5.6). The
+     *  capability gate (`ifr_capable`) forces VFR-only aircraft to 'vfr' at the
+     *  call site. ADDITIVE: no engine reads this until the Step-2 cutover. */
+    function ruleMode() {
+        const r = loadAll().ruleMode;
+        const v = r && r.value;
+        return (v === 'vfr' || v === 'ifr') ? v : 'ifr';
+    }
+
+    /** Final-reserve minutes for a regime ('vfr'|'vfr_day'|'vfr_night'|'ifr').
+     *  EASA NCO / FAA 91.151 minutes held WITHIN the usable battery — a SEPARATE
+     *  buffer from the min-SoC floor. 'vfr' maps to day. ADDITIVE until Step 2. */
+    function reserveMinFor(regime) {
+        const r = loadAll().reserveMin || {};
+        const key = regime === 'vfr' ? 'vfr_day' : regime;
+        const v = +r[key];
+        return isFinite(v) && v >= 0 ? v : (+r.ifr || 45);
+    }
+
     return {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
         usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
-        alternateReserveEnabled,
+        alternateReserveEnabled, ruleMode, reserveMinFor,
     };
 })();
