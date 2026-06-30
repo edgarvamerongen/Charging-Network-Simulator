@@ -925,7 +925,7 @@ def api_import():
         return jsonify({'error': str(e)}), 400
 
     planes_by_id = {p['id']: p for p in simulator.planes}
-    blob, report = flight_import.build_blob(payload, airport_resolver.resolve, planes_by_id)
+    blob, import_report = flight_import.build_blob(payload, airport_resolver.resolve, planes_by_id)
 
     if len(json.dumps(blob).encode('utf-8')) > shares.MAX_STATE_BYTES:
         return jsonify({'error': 'Imported build is too large to share.'}), 413
@@ -936,7 +936,7 @@ def api_import():
         return jsonify({'error': 'Could not create import link.'}), 500
 
     url = request.host_url.rstrip('/') + '/s/' + slug
-    return jsonify({'url': url, 'slug': slug, 'report': report})
+    return jsonify({'url': url, 'slug': slug, 'report': import_report})
 
 
 @app.route('/api/report.pdf', methods=['POST'])

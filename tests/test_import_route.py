@@ -43,14 +43,15 @@ class ImportRouteTest(unittest.TestCase):
         body = {'source': 'PH-GOV', 'flights': [
             {'route': ['AMS', 'BER', 'AMS'], 'date': '2022-01-01'},
             {'route': ['AMS', 'JFK', 'AMS'], 'date': '2022-02-01'},
+            {'route': ['AMS', 'EDDL', 'AMS'], 'date': '2022-03-01'},  # ~200 km, well within 500 km range
         ]}
         r = self.client.post('/api/import', headers=_AUTH, json=body)
         self.assertEqual(r.status_code, 200, r.data)
         data = r.get_json()
         self.assertTrue(data['url'].endswith('/s/' + data['slug']))
-        self.assertEqual(data['report']['flights_in'], 2)
-        self.assertEqual(data['report']['routes_out'], 2)
-        self.assertEqual(data['report']['infeasible_for_default'], 2)   # both AMS-BER (593km) and AMS-JFK (5847km) exceed beta_plane 500km range
+        self.assertEqual(data['report']['flights_in'], 3)
+        self.assertEqual(data['report']['routes_out'], 3)
+        self.assertEqual(data['report']['infeasible_for_default'], 2)  # AMS-BER (~593km) and AMS-JFK (~5847km) exceed beta_plane 500km; AMS-EDDL (~200km) is within range
         # the stored blob is a build blob and reloads verbatim
         self.assertEqual(shares.load_state(data['slug'])['k'], 'build')
 
