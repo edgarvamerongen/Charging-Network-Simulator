@@ -850,8 +850,10 @@ def simulate_flight():
 
     # Origin == destination on a STOP-LESS one-way / retour is a degenerate
     # zero-distance flight (success:true with all-zero numbers) — reject early.
-    # A multi-stop one-way that returns to base is a legitimate rotation
-    # (e.g. AMS->LHR->AMS->...->AMS), so skip this check when stops are present.
+    # A multi-stop trip that returns to base is a legitimate rotation
+    # (e.g. AMS->LHR->AMS->...->AMS) — with stops the legs have real distance, so
+    # this is NOT degenerate. The relaxation deliberately covers ALL non-training
+    # types (oneway/retour/circular): skip the check whenever stops are present.
     if trip_type != 'training' and not stops:
         same = False
         if isinstance(origin, dict) and isinstance(destination, dict):
