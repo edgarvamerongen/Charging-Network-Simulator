@@ -144,6 +144,43 @@ class TestSimulateAPI(unittest.TestCase):
         self.assertAlmostEqual(r["total_distance_km"],
                                round(sum(l["distance_km"] for l in r["legs"]), 2), delta=0.02)
 
+    def test_oneway_same_origin_dest_with_stops_ok(self):
+        # A reconstructed rotation returns to base: origin == destination is valid
+        # for a MULTI-STOP one-way (not a degenerate zero-distance flight). The
+        # stop-less A->A case is still rejected (see test_over_range/degenerate).
+        st, r = _post("/api/simulate", {
+            "origin": coord("EHAM"), "destination": coord("EHAM"),
+            "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
+            "trip_type": "oneway",
+            "stops": [dict(coord("EHRD"), ident="EHRD")]})
+        self.assertEqual(st, 200, r)
+        self.assertTrue(r.get("success"), r)
+        self.assertEqual(len(r["legs"]), 2)  # EHAM->EHRD->EHAM
+
+    def test_oneway_same_origin_dest_no_stops_still_rejected(self):
+        try:
+            st, r = _post("/api/simulate", {
+                "origin": coord("EHAM"), "destination": coord("EHAM"),
+                "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
+                "trip_type": "oneway"})
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 400)
+            return
+        self.assertEqual(st, 400, r)
+
+    def test_retour_same_origin_dest_with_stops_is_non_degenerate(self):
+        # The `not stops` guard also admits retour with origin==destination. That
+        # is NOT the degenerate zero-distance case it guards against: with a stop,
+        # the legs have real distance. Lock that it succeeds with non-zero km.
+        st, r = _post("/api/simulate", {
+            "origin": coord("EHAM"), "destination": coord("EHAM"),
+            "plane_id": "beta_plane", "charger_id": LIVE_CHARGER,
+            "trip_type": "retour",
+            "stops": [dict(coord("EHRD"), ident="EHRD")]})
+        self.assertEqual(st, 200, r)
+        self.assertTrue(r.get("success"), r)
+        self.assertGreater(r["total_distance_km"], 0)
+
     def test_over_range_rejected(self):
         st, r = _post("/api/simulate", {
             "origin": coord("EHAM"), "destination": coord("LFPG"),

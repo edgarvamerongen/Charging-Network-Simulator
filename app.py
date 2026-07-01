@@ -848,10 +848,11 @@ def simulate_flight():
     if not all([origin, destination]) or not (plane_id or plane_obj) or not (charger_id or charger_obj):
         return jsonify({"error": "Missing parameters"}), 400
 
-    # Origin == destination is only meaningful for training (circular pattern).
-    # For one-way / retour it produces success:true with all-zero numbers, which
-    # is misleading. Reject early with a clear message.
-    if trip_type != 'training':
+    # Origin == destination on a STOP-LESS one-way / retour is a degenerate
+    # zero-distance flight (success:true with all-zero numbers) — reject early.
+    # A multi-stop one-way that returns to base is a legitimate rotation
+    # (e.g. AMS->LHR->AMS->...->AMS), so skip this check when stops are present.
+    if trip_type != 'training' and not stops:
         same = False
         if isinstance(origin, dict) and isinstance(destination, dict):
             same = (origin.get('lat') == destination.get('lat')
