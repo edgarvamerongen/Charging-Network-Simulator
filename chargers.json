@@ -96,5 +96,12 @@
     "power_kw": 3750,
     "type": "Vaeridion",
     "image": "chargers/Vaeridion-NRG2fly-2.4MW.jpg"
+  },
+  {
+    "id": "dc_10000",
+    "name": "Elysian 10 MW",
+    "power_kw": 10000,
+    "type": "Elysian",
+    "image": "chargers/Vaeridion-NRG2fly-2.4MW.jpg"
   }
 ]
