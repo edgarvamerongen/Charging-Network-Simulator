@@ -54,6 +54,9 @@ def validate_normalized(payload):
             raise ValueError('flights[%d].route must have >= 2 codes' % i)
         if not all(isinstance(c, str) and c.strip() for c in route):
             raise ValueError('flights[%d].route codes must be non-empty strings' % i)
+        trip = fl.get('trip')
+        if trip is not None and trip != 'oneway':
+            raise ValueError('flights[%d].trip must be "oneway" if set' % i)
     defaults = payload.get('defaults') or {}
     basis = defaults.get('freq_basis')
     if basis is not None and basis not in _VALID_BASIS:
@@ -107,7 +110,12 @@ def build_blob(payload, resolve, planes_by_id):
             dropped += 1
             continue
         idents = [r['ident'] for r in recs]
-        trip = classify_trip(idents)
+        if fl.get('trip') == 'oneway':
+            # Caller declared an exact ordered chain (e.g. a reconstructed
+            # rotation): keep every leg, no de-dup, even when start == end.
+            trip = {'t': 'oneway', 'o': idents[0], 'd': idents[-1], 's': idents[1:-1]}
+        else:
+            trip = classify_trip(idents)
         sig = trip['t'] + '|' + '>'.join(idents)
         if sig not in groups:
             groups[sig] = {'trip': trip, 'recs': recs, 'count': 0, 'dates': []}

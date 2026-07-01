@@ -190,5 +190,44 @@ class BuildBlobTest(unittest.TestCase):
         self.assertEqual(blob['fl'][0]['fn'], 0.01)
 
 
+class ExplicitTripTest(unittest.TestCase):
+    def test_validate_accepts_oneway(self):
+        flight_import.validate_normalized(
+            {'flights': [{'route': ['AMS', 'BER', 'AMS'], 'trip': 'oneway'}]})  # no raise
+
+    def test_validate_rejects_unknown_trip(self):
+        with self.assertRaises(ValueError):
+            flight_import.validate_normalized(
+                {'flights': [{'route': ['AMS', 'BER'], 'trip': 'sequence'}]})
+
+    def test_build_blob_oneway_preserves_repeated_hub(self):
+        # 3-out-and-back home rotation AMS->BER->AMS->FRA->AMS->JFK->AMS: the hub
+        # (AMS) appears TWICE in the interior. Tagged 'oneway' must keep the exact
+        # ordered interior incl. BOTH repeated AMS (this is where circular loses one).
+        payload = {'flights': [
+            {'route': ['AMS', 'BER', 'AMS', 'FRA', 'AMS', 'JFK', 'AMS'],
+             'date': '2026-01-01', 'trip': 'oneway'},
+        ]}
+        blob, report = flight_import.build_blob(payload, _resolve, _PLANES)
+        f = blob['fl'][0]
+        self.assertEqual(f['t'], 'oneway')
+        self.assertEqual(f['o']['i'], 'EHAM')
+        self.assertEqual(f['d']['i'], 'EHAM')
+        # both EHAM interior visits kept, order preserved (not de-duped)
+        self.assertEqual([s['i'] for s in f['s']], ['EDDB', 'EHAM', 'EDDF', 'EHAM', 'KJFK'])
+        self.assertEqual(report['dropped'], 0)
+
+    def test_untagged_route_still_classifies_circular(self):
+        # Same route, no explicit trip -> unchanged legacy behavior (circular
+        # de-dupes the repeated interior hub, dropping one EHAM).
+        payload = {'flights': [
+            {'route': ['AMS', 'BER', 'AMS', 'FRA', 'AMS', 'JFK', 'AMS'], 'date': '2026-01-01'},
+        ]}
+        blob, _ = flight_import.build_blob(payload, _resolve, _PLANES)
+        f = blob['fl'][0]
+        self.assertEqual(f['t'], 'circular')
+        self.assertEqual([s['i'] for s in f['s']], ['EDDB', 'EHAM', 'EDDF', 'KJFK'])  # de-duped
+
+
 if __name__ == '__main__':
     unittest.main()
