@@ -82,10 +82,18 @@ window.CNSBuildShare = (function () {
         const wp = (p) => ({ ident: p.i, name: p.n, lat: p.la, lon: p.lo });
         const FE = (typeof CNSFlightEntry !== 'undefined') ? CNSFlightEntry : null;
         if (!FE || !FE.fromSim) return null;
-        return FE.fromSim(d, {
+        const entry = FE.fromSim(d, {
             origin: wp(fl.o), dest: fl.d ? wp(fl.d) : wp(fl.o),
             chargerId: fl.c, freqN: fl.fn, freqUnit: fl.fu, id: fl.id,
         });
+        // Imported stops are intentional itinerary waypoints (a reconstructed
+        // rotation's real legs), not auto-inserted charging stops — tag them
+        // _manual so the demand-calc recompute preserves them (otherwise it
+        // drops untagged stops and collapses the rotation into one long leg).
+        if (entry && Array.isArray(entry.stops)) {
+            entry.stops = entry.stops.map((s) => ({ ...s, _manual: true }));
+        }
+        return entry;
     }
 
     // Restore a build blob: settings first, then re-simulate every flight in

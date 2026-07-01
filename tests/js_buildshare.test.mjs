@@ -148,6 +148,34 @@ test('applyBuild re-simulates flights, replaces the folder, restores cfg/sch/ms'
   assert.equal(saved.rendered, true);
 });
 
+test('applyBuild tags restored multi-leg stops _manual so recompute keeps them', async () => {
+  // Regression: an imported rotation (multi-stop oneway) must keep its stops
+  // through the demand-calc recompute, which drops any stop lacking _manual.
+  const saved = {};
+  const s = stubs([], {}, {}, undefined);
+  s.CNSDemand = { loadFolder: () => [], loadCfg: () => ({}),
+    saveFolder: (f) => { saved.folder = f; }, saveCfg: () => {} };
+  s.CNSState = { KEYS: { sched: 'cns_schedule' }, getJSON: (k, d) => d, setJSON: () => {} };
+  // fromSim echoes the sim's stops (untagged), exactly like the real one.
+  s.CNSFlightEntry = { fromSim: (d, opts) => ({ id: opts.id, multiLeg: true, stops: d.stops }) };
+  s.renderFolder = () => {};
+  const B = load(s);
+  const fetchStub = async () => ({ json: async () => ({
+    plane: { id: 'elysian_e9x' }, charger: { name: 'E', power_kw: 10000 }, trip_type: 'oneway',
+    multi_leg: true, stops: [{ ident: 'EGLL', name: 'LHR' }, { ident: 'EHAM', name: 'AMS' }],
+  }) });
+  const st = { v: 1, k: 'build', fl: [
+    { id: 'r1', p: 'elysian_e9x', c: 'dc_10000', t: 'oneway', fn: 1, fu: 'week',
+      o: { i: 'EHAM', la: 52.3, lo: 4.76, n: 'AMS' }, d: { i: 'EHAM', la: 52.3, lo: 4.76, n: 'AMS' },
+      s: [{ i: 'EGLL', la: 51.47, lo: -0.46, n: 'LHR' }, { i: 'EHAM', la: 52.3, lo: 4.76, n: 'AMS' }] },
+  ] };
+  await B.applyBuild(st, fetchStub);
+  assert.equal(saved.folder.length, 1);
+  assert.equal(saved.folder[0].stops.length, 2);
+  assert.ok(saved.folder[0].stops.every((s) => s._manual === true),
+    'every restored stop must be tagged _manual');
+});
+
 test('copyBuildLink refuses an empty folder', async () => {
   const toasts = [];
   const s = stubs([], {}, {}, undefined);
