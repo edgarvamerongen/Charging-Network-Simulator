@@ -1783,11 +1783,11 @@
                         <div class="ps-main">
                             <div class="ps-name ps-id-hidden" id="psName"></div>
                             <div class="reach-row">
-                                <div class="reach-label">Usable reach: <strong id="reachVal">—</strong> of <span id="reachCat">—</span> catalog range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></div>
+                                <div class="reach-label">Usable reach: <strong id="reachVal">—</strong> of <span id="reachCat">—</span> VFR max <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></div>
                                 <div class="reach-bar"><div class="reach-fill" id="reachFill"></div></div>
                             </div>
                             <div class="ps-stats">
-                                <span class="ps-stat ps-stat-hide"><strong id="psRange"></strong><span class="ps-stat-l">range</span></span>
+                                <span class="ps-stat ps-stat-hide"><strong id="psRange"></strong><span class="ps-stat-l">usable range</span></span>
                                 <span class="ps-stat ps-stat-hide"><strong id="psBattery"></strong><span class="ps-stat-l">battery</span></span>
                                 <span class="ps-stat ps-stat-hide"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
                                 <span class="ps-stat ps-stat-hide"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
@@ -3498,7 +3498,9 @@
             const bits = [];
             if (p.seats != null) bits.push(p.seats + ' seats');
             if (p.battery_kwh != null) bits.push(fmtEnergy(+p.battery_kwh));
-            if (p.range_km != null) bits.push(fmtDist(+p.range_km));
+            const planKm = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(p) : null;
+            if (planKm > 0) bits.push(fmtDist(planKm));
+            else if (p.training_range_km) bits.push(fmtDist(+p.training_range_km) + ' local');
             if (p.speed_kmh != null) bits.push(fmtSpeed(+p.speed_kmh));
             return bits.join(' · ');
         }
@@ -3617,10 +3619,10 @@
             const fill = document.getElementById('reachFill');
             if (!fill || !spec) return;
             const avail = _availRangeShownKm(spec);
-            const cat = +spec.range_km || 0;
+            const best = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(spec, { ruleMode: 'vfr' }) : 0;
             document.getElementById('reachVal').textContent = (avail == null) ? '—' : fmtDist(avail);
-            document.getElementById('reachCat').textContent = cat ? fmtDist(cat) : '—';
-            fill.style.width = (cat > 0 && avail != null ? Math.max(0, Math.min(100, avail / cat * 100)) : 0) + '%';
+            document.getElementById('reachCat').textContent = best > 0 ? fmtDist(best) : '—';
+            fill.style.width = (best > 0 && avail != null ? Math.max(0, Math.min(100, avail / best * 100)) : 0) + '%';
         }
         // ---------- trip-type segmented control ----------
         (function () {
@@ -3667,7 +3669,9 @@
         }
         function _refreshSpecStats(spec) {
             _renderReachBar(spec);   // the bar IS the visible 'available range' — every stat refresh updates it
-            document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
+            const _plan = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(spec) : null;
+            document.getElementById('psRange').textContent =
+                _plan > 0 ? fmtDist(_plan) : (spec.training_range_km ? fmtDist(spec.training_range_km) + ' local' : '—');
             document.getElementById('psBattery').textContent = fmtEnergy(spec.battery_kwh || 0);
             document.getElementById('psSpeed').textContent = (typeof fmtSpeed === 'function') ? fmtSpeed(spec.speed_kmh) : (spec.speed_kmh + ' km/h');
             document.getElementById('psSeats').textContent = spec.seats != null ? spec.seats : '—';

@@ -215,7 +215,7 @@ window.CNSReport = (function () {
                 svg: t.planeSvg || (cat && cat.svg) || '',
                 image: (cat && cat.image) || '',
                 battery_kwh: (cat && cat.battery_kwh) ?? t.battery ?? 0,
-                range_km: (cat && cat.range_km) ?? 0,
+                usable_range_km: (window.CNSFlight && cat) ? CNSFlight.planningRangeKm(cat) : 0,
                 speed_kmh: (cat && cat.speed_kmh) ?? 0,
                 seats: cat && cat.seats,
                 load_kg: cat && cat.load_kg,

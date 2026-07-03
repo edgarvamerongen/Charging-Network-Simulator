@@ -347,8 +347,8 @@
         <tr>
           <th>Battery</th>
           <td>{{ p.battery_kwh|default(none)|fmt_energy or '—' }}</td>
-          <th>Range</th>
-          <td>{% if p.range_km %}{{ '%.0f'|format(p.range_km) }} km{% else %}—{% endif %}</td>
+          <th>Usable range</th>
+          <td>{% if p.usable_range_km %}{{ '%.0f'|format(p.usable_range_km) }} km{% else %}—{% endif %}</td>
         </tr>
         <tr>
           <th>Cruise speed</th>
