@@ -4719,9 +4719,13 @@
             document.getElementById('hlRevenueSub').textContent =
                 `${num(_kwhShown)} kWh · €${_rate.toFixed(2)}/kWh` + (_fN > 1 ? ` · ${_fN}×` : '');
 
+            // Audit trail shows the DISPLAYED range (planning ceiling), never the gross catalog
+            // figure — same reasoning as psUsage (spec-card): the ratio itself (avg_usage_kwh_per_100km)
+            // is server-computed and unchanged; only the visible divisor operand is swapped.
+            const _pRangeShown = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(p) : (p.range_km || 0);
             const common = [
                 `avg usage      = battery / range × 100`,
-                `               = ${p.battery_kwh} kWh / ${p.range_km} km × 100 = ${p.avg_usage_kwh_per_100km} kWh/100km`, ``,
+                `               = ${p.battery_kwh} kWh / ${Math.round(_pRangeShown)} km × 100 = ${p.avg_usage_kwh_per_100km} kWh/100km`, ``,
             ];
             let lines;
             if (isMulti) {
@@ -5556,7 +5560,10 @@
             else { thumb.removeAttribute('src'); thumb.classList.add('d-none'); }
             if (nameEl) nameEl.textContent = spec ? spec.name : '';
             if (spec) {
-                const range = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
+                // Never present the gross catalog range_km — same rule as _planeSpecsLine (photo-grid
+                // tiles): show the regime planning ceiling, training-loop reach for training-only planes.
+                const _plan = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(spec) : null;
+                const range = _plan > 0 ? fmtDist(_plan) : (spec.training_range_km ? fmtDist(+spec.training_range_km) + ' local' : '—');
                 specEl.textContent = `${spec.battery_kwh || 0} kWh · ${range}${spec.seats ? ' · ' + spec.seats + ' seats' : ''}`;
             } else specEl.textContent = '';
         }
