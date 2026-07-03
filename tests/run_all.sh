@@ -12,7 +12,7 @@
 set -u
 cd "$(dirname "$0")/.."
 
-PY=./venv/bin/python
+PY=${PY:-./venv/bin/python}   # override for worktrees (no venv): PY=/abs/main-checkout/venv/bin/python bash tests/run_all.sh
 rc=0
 
 echo "=================================================================="
