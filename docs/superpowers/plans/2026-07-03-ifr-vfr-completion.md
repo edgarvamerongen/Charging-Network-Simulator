@@ -413,12 +413,13 @@ test('divertExcessKm: absent/zero flat behaves like today (full node reserve)', 
 - [ ] **Step 1: Update the test to the honest expectation.** In `tests/test_import_route.py` replace the `infeasible_for_default` assertion + comment with:
 
 ```python
-        # Regime reach (Beta IFR ≈ 203.5 km usable): AMS-JFK (~5847), AMS-BER (~593) AND
-        # AMS-EDDL (~200 direct legs) all exceed it → 3. The flag means "needs stops/replan",
-        # rows still import. (Was 1 while the check compared against the gross range_km.)
-        self.assertEqual(data['report']['infeasible_for_default'], 3)
+        # Regime reach (Beta IFR usable_range = 630×0.7 − 187.5 − 50 divert = 203.5 km; the
+        # import path carves no SID/STAR): AMS-JFK (~5847) and AMS-BER (~593) exceed it → 2;
+        # AMS-EDDL (~178 great-circle) still fits. The flag means "needs stops/replan", rows
+        # still import. (Was 1 while the check compared against the gross 630 range_km.)
+        self.assertEqual(data['report']['infeasible_for_default'], 2)
 ```
-- [ ] **Step 2: Run — expect FAIL** (`1 != 3`):
+- [ ] **Step 2: Run — expect FAIL** (`1 != 2`):
   `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib "$PYBIN" -m unittest discover -s tests -p "test_import_route.py" -v`
 - [ ] **Step 3: Implement.** In `flight_import.py`, where `plane_range` is derived from the default plane's `range_km`, replace with:
 
