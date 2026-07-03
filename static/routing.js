@@ -41,6 +41,13 @@ window.CNSRouting = (function () {
         return haversineKm(a, b) * f;
     }
 
+    // Per-node divert reserve counts only the EXCESS over the flat divert_km already
+    // held inside the IFR reach (single-count seam — see performance-engine.md §13.9).
+    function divertExcessKm(nodeAltKm, flatDivertKm, routingFactor) {
+        const alt = (Number(nodeAltKm) || 0) / (routingFactor > 0 ? routingFactor : 1);
+        return Math.max(0, alt - (Number(flatDivertKm) || 0));
+    }
+
     // Defaults — tweakable via opts.options
     const DEFAULTS = {
         reservePct: 0,                  // legacy; reserve now flows through CNSSettings.usableFraction
@@ -74,16 +81,27 @@ window.CNSRouting = (function () {
         if (rng <= 0) return { stops: [], totalDistanceKm: 0, legCount: 0, error: 'Aircraft has no range.' };
 
         // Realism factors: reserves cap usable range, routing padding shrinks reach.
+        // regime: VFR vs IFR (P3 seam) — guarded, since some node harnesses load
+        // routing.js WITHOUT flight-model.js (no window.CNSFlight); default IFR then.
+        const regime = (window.CNSFlight && CNSFlight.effectiveRegime)
+            ? CNSFlight.effectiveRegime(plane, options.ruleMode) : 'ifr';
         const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
-        const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+        // Airways routing padding is IFR-only — VFR flies near the great-circle, so both
+        // the reach fallback below and the leg-distance math further down (:~150) drop to
+        // identity in VFR, matching the engine's own regime gate (flight-model.js simulateTrip).
+        const route = (regime === 'ifr' && window.CNSSettings) ? CNSSettings.routingFactor() : 1.0;
         const requireAlt = (window.CNSSettings && CNSSettings.alternateReserveEnabled)
                          ? CNSSettings.alternateReserveEnabled() : false;
+        // The flat per-flight divert (plane.divert_km) already lives INSIDE the IFR
+        // regime reach (CNSPlaneSchema.usableRange subtracts it before routingFactor is
+        // applied — see CNSFlight.availableRangeKm). VFR carries no flat divert term.
+        const flatDivertKm = (regime === 'ifr') ? (Number(plane.divert_km) || 0) : 0;
         // Per-airport divert reserve. Every ARRIVAL node (each stop + the
         // destination) must arrive holding enough charge to reach its nearest
-        // airport — that airport's pre-baked great-circle `alternate_km`. We
-        // divide by `route` so the short divert is NOT inflated by cruise
-        // airways padding (a divert is flown near-direct). Built once and only
-        // when the toggle is on, so the planner is identical when off.
+        // airport — that airport's pre-baked great-circle `alternate_km`. Built once
+        // and only when the toggle is on, so the planner is identical when off.
+        // Counts only the EXCESS over flatDivertKm (single-count seam, P3) — see
+        // divertExcessKm above.
         const altByIdent = new Map();
         if (requireAlt) {
             for (const a of allAirports) {
@@ -95,12 +113,17 @@ window.CNSRouting = (function () {
             const km = (n.ident != null && altByIdent.has(n.ident))
                      ? altByIdent.get(n.ident)
                      : (+n.alternate_km || 0);
-            return km / route;
+            return divertExcessKm(km, flatDivertKm, route);
         };
         // Caller may pass an explicit max straight-line leg (the planner's "available
-        // range", already incl. reserve + routing padding, or a per-flight override).
+        // range", already incl. reserve + routing padding, or a per-flight override) —
+        // the live planner passes CNSFlight.availableRangeKm(plane) (regime-aware). Falls
+        // back to the same seam directly, then to the pre-cutover flat formula only when
+        // flight-model.js isn't loaded at all (standalone node harnesses).
         const maxLeg = options.maxLegKm != null ? options.maxLegKm
-                     : rng * usable * (1 - options.reservePct) / route;
+                     : (window.CNSFlight && CNSFlight.availableRangeKm)
+                         ? CNSFlight.availableRangeKm(plane, { ruleMode: options.ruleMode })
+                         : rng * usable * (1 - options.reservePct) / route;   // standalone fallback (no flight-model loaded)
         if (maxLeg <= 0) return { stops: [], totalDistanceKm: 0, legCount: 0, error: 'Aircraft has no usable range.' };
 
         const O = { lat: origin.lat, lon: origin.lon };
@@ -243,5 +266,5 @@ window.CNSRouting = (function () {
         return { stops, legCount: stops.length + 1, error: null };
     }
 
-    return { planRoute, planChain, haversineKm, routedKm };
+    return { planRoute, planChain, haversineKm, routedKm, divertExcessKm };
 })();

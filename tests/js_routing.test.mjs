@@ -374,5 +374,21 @@ test('planChain forwards allowedIdents to each gap planRoute', () => {
   assert.equal(res.stops.map(s => s.ident).join(','), 'S');
 });
 
+// ---- single-count divert: the flat divert_km lives in the reach; nodes add only their excess ----
+const R = loadRouting({});
+test('divertExcessKm: node within the flat divert adds nothing', () => {
+  assert.equal(R.divertExcessKm(30, 50, 1.0), 0);
+});
+test('divertExcessKm: node beyond the flat divert adds only the excess', () => {
+  assert.equal(R.divertExcessKm(80, 50, 1.0), 30);
+});
+test('divertExcessKm: routing factor de-inflates the node alternate before comparing', () => {
+  // 84 km alternate at routingFactor 1.05 → 80 great-circle-equivalent → 30 excess
+  assert.ok(Math.abs(R.divertExcessKm(84, 50, 1.05) - 30) < 1e-9);
+});
+test('divertExcessKm: absent/zero flat behaves like today (full node reserve)', () => {
+  assert.equal(R.divertExcessKm(80, 0, 1.0), 80);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
