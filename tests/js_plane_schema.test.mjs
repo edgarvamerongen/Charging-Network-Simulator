@@ -133,5 +133,20 @@ test('catalog: Vaeridion IFR@MTOW range is 400, TODR grass 1000', () => {
   assert.equal(S.select(v, 'takeoff_distance_m', { surface: 'grass' }), 1000);
 });
 
+test('VFR add-back: incl_reserve(ifr) plane extrapolates the diversion back in (§13.3)', () => {
+  const planes = JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8'));
+  const v = planes.find(p => S.value(p, 'id') === 'vaeridion');
+  assert.equal(S.usableRange(v, 'ifr', { load: 'mtow' }), 400);
+  assert.equal(S.usableRange(v, 'vfr'), 480);   // 400 + 80 diversion + (30−30) loiter delta
+});
+test('fleet invariant: 0 <= usableRange(ifr) <= usableRange(vfr) for every catalog plane', () => {
+  const planes = JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8'));
+  for (const p of planes) {
+    const ifr = S.usableRange(p, 'ifr'), vfr = S.usableRange(p, 'vfr');
+    assert.ok(ifr >= 0, `${S.value(p, 'id')} ifr ${ifr} >= 0`);
+    assert.ok(vfr >= ifr, `${S.value(p, 'id')} vfr ${vfr} >= ifr ${ifr}`);
+  }
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

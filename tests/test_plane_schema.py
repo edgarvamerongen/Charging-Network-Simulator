@@ -177,6 +177,20 @@ class TestUsableRange(unittest.TestCase):
         self.assertAlmostEqual(plane_schema.usable_range(beta, "vfr"), 316.0, places=1)   # 630×0.7 − 125
         self.assertAlmostEqual(plane_schema.usable_range(beta, "ifr"), 253.5, places=1)   # 441 − 187.5
 
+    def test_catalog_vaeridion_vfr_addback(self):
+        # §13.3: VFR add-back for an incl_reserve(ifr) plane extrapolates the diversion back in.
+        v = next(p for p in _catalog() if plane_schema.value(p, "id") == "vaeridion")
+        self.assertEqual(plane_schema.usable_range(v, "ifr", {"load": "mtow"}), 400)
+        self.assertEqual(plane_schema.usable_range(v, "vfr"), 480)   # 400 + 80 diversion + (30−30) loiter delta
+
+    def test_catalog_fleet_invariant_ifr_le_vfr(self):
+        for p in _catalog():
+            ifr = plane_schema.usable_range(p, "ifr")
+            vfr = plane_schema.usable_range(p, "vfr")
+            pid = plane_schema.value(p, "id")
+            self.assertGreaterEqual(ifr, 0, f"{pid} ifr {ifr} >= 0")
+            self.assertGreaterEqual(vfr, ifr, f"{pid} vfr {vfr} >= ifr {ifr}")
+
 
 class TestMeasurementsValidation(unittest.TestCase):
     BASE = {"id": "x", "name": "X", "battery_kwh": 10, "range_km": 100, "speed_kmh": 200, "ifr_capable": True}

@@ -157,6 +157,21 @@ def usable_range(plane, regime="vfr", context=None, *, min_soc=None,
     m = select_measurement(plane, "range_km", ctx)
     if m is not None and m.get("basis") == "usable_incl_reserve":
         return m.get("value")
+    # VFR add-back (§13.3): a non-IFR regime on a plane whose only usable figure is
+    # an ifr-conditioned incl-reserve measurement extrapolates the IFR diversion +
+    # loiter delta back in, rather than falling through to the gross build-down
+    # (which can undercut the IFR figure it is meant to exceed).
+    if regime != "ifr":
+        ctx_ifr = dict(context or {})
+        ctx_ifr["regime"] = "ifr"
+        mi = select_measurement(plane, "range_km", ctx_ifr)
+        ri = value(plane, "reserve_included")
+        if mi is not None and mi.get("basis") == "usable_incl_reserve" and ri and ri.get("regime") == "ifr":
+            spd0 = value(plane, "speed_kmh") or 0
+            vfr_min = reserve_min.get(regime, reserve_min.get("vfr", 30))
+            addback = (mi.get("value") or 0.0) + (ri.get("diversion_km") or 0.0) \
+                + max(0.0, ((ri.get("loiter_min") or 0.0) - vfr_min) / 60.0) * spd0
+            return max(mi.get("value"), addback)
     gross = m.get("value") if (m is not None and m.get("basis") == "gross") else value(plane, "range_km")
     spd = value(plane, "speed_kmh")
     if not gross or not spd:

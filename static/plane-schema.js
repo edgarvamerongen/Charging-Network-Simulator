@@ -110,6 +110,21 @@ window.CNSPlaneSchema = (function () {
         regime = regime || 'vfr'; opts = opts || {};
         const m = selectMeasurement(plane, 'range_km', Object.assign({}, context, { regime }));
         if (m && m.basis === 'usable_incl_reserve') return m.value;   // published with-reserves figure
+        // VFR add-back (§13.3): a non-IFR regime on a plane whose only usable figure
+        // is an ifr-conditioned incl-reserve measurement extrapolates the IFR
+        // diversion + loiter delta back in, rather than falling through to the
+        // gross build-down (which can undercut the IFR figure it is meant to exceed).
+        if (regime !== 'ifr') {
+            const mi = selectMeasurement(plane, 'range_km', Object.assign({}, context, { regime: 'ifr' }));
+            const ri = value(plane, 'reserve_included');
+            if (mi && mi.basis === 'usable_incl_reserve' && ri && ri.regime === 'ifr') {
+                const spd0 = value(plane, 'speed_kmh') || 0;
+                const vfrMin = RESERVE_MIN[regime] != null ? RESERVE_MIN[regime] : 30;
+                const addback = mi.value + (ri.diversion_km || 0)
+                    + Math.max(0, ((ri.loiter_min || 0) - vfrMin) / 60) * spd0;
+                return Math.max(mi.value, addback);
+            }
+        }
         const gross = (m && m.basis === 'gross') ? m.value : value(plane, 'range_km');
         const spd = value(plane, 'speed_kmh');
         if (!gross || !spd) return value(plane, 'range_km');

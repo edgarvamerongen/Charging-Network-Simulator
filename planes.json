@@ -46,6 +46,7 @@
     "default_charger_id": "dc_1000",
     "class": "regional",
     "mtow_kg": { "value": 5700, "source": "Vaeridion spec sheet 2026", "confidence": "manufacturer-stated" },
+    "reserve_included": { "regime": "ifr", "diversion_km": 80, "loiter_min": 30 },
     "surfaces_ok": ["paved", "grass"],
     "measurements": [
       { "quantity": "range_km", "value": 400, "conditions": { "regime": "ifr", "load": "mtow" }, "basis": "usable_incl_reserve", "source": "Vaeridion spec sheet 2026 (400 km / 215 nm + commercial IFR reserves @ MTOW)", "confidence": "manufacturer-stated" },
