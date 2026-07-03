@@ -182,6 +182,7 @@ class TestUsableRange(unittest.TestCase):
         v = next(p for p in _catalog() if plane_schema.value(p, "id") == "vaeridion")
         self.assertEqual(plane_schema.usable_range(v, "ifr", {"load": "mtow"}), 400)
         self.assertEqual(plane_schema.usable_range(v, "vfr"), 480)   # 400 + 80 diversion + (30−30) loiter delta
+        self.assertEqual(plane_schema.usable_range(v, "vfr_night"), 480)  # night reserve (45) > baked loiter (30) -> loiter credit clamps to 0, diversion credit survives
 
     def test_catalog_fleet_invariant_ifr_le_vfr(self):
         for p in _catalog():

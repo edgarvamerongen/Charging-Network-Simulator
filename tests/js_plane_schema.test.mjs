@@ -138,6 +138,7 @@ test('VFR add-back: incl_reserve(ifr) plane extrapolates the diversion back in (
   const v = planes.find(p => S.value(p, 'id') === 'vaeridion');
   assert.equal(S.usableRange(v, 'ifr', { load: 'mtow' }), 400);
   assert.equal(S.usableRange(v, 'vfr'), 480);   // 400 + 80 diversion + (30−30) loiter delta
+  assert.equal(S.usableRange(v, 'vfr_night'), 480); // night reserve (45) > baked loiter (30) → loiter credit clamps to 0, diversion credit survives
 });
 test('fleet invariant: 0 <= usableRange(ifr) <= usableRange(vfr) for every catalog plane', () => {
   const planes = JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8'));

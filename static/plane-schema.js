@@ -114,6 +114,8 @@ window.CNSPlaneSchema = (function () {
         // is an ifr-conditioned incl-reserve measurement extrapolates the IFR
         // diversion + loiter delta back in, rather than falling through to the
         // gross build-down (which can undercut the IFR figure it is meant to exceed).
+        // The loiter credit clamps to zero when the regime's reserve already exceeds
+        // the baked-in loiter (e.g. vfr_night).
         if (regime !== 'ifr') {
             const mi = selectMeasurement(plane, 'range_km', Object.assign({}, context, { regime: 'ifr' }));
             const ri = value(plane, 'reserve_included');
