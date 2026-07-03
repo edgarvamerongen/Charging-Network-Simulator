@@ -2821,29 +2821,31 @@
         }
         function _selectedPlane() { return selectedPlaneSpec(); }
         function _usableFrac(p) { return (window.CNSSettings && p) ? CNSSettings.usableFraction(p) : 1.0; }
-        // Great-circle reach the planner + range checks enforce: range × usableFraction
-        // (usable battery after the landing reserve), MINUS the fixed SID/STAR terminal km,
-        // ÷ routing padding. So a leg fits iff rawKm·route + sidStar ≤ the full available
-        // range — the pad counts against the plane's max range (the leg carries the pad).
-        // The DISPLAYED available range (_availRangeShownKm) stays the FULL figure, so the
-        // headline max range doesn't shrink; only the routing reach reserves the pad.
         function _availableRangeKm(plane) {
             const p = plane || selectedPlaneSpec();
             if (!p || !p.range_km) return null;
-            const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
-            const base = _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
-            return Math.max(0, base - sid / route);   // carve out the SID/STAR pad (great-circle equivalent)
+            if (_availRangeOverride == null) return CNSFlight.availableRangeKm(p);
+            // manual override replaces the planning range; carve sidStar/route the same way the engine does
+            const regime = CNSFlight.effectiveRegime(p);
+            const route = (regime === 'ifr' && window.CNSSettings) ? CNSSettings.routingFactor() : 1.0;
+            const sid = (regime === 'ifr' && window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
+            return (route > 0) ? Math.max(0, _availRangeOverride - sid) / route : 0;
         }
-        // The available range to DISPLAY/EDIT: the FULL usable range — undo the /route AND add
-        // back the SID/STAR pad carved out of the reach, so the headline max range stays whole.
-        // The pad shows up in the LEG distance, not here; the router uses _availableRangeKm.
+        // The available range to DISPLAY/EDIT: the regime PLANNING range (never the gross catalog km).
+        // The sidStar pad shows up in the LEG distance, not here; the router uses _availableRangeKm.
         function _availRangeShownKm(plane) {
-            const a = _availableRangeKm(plane);
-            if (a == null) return null;
-            const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
-            return a * route + sid;   // = base·route = the full available range, pad-independent
+            const p = plane || selectedPlaneSpec();
+            if (!p || !p.range_km) return null;
+            return _availRangeOverride != null ? _availRangeOverride : CNSFlight.planningRangeKm(p);
+        }
+        // Displayed leg length — must match the engine's per-leg distKm (regime-gated pads).
+        function _dispLegKm(a, b, plane) {
+            const p = plane || selectedPlaneSpec();
+            const regime = (window.CNSFlight && p) ? CNSFlight.effectiveRegime(p) : 'ifr';
+            const raw = CNSRouting.haversineKm(a, b);
+            const route = (regime === 'ifr' && window.CNSSettings) ? CNSSettings.routingFactor() : 1.0;
+            const sid = (regime === 'ifr' && window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
+            return raw * route + sid;
         }
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
@@ -3684,10 +3686,12 @@
             if (toggle && panel) toggle.addEventListener('click', () => panel.classList.toggle('d-none'));
             function onEdit() {
                 const v = parseFloat(document.getElementById('psoAvailRange').value);
-                // The field shows the FULL range when the engine is on; store the great-circle
-                // reach the router uses (/route) so reachability stays single-count.
-                const _r = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                _availRangeOverride = (isFinite(v) && v > 0) ? (v / _r) : null;   // field shows the full range; store the great-circle reach the router uses
+                // The field shows _availRangeShownKm (the regime PLANNING range) and
+                // _availRangeShownKm returns _availRangeOverride verbatim when set —
+                // so store the typed value as-is; _availableRangeKm carves sidStar/route
+                // out for the router itself. (No /route here — that round-tripped the
+                // OLD shown-range formula, which no longer applies post-seam.)
+                _availRangeOverride = (isFinite(v) && v > 0) ? v : null;
                 const card = document.getElementById('planeSpecCard');
                 const spec = selectedPlaneSpec();
                 if (spec) _refreshSpecStats(spec);
@@ -4169,15 +4173,12 @@
         }
         // ---- Flight engine (static/flight-model.js) bridge ------------------------
         // Distance to SHOW in the planning aids (trajectory pill + suggested route): the
-        // ROUTED leg length = great-circle × routing padding + the fixed SID/STAR pad,
-        // so it equals the engine's per-leg distKm and moves with BOTH distance factors
-        // (the result panel reads the same profile). Called once per leg, so the fixed pad
-        // lands on each leg. The reach math itself stays great-circle and pad-free (see
-        // maxLeg) — only the shown number carries the padding.
+        // regime-gated leg length (see _dispLegKm), so it equals the engine's per-leg
+        // distKm and moves with BOTH distance factors (the result panel reads the same
+        // profile) — VFR legs don't carry IFR routing/SID-STAR pads the engine no longer
+        // burns. No plane in scope at these call sites, so it reads selectedPlaneSpec().
         function _dispKm(a, b) {
-            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
-            if (window.CNSRouting) return CNSRouting.routedKm(a, b) + sid;   // routed (great-circle × padding) + SID/STAR terminal km
-            return haversineKm([a.lat, a.lon], [b.lat, b.lon]) + sid;   // pre-CNSRouting fallback (great-circle) + pad
+            return _dispLegKm(a, b);
         }
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
         // origin + planned stops + dest; the engine OWNS the retour mirror + training
