@@ -455,6 +455,66 @@ from plane_schema import usable_range, ifr_capable
 
 # Phase B — S6: the global VFR/IFR control
 
+### Task B0: VFR add-back for incl-reserve planes + fleet reach invariants (ruled §13.3 — GATES B1)
+
+**Why:** discovered in critique review — Vaeridion VFR currently computes 700×0.7 − 217.5 = **272.5 km**, LESS than its IFR 400 (the incl-reserve measurement only matches IFR context, so VFR falls through to the gross build-down). Flipping B1's switch to VFR would *shrink* the range on screen — physically impossible. The spec RULED the fix (§5.3 / §13.3): a VFR flight on an `incl_reserve(ifr)` figure drops the IFR diversion and the loiter delta, extrapolating the won range back in: `vfr = value + diversion_km + (loiter_min − 30)/60 × speed`, floored at `value`. Vaeridion: 400 + 80 + 0 = **480**.
+
+**Files:**
+- Modify: `static/plane-schema.js` (`usableRange`, ~:109), `plane_schema.py` (`usable_range`, ~:142), `planes.json` (vaeridion `reserve_included`)
+- Test: `tests/js_plane_schema.test.mjs`, `tests/test_plane_schema.py`
+
+**Interfaces:**
+- Consumes: the existing `usable_incl_reserve` measurement selection.
+- Produces: `usableRange(plane, 'vfr')` ≥ `usableRange(plane, 'ifr')` for every catalog plane (fleet invariant, both languages); `reserve_included = { "regime": "ifr", "diversion_km": 80, "loiter_min": 30 }` on the vaeridion entry (§5.3's exact published decomposition).
+
+- [ ] **Step 1: Failing tests.** JS (`tests/js_plane_schema.test.mjs`):
+
+```js
+test('VFR add-back: incl_reserve(ifr) plane extrapolates the diversion back in (§13.3)', () => {
+  const planes = JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8'));
+  const v = planes.find(p => S.value(p, 'id') === 'vaeridion');
+  assert.equal(S.usableRange(v, 'ifr', { load: 'mtow' }), 400);
+  assert.equal(S.usableRange(v, 'vfr'), 480);   // 400 + 80 diversion + (30−30) loiter delta
+});
+test('fleet invariant: 0 <= usableRange(ifr) <= usableRange(vfr) for every catalog plane', () => {
+  const planes = JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8'));
+  for (const p of planes) {
+    const ifr = S.usableRange(p, 'ifr'), vfr = S.usableRange(p, 'vfr');
+    assert.ok(ifr >= 0, `${S.value(p, 'id')} ifr ${ifr} >= 0`);
+    assert.ok(vfr >= ifr, `${S.value(p, 'id')} vfr ${vfr} >= ifr ${ifr}`);
+  }
+});
+```
+  Python (`tests/test_plane_schema.py`, in `TestUsableRange`): mirror both — `usable_range(v, "vfr") == 480` (load the real catalog like `test_catalog_beta_gross_630` does) and a loop asserting `0 <= usable_range(p, "ifr") <= usable_range(p, "vfr")` over `_catalog()`.
+- [ ] **Step 2: Run both — expect FAIL** (vfr 272.5, and the invariant loop names vaeridion).
+- [ ] **Step 3: Data.** In `planes.json` vaeridion entry add, next to `mtow_kg`:
+
+```jsonc
+"reserve_included": { "regime": "ifr", "diversion_km": 80, "loiter_min": 30 },
+```
+- [ ] **Step 4: Implement — JS** (`usableRange`, before the gross build-down): when the requested regime is NOT ifr, look for the ifr-conditioned incl-reserve measurement and add back:
+
+```js
+        if (regime !== 'ifr') {
+            const mi = selectMeasurement(plane, 'range_km', Object.assign({}, context, { regime: 'ifr' }));
+            const ri = value(plane, 'reserve_included');
+            if (mi && mi.basis === 'usable_incl_reserve' && ri && ri.regime === 'ifr') {
+                const spd0 = value(plane, 'speed_kmh') || 0;
+                const vfrMin = RESERVE_MIN[regime] != null ? RESERVE_MIN[regime] : 30;
+                const addback = mi.value + (ri.diversion_km || 0)
+                    + Math.max(0, ((ri.loiter_min || 0) - vfrMin) / 60) * spd0;
+                return Math.max(mi.value, addback);
+            }
+        }
+```
+  Mirror in `plane_schema.py` `usable_range` with the same guard order and the same floor (`max(m_value, addback)`).
+- [ ] **Step 5: Run** both plane-schema suites + `validate_planes.py` (schema must accept `reserve_included` — if `planes.schema.json` rejects it, add the property with the three fields, types number/number/string-enum) + `golden_capture --check` (no drift — nothing reads VFR for vaeridion in the goldens yet; if B4 already landed its `vfr` variant, expect ONLY vaeridion `[vfr]` rows to move and re-bless deliberately).
+- [ ] **Step 6: Commit.**
+  ```bash
+  git add static/plane-schema.js plane_schema.py planes.json planes.schema.json tests/js_plane_schema.test.mjs tests/test_plane_schema.py
+  git commit -m "fix(perf-engine): VFR add-back for incl-reserve planes (§13.3) — Vaeridion VFR 480, fleet reach invariants"
+  ```
+
 ### Task B1: Model-settings VFR/IFR switch (writes `ruleMode`, recompute cascades)
 
 **Files:**
