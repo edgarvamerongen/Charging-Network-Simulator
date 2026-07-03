@@ -243,5 +243,52 @@ for (const c of golden.cases) {
   }
 })();
 
+// ---- tripPlane wired LIVE into profileForTrip: the heal above is only useful if the actual
+// saved-trip path (scheduler.js:99 / report.js:68 / index.html:4239, all via profileForTrip)
+// assembles its plane through tripPlane instead of its own inline literal. Coords are required —
+// profileForTrip returns null without originLat/originLon/destLat/destLon (see :273).
+// Field name note: a saved trip carries battery under `battery` (NOT `battery_kwh`) — every real
+// writer persists `battery: d.plane.battery_kwh` (flight-entry.js:23, index.html:5435/5649,
+// mobile.js:747); these fixtures mirror that on-the-wire shape rather than the FlightProfile's
+// own `battery_kwh` naming.
+(function tripPlaneLiveInProfileForTrip() {
+  const S = loadStack();
+  const o = AP.EHAM, d = AP.LFPG;
+  // Stale catalog trip: carries an old (pre-cutover) physics snapshot for a plane that IS in
+  // the catalog today. Un-wired profileForTrip would use trip.range_km (500) verbatim; wired
+  // through tripPlane it must heal to the catalog's current range_km (630), matching
+  // availableRangeKm(PLANES['beta_plane']) exactly (heal visible on the LIVE path).
+  const staleTrip = {
+    planeId: 'beta_plane', planeName: 'Beta Alia CX300', tripType: 'one-way',
+    range_km: 500, speed_kmh: 250, battery: 225,
+    originIdent: 'EHAM', originName: o.name, originLat: o.lat, originLon: o.lon,
+    destIdent: 'LFPG', destName: d.name, destLat: d.lat, destLon: d.lon,
+  };
+  const p1 = S.CNSFlight.profileForTrip(staleTrip, {});
+  const expect1 = S.CNSFlight.availableRangeKm(PLANES['beta_plane']);
+  // Custom trip: planeId not in catalog, own physics carried on the trip — must NOT heal;
+  // profileForTrip must simulate with exactly this trip's own numbers.
+  const customTrip = {
+    planeId: 'my_custom', planeName: 'X', tripType: 'one-way',
+    range_km: 333, speed_kmh: 200, battery: 100,
+    originIdent: 'EHAM', originName: o.name, originLat: o.lat, originLon: o.lon,
+    destIdent: 'LFPG', destName: d.name, destLat: d.lat, destLon: d.lon,
+  };
+  const p2 = S.CNSFlight.profileForTrip(customTrip, {});
+  const customPlane = { battery_kwh: 100, range_km: 333, speed_kmh: 200 };
+  const expect2 = S.CNSFlight.availableRangeKm(customPlane);
+  const checks = [
+    // p1/p2 must both RESOLVE (non-null) — a null profile means profileForTrip bailed
+    // (e.g. its plane literal never picked up the trip-carried battery), which is itself
+    // a failure, not a vacuous pass.
+    [p1 != null && p1.availRangeKm === expect1, `LIVE — stale catalog trip through profileForTrip heals to catalog reach (got ${p1 && p1.availRangeKm}, want ${expect1})`],
+    [p2 != null && p2.availRangeKm === expect2, `LIVE — custom trip through profileForTrip keeps its own reach (got ${p2 && p2.availRangeKm}, want ${expect2})`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    ${msg}`); }
+    else { fail++; console.log(`  FAIL  ${msg}`); }
+  }
+})();
+
 console.log(`\n${pass} pass, ${deltas} intended delta(s), ${fail} fail (of ${golden.cases.length * golden._meta.settings.length})`);
 process.exit(fail ? 1 : 0);

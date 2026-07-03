@@ -249,6 +249,16 @@ window.CNSFlight = (function () {
     // ifr_capable, class, measurements, min_landing_soc, surfaces_ok) ride along from
     // `cat` whenever it resolved, so CNSFlight.planningRangeKm/effectiveRegime on the
     // returned plane see the same inputs the spec card does.
+    //
+    // The one and only precedence owner for BOTH live consumers (profileForTrip below) and
+    // any lighter caller that just needs a resolved plane object (e.g. a future regime chip)
+    // — profileForTrip assembles its plane via THIS function, not its own literal, so
+    // scheduler.js/report.js/index.html (all going through profileForTrip) see the heal too.
+    //
+    // trip.battery (NOT trip.battery_kwh) is the real on-the-wire field name: every writer
+    // (flight-entry.js:23, index.html:5435/5649, mobile.js:747) persists it as
+    // `battery: d.plane.battery_kwh`, and every other reader (demand.js, scheduler.js,
+    // report.js) reads `t.battery` — confirmed by grep across the whole codebase.
     function tripPlane(trip) {
         if (!trip) return null;
         const cat = (window.PLANES_BY_ID || {})[trip.planeId] || null;
@@ -258,7 +268,7 @@ window.CNSFlight = (function () {
             name: trip.planeName != null ? trip.planeName : (cat && cat.name),
             range_km: isCat ? cat.range_km : (trip.range_km != null ? trip.range_km : (cat && cat.range_km)),
             speed_kmh: isCat ? cat.speed_kmh : (trip.speed_kmh != null ? trip.speed_kmh : (cat && cat.speed_kmh)),
-            battery_kwh: isCat ? cat.battery_kwh : (trip.battery_kwh != null ? trip.battery_kwh : (cat && cat.battery_kwh)),
+            battery_kwh: isCat ? cat.battery_kwh : (trip.battery != null ? trip.battery : (cat && cat.battery_kwh)),
             c_rate: trip.c_rate != null ? trip.c_rate : (cat && cat.c_rate),
             training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : (cat && cat.training_range_km),
         });
@@ -272,14 +282,7 @@ window.CNSFlight = (function () {
         opts = opts || {};
         if (!trip || trip.originLat == null || trip.originLon == null) return null;
         try {
-            const cat = (window.PLANES_BY_ID || {})[trip.planeId] || {};
-            const plane = {
-                battery_kwh: trip.battery != null ? trip.battery : cat.battery_kwh,
-                range_km: trip.range_km != null ? trip.range_km : cat.range_km,
-                speed_kmh: trip.speed_kmh != null ? trip.speed_kmh : cat.speed_kmh,
-                c_rate: trip.c_rate,
-                training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : cat.training_range_km,
-            };
+            const plane = tripPlane(trip) || {};
             if (!plane.range_km || !plane.battery_kwh) return null;
             const wp = (x) => ({ ident: x.ident, name: x.name, lat: x.lat, lon: x.lon });
             const o = { ident: trip.originIdent, name: trip.originName, lat: trip.originLat, lon: trip.originLon };
