@@ -66,6 +66,23 @@ window.CNSFlight = (function () {
         return waypoints.slice();                            // one-way: O..stops..D  (training handled separately)
     }
 
+    // ---- the single reach seam (P3): planner UI, router and displays all read these ----
+    function effectiveRegime(plane, ruleMode) {
+        return _ifrCapable(plane) ? (ruleMode || _ruleMode()) : 'vfr';
+    }
+    // Regime planning range (incl. the IFR flat divert), BEFORE the sidStar/route carve —
+    // this is the figure surfaces DISPLAY ("usable range"); never display plane.range_km (gross).
+    function planningRangeKm(plane, opts) {
+        return _usableRangeKm(plane, effectiveRegime(plane, opts && opts.ruleMode));
+    }
+    // The reach the router ENFORCES per leg: sidStar carved out, routing factor applied (IFR only).
+    function availableRangeKm(plane, opts) {
+        const regime = effectiveRegime(plane, opts && opts.ruleMode);
+        const route = (regime === 'ifr') ? _routingFactor() : 1.0;
+        const sid = (regime === 'ifr') ? _sidStarKm() : 0;
+        return (route > 0) ? Math.max(0, _usableRangeKm(plane, regime) - sid) / route : 0;
+    }
+
     function simulateTrip(plane, waypoints, opts) {
         opts = opts || {};
         const tripType = opts.tripType || 'one-way';
@@ -86,7 +103,7 @@ window.CNSFlight = (function () {
         const reserve = batt - usable;
         const ePerKm = range > 0 ? batt / range : 0;
         const cRate = plane.c_rate;                                   // vestigial; effectiveChargePower handles null
-        const availRangeKm = (route > 0) ? Math.max(0, planRangeKm - sidStar) / route : 0;   // great-circle reach the planner enforces; the SID/STAR pad is carved out so a padded leg (rawKm·route + sidStar) still fits.
+        const availRangeKm = availableRangeKm(plane, { ruleMode: opts.ruleMode });   // the seam — identical math, one owner
         const getTarget = (typeof opts.getTargetSoc === 'function') ? opts.getTargetSoc : (() => _chargeTargetDefault());
         const getChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => +opts.chargerKw || 0);
         // Interim-deficit charging (per-rotation opts supplied by the scheduler): a shared aircraft
@@ -262,5 +279,5 @@ window.CNSFlight = (function () {
         return ch ? ch.energyKwh : null;
     }
 
-    return { simulateTrip, _expandChain, profileForTrip, chargeEnergyAt };
+    return { simulateTrip, _expandChain, profileForTrip, chargeEnergyAt, effectiveRegime, planningRangeKm, availableRangeKm };
 })();

@@ -195,5 +195,31 @@ for (const c of golden.cases) {
     } else { pass++; console.log(`  ok    ${c.name} [${v}]`); }
   }
 }
+// ---- the single reach seam: every consumer (planner UI, router, displays) reads these ----
+(function reachSeam() {
+  const S = loadStack();
+  const beta = PLANES['beta_plane'];          // 630 gross, 225 kWh, 250 km/h, divert_km 50, IFR-capable
+  const velis = PLANES['pipistrel_velis'];    // ifr_capable false (certified)
+  S.CNSSettings.reset();                      // defaults: ruleMode ifr, sidStar 10 ON, routingPadding OFF
+  const eq = (a, b, t) => Math.abs(a - b) < (t || 1e-6);
+  const checks = [
+    [S.CNSFlight.effectiveRegime(beta) === 'ifr', `effectiveRegime(beta) defaults to global ifr`],
+    [S.CNSFlight.effectiveRegime(beta, 'vfr') === 'vfr', `explicit ruleMode wins`],
+    [S.CNSFlight.effectiveRegime(velis, 'ifr') === 'vfr', `VFR-only plane is forced vfr`],
+    [eq(S.CNSFlight.planningRangeKm(beta), 203.5), `beta IFR planning = 441 − 187.5 − 50 (got ${S.CNSFlight.planningRangeKm(beta)})`],
+    [eq(S.CNSFlight.planningRangeKm(beta, { ruleMode: 'vfr' }), 316), `beta VFR planning = 441 − 125, no divert (got ${S.CNSFlight.planningRangeKm(beta, { ruleMode: 'vfr' })})`],
+    [eq(S.CNSFlight.availableRangeKm(beta), 193.5), `beta IFR reach carves the 10 km sidStar (got ${S.CNSFlight.availableRangeKm(beta)})`],
+    [eq(S.CNSFlight.availableRangeKm(beta, { ruleMode: 'vfr' }), 316), `beta VFR reach: no sidStar, no routing (got ${S.CNSFlight.availableRangeKm(beta, { ruleMode: 'vfr' })})`],
+    [eq(S.CNSFlight.planningRangeKm(velis), 0), `velis planning range 0 — reserve exceeds endurance`],
+    // engine parity: simulateTrip's enforced reach IS the seam value
+    [eq(S.CNSFlight.simulateTrip(beta, [wp('EHAM'), wp('LFPG')], { tripType: 'one-way', getChargerKw: () => 250 }).availRangeKm,
+        S.CNSFlight.availableRangeKm(beta)), `simulateTrip.availRangeKm === availableRangeKm(plane)`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    seam — ${msg}`); }
+    else { fail++; console.log(`  FAIL  seam — ${msg}`); }
+  }
+})();
+
 console.log(`\n${pass} pass, ${deltas} intended delta(s), ${fail} fail (of ${golden.cases.length * golden._meta.settings.length})`);
 process.exit(fail ? 1 : 0);
