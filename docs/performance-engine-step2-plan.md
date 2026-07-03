@@ -79,12 +79,10 @@ cutover, one re-bless** (see S3). Rollback = revert the commit.
 ### S3 — Adopt the gross data (the data half of the S2 cutover — same commit, one re-bless)
 In the **same commit as S2** (the formula needs these figures):
 - Beta `range_km` 500 → **630** (gross); `tests/_helpers.py` BETA → 630.
-- Vaeridion `range_km` 500 → **400** + `range_basis:"incl_reserve"` (engine reads the IFR@MTOW
-  measurement directly); `speed_kmh` 400 → **435** (235 KTAS); `_helpers` VAERIDION to match.
+- Vaeridion `range_km` 500 → **700 gross** (energy-balance estimate: 600 kWh, 30% floor, 45-min IFR reserve @190 kt + 80 km divert, ≤40-min/800-kW turnaround); `speed_kmh` → 435. The published 400 km IFR@MTOW stays a `usable_incl_reserve` measurement (the IFR planning range). Setting the live scalar to 400 would zero the reserve energy (ePerKm = 600/400 uses the whole battery) — caught in review.
 - Re-bless `golden_capture` + `sched_snapshot` **once**; re-run `tests.test_sim_core` (the
   `TestReferenceCatalogSync` guard stays green because `_helpers` moved too).
-Sanity-check the headline before re-blessing: Beta ≈ **379 km VFR / 316 IFR**, Vaeridion **400**, and the
-Velis under IFR comes back **infeasible** (negative usable range → a clean infeasible flag, not garbage — #6).
+Sanity-check the headline before re-blessing: Beta ≈ 316 VFR / 253.5 IFR (203.5 with divert), Vaeridion 400 IFR, Velis IFR infeasible.
 
 > **✅ Review #1 & #3 (resolved by decision):** no flag → S2+S3 are one atomic cutover, so the gross range
 > never runs on the old formula (#1) and there's no kill-switch to mis-toggle (#3). This is a deliberate

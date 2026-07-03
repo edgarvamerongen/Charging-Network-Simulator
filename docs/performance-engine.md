@@ -156,7 +156,7 @@ under and its own provenance (the scalar stays as the back-compat default pick):
   `− alternate ÷ routing`. Min-SoC is the unusable floor; the final reserve is held *within* the
   usable battery (two separate, sequential buffers). A published *with-reserves* figure (basis
   `usable_incl_reserve`, e.g. Vaeridion 400 km @ MTOW IFR) wins outright and skips the build-down.
-  Worked: **Beta @ 630 km gross, 250 km/h → 379 km VFR / 316.5 km IFR.**
+  Worked: **Beta @ 630 km gross, 250 km/h, 30% floor → 316 km VFR / 253.5 km IFR (− 50 km divert → 203.5 IFR planning).**
   - **Partial-load range from full-load** (planned): scale the MTOW range up as payload drops via
     mass — this replaces the old inferred 687 km "Light" figure once Max/Light collapse into one.
 - This is why **separate catalog entries for one airframe go away**: Vaeridion Max/Light become one
@@ -232,9 +232,7 @@ planning_range_km = usable_battery_km − reserve_km         // VFR / IFR planni
 
 Min-SoC and the final reserve are **separate, sequential** buffers: the min-SoC slice is battery you
 never touch (BMS/health); the reserve is energy held *within* the usable part for a go-around or
-hold. `min_takeoff_soc` is a third, distinct *dispatch* gate (you may not launch below it). **Worked
-example — Beta @ 630 km gross, 250 km/h, 20% min-SoC:** usable battery = 504 km; VFR (− 125 km) =
-**379 km**; IFR (− 187.5 km, then − alternate ÷ routing) ≈ **316 km**. A published with-reserves
+hold. `min_takeoff_soc` is a third, distinct *dispatch* gate (you may not launch below it). **Worked example — Beta @ 630 km gross, 250 km/h, 30% min-SoC (advised floor, ruled 2026-06-30):** usable battery = 441 km; VFR (− 125 km) = **316 km**; IFR (− 187.5 km, − 50 km divert ÷ routing) ≈ **203.5 km**. A published with-reserves
 figure (e.g. Vaeridion's 400 km @ MTOW IFR) is used as-is instead of this build-down.
 
 Worked across the fleet (30-min VFR / 45-min IFR final reserve, catalog figures; illustrative):
@@ -253,8 +251,7 @@ fraction (today's model) cannot represent a fleet this wide.
 **R8-bis (RULED — supersedes R8).** R8 deliberately made the reserve a **global** `usableFraction`
 slider and dropped per-aircraft values. That generalization is **retired**: per-aircraft, regime-aware
 reserves are now the model. The global slider survives only as a fleet-wide what-if **override** and
-as the **fallback** when an aircraft carries no reserve data — so the change stays identity-preserving
-for any plane without `reserve_min` (behaves exactly as today). Real precedent that per-aircraft floors
+as the **fallback** when an aircraft carries no reserve data — every plane computes (all carry `range_km` + `speed_kmh`; `RESERVE_MIN` supplies regime defaults) — the flat `usableFraction` survives only as the energy floor and as the reach fallback when `plane-schema.js` is not loaded. Real precedent that per-aircraft floors
 exist in the wild: the **Velis POH forbids takeoff below 50% SoC** — a hard `min_takeoff_soc = 0.50`
 that no global slider captures.
 
@@ -517,6 +514,19 @@ that moves a saved number — chiefly R8-bis.
    surface becomes **Route settings** and `ruleMode` moves onto each individual route in the DC rather
    than staying global (§5.6).
 6. **Provenance granularity — RULED: per-field** (richer spec sheet) (§3.3).
+7. **No realism flag — RULED (2026-06-30): hard cutover.** The regime engine is always on; the only
+   mode toggle is VFR vs IFR. Today's flat `usableFraction` reach is retired; rollback = `git revert`.
+   (Consciously overrides the R12 ship-behind-a-flag convention for this module.)
+8. **Usable ENERGY vs regime RESERVE — RULED: decoupled.** The min-SoC floor (30%, advised) bounds the
+   usable/chargeable energy (charge targets, training caps). The regime reserve (VFR 30 / IFR 45 min)
+   shortens only the cross-country REACH. Coupling them zeroes a short-endurance trainer's energy
+   (Velis training bug, caught by the golden gate).
+9. **Gross figures are internal — RULED.** `range_km` now stores the gross (Beta 630 = 336 nm; Vaeridion
+   700 via the operational energy-balance estimate) as the ePerKm driver. The OEMs did not publish these
+   figures: no UI/PDF surface presents them; surfaces show the regime planning range. Vaeridion's live
+   scalar is NOT the published 400 (setting it there would make ePerKm = batt/400 and zero the reserve
+   energy); the 400 IFR@MTOW stays a measurement and IS the IFR planning range. Per-plane `divert_km`
+   (Beta 50) folds the standard divert into the IFR reach; per-node alternates count only their excess.
 
 **Still open / deferred:** the `class` taxonomy values; the pax-weight assumption for
 `mass_feasibility` (§6); data sources for wind/weather (§8); and the per-route settings migration,
