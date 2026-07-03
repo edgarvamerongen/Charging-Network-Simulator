@@ -521,7 +521,7 @@ that moves a saved number — chiefly R8-bis.
    usable/chargeable energy (charge targets, training caps). The regime reserve (VFR 30 / IFR 45 min)
    shortens only the cross-country REACH. Coupling them zeroes a short-endurance trainer's energy
    (Velis training bug, caught by the golden gate).
-9. **Gross figures are internal — RULED.** `range_km` now stores the gross (Beta 630 = 336 nm; Vaeridion
+9. **Gross figures are internal — RULED.** `range_km` now stores the gross (Beta 630, slightly above the ~336 nm demonstrated figure; Vaeridion
    700 via the operational energy-balance estimate) as the ePerKm driver. The OEMs did not publish these
    figures: no UI/PDF surface presents them; surfaces show the regime planning range. Vaeridion's live
    scalar is NOT the published 400 (setting it there would make ePerKm = batt/400 and zero the reserve
