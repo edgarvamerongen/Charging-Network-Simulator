@@ -221,5 +221,27 @@ for (const c of golden.cases) {
   }
 })();
 
+// ---- tripPlane: catalog planes ignore stale per-trip physics snapshots (auto-migration) ----
+// No `customPlane` flag exists anywhere in the codebase (grepped); the real detection mechanism
+// mirrors profileForTrip's own lookup (:246) and report.js's _usedPlanes (:211): a plane is
+// "catalog" iff its planeId resolves in window.PLANES_BY_ID. Anything else (a CNSPlanes-registered
+// custom plane, or a truly unknown/deleted planeId) keeps the trip's own carried physics.
+(function tripPlaneHeal() {
+  const S = loadStack();
+  const staleTrip = { planeId: 'beta_plane', range_km: 500, speed_kmh: 250, battery_kwh: 225 };
+  const p1 = S.CNSFlight.tripPlane(staleTrip);
+  const customTrip = { planeId: 'my_custom', range_km: 333, speed_kmh: 200, battery_kwh: 100, name: 'X' };
+  const p2 = S.CNSFlight.tripPlane(customTrip);
+  const checks = [
+    [p1 && p1.range_km === 630, `catalog plane heals to catalog range (got ${p1 && p1.range_km})`],
+    [p1 && p1.divert_km === 50, `catalog divert_km rides along`],
+    [p2 && p2.range_km === 333, `custom plane keeps its own physics (got ${p2 && p2.range_km})`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    heal — ${msg}`); }
+    else { fail++; console.log(`  FAIL  heal — ${msg}`); }
+  }
+})();
+
 console.log(`\n${pass} pass, ${deltas} intended delta(s), ${fail} fail (of ${golden.cases.length * golden._meta.settings.length})`);
 process.exit(fail ? 1 : 0);

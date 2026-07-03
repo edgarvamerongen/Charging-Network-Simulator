@@ -235,6 +235,35 @@ window.CNSFlight = (function () {
     }
 
     // ---- saved-trip adapters (shared by the demand drawer + the PDF report) -------
+    // Resolve the PHYSICS plane for a saved trip. A trip may predate a catalog data
+    // revision (e.g. Beta 500 -> 630 kg cutover): for a KNOWN catalog plane (planeId
+    // resolves in PLANES_BY_ID) the catalog's range_km/speed_kmh/battery_kwh are
+    // authoritative — the trip's own copies are a stale snapshot and are ignored, so
+    // old saved flights auto-heal to current physics on recompute. A trip whose planeId
+    // does NOT resolve (a CNSPlanes-registered custom plane, or a deleted/unknown one)
+    // keeps its own carried physics exactly as before — there is no separate "custom"
+    // flag anywhere in the codebase; catalog membership IS the detection (mirrors the
+    // cat lookup profileForTrip and report.js._usedPlanes already use). Non-physics
+    // fields (training_range_km, c_rate, name, …) keep the trip-first/catalog-fallback
+    // precedence unchanged. Catalog extras the schema build-down needs (divert_km,
+    // ifr_capable, class, measurements, min_landing_soc, surfaces_ok) ride along from
+    // `cat` whenever it resolved, so CNSFlight.planningRangeKm/effectiveRegime on the
+    // returned plane see the same inputs the spec card does.
+    function tripPlane(trip) {
+        if (!trip) return null;
+        const cat = (window.PLANES_BY_ID || {})[trip.planeId] || null;
+        const isCat = !!cat;   // known catalog plane -> its physics are authoritative
+        return Object.assign({}, cat, {
+            id: trip.planeId,
+            name: trip.planeName != null ? trip.planeName : (cat && cat.name),
+            range_km: isCat ? cat.range_km : (trip.range_km != null ? trip.range_km : (cat && cat.range_km)),
+            speed_kmh: isCat ? cat.speed_kmh : (trip.speed_kmh != null ? trip.speed_kmh : (cat && cat.speed_kmh)),
+            battery_kwh: isCat ? cat.battery_kwh : (trip.battery_kwh != null ? trip.battery_kwh : (cat && cat.battery_kwh)),
+            c_rate: trip.c_rate != null ? trip.c_rate : (cat && cat.c_rate),
+            training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : (cat && cat.training_range_km),
+        });
+    }
+
     // Rebuild a FlightProfile for a SAVED folder trip: geometry from persisted coords,
     // plane from the saved spec (R4) or the catalog (planeId), per-AIRPORT target via
     // opts.getTargetSoc. Returns null (caller falls back to the legacy math) when the
@@ -279,5 +308,5 @@ window.CNSFlight = (function () {
         return ch ? ch.energyKwh : null;
     }
 
-    return { simulateTrip, _expandChain, profileForTrip, chargeEnergyAt, effectiveRegime, planningRangeKm, availableRangeKm };
+    return { simulateTrip, _expandChain, tripPlane, profileForTrip, chargeEnergyAt, effectiveRegime, planningRangeKm, availableRangeKm };
 })();
