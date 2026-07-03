@@ -1261,6 +1261,10 @@
         .rs-q { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #cbd5e1; background: #fff; color: var(--muted); font-size: .66rem; font-weight: 700; line-height: 15px; text-align: center; cursor: help; display: inline-block; user-select: none; }
         .rs-q:hover, .rs-q:focus { background: var(--primary); color: #fff; border-color: var(--primary); outline: none; }
         .rs-q-inline { width: 14px; height: 14px; line-height: 13px; font-size: .6rem; vertical-align: middle; }
+        /* B1: VFR/IFR global default — sits above the opt-in factor grid (always-on
+           mode, not a toggle), so it gets its own bordered block rather than an rs-cell. */
+        .rs-rulemode-row { padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--panel-border); }
+        .rs-rulemode-row .trip-seg { max-width: 220px; margin-top: 2px; }
         .rs-curve { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--panel-border); }
         .rs-curve:not(.on) .rs-curve-body { opacity: .4; }
         .rs-curve-body { margin-top: 6px; }
@@ -2087,6 +2091,18 @@
                         Operational model factors layered on the physical model — they cascade through the result
                         panel, demand calculator, scheduler and PDF. Hover <span class="rs-q rs-q-inline">?</span> for detail.
                     </p>
+
+                    <div class="rs-rulemode-row" id="msRuleMode">
+                        <div class="rs-cell-head">
+                            <label class="rs-toggle" style="cursor: default;"><span>Flight rules</span></label>
+                            <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Global default regime a new route inherits — IFR carries the larger reserve (45 min) and SID/STAR padding; VFR-only aircraft are always forced to VFR regardless of this setting.">?</span>
+                        </div>
+                        <div class="est-note mb-1">Default regime for new routes</div>
+                        <div class="trip-seg" role="group" aria-label="Flight rules">
+                            <button type="button" class="trip-seg-btn" data-rm="vfr">VFR</button>
+                            <button type="button" class="trip-seg-btn" data-rm="ifr">IFR</button>
+                        </div>
+                    </div>
 
                     <div class="rs-cat">Available range</div>
                     <div class="rs-grid">
@@ -5767,6 +5783,7 @@
                 });
                 updateBadge();
                 syncRate();
+                syncRuleModeRow();
                 drawTaperCurve();
             }
             function commit(key, patch) {
@@ -5814,6 +5831,30 @@
                 rateSl.addEventListener('input', () => { if (rateVal) rateVal.textContent = fmtRate(+rateSl.value); });
                 rateSl.addEventListener('change', () => CNSSettings.save({ chargeRate: { value: +rateSl.value / 100 } }));
             }
+
+            // B1: VFR/IFR flight-rules global default — a two-button segmented control,
+            // not an opt-in factor, so it lives outside the checkbox-driven `map` above.
+            // Changing it saves through CNSSettings (fires the CNSSettings.subscribe
+            // cascade below, incl. recomputeAllFlightsDebounced) and additionally
+            // refreshes the plane-spec card + live route inline, per spec.
+            function syncRuleModeRow() {
+                const row = document.getElementById('msRuleMode');
+                if (!row) return;
+                const cur = CNSSettings.ruleMode();
+                row.querySelectorAll('[data-rm]').forEach(b => b.classList.toggle('active', b.dataset.rm === cur));
+            }
+            (function () {
+                const row = document.getElementById('msRuleMode');
+                if (!row) return;
+                row.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => {
+                    if (b.dataset.rm === CNSSettings.ruleMode()) return;
+                    CNSSettings.save({ ruleMode: { value: b.dataset.rm } });   // fires the CNSSettings.subscribe recompute cascade
+                    syncRuleModeRow();
+                    if (typeof renderPlaneSpecCard === 'function') renderPlaneSpecCard();
+                    if (typeof smartReplan === 'function') smartReplan();
+                    if (typeof drawLiveRoute === 'function') drawLiveRoute();
+                }));
+            })();
 
             // F9: live SoC -> effective-power curve, normalised to the C-rate-capped
             // peak. Flat to the knee, then exponential roll-off to the floor at 100%
