@@ -11,6 +11,8 @@ import hashlib
 import math
 from datetime import datetime
 
+from plane_schema import usable_range, ifr_capable
+
 
 def classify_trip(idents):
     """Classify an ordered list of resolved airport idents into a CNS trip.
@@ -91,7 +93,10 @@ def build_blob(payload, resolve, planes_by_id):
     if plane not in planes_by_id:
         plane = _DEFAULT_PLANE
     charger = defaults.get('charger') or _DEFAULT_CHARGER
-    plane_range = (planes_by_id.get(plane) or {}).get('range_km') or 0
+    default_plane = planes_by_id.get(plane) or {}
+    regime = 'ifr' if ifr_capable(default_plane) else 'vfr'
+    plane_range = usable_range(default_plane, regime,
+                               alternate_km=(default_plane.get('divert_km') or 0))
 
     # 1. Resolve + classify each flight; group by route signature.
     groups = {}          # signature -> {'trip','recs','count','dates'}
