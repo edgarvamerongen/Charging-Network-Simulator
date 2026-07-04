@@ -20,6 +20,7 @@
       "seats":              { "type": "integer", "minimum": 1, "maximum": 1000 },
       "battery_kwh":        { "type": "number", "gt": 0, "maximum": 100000, "x-unit": "kWh" },
       "range_km":           { "type": "number", "gt": 0, "maximum": 50000, "x-unit": "km", "note": "interpreted per range_basis" },
+      "divert_km":          { "type": "number", "minimum": 0, "maximum": 50000, "x-unit": "km", "note": "flat planning divert folded into the IFR reach (per-node alternates count only their excess)" },
       "speed_kmh":          { "type": "number", "gt": 0, "maximum": 5000, "x-unit": "km/h" },
       "load_kg":            { "type": "number", "minimum": 0, "maximum": 1000000, "x-unit": "kg", "note": "max payload" },
       "training_range_km":  { "type": "number", "minimum": 0, "maximum": 50000, "x-unit": "km" },
