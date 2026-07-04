@@ -58,6 +58,7 @@ export const SETTINGS = {
   default:   (S) => S.reset(),  // landingReserve 0.30, routing 1.05, chargeTarget 0.80, taper on
   target100: (S) => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 1.0 } }); },
   target50:  (S) => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 0.5 } }); },
+  vfr:       (S) => { S.reset(); S.save({ ruleMode: { value: 'vfr' } }); },
 };
 
 // deterministic airports (coords lifted from tests/_helpers.py)

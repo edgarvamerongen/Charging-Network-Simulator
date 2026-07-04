@@ -23,6 +23,7 @@ const SET = {
   default:   S => S.reset(),
   target100: S => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 1.0 } }); },
   target50:  S => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 0.5 } }); },
+  vfr:       S => { S.reset(); S.save({ ruleMode: { value: 'vfr' } }); },
 };
 const wp = (k) => ({ ident: k, name: AP[k].name, lat: AP[k].lat, lon: AP[k].lon });
 
