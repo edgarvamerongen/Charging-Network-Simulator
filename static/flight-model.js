@@ -291,6 +291,7 @@ window.CNSFlight = (function () {
             const waypoints = (trip.tripType === 'training') ? [wp(o)] : [wp(o), ...stops, wp(d)];
             return simulateTrip(plane, waypoints, {
                 tripType: trip.tripType,
+                ruleMode: trip.rm || undefined,         // per-route saved regime (C1); absent -> global default
                 getTargetSoc: opts.getTargetSoc,
                 getChargerKw: opts.getChargerKw || (() => 0),
                 trainingRangeKm: plane.training_range_km,

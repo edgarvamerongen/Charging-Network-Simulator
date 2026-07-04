@@ -189,5 +189,33 @@ test('index.html: _recomputeCtx is map-filter independent (full catalog, setting
     if (!m[1].includes(must)) throw new Error(`_recomputeCtx missing ${must} (full-catalog pool)`);
 });
 
+// ---- C2: per-route ruleMode threads through recompute (profileForTrip/simulateTrip) ----
+// Two-leg Beta retour (EHAM<->EHGG, no stops = out+back = 2 legs). t2 carries rm:'vfr';
+// under IFR-global defaults VFR drops the 10-km sidStar pad on EACH leg, so t2 must burn
+// less energy than t1 — and the saved rm must survive the recompute round-trip unchanged.
+function energyOf(t) { return (t.legs || []).reduce((s, l) => s + (l.energy_kwh || 0), 0); }
+
+test('recomputeFlight: per-trip rm=vfr burns less energy than the IFR-global default', () => {
+  S.CNSSettings.reset();   // global ruleMode 'ifr', sidStarPadding 10 km ON
+  const t1 = tripFor('EHAM', 'EHGG');
+  const t2 = { ...tripFor('EHAM', 'EHGG'), rm: 'vfr' };
+  const out1 = S.CNSRecompute.recomputeFlight(t1, ctx());
+  const out2 = S.CNSRecompute.recomputeFlight(t2, ctx());
+  if (!(energyOf(out2) < energyOf(out1)))
+    throw new Error(`expected VFR energy < IFR-global energy, got vfr=${energyOf(out2)} ifr=${energyOf(out1)}`);
+  const legs = (out1.legs || []).length;
+  const expectedDeltaKwh = legs * 10 * 0.357143;
+  const gotDeltaKwh = energyOf(out1) - energyOf(out2);
+  if (Math.abs(gotDeltaKwh - expectedDeltaKwh) > 0.05)
+    throw new Error(`expected delta ~${expectedDeltaKwh.toFixed(3)} kWh (legs=${legs} x 10km x 0.357143), got ${gotDeltaKwh.toFixed(3)}`);
+});
+
+test('recomputeFlight: rm survives the recompute round-trip (preserved like _manual)', () => {
+  S.CNSSettings.reset();
+  const t2 = { ...tripFor('EHAM', 'EHGG'), rm: 'vfr' };
+  const out2 = S.CNSRecompute.recomputeFlight(t2, ctx());
+  if (out2.rm !== 'vfr') throw new Error(`expected rm to survive recompute unchanged, got ${JSON.stringify(out2.rm)}`);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

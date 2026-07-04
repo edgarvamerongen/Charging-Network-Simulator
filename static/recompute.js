@@ -26,7 +26,7 @@ window.CNSRecompute = (function () {
     // route + feasibility. Training/direct skip routing. ctx = { allAirports, planeFor,
     // availableRangeKm, allowedTypes, allowedIdents, routingOptions }.
     function recomputeFlight(trip, ctx) {
-        const t = { ...trip };
+        const t = { ...trip };   // full spread carries per-trip fields (rm incl.) across the rebuild, same as _manual on stops
         if (trip.tripType === 'training') { t.feasible = true; t.infeasibleReason = null; return t; }
         const plane = ctx.planeFor(trip);
         const mk = (ident, name, lat, lon) => {
@@ -81,6 +81,7 @@ window.CNSRecompute = (function () {
         const wps = [origin, ...chain.stops, ringDest].map(n => ({ ident: n.ident, name: n.name, lat: n.lat, lon: n.lon }));
         const prof = window.CNSFlight.simulateTrip(plane, wps, {
             tripType: trip.tripType,
+            ruleMode: trip.rm || undefined,   // per-route saved regime (C1); absent -> global default
             getTargetSoc: (id) => (window.CNSDemand && window.CNSDemand.resolveTargetSoc) ? window.CNSDemand.resolveTargetSoc((window.CNSDemand.loadCfg && window.CNSDemand.loadCfg()[id]) || null) : null,
             getChargerKw: () => +trip.chargerPower || 0,
         });
