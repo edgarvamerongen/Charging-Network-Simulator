@@ -45,10 +45,10 @@ const approx = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 
 console.log('CNSSettings (static/settings.js) — node harness\n');
 
-// ---- v5 defaults: reserve + taper + SID/STAR + alternate ON; routing padding, efficiency OFF ----
-test('v5 defaults: reserve/taper/SID-STAR/alternate ON, routing/efficiency OFF', () => {
+// ---- v6 defaults: reserve + taper + SID/STAR + alternate ON; routing padding, efficiency OFF ----
+test('v6 defaults: reserve/taper/SID-STAR/alternate ON, routing/efficiency OFF', () => {
   const { S } = loadSettings();
-  assert.ok(approx(S.usableFraction({}), 0.80), 'reserve default 20% -> usable 0.80');
+  assert.ok(approx(S.usableFraction({}), 0.70), 'reserve default 30% -> usable 0.70');
   assert.equal(S.routingFactor(), 1.0, 'routing padding OFF by default -> identity');
   assert.equal(S.gridDemandFactor(), 1.0, 'efficiency off by default -> identity');
   assert.ok(S.chargeTimeMin(100, 100, 225) > 60, 'taper on -> slower than the 60min linear');
@@ -203,6 +203,38 @@ test('activeFlags reports alternateReserve + anyOn', () => {
   const f = S.activeFlags();
   assert.equal(f.alternateReserve, true);
   assert.equal(f.anyOn, true);
+});
+
+// ---- ruleMode + reserveMin (Step-1 additive; nothing reads them until the Step-2 cutover) ----
+test('ruleMode default is "ifr"', () => {
+  const { S } = loadSettings();
+  assert.equal(S.ruleMode(), 'ifr');
+});
+test('ruleMode persists a saved value (vfr)', () => {
+  const { S } = loadSettings();
+  S.save({ ruleMode: { value: 'vfr' } });
+  assert.equal(S.ruleMode(), 'vfr');
+});
+test('ruleMode falls back to ifr for a bogus value', () => {
+  const { S } = loadSettings();
+  S.save({ ruleMode: { value: 'banana' } });
+  assert.equal(S.ruleMode(), 'ifr');
+});
+test('reserveMinFor: vfr->30 (day), vfr_night->45, ifr->45 by default', () => {
+  const { S } = loadSettings();
+  assert.equal(S.reserveMinFor('vfr'), 30);
+  assert.equal(S.reserveMinFor('vfr_day'), 30);
+  assert.equal(S.reserveMinFor('vfr_night'), 45);
+  assert.equal(S.reserveMinFor('ifr'), 45);
+});
+test('reserveMinFor: a saved override is honoured', () => {
+  const { S } = loadSettings();
+  S.save({ reserveMin: { ifr: 60 } });
+  assert.equal(S.reserveMinFor('ifr'), 60);
+});
+test('reserveMinFor: unknown regime falls back to ifr minutes', () => {
+  const { S } = loadSettings();
+  assert.equal(S.reserveMinFor('zzz'), 45);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

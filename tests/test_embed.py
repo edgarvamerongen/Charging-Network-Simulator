@@ -1,11 +1,20 @@
 """Tests for the /embed route and supporting functions."""
 
 import os
+import re
 import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import app as cns_app
+
+
+def _re_find(text, pattern):
+    """First capture group of `pattern` in `text`, or raise — small helper for
+    pulling a JS literal out of the embed page's inline <script> block."""
+    m = re.search(pattern, text)
+    assert m, f'pattern not found: {pattern}'
+    return m.group(1)
 
 # Minimal airport fixtures — enough fields to exercise resolve_airport
 _AIRPORTS = [
@@ -150,6 +159,36 @@ class TestEmbedRoute(unittest.TestCase):
         r = self.client.get('/embed?origin=nonexistent')
         self.assertEqual(r.status_code, 200)
         self.assertIn(b'network', r.data.lower())
+
+    # ── A6-fix: range circle must never present the confidential gross ────
+
+    def test_range_circle_uses_usable_not_gross_range(self):
+        """The range tier's map circle (and the reachable-airport filter
+        feeding it) must be built from the regime USABLE range, not the raw
+        catalog range_km. Beta Alia CX300 (range_km 630 gross, divert_km 50)
+        -> IFR usable_range == 203.5 km, the number the client-side circle
+        math must receive."""
+        import json as _json
+        r = self.client.get('/embed?origin=EHAM&plane=beta_plane')
+        self.assertEqual(r.status_code, 200)
+        body = r.data.decode()
+        # greedy to line end — captures the full JSON statement (strings may contain ';')
+        m = _json.loads(_re_find(body, r'var rangeKm\s*=\s*(.+);'))
+        self.assertAlmostEqual(m, 203.5)
+
+    def test_embed_plane_json_omits_confidential_range_fields(self):
+        """The inline `var plane = {{ plane | tojson }}` payload must not
+        carry range_km or measurements (the provenance array also embeds the
+        gross range) — those rode along unused once the circle stopped
+        reading plane.range_km directly, but the raw 630/700 km would still
+        be sitting in the public, cached page's view-source otherwise."""
+        import json as _json
+        r = self.client.get('/embed?origin=EHAM&plane=beta_plane')
+        # greedy to line end — captures the full JSON statement (strings may contain ';')
+        plane = _json.loads(_re_find(r.data.decode(), r'var plane\s*=\s*(.+);'))
+        self.assertNotIn('range_km', plane)
+        self.assertNotIn('measurements', plane)
+        self.assertEqual(plane.get('id'), 'beta_plane')  # non-confidential fields still flow
 
 
 if __name__ == '__main__':

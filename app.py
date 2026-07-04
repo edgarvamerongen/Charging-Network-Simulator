@@ -29,6 +29,7 @@ from spreadsheet import generate_xlsx
 import shares
 import airport_resolver
 import flight_import
+from plane_schema import usable_range, ifr_capable
 
 app = Flask(__name__)
 # Behind the local reverse proxy (Caddy on the VPS) every request reaches gunicorn
@@ -510,10 +511,16 @@ def embed():
     else:
         click_url = cns_base + '/'
 
-    # Reachable airports for range tier
+    # Reachable airports for range tier. Uses the regime USABLE range, never
+    # the raw catalog range_km — that gross figure (e.g. Beta 630, Vaeridion
+    # 700 km) is confidential and must not leak via the map circle radius or
+    # which airports render as "reachable" dots.
     reachable = []
+    range_km = 0
     if tier == 'range':
-        range_km = plane.get('range_km', 500)
+        regime = 'ifr' if ifr_capable(plane) else 'vfr'
+        # server-side default-configuration figure (no per-user settings)
+        range_km = usable_range(plane, regime, alternate_km=(plane.get('divert_km') or 0))
         olat, olon = origin['latitude_deg'], origin['longitude_deg']
         for ap in airports:
             if ap['ident'] == origin['ident']:
@@ -536,11 +543,19 @@ def embed():
             if ap.get('type') in ('large_airport', 'medium_airport')
         ]
 
+    # Client-side plane payload: strip range_km / measurements before they hit
+    # {{ plane | tojson }} — the embed page is public + cached, so the raw
+    # gross range must not even ride along unused in the inline JSON (it was
+    # previously readable via view-source once plane.range_km stopped being
+    # read by the map code above).
+    plane_public = {k: v for k, v in plane.items() if k not in ('range_km', 'measurements')}
+
     resp = make_response(render_template(
         'embed.html',
         tier=tier, theme=theme,
         origin=origin, destination=destination,
-        plane=plane, charger=charger,
+        plane=plane_public, charger=charger,
+        range_km=range_km,
         sim_result=sim_result,
         reachable=reachable,
         network_airports=network_airports,

@@ -40,6 +40,28 @@ test('encode → decode round-trips the route state exactly', () => {
   assert.deepEqual(S.decode(S.encode(st)), st);
 });
 
+test('encode → decode round-trips a per-route ruleMode override', () => {
+  const S = loadShare();
+  const st = {
+    v: 1, a: 'beta_plane', o: 'EHLE', d: 'EDDF', s: [],
+    t: 'oneway', f: { n: 1, u: 'day' }, c: 'dc_320', w: true, rm: 'vfr',
+  };
+  const decoded = S.decode(S.encode(st));
+  assert.equal(decoded.rm, 'vfr');
+  assert.deepEqual(decoded, st);
+});
+
+test('decoding a legacy blob without rm leaves it absent (no default injected)', () => {
+  const S = loadShare();
+  const legacy = {
+    v: 1, a: 'beta_plane', o: 'EHLE', d: 'EDDF', s: [],
+    t: 'oneway', f: { n: 1, u: 'day' }, c: 'dc_320', w: true,
+  };
+  const decoded = S.decode(S.encode(legacy));
+  assert.equal('rm' in decoded, false);
+  assert.equal(decoded.rm, undefined);
+});
+
 test('blob is URL-safe — no + / = (survives a #hash unescaped)', () => {
   const S = loadShare();
   const blob = S.encode({ v: 1, a: 'x', o: 'EHAM', d: 'EHRD', s: [], t: 'oneway', f: { n: 1, u: 'day' }, c: 'dc_50', w: false });

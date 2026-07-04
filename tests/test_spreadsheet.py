@@ -105,6 +105,36 @@ class TestSpreadsheet(unittest.TestCase):
         self.assertEqual(b._tab('EHAM'), 'EHAM (2)')
         self.assertEqual(b._tab('eham'), 'eham (3)')   # uniqueness is case-insensitive
 
+    def test_aircraft_range_header_is_usable_not_gross(self):
+        # A6-fix: the fleet-sheet 'Range (km)' column showed the raw catalog
+        # range_km (confidential gross — e.g. 630 for Beta Alia), leaking it
+        # on export. Header now names the regime planning (usable) figure.
+        ws = self.wb['Data']
+        tbl = ws.tables['tblAircraft']
+        first_col, first_row = openpyxl.utils.range_boundaries(tbl.ref)[:2]
+        header = [ws.cell(row=first_row, column=first_col + i).value for i in range(7)]
+        self.assertIn('Usable range (km)', header)
+        self.assertNotIn('Range (km)', header)
+
+    def test_aircraft_range_value_is_usable_not_gross(self):
+        # Same fix, value-level: build a workbook from the REAL catalog Beta
+        # Alia CX300 (range_km 630 gross, divert_km 50) and confirm the cell
+        # holds the IFR usable_range (gross minus min-SoC floor, minus final
+        # reserve, minus alternate) == 203.5 km, not the 630 gross.
+        payload = dict(PAYLOAD)
+        payload['planes'] = [{
+            'id': 'beta_plane', 'name': 'Beta Alia CX300', 'battery_kwh': 225,
+            'range_km': 630, 'speed_kmh': 250, 'seats': 6, 'load_kg': 500,
+            'divert_km': 50, 'class': 'commuter',
+        }]
+        wb = openpyxl.load_workbook(io.BytesIO(generate_xlsx(payload)))
+        ws = wb['Data']
+        tbl = ws.tables['tblAircraft']
+        first_col, first_row = openpyxl.utils.range_boundaries(tbl.ref)[:2]
+        header = [ws.cell(row=first_row, column=first_col + i).value for i in range(7)]
+        range_col = first_col + header.index('Usable range (km)')
+        self.assertAlmostEqual(ws.cell(row=first_row + 1, column=range_col).value, 203.5)
+
 
 @unittest.skipUnless(HAVE_OPENPYXL, 'openpyxl not installed')
 class TestFormulaInjection(unittest.TestCase):

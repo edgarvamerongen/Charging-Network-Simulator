@@ -38,7 +38,7 @@ window.CNSTour = (function () {
         // by default (20% landing reserve + SID/STAR padding + alternate reserve) its usable reach
         // drops to ~400 km — so Lelystad→Munich (~636 km) no longer fits in one
         // hop and the auto-planner inserts a charging stop (Siegerland). That's
-        // exactly what we showcase at the Model-settings + Suggested-route steps.
+        // exactly what we showcase at the Route-settings + Suggested-route steps.
         //
         // Order matters: set plane FIRST, so that when pickAirport fires its
         // smartReplan + updateTrajectory the over-range warning in the trajectory
@@ -272,7 +272,7 @@ window.CNSTour = (function () {
         const close = document.querySelector('#flightsMapModal.show .btn-close');
         if (close) { close.click(); await _wait(400); }
     }
-    // Model-settings step: open #modelSettingsModal and lift it above the tour
+    // Route-settings step: open #modelSettingsModal and lift it above the tour
     // overlay (same recipe as the flights-map step) so the user sees the live
     // panel while the popover overviews its groups; closed again on step exit.
     async function _openModelSettings() {
@@ -332,18 +332,18 @@ window.CNSTour = (function () {
                 element: '#planePicker',
                 popover: { title: 'Aircraft', description: 'Pick an aircraft from the visual grid; each tile is a model. The <strong>Usable reach</strong> bar below shows its effective range, after the model\'s reserve and padding, against the catalog maximum. "Edit for this flight" tweaks the specs just for this route, and ➕ adds a custom aircraft (saved on the server for your colleagues).', side: 'right' },
             },
-            // 9. Model settings — surfaced BEFORE the route so the factors that
+            // 9. Route settings — surfaced BEFORE the route so the factors that
             // shape it (and force a stop) are understood first.
             {
                 element: '#planModelSettingsBtn',
-                popover: { title: 'Model settings: applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 20% landing reserve, SID/STAR padding, an alternate-divert reserve, the charging-curve taper, and an 80% default charge target. They also set the charging price (€/kWh) and charger efficiency used for the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are why the Beta Alia\'s 500&nbsp;km range cannot reach Munich in one hop, so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
+                popover: { title: 'Route settings: applied to every calculation', description: 'These operational factors are <strong>on by default</strong> so the numbers stay realistic: a 20% landing reserve, SID/STAR padding, an alternate-divert reserve, the charging-curve taper, and an 80% default charge target. They also set the charging price (€/kWh) and charger efficiency used for the result panel\'s <strong>Airport revenue</strong>. The reserve and padding are why the Beta Alia\'s 500&nbsp;km range cannot reach Munich in one hop, so a charging stop is needed. Open this any time to adjust the factors or switch them off.', side: 'right' },
             },
-            // 9a. Model settings panel — open it and walk its three groups. Pinned
+            // 9a. Route settings panel — open it and walk its three groups. Pinned
             // popover (top) with the modal lifted above the tour overlay, same
             // recipe as the Overview flights-map step.
             {
                 popover: {
-                    title: 'Inside the model settings',
+                    title: 'Inside Route settings',
                     description: 'This panel holds the operational assumptions behind the simulation; changing any of them updates the route, charge times, demand and revenue. Three groups: <strong>Available range</strong> sets the landing reserve and routing padding, which determine how far each aircraft can fly before it must charge; <strong>Charging</strong> sets how full each aircraft charges and how quickly it does so; <strong>Revenue</strong> sets the charging efficiency and the price per kWh that drive the energy and revenue figures.',
                     side: 'over', align: 'center',
                     // Bottom-pinned: the panel is tall (taper chart), so a top pin would
@@ -482,7 +482,7 @@ window.CNSTour = (function () {
             // 19. NEW — Charge target chip
             {
                 element: '#folder .soc-chip',
-                popover: { title: 'Charge target', description: '<strong>Auto</strong> inherits the global default charge target from Model settings (80% by default). Set a percentage here to override it for <em>this</em> airport; a LOCAL target always wins over the GLOBAL default. Higher targets give the plane more reserve but slow charging (lithium-ion tapers above ~80% SoC).', side: 'top' },
+                popover: { title: 'Charge target', description: '<strong>Auto</strong> inherits the global default charge target from Route settings (80% by default). Set a percentage here to override it for <em>this</em> airport; a LOCAL target always wins over the GLOBAL default. Higher targets give the plane more reserve but slow charging (lithium-ion tapers above ~80% SoC).', side: 'top' },
                 onHighlightStarted: async () => { await _ensureDrawerOpen(); await _revealInDrawer('#folder .soc-chip'); },
             },
             // 19a. NEW — Edit / remove a saved flight (pencil + ×) on any row.
@@ -510,7 +510,7 @@ window.CNSTour = (function () {
                     document.body.classList.remove('tour-scheduler-step');
                 },
             },
-            // (Model settings is now shown earlier, in the planner flow — right
+            // (Route settings is now shown earlier, in the planner flow — right
             // after "Plan with charging stops" — so its factors are introduced
             // before the route is computed.)
             // PDF report

@@ -57,7 +57,11 @@ class ImportRouteTest(unittest.TestCase):
         self.assertTrue(data['url'].endswith('/s/' + data['slug']))
         self.assertEqual(data['report']['flights_in'], 3)
         self.assertEqual(data['report']['routes_out'], 3)
-        self.assertEqual(data['report']['infeasible_for_default'], 2)  # AMS-BER (~593km) and AMS-JFK (~5847km) exceed beta_plane 500km; AMS-EDDL (~200km) is within range
+        # Regime reach (Beta IFR usable_range = 630×0.7 − 187.5 − 50 divert = 203.5 km; the
+        # import path carves no SID/STAR): AMS-JFK (~5847) and AMS-BER (~593) exceed it → 2;
+        # AMS-EDDL (~178 great-circle) still fits. The flag means "needs stops/replan", rows
+        # still import. (Was 1 while the check compared against the gross 630 range_km.)
+        self.assertEqual(data['report']['infeasible_for_default'], 2)
         # the stored blob is a build blob and reloads verbatim
         self.assertEqual(shares.load_state(data['slug'])['k'], 'build')
 

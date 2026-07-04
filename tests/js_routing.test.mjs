@@ -374,5 +374,35 @@ test('planChain forwards allowedIdents to each gap planRoute', () => {
   assert.equal(res.stops.map(s => s.ident).join(','), 'S');
 });
 
+// ---- single-count divert: the flat divert_km lives in the reach; nodes add only their excess ----
+const R = loadRouting({});
+test('divertExcessKm: node within the flat divert adds nothing', () => {
+  assert.equal(R.divertExcessKm(30, 50, 1.0), 0);
+});
+test('divertExcessKm: node beyond the flat divert adds only the excess', () => {
+  assert.equal(R.divertExcessKm(80, 50, 1.0), 30);
+});
+test('divertExcessKm: routing factor de-inflates the node alternate before comparing', () => {
+  // 84 km alternate at routingFactor 1.05 → 80 great-circle-equivalent → 30 excess
+  assert.ok(Math.abs(R.divertExcessKm(84, 50, 1.05) - 30) < 1e-9);
+});
+test('divertExcessKm: absent/zero flat behaves like today (full node reserve)', () => {
+  assert.equal(R.divertExcessKm(80, 0, 1.0), 80);
+});
+
+// Vaeridion carries its 80-km planning diversion as a FLAT divert_km in the catalog
+// (planes.json), so routing.js keys single-count off it the same way it does for Beta:
+// a node alternate inside the 80 adds nothing; beyond it, only the excess counts.
+// (The IFR reach itself is untouched — the 400 km incl-reserve measurement short-circuits
+// the build-down before alternateKm applies; pinned by the plane-schema suites.)
+test('vaeridion: catalog divert_km 80 keys the per-node excess (60 → 0, 100 → 20)', () => {
+  const vaeridion = JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8'))
+    .find(p => p.id === 'vaeridion');
+  const flat = Number(vaeridion.divert_km) || 0;   // routing.js:98 reads it exactly like this
+  assert.equal(flat, 80, `vaeridion.divert_km must be 80 (got ${vaeridion.divert_km})`);
+  assert.equal(R.divertExcessKm(60, flat, 1.0), 0, '60 km alternate sits inside the flat 80');
+  assert.equal(R.divertExcessKm(100, flat, 1.0), 20, 'only the excess over the flat 80 counts');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

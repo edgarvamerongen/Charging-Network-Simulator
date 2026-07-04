@@ -9,7 +9,11 @@
     "training_range_km": 87.5,
     "image": "pipistrel.jpg",
     "svg": "pepistrel.svg",
-    "default_charger_id": "dc_22"
+    "default_charger_id": "dc_22",
+    "class": "trainer",
+    "ifr_capable": { "value": false, "basis": "EASA Type Certificate EASA.A.573", "source": "EASA TCDS — day-VFR only (2020)", "confidence": "certified" },
+    "min_takeoff_soc": { "value": 0.50, "source": "Velis Electro POH — no takeoff below 50% SoC", "confidence": "manufacturer-stated" },
+    "surfaces_ok": ["paved", "grass"]
   },
   {
     "id": "beta_plane",
@@ -17,11 +21,18 @@
     "seats": 6,
     "load_kg": 500,
     "battery_kwh": 225,
-    "range_km": 500,
+    "range_km": 630,
     "speed_kmh": 250,
+    "divert_km": 50,
     "image": "beta.png",
     "svg": "beta.svg",
-    "default_charger_id": "dc_320"
+    "default_charger_id": "dc_320",
+    "class": "commuter",
+    "ifr_capable": { "value": true, "source": "design intent — commuter/regional IFR ops; confirm vs type certificate when published", "confidence": "estimated" },
+    "surfaces_ok": ["paved"],
+    "measurements": [
+      { "quantity": "range_km", "value": 630, "basis": "gross", "source": "Beta Alia CX300 — ~336 nm demonstrated", "confidence": "estimated" }
+    ]
   },
   {
     "id": "vaeridion",
@@ -29,11 +40,23 @@
     "seats": 9,
     "load_kg": 1000,
     "battery_kwh": 600,
-    "range_km": 500,
-    "speed_kmh": 400,
+    "range_km": 700,
+    "speed_kmh": 435,
+    "divert_km": 80,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg",
-    "default_charger_id": "dc_1000"
+    "default_charger_id": "dc_1000",
+    "class": "regional",
+    "ifr_capable": { "value": true, "source": "design intent — commuter/regional IFR ops; confirm vs type certificate when published", "confidence": "estimated" },
+    "mtow_kg": { "value": 5700, "source": "Vaeridion spec sheet 2026", "confidence": "manufacturer-stated" },
+    "reserve_included": { "regime": "ifr", "diversion_km": 80, "loiter_min": 30 },
+    "surfaces_ok": ["paved", "grass"],
+    "measurements": [
+      { "quantity": "range_km", "value": 400, "conditions": { "regime": "ifr", "load": "mtow" }, "basis": "usable_incl_reserve", "source": "Vaeridion spec sheet 2026 (400 km / 215 nm + commercial IFR reserves @ MTOW)", "confidence": "manufacturer-stated" },
+      { "quantity": "range_km", "value": 700, "basis": "gross", "source": "internal operational estimate — energy balance (600 kWh batt, 30% floor, 45-min IFR reserve @190 kt + 80 km divert, <=40-min/800-kW turnaround) => ~700 km; internal ePerKm use only, NOT an OEM-published figure", "confidence": "estimated" },
+      { "quantity": "takeoff_distance_m", "value": 800, "conditions": { "surface": "paved", "mass": "mtow" }, "source": "Vaeridion spec sheet 2026 (SL, ISA+0)", "confidence": "manufacturer-stated" },
+      { "quantity": "takeoff_distance_m", "value": 1000, "conditions": { "surface": "grass", "mass": "mtow" }, "source": "Vaeridion spec sheet 2026 (SL, ISA+0)", "confidence": "manufacturer-stated" }
+    ]
   },
   {
     "id": "vaeridion_light",
@@ -45,7 +68,10 @@
     "speed_kmh": 400,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg",
-    "default_charger_id": "dc_1000"
+    "default_charger_id": "dc_1000",
+    "class": "regional",
+    "ifr_capable": { "value": true, "source": "design intent — commuter/regional IFR ops; confirm vs type certificate when published", "confidence": "estimated" },
+    "surfaces_ok": ["paved"]
   },
   {
     "id": "elysian_e9x",
@@ -60,6 +86,10 @@
     "simultaneous_charging": {
       "enabled": true,
       "max": 2
-    }
+    },
+    "class": "regional",
+    "ifr_capable": { "value": true, "source": "design intent — commuter/regional IFR ops; confirm vs type certificate when published", "confidence": "estimated" },
+    "mtow_kg": { "value": 80000, "source": "FlightGlobal 2026-04 — MTOW raised above 80 t", "confidence": "estimated" },
+    "surfaces_ok": ["paved"]
   }
 ]

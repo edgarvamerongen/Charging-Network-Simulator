@@ -26,9 +26,21 @@ window.CNSRecompute = (function () {
     // route + feasibility. Training/direct skip routing. ctx = { allAirports, planeFor,
     // availableRangeKm, allowedTypes, allowedIdents, routingOptions }.
     function recomputeFlight(trip, ctx) {
-        const t = { ...trip };
+        const t = { ...trip };   // full spread carries per-trip fields (rm incl.) across the rebuild, same as _manual on stops
         if (trip.tripType === 'training') { t.feasible = true; t.infeasibleReason = null; return t; }
-        const plane = ctx.planeFor(trip);
+        // Resolve the PHYSICS plane through the shared adapter (same owner as profileForTrip):
+        // catalog planes heal to current catalog physics — divert_km / measurements /
+        // ifr_capable ride along — while custom planes keep their carried spec. ctx.planeFor
+        // is the fallback for a harness stack loaded without flight-model.js.
+        const plane = (window.CNSFlight && CNSFlight.tripPlane) ? CNSFlight.tripPlane(trip) : ctx.planeFor(trip);
+        // The routing reach comes from the ONE seam (P3) under the trip's OWN regime
+        // (trip.rm, absent -> global default) — never from the live form's per-flight
+        // overrides (_ruleModeOverride/_availRangeOverride), which describe the flight
+        // being PLANNED, not this saved one. ctx.availableRangeKm is the same
+        // no-flight-model fallback as ctx.planeFor.
+        const reachKm = (window.CNSFlight && CNSFlight.availableRangeKm)
+            ? CNSFlight.availableRangeKm(plane, { ruleMode: trip.rm || undefined })
+            : ctx.availableRangeKm(plane);
         const mk = (ident, name, lat, lon) => {
             const full = ident && ctx.allAirports.find(a => a.ident === ident);
             return { ident, name, lat: +lat, lon: +lon, alternate_km: full ? full.alternate_km : undefined };
@@ -49,8 +61,10 @@ window.CNSRecompute = (function () {
             // Forward the planner's routing options (the "Prefer" control → typePenalty), or the
             // recompute diverges from the live planner: a hard-coded {} applies the DEFAULT
             // small-airport penalty, which can push a small-field route over maxStops and wrongly
-            // flag a planner-feasible flight as "no route".
-            maxLegKm: ctx.availableRangeKm(plane), options: ctx.routingOptions || {},
+            // flag a planner-feasible flight as "no route". ruleMode rides in the options so the
+            // router's regime gates (flat divert, per-node excess, routing factor) match the reach.
+            maxLegKm: reachKm,
+            options: Object.assign({}, ctx.routingOptions || {}, { ruleMode: trip.rm || undefined }),
         });
         if (chain.error) { t.feasible = false; t.infeasibleReason = chain.error; return t; }
 
@@ -66,7 +80,7 @@ window.CNSRecompute = (function () {
                 origin: dest, destination: origin, plane,
                 allAirports: ctx.allAirports.filter(a => !used.has(a.ident)),
                 allowedTypes: ctx.allowedTypes, allowedIdents: ctx.allowedIdents,
-                options: Object.assign({}, ctx.routingOptions || {}, { maxLegKm: ctx.availableRangeKm(plane) }),
+                options: Object.assign({}, ctx.routingOptions || {}, { maxLegKm: reachKm, ruleMode: trip.rm || undefined }),
             });
             if (seg.error) { t.feasible = false; t.infeasibleReason = seg.error; return t; }
             const closing = (seg.stops || []).map(s => ({ ...s, _auto: true }));
@@ -81,6 +95,7 @@ window.CNSRecompute = (function () {
         const wps = [origin, ...chain.stops, ringDest].map(n => ({ ident: n.ident, name: n.name, lat: n.lat, lon: n.lon }));
         const prof = window.CNSFlight.simulateTrip(plane, wps, {
             tripType: trip.tripType,
+            ruleMode: trip.rm || undefined,   // per-route saved regime (C1); absent -> global default
             getTargetSoc: (id) => (window.CNSDemand && window.CNSDemand.resolveTargetSoc) ? window.CNSDemand.resolveTargetSoc((window.CNSDemand.loadCfg && window.CNSDemand.loadCfg()[id]) || null) : null,
             getChargerKw: () => +trip.chargerPower || 0,
         });

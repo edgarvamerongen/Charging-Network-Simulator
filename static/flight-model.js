@@ -35,6 +35,19 @@ window.CNSFlight = (function () {
     function _routingFactor() { const s = _settings(); return s && s.routingFactor ? s.routingFactor() : 1; }
     function _sidStarKm() { const s = _settings(); return s && s.sidStarPaddingKm ? s.sidStarPaddingKm() : 0; }
     function _usableFraction(plane) { const s = _settings(); return s && s.usableFraction ? s.usableFraction(plane) : 1; }
+    function _ruleMode() { const s = _settings(); return s && s.ruleMode ? s.ruleMode() : 'ifr'; }
+    function _ifrCapable(plane) { const ps = window.CNSPlaneSchema; return (ps && ps.ifrCapable) ? !!ps.ifrCapable(plane) : true; }
+    // Great-circle usable range for a regime: gross×(1−min_soc) − reserve(regime). The min-SoC
+    // floor follows the Route-settings slider (minSoc = 1 − usableFraction: default 0.30 —
+    // identical to the schema constant — and 0 with the toggle off), so ONE control drives both
+    // the energy floor and the reach. Falls back to the old flat usableFraction reach if the
+    // schema module isn't loaded (keeps the pre-cutover node harness alive).
+    function _usableRangeKm(plane, regime) {
+        const ps = window.CNSPlaneSchema; const div = +plane.divert_km || 0;
+        if (!(ps && ps.usableRange)) return (+plane.range_km || 0) * _usableFraction(plane);
+        const f = _usableFraction(plane);
+        return ps.usableRange(plane, regime, null, { alternateKm: div, minSoc: (f > 0 && f <= 1) ? (1 - f) : undefined });
+    }
     function _gridDemandFactor() { const s = _settings(); return s && s.gridDemandFactor ? s.gridDemandFactor() : 1; }
     function _chargeTargetDefault() { const s = _settings(); return s && s.chargeTargetDefault ? s.chargeTargetDefault() : null; }
     function _effectiveChargePower(kw, batt, cr) { const s = _settings(); return (s && s.effectiveChargePower) ? s.effectiveChargePower(kw, batt, cr) : (kw || 0); }
@@ -61,22 +74,43 @@ window.CNSFlight = (function () {
         return waypoints.slice();                            // one-way: O..stops..D  (training handled separately)
     }
 
+    // ---- the single reach seam (P3): planner UI, router and displays all read these ----
+    function effectiveRegime(plane, ruleMode) {
+        return _ifrCapable(plane) ? (ruleMode || _ruleMode()) : 'vfr';
+    }
+    // Regime planning range (incl. the IFR flat divert), BEFORE the sidStar/route carve —
+    // this is the figure surfaces DISPLAY ("usable range"); never display plane.range_km (gross).
+    function planningRangeKm(plane, opts) {
+        return _usableRangeKm(plane, effectiveRegime(plane, opts && opts.ruleMode));
+    }
+    // The reach the router ENFORCES per leg: sidStar carved out, routing factor applied (IFR only).
+    function availableRangeKm(plane, opts) {
+        const regime = effectiveRegime(plane, opts && opts.ruleMode);
+        const route = (regime === 'ifr') ? _routingFactor() : 1.0;
+        const sid = (regime === 'ifr') ? _sidStarKm() : 0;
+        return (route > 0) ? Math.max(0, _usableRangeKm(plane, regime) - sid) / route : 0;
+    }
+
     function simulateTrip(plane, waypoints, opts) {
         opts = opts || {};
         const tripType = opts.tripType || 'one-way';
         const training = tripType === 'training';
-        const route = _routingFactor();
-        const sidStar = _sidStarKm();                                 // fixed km added to EACH leg (SID/STAR); 0 when off
+        // VFR/IFR regime — a PROFILE, not just a reserve. Per-route value when given, else the global
+        // default; VFR-only aircraft (ifr_capable=false) are forced VFR. Airways padding (routing extension
+        // + SID/STAR) is IFR-only; VFR flies near the great-circle, so both drop to identity in VFR.
+        const regime = _ifrCapable(plane) ? (opts.ruleMode || _ruleMode()) : 'vfr';
+        const route = (regime === 'ifr') ? _routingFactor() : 1.0;    // airways routing extension — IFR only
+        const sidStar = (regime === 'ifr') ? _sidStarKm() : 0;        // SID/STAR terminal pad (km/leg) — IFR only
         const grid = _gridDemandFactor();
         const batt = Math.max(0, +plane.battery_kwh || 0);
         const range = Math.max(0, +plane.range_km || 0);
         const speed = Math.max(0, +plane.speed_kmh || 0);
-        const usableFrac = _usableFraction(plane);
-        const usable = batt * usableFrac;
+        const usableFrac = _usableFraction(plane);                    // min-SoC floor (battery-health reserve, 30% default) — the chargeable/usable ENERGY
+        const usable = batt * usableFrac;                             // usable ENERGY for charge + training caps (down to the floor). The regime hold reserve shortens the REACH (availRangeKm), NOT this — else a short-endurance trainer (Velis) wrongly shows 0 usable.
         const reserve = batt - usable;
         const ePerKm = range > 0 ? batt / range : 0;
         const cRate = plane.c_rate;                                   // vestigial; effectiveChargePower handles null
-        const availRangeKm = (range > 0 && route > 0) ? Math.max(0, range * usableFrac - sidStar) / route : 0;   // great-circle reach the planner enforces: the fixed SID/STAR pad is carved out so a padded leg (rawKm·route + sidStar) still respects the plane's max range. The DISPLAYED available range stays the full range·usableFrac (pad shown in the LEG, not the headline reach).
+        const availRangeKm = availableRangeKm(plane, { ruleMode: opts.ruleMode });   // the seam — identical math, one owner. The flat plane.divert_km folds into this reach; per-node alternates count only their excess (routing.js divertExcessKm).
         const getTarget = (typeof opts.getTargetSoc === 'function') ? opts.getTargetSoc : (() => _chargeTargetDefault());
         const getChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => +opts.chargerKw || 0);
         // Interim-deficit charging (per-rotation opts supplied by the scheduler): a shared aircraft
@@ -208,6 +242,45 @@ window.CNSFlight = (function () {
     }
 
     // ---- saved-trip adapters (shared by the demand drawer + the PDF report) -------
+    // Resolve the PHYSICS plane for a saved trip. A trip may predate a catalog data
+    // revision (e.g. Beta 500 -> 630 kg cutover): for a KNOWN catalog plane (planeId
+    // resolves in PLANES_BY_ID) the catalog's range_km/speed_kmh/battery_kwh are
+    // authoritative — the trip's own copies are a stale snapshot and are ignored, so
+    // old saved flights auto-heal to current physics on recompute. A trip whose planeId
+    // does NOT resolve (a CNSPlanes-registered custom plane, or a deleted/unknown one)
+    // keeps its own carried physics exactly as before — there is no separate "custom"
+    // flag anywhere in the codebase; catalog membership IS the detection (mirrors the
+    // cat lookup profileForTrip and report.js._usedPlanes already use). Non-physics
+    // fields (training_range_km, c_rate, name, …) keep the trip-first/catalog-fallback
+    // precedence unchanged. Catalog extras the schema build-down needs (divert_km,
+    // ifr_capable, class, measurements, min_landing_soc, surfaces_ok) ride along from
+    // `cat` whenever it resolved, so CNSFlight.planningRangeKm/effectiveRegime on the
+    // returned plane see the same inputs the spec card does.
+    //
+    // The one and only precedence owner for BOTH live consumers (profileForTrip below) and
+    // any lighter caller that just needs a resolved plane object (e.g. a future regime chip)
+    // — profileForTrip assembles its plane via THIS function, not its own literal, so
+    // scheduler.js/report.js/index.html (all going through profileForTrip) see the heal too.
+    //
+    // trip.battery (NOT trip.battery_kwh) is the real on-the-wire field name: every writer
+    // (flight-entry.js:23, index.html:5435/5649, mobile.js:747) persists it as
+    // `battery: d.plane.battery_kwh`, and every other reader (demand.js, scheduler.js,
+    // report.js) reads `t.battery` — confirmed by grep across the whole codebase.
+    function tripPlane(trip) {
+        if (!trip) return null;
+        const cat = (window.PLANES_BY_ID || {})[trip.planeId] || null;
+        const isCat = !!cat;   // known catalog plane -> its physics are authoritative
+        return Object.assign({}, cat, {
+            id: trip.planeId,
+            name: trip.planeName != null ? trip.planeName : (cat && cat.name),
+            range_km: isCat ? cat.range_km : (trip.range_km != null ? trip.range_km : (cat && cat.range_km)),
+            speed_kmh: isCat ? cat.speed_kmh : (trip.speed_kmh != null ? trip.speed_kmh : (cat && cat.speed_kmh)),
+            battery_kwh: isCat ? cat.battery_kwh : (trip.battery != null ? trip.battery : (cat && cat.battery_kwh)),
+            c_rate: trip.c_rate != null ? trip.c_rate : (cat && cat.c_rate),
+            training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : (cat && cat.training_range_km),
+        });
+    }
+
     // Rebuild a FlightProfile for a SAVED folder trip: geometry from persisted coords,
     // plane from the saved spec (R4) or the catalog (planeId), per-AIRPORT target via
     // opts.getTargetSoc. Returns null (caller falls back to the legacy math) when the
@@ -216,14 +289,7 @@ window.CNSFlight = (function () {
         opts = opts || {};
         if (!trip || trip.originLat == null || trip.originLon == null) return null;
         try {
-            const cat = (window.PLANES_BY_ID || {})[trip.planeId] || {};
-            const plane = {
-                battery_kwh: trip.battery != null ? trip.battery : cat.battery_kwh,
-                range_km: trip.range_km != null ? trip.range_km : cat.range_km,
-                speed_kmh: trip.speed_kmh != null ? trip.speed_kmh : cat.speed_kmh,
-                c_rate: trip.c_rate,
-                training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : cat.training_range_km,
-            };
+            const plane = tripPlane(trip) || {};
             if (!plane.range_km || !plane.battery_kwh) return null;
             const wp = (x) => ({ ident: x.ident, name: x.name, lat: x.lat, lon: x.lon });
             const o = { ident: trip.originIdent, name: trip.originName, lat: trip.originLat, lon: trip.originLon };
@@ -232,6 +298,7 @@ window.CNSFlight = (function () {
             const waypoints = (trip.tripType === 'training') ? [wp(o)] : [wp(o), ...stops, wp(d)];
             return simulateTrip(plane, waypoints, {
                 tripType: trip.tripType,
+                ruleMode: trip.rm || undefined,         // per-route saved regime (C1); absent -> global default
                 getTargetSoc: opts.getTargetSoc,
                 getChargerKw: opts.getChargerKw || (() => 0),
                 trainingRangeKm: plane.training_range_km,
@@ -252,5 +319,5 @@ window.CNSFlight = (function () {
         return ch ? ch.energyKwh : null;
     }
 
-    return { simulateTrip, _expandChain, profileForTrip, chargeEnergyAt };
+    return { simulateTrip, _expandChain, tripPlane, profileForTrip, chargeEnergyAt, effectiveRegime, planningRangeKm, availableRangeKm };
 })();

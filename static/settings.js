@@ -52,9 +52,11 @@ window.CNSSettings = (function () {
     // v4: landing-reserve default drops 30% → 20%; the catalog ranges in planes.json
     // are recalibrated against it (range_km = familiar available range ÷ 0.8).
     // v5: alternate reserve + SID/STAR padding default ON (realistic ops out of the box).
-    const KEY = 'cns_settings_v5';
+    // v6: landing-reserve floor recalibrated 0.20 → 0.30 (perf-engine cutover; catalog gross
+    // ranges re-derived against the 30% floor) — retires persisted 0.20 blobs.
+    const KEY = 'cns_settings_v6';
     const DEFAULTS = Object.freeze({
-        landingReserve:    { enabled: true,  minLandingSoc: 0.20 },   // 0..1 — planes.json ranges are calibrated to this default
+        landingReserve:    { enabled: true,  minLandingSoc: 0.30 },   // 0..1 — advised industry floor (battery health); gross figures recalibrated to this
         alternateReserve:  { enabled: true },                        // divert-to-nearest-airport reserve; uses each airport's pre-baked alternate_km
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
         chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
@@ -62,6 +64,8 @@ window.CNSSettings = (function () {
         sidStarPadding:    { enabled: true,  km: 10 },                // fixed km added to EACH leg (SID+STAR terminal track miles); additive on top of routingPadding
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
+        ruleMode:          { value: 'ifr' },                          // VFR/IFR regime — global default a new route inherits; per-route overrides; VFR-only aircraft (ifr_capable=false) are forced to VFR at the call site. ADDITIVE: nothing reads this until the Step-2 engine cutover.
+        reserveMin:        { vfr_day: 30, vfr_night: 45, ifr: 45 },   // final-reserve MINUTES per regime (EASA NCO / FAA 91.151), held WITHIN the usable battery — a SEPARATE buffer from the min-SoC floor. ADDITIVE until Step 2.
     });
 
     // Cloned so call sites can't mutate the frozen defaults via the returned object.
@@ -250,11 +254,31 @@ window.CNSSettings = (function () {
         };
     }
 
+    /** The VFR/IFR regime for planning — the global default a new route inherits
+     *  (the per-route value takes precedence once routes carry one, §5.6). The
+     *  capability gate (`ifr_capable`) forces VFR-only aircraft to 'vfr' at the
+     *  call site. ADDITIVE: no engine reads this until the Step-2 cutover. */
+    function ruleMode() {
+        const r = loadAll().ruleMode;
+        const v = r && r.value;
+        return (v === 'vfr' || v === 'ifr') ? v : 'ifr';
+    }
+
+    /** Final-reserve minutes for a regime ('vfr'|'vfr_day'|'vfr_night'|'ifr').
+     *  EASA NCO / FAA 91.151 minutes held WITHIN the usable battery — a SEPARATE
+     *  buffer from the min-SoC floor. 'vfr' maps to day. ADDITIVE until Step 2. */
+    function reserveMinFor(regime) {
+        const r = loadAll().reserveMin || {};
+        const key = regime === 'vfr' ? 'vfr_day' : regime;
+        const v = +r[key];
+        return isFinite(v) && v >= 0 ? v : (+r.ifr || 45);
+    }
+
     return {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
         usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
-        alternateReserveEnabled,
+        alternateReserveEnabled, ruleMode, reserveMinFor,
     };
 })();

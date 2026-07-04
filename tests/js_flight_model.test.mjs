@@ -23,6 +23,7 @@ const SET = {
   default:   S => S.reset(),
   target100: S => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 1.0 } }); },
   target50:  S => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 0.5 } }); },
+  vfr:       S => { S.reset(); S.save({ ruleMode: { value: 'vfr' } }); },
 };
 const wp = (k) => ({ ident: k, name: AP[k].name, lat: AP[k].lat, lon: AP[k].lon });
 
@@ -66,15 +67,20 @@ let pass = 0, fail = 0, deltas = 0;
 //      (reach + pad == full range). (Default-OFF is covered by the goldens.)
 (function sidStarIntegration() {
   const S = loadStack();
-  const plane = PLANES[Object.keys(PLANES)[0]];
+  // Regime cutover: SID/STAR + routing padding are IFR-only, so use an IFR-capable plane
+  // (Beta). The reach the planner enforces is now the regime usableRange (gross×(1−min_soc)
+  // − reserve − divert), NOT the raw range — the pad is carved out of THAT.
+  const plane = PLANES['beta_plane'];
   const ePerKm = plane.battery_kwh / plane.range_km;
   const waypoints = [wp('EHAM'), wp('LFPG')];
-  const run = () => S.CNSFlight.simulateTrip(plane, waypoints, { tripType: 'one-way', getChargerKw: () => 250 });
-  // baseline: distance factors off -> route = 1, no pad, full usable range
-  S.CNSSettings.save({ routingPadding: { enabled: false }, landingReserve: { enabled: false }, sidStarPadding: { enabled: false } });
+  const run = () => S.CNSFlight.simulateTrip(plane, waypoints, { tripType: 'one-way', ruleMode: 'ifr', getChargerKw: () => 250 });
+  // the IFR planning reach before any SID/STAR pad (what avail0 must equal)
+  const usable = S.CNSPlaneSchema.usableRange(plane, 'ifr', null, { alternateKm: +plane.divert_km || 0 });
+  // baseline: SID/STAR + routing padding OFF -> leg == rawKm, reach == the usable planning range
+  S.CNSSettings.save({ routingPadding: { enabled: false }, sidStarPadding: { enabled: false } });
   const base = run();
   const rawKm = base.legs[0].rawKm, d0 = base.legs[0].distKm, e0 = base.legs[0].energyKwh, avail0 = base.availRangeKm;
-  // SID/STAR on at 30 km
+  // SID/STAR on at 30 km (IFR only)
   S.CNSSettings.save({ sidStarPadding: { enabled: true, km: 30 } });
   const padded = run();
   const d1 = padded.legs[0].distKm, e1 = padded.legs[0].energyKwh, avail1 = padded.availRangeKm;
@@ -84,9 +90,9 @@ let pass = 0, fail = 0, deltas = 0;
     [eq(d1, rawKm + 30), `SID/STAR 30km -> distKm == rawKm + 30 (${d1} vs ${rawKm + 30})`],
     [eq(e1, ePerKm * d1), `energy tracks padded distKm (${e1} vs ${ePerKm * d1})`],
     [e1 > e0 + 1e-6, `padded energy exceeds baseline (${e1} > ${e0})`],
-    [eq(avail0, plane.range_km), `reach (factors off) == range (${avail0} vs ${plane.range_km})`],
-    [eq(avail1, plane.range_km - 30), `reach RESERVES the pad — == range − 30 (${avail1} vs ${plane.range_km - 30})`],
-    [eq(avail1 + 30, plane.range_km), `reach + pad == full range — a padded leg still respects the max (${avail1 + 30} vs ${plane.range_km})`],
+    [eq(avail0, usable), `reach (no pad) == regime usable range (${avail0} vs ${usable})`],
+    [eq(avail1, usable - 30), `reach RESERVES the pad — == usable − 30 (${avail1} vs ${usable - 30})`],
+    [eq(avail1 + 30, usable), `reach + pad == full usable range — a padded leg still respects the max (${avail1 + 30} vs ${usable})`],
     // display↔engine parity: the planning-aid distance shown in the trajectory pill +
     // route list is _dispKm = CNSRouting.routedKm + sidStarPaddingKm. It must equal the
     // engine's per-leg distKm, so the SHOWN distance moves with the pad exactly like the
@@ -190,5 +196,125 @@ for (const c of golden.cases) {
     } else { pass++; console.log(`  ok    ${c.name} [${v}]`); }
   }
 }
+// ---- the single reach seam: every consumer (planner UI, router, displays) reads these ----
+(function reachSeam() {
+  const S = loadStack();
+  const beta = PLANES['beta_plane'];          // 630 gross, 225 kWh, 250 km/h, divert_km 50, IFR-capable
+  const velis = PLANES['pipistrel_velis'];    // ifr_capable false (certified)
+  S.CNSSettings.reset();                      // defaults: ruleMode ifr, sidStar 10 ON, routingPadding OFF
+  const eq = (a, b, t) => Math.abs(a - b) < (t || 1e-6);
+  const checks = [
+    [S.CNSFlight.effectiveRegime(beta) === 'ifr', `effectiveRegime(beta) defaults to global ifr`],
+    [S.CNSFlight.effectiveRegime(beta, 'vfr') === 'vfr', `explicit ruleMode wins`],
+    [S.CNSFlight.effectiveRegime(velis, 'ifr') === 'vfr', `VFR-only plane is forced vfr`],
+    [eq(S.CNSFlight.planningRangeKm(beta), 203.5), `beta IFR planning = 441 − 187.5 − 50 (got ${S.CNSFlight.planningRangeKm(beta)})`],
+    [eq(S.CNSFlight.planningRangeKm(beta, { ruleMode: 'vfr' }), 316), `beta VFR planning = 441 − 125, no divert (got ${S.CNSFlight.planningRangeKm(beta, { ruleMode: 'vfr' })})`],
+    [eq(S.CNSFlight.availableRangeKm(beta), 193.5), `beta IFR reach carves the 10 km sidStar (got ${S.CNSFlight.availableRangeKm(beta)})`],
+    [eq(S.CNSFlight.availableRangeKm(beta, { ruleMode: 'vfr' }), 316), `beta VFR reach: no sidStar, no routing (got ${S.CNSFlight.availableRangeKm(beta, { ruleMode: 'vfr' })})`],
+    [eq(S.CNSFlight.planningRangeKm(velis), 0), `velis planning range 0 — reserve exceeds endurance`],
+    // engine parity: simulateTrip's enforced reach IS the seam value
+    [eq(S.CNSFlight.simulateTrip(beta, [wp('EHAM'), wp('LFPG')], { tripType: 'one-way', getChargerKw: () => 250 }).availRangeKm,
+        S.CNSFlight.availableRangeKm(beta)), `simulateTrip.availRangeKm === availableRangeKm(plane)`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    seam — ${msg}`); }
+    else { fail++; console.log(`  FAIL  seam — ${msg}`); }
+  }
+})();
+
+// ---- Fix 5: the Route-settings min-SoC slider drives the REACH, not just the energy floor ----
+// minSoc = 1 − usableFraction threads through _usableRangeKm → planningRangeKm, restoring
+// one-control-full-effect coherence (the spec-card tooltips promise it). At the default
+// (enabled, 0.30) this is numerically IDENTICAL to the schema constant — goldens pinned.
+// At 0.40: beta VFR planning = 630×0.60 − 125 = 253. Toggle OFF → minSoc 0 → 630 − 125
+// = 505: more reach, but still never the confidential gross 630.
+(function minSocReachSeam() {
+  const S = loadStack();
+  const beta = PLANES['beta_plane'];
+  const eq = (a, b) => Math.abs(a - b) < 1e-6;
+  S.CNSSettings.reset();
+  S.CNSSettings.save({ landingReserve: { enabled: true, minLandingSoc: 0.40 } });
+  const at40 = S.CNSFlight.planningRangeKm(beta, { ruleMode: 'vfr' });
+  S.CNSSettings.save({ landingReserve: { enabled: false } });
+  const off = S.CNSFlight.planningRangeKm(beta, { ruleMode: 'vfr' });
+  const checks = [
+    [eq(at40, 253), `minSoc 0.40 → beta VFR planning = 630×0.60 − 125 = 253 (got ${at40})`],
+    [eq(off, 505), `reserve OFF → minSoc 0 → 630 − 125 = 505, never the gross (got ${off})`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    minSoc-reach — ${msg}`); }
+    else { fail++; console.log(`  FAIL  minSoc-reach — ${msg}`); }
+  }
+})();
+
+// ---- tripPlane: catalog planes ignore stale per-trip physics snapshots (auto-migration) ----
+// No `customPlane` flag exists anywhere in the codebase (grepped); the real detection mechanism
+// mirrors profileForTrip's own lookup (:246) and report.js's _usedPlanes (:211): a plane is
+// "catalog" iff its planeId resolves in window.PLANES_BY_ID. Anything else (a CNSPlanes-registered
+// custom plane, or a truly unknown/deleted planeId) keeps the trip's own carried physics.
+(function tripPlaneHeal() {
+  const S = loadStack();
+  const staleTrip = { planeId: 'beta_plane', range_km: 500, speed_kmh: 250, battery_kwh: 225 };
+  const p1 = S.CNSFlight.tripPlane(staleTrip);
+  const customTrip = { planeId: 'my_custom', range_km: 333, speed_kmh: 200, battery_kwh: 100, name: 'X' };
+  const p2 = S.CNSFlight.tripPlane(customTrip);
+  const checks = [
+    [p1 && p1.range_km === 630, `catalog plane heals to catalog range (got ${p1 && p1.range_km})`],
+    [p1 && p1.divert_km === 50, `catalog divert_km rides along`],
+    [p2 && p2.range_km === 333, `custom plane keeps its own physics (got ${p2 && p2.range_km})`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    heal — ${msg}`); }
+    else { fail++; console.log(`  FAIL  heal — ${msg}`); }
+  }
+})();
+
+// ---- tripPlane wired LIVE into profileForTrip: the heal above is only useful if the actual
+// saved-trip path (scheduler.js:99 / report.js:68 / index.html:4239, all via profileForTrip)
+// assembles its plane through tripPlane instead of its own inline literal. Coords are required —
+// profileForTrip returns null without originLat/originLon/destLat/destLon (see :273).
+// Field name note: a saved trip carries battery under `battery` (NOT `battery_kwh`) — every real
+// writer persists `battery: d.plane.battery_kwh` (flight-entry.js:23, index.html:5435/5649,
+// mobile.js:747); these fixtures mirror that on-the-wire shape rather than the FlightProfile's
+// own `battery_kwh` naming.
+(function tripPlaneLiveInProfileForTrip() {
+  const S = loadStack();
+  const o = AP.EHAM, d = AP.LFPG;
+  // Stale catalog trip: carries an old (pre-cutover) physics snapshot for a plane that IS in
+  // the catalog today. Un-wired profileForTrip would use trip.range_km (500) verbatim; wired
+  // through tripPlane it must heal to the catalog's current range_km (630), matching
+  // availableRangeKm(PLANES['beta_plane']) exactly (heal visible on the LIVE path).
+  const staleTrip = {
+    planeId: 'beta_plane', planeName: 'Beta Alia CX300', tripType: 'one-way',
+    range_km: 500, speed_kmh: 250, battery: 225,
+    originIdent: 'EHAM', originName: o.name, originLat: o.lat, originLon: o.lon,
+    destIdent: 'LFPG', destName: d.name, destLat: d.lat, destLon: d.lon,
+  };
+  const p1 = S.CNSFlight.profileForTrip(staleTrip, {});
+  const expect1 = S.CNSFlight.availableRangeKm(PLANES['beta_plane']);
+  // Custom trip: planeId not in catalog, own physics carried on the trip — must NOT heal;
+  // profileForTrip must simulate with exactly this trip's own numbers.
+  const customTrip = {
+    planeId: 'my_custom', planeName: 'X', tripType: 'one-way',
+    range_km: 333, speed_kmh: 200, battery: 100,
+    originIdent: 'EHAM', originName: o.name, originLat: o.lat, originLon: o.lon,
+    destIdent: 'LFPG', destName: d.name, destLat: d.lat, destLon: d.lon,
+  };
+  const p2 = S.CNSFlight.profileForTrip(customTrip, {});
+  const customPlane = { battery_kwh: 100, range_km: 333, speed_kmh: 200 };
+  const expect2 = S.CNSFlight.availableRangeKm(customPlane);
+  const checks = [
+    // p1/p2 must both RESOLVE (non-null) — a null profile means profileForTrip bailed
+    // (e.g. its plane literal never picked up the trip-carried battery), which is itself
+    // a failure, not a vacuous pass.
+    [p1 != null && p1.availRangeKm === expect1, `LIVE — stale catalog trip through profileForTrip heals to catalog reach (got ${p1 && p1.availRangeKm}, want ${expect1})`],
+    [p2 != null && p2.availRangeKm === expect2, `LIVE — custom trip through profileForTrip keeps its own reach (got ${p2 && p2.availRangeKm}, want ${expect2})`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    ${msg}`); }
+    else { fail++; console.log(`  FAIL  ${msg}`); }
+  }
+})();
+
 console.log(`\n${pass} pass, ${deltas} intended delta(s), ${fail} fail (of ${golden.cases.length * golden._meta.settings.length})`);
 process.exit(fail ? 1 : 0);

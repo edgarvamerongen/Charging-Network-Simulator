@@ -35,6 +35,7 @@ from datetime import datetime
 
 from economics import (DAY_START_MIN, DAY_END_MIN, REALISATION_LOW,
                        REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH)
+from plane_schema import usable_range, ifr_capable
 
 FORMAT_NAME = 'NRG2FLY Charging Network Simulator — workbook'
 FORMAT_VERSION = 'CNS Workbook v2'
@@ -398,12 +399,15 @@ class SpreadsheetBuilder:
         # --- AIRCRAFT (input) ---
         self._section(ws, r, 'AIRCRAFT', 'input — round-trippable')
         r += 1
-        cols = ['Aircraft ID', 'Name', 'Battery (kWh)', 'Range (km)', 'Speed (km/h)', 'Seats', 'Payload (kg)']
+        cols = ['Aircraft ID', 'Name', 'Battery (kWh)', 'Usable range (km)', 'Speed (km/h)', 'Seats', 'Payload (kg)']
         self._header_row(ws, r, cols)
         hdr = r
         r += 1
         for pl in self.planes:
-            vals = [pl.get('id'), pl.get('name'), _num(pl.get('battery_kwh')), _num(pl.get('range_km')),
+            regime = 'ifr' if ifr_capable(pl) else 'vfr'
+            # server-side default-configuration figure (no per-user settings)
+            range_km = usable_range(pl, regime, alternate_km=(pl.get('divert_km') or 0))
+            vals = [pl.get('id'), pl.get('name'), _num(pl.get('battery_kwh')), _num(round(range_km, 1)),
                     _num(pl.get('speed_kmh')), _num(pl.get('seats')), _num(pl.get('load_kg'))]
             for i, v in enumerate(vals, start=1):
                 self._cell(ws, r, i, _safe_text(v), color=C_INPUT, fmt=(FMT_NUM if i in (3, 4, 5, 7) else None))

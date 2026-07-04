@@ -91,6 +91,7 @@
   var reachable = {{ reachable | tojson }};
   var networkAP = {{ network_airports | tojson }};
   var plane     = {{ plane | tojson }};
+  var rangeKm   = {{ range_km | tojson }};
 
   var map = L.map('map', {
     zoomControl: false,
@@ -130,9 +131,12 @@
       .bindTooltip(origin.name, { permanent: true, direction: 'top', offset: [0, -8], className: '' })
       .addTo(map);
 
-    // Range circle
-    var rangeKm = (plane && plane.range_km) || 500;
-    L.circle(oLatLng, { radius: rangeKm * 1000, color: 'rgba(29,158,117,0.3)', fillColor: 'rgba(29,158,117,0.07)', weight: 1 }).addTo(map);
+    // Range circle — server-computed regime usable range (never the raw
+    // catalog gross); 0 draws no circle rather than falling back to a stale
+    // guess.
+    if (rangeKm > 0) {
+      L.circle(oLatLng, { radius: rangeKm * 1000, color: 'rgba(29,158,117,0.3)', fillColor: 'rgba(29,158,117,0.07)', weight: 1 }).addTo(map);
+    }
 
     // Reachable airports
     var bounds = L.latLngBounds([oLatLng]);

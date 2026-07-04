@@ -65,6 +65,19 @@ test('currentBuild stores INPUTS only — no computed energy', () => {
   assert.equal('charges' in f1, false);
 });
 
+test('currentBuild carries a per-flight ruleMode override (rm) through the whitelist', () => {
+  const withRm = [{ ...FOLDER[0], rm: 'ifr' }];
+  const B = load(stubs(withRm, {}, {}, undefined));
+  const f1 = B.currentBuild().fl[0];
+  assert.equal(f1.rm, 'ifr');
+});
+
+test('currentBuild omits rm for a legacy/global-default flight (absent, no default injected)', () => {
+  const B = load(stubs(FOLDER, {}, {}, undefined));   // FOLDER flights carry no rm
+  const f1 = B.currentBuild().fl[0];
+  assert.equal('rm' in f1, false);
+});
+
 test('currentBuild omits destination for training trips', () => {
   const B = load(stubs(FOLDER, {}, {}, undefined));
   const t1 = B.currentBuild().fl[1];
@@ -103,6 +116,37 @@ test('_simPayload maps stored inputs to an /api/simulate body', () => {
     destination: { ident: 'EDDF', name: 'Frankfurt', lat: 50.03, lon: 8.56 },
     stops: [{ ident: 'EDLV', name: 'Niederrhein', lat: 51.6, lon: 6.1 }],
   });
+});
+
+test('applyBuild threads a stored per-flight rm into the restored folder entry', async () => {
+  const saved = {};
+  const fromSimCalls = [];
+  const restoreStubs = stubs([], {}, {}, undefined);
+  restoreStubs.CNSDemand = { loadFolder: () => [], loadCfg: () => ({}), saveFolder: (f) => { saved.folder = f; }, saveCfg: () => {} };
+  restoreStubs.CNSState = { KEYS: { sched: 'cns_schedule' }, getJSON: (k, d) => d, setJSON: () => {} };
+  restoreStubs.CNSFlightEntry = {
+    fromSim: (d, opts) => { fromSimCalls.push(opts); return { id: opts.id, planeId: d.plane.id, rm: opts.rm }; },
+  };
+  const B = load(restoreStubs);
+
+  const fetchStub = async () => ({
+    json: async () => ({ plane: { id: 'beta_plane', name: 'Beta', battery_kwh: 225 }, charger: { name: 'C', power_kw: 320 }, trip_type: 'oneway', leg_energy_kwh: 150 }),
+  });
+
+  const st = {
+    v: 1, k: 'build',
+    fl: [
+      { id: 'f1', p: 'beta_plane', c: 'dc_320', t: 'oneway', fn: 2, fu: 'day', rm: 'ifr', o: { i: 'EHLE', la: 52.46, lo: 5.52, n: 'L' }, d: { i: 'EDDF', la: 50.03, lo: 8.56, n: 'F' } },
+      { id: 'f2', p: 'beta_plane', c: 'dc_320', t: 'oneway', fn: 1, fu: 'day', o: { i: 'EHLE', la: 52.46, lo: 5.52, n: 'L' }, d: { i: 'EDDF', la: 50.03, lo: 8.56, n: 'F' } },
+    ],
+  };
+  await B.applyBuild(st, fetchStub);
+
+  assert.equal(fromSimCalls[0].rm, 'ifr');
+  assert.equal(saved.folder[0].rm, 'ifr');
+  // f2 has no stored rm (legacy/global-default) — must arrive as undefined, never a default value.
+  assert.equal(fromSimCalls[1].rm, undefined);
+  assert.equal(saved.folder[1].rm, undefined);
 });
 
 test('applyBuild re-simulates flights, replaces the folder, restores cfg/sch/ms', async () => {

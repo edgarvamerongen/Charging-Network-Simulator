@@ -413,7 +413,7 @@
            map content the user is supposed to be watching. */
         .tour-modal-front, .tour-modal-front .modal-backdrop { z-index: 100050 !important; }
         body.tour-network-step .driver-overlay { z-index: 100040; }
-        /* Model-settings tour step: lower the overlay so the lifted #modelSettingsModal
+        /* Route-settings tour step: lower the overlay so the lifted #modelSettingsModal
            shows; its top-pinned popover (cns-tour-popover-top, z 100070) floats above. */
         body.tour-modalfront-step .driver-overlay { z-index: 100040; }
         /* Demand Calculator tour step: lift the WHOLE drawer above the tour
@@ -648,7 +648,7 @@
         .btn-export { padding: 5px 11px; font-size: .8rem; }
         .btn-export .dl { opacity: .75; margin-right: 2px; }
 
-        /* Ghost utility button for low-emphasis tool actions (Model settings).
+        /* Ghost utility button for low-emphasis tool actions (Route settings).
            Renders as plain text + icon with a tinted hover state — visually
            recedes vs the orange primary CTA so the value-delivery action wins. */
         .btn-ghost-tool {
@@ -690,7 +690,7 @@
         }
         .trip-traj.d-none { display: none; }
         /* Over-range warning inside the trajectory pill — flips the pill to a
-           red treatment so the user can't miss that the current Model settings
+           red treatment so the user can't miss that the current Route settings
            make the chosen route infeasible. */
         .trip-traj.traj-error { background: rgba(195,61,61,.10); border-left-color: var(--danger); }
         .trip-traj .traj-warn { color: var(--danger); font-weight: 700; }
@@ -1232,7 +1232,7 @@
             color: var(--brand-ink); background: rgba(43,47,90,.08); cursor: help;
         }
 
-        /* Model-settings modal: one row per opt-in factor. */
+        /* Route-settings modal: one row per opt-in factor. */
         .rs-row { padding: 9px 0; border-bottom: 1px solid var(--panel-border); }
         .rs-row:last-child { border-bottom: none; }
         .rs-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; font-size: .9rem; color: var(--ink); }
@@ -1261,6 +1261,10 @@
         .rs-q { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #cbd5e1; background: #fff; color: var(--muted); font-size: .66rem; font-weight: 700; line-height: 15px; text-align: center; cursor: help; display: inline-block; user-select: none; }
         .rs-q:hover, .rs-q:focus { background: var(--primary); color: #fff; border-color: var(--primary); outline: none; }
         .rs-q-inline { width: 14px; height: 14px; line-height: 13px; font-size: .6rem; vertical-align: middle; }
+        /* B1: VFR/IFR global default — sits above the opt-in factor grid (always-on
+           mode, not a toggle), so it gets its own bordered block rather than an rs-cell. */
+        .rs-rulemode-row { padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--panel-border); }
+        .rs-rulemode-row .trip-seg { max-width: 220px; margin-top: 2px; }
         .rs-curve { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--panel-border); }
         .rs-curve:not(.on) .rs-curve-body { opacity: .4; }
         .rs-curve-body { margin-top: 6px; }
@@ -1486,6 +1490,8 @@
         .trip-seg-btn { flex: 1 1 0; border: none; background: transparent; border-radius: 999px; padding: 6px 4px; font-size: .78rem; font-weight: 600; color: var(--ink-soft); cursor: pointer; transition: background .12s, color .12s; white-space: nowrap; }
         .trip-seg-btn:hover { color: var(--ink); }
         .trip-seg-btn.active { background: var(--brand-ink); color: #fff; }
+        .trip-seg-btn:disabled { opacity: .45; cursor: not-allowed; }
+        .trip-seg-btn:disabled:hover { color: var(--ink-soft); }
 
         /* Charging-stops toggle + advanced section + suggested route list */
         .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 8px; flex-wrap: wrap; }   /* narrow rail: the settings pill drops below the toggle instead of cramming */
@@ -1566,10 +1572,10 @@
         }
         .sim-reset:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
 
-        /* Compact "Model settings" trigger in the Plan a flight panel.
+        /* Compact "Route settings" trigger in the Plan a flight panel.
            Opens the same modal as the Demand Calculator's button. Sits
            where the old > Advanced details used to live. */
-        /* Model-settings trigger: borderless ghost pill — gear + label, with the
+        /* Route-settings trigger: borderless ghost pill — gear + label, with the
            active-factor count as a notification dot on the button's corner. */
         .modelset-btn {
             position: relative; background: none; border: none;
@@ -1629,6 +1635,11 @@
         .stops-list .type-medium { background: #dbeafe; color: #1d4ed8; }
         .stops-list .type-large { background: #d1fae5; color: #065f46; }
         .stops-list .type-small { background: #fee2e2; color: #991b1b; }
+        /* Regime chip (C4): terse IFR/VFR flag on a route — the trip's EFFECTIVE regime, always
+           shown (IFR is still information, not just an alert state). Bespoke, matches .type-tag's
+           shape/tokens (NOT a Bootstrap badge) so it sits quietly beside a role/name cell or the
+           result panel's aircraft name without competing with the purple .alt-hint divert flag. */
+        .rm-chip { display: inline-block; font-size: .62rem; padding: 1px 5px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); background: rgba(74,79,118,.10); margin-left: 6px; cursor: default; }
         .stops-list .leg-dist { font-size: .7rem; color: var(--muted); justify-self: end; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .stops-error { color: var(--danger); font-size: .82rem; }
         .stops-error button, #enableAllTypesBtn, #enableNetworkBtn, #enableAllPoolsBtn { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
@@ -1782,17 +1793,18 @@
                         <img id="psThumb" class="ps-thumb ps-id-hidden d-none" alt="">
                         <div class="ps-main">
                             <div class="ps-name ps-id-hidden" id="psName"></div>
+                            <span id="psVfrOnly" class="badge text-bg-secondary d-none">VFR only</span>
                             <div class="reach-row">
-                                <div class="reach-label">Usable reach: <strong id="reachVal">—</strong> of <span id="reachCat">—</span> catalog range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></div>
+                                <div class="reach-label">Usable reach: <strong id="reachVal">—</strong> of <span id="reachCat">—</span> VFR max <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Route settings → Landing reserve.">?</span></div>
                                 <div class="reach-bar"><div class="reach-fill" id="reachFill"></div></div>
                             </div>
                             <div class="ps-stats">
-                                <span class="ps-stat ps-stat-hide"><strong id="psRange"></strong><span class="ps-stat-l">range</span></span>
+                                <span class="ps-stat ps-stat-hide"><strong id="psRange"></strong><span class="ps-stat-l">usable range</span></span>
                                 <span class="ps-stat ps-stat-hide"><strong id="psBattery"></strong><span class="ps-stat-l">battery</span></span>
                                 <span class="ps-stat ps-stat-hide"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
                                 <span class="ps-stat ps-stat-hide"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
                                 <span class="ps-stat"><strong id="psUsage"></strong><span class="ps-stat-l">avg usage</span></span>
-                                <span class="ps-stat ps-stat-avail ps-stat-hide"><strong id="psAvail"></strong><span class="ps-stat-l">available range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></span></span>
+                                <span class="ps-stat ps-stat-avail ps-stat-hide"><strong id="psAvail"></strong><span class="ps-stat-l">available range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Route settings → Landing reserve.">?</span></span></span>
                             </div>
                             <button type="button" id="psOverrideToggle" class="ps-override-toggle">Edit for this flight <span class="chev">▾</span></button>
                         </div>
@@ -1852,6 +1864,18 @@
                     <p id="circularHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a closed loop: Departure → stop(s) → back to Departure. Add at least one stop — the last stop is the loop's far point. For a simple there-and-back, pick Return.</p>
                 </div>
 
+                <!-- Per-route VFR/IFR override: Auto inherits the Route-settings global
+                     default (B1); VFR/IFR pin this route regardless of the global. Forced
+                     to VFR + disabled for aircraft that aren't IFR-capable (:ifrCapable). -->
+                <div class="field">
+                    <label>Rules</label>
+                    <div id="ruleModeSeg" class="trip-seg" role="group" aria-label="Flight rules for this route">
+                        <button type="button" class="trip-seg-btn" data-rm="auto" title="Uses the global default">Auto</button>
+                        <button type="button" class="trip-seg-btn" data-rm="vfr">VFR</button>
+                        <button type="button" class="trip-seg-btn" data-rm="ifr">IFR</button>
+                    </div>
+                </div>
+
                 <!-- Charging stops: when on, an over-range route is auto-split into legs
                      through intermediate airports (A* shortest-path with preference bias). -->
                 <div class="field stops-toggle-row">
@@ -1859,11 +1883,11 @@
                         <input type="checkbox" id="withStops">
                         <span>Charging stops</span>
                     </label>
-                    <!-- Icon-only Model settings trigger (gear + active-factor count):
+                    <!-- Icon-only Route settings trigger (gear + active-factor count):
                          same modal as the Demand Calculator — operators can tweak
                          model factors while planning. -->
-                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Open Model settings — model factors cascade through the planner and result panel">
-                        <span class="gear" aria-hidden="true">⚙</span> Model settings
+                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Open Route settings — model factors cascade through the planner and result panel">
+                        <span class="gear" aria-hidden="true">⚙</span> Route settings
                         <span id="planModelBadge" class="model-badge d-none">0</span>
                     </button>
                 </div>
@@ -1977,7 +2001,7 @@
                      specs live on the in-form spec card under the selector (F6). -->
                 <div class="result-aircraft">
                     <img id="acPhoto" class="ac-photo d-none" alt="">
-                    <div class="result-ac-name" id="acName"></div>
+                    <div class="result-ac-name"><span id="acName"></span><span id="rmChip" class="rm-chip"></span></div>
                 </div>
 
                 <!-- Route: one row per action (leg / en-route charge) + a total,
@@ -2039,7 +2063,7 @@
                     <label class="inline-field">Show airport
                         <select id="airportFilter" class="form-select form-select-sm"></select>
                     </label>
-                    <button id="modelSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true">⚙</span> Model settings <span id="modelBadge" class="model-badge d-none">0</span></button>
+                    <button id="modelSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true">⚙</span> Route settings <span id="modelBadge" class="model-badge d-none">0</span></button>
                     <button id="generateReport" class="btn-cns btn-sm-cns btn-export" type="button" title="Generate a PDF report of the current plan"><span class="dl" aria-hidden="true">⤓</span> PDF</button>
                     <button id="exportSpreadsheet" class="btn-cns btn-sm-cns btn-export" type="button" title="Export the whole plan as an Excel spreadsheet (.xlsx)"><span class="dl" aria-hidden="true">⤓</span> XLSX</button>
                     <button id="shareBuild" class="btn-cns btn-sm-cns" type="button" title="Copy a shareable link to this whole network — all flights, chargers &amp; schedule"><span aria-hidden="true">🔗</span> Share build</button>
@@ -2074,12 +2098,12 @@
         </div>
     </div>
 
-    <!-- Model settings: opt-in factors that cascade through every calculation. -->
+    <!-- Route settings: opt-in factors that cascade through every calculation. -->
     <div class="modal fade" id="modelSettingsModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Model settings</h5>
+                    <h5 class="modal-title">Route settings</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -2087,6 +2111,18 @@
                         Operational model factors layered on the physical model — they cascade through the result
                         panel, demand calculator, scheduler and PDF. Hover <span class="rs-q rs-q-inline">?</span> for detail.
                     </p>
+
+                    <div class="rs-rulemode-row" id="msRuleMode">
+                        <div class="rs-cell-head">
+                            <label class="rs-toggle" style="cursor: default;"><span>Flight rules</span></label>
+                            <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Global default regime a new route inherits — IFR carries the larger reserve (45 min) and SID/STAR padding; VFR-only aircraft are always forced to VFR regardless of this setting.">?</span>
+                        </div>
+                        <div class="est-note mb-1">Default regime for new routes</div>
+                        <div class="trip-seg" role="group" aria-label="Flight rules">
+                            <button type="button" class="trip-seg-btn" data-rm="vfr">VFR</button>
+                            <button type="button" class="trip-seg-btn" data-rm="ifr">IFR</button>
+                        </div>
+                    </div>
 
                     <div class="rs-cat">Available range</div>
                     <div class="rs-grid">
@@ -2374,6 +2410,14 @@
                             </div>
                         </div>
                     </div>
+                    <div class="mb-2">
+                        <label class="form-label">Rules</label>
+                        <div id="efRuleModeSeg" class="trip-seg" role="group" aria-label="Flight rules for this route">
+                            <button type="button" class="trip-seg-btn" data-rm="auto" title="Uses the global default">Auto</button>
+                            <button type="button" class="trip-seg-btn" data-rm="vfr">VFR</button>
+                            <button type="button" class="trip-seg-btn" data-rm="ifr">IFR</button>
+                        </div>
+                    </div>
                     <div class="row g-2">
                         <div class="col-6 mb-2">
                             <label class="form-label">Frequency</label>
@@ -2418,6 +2462,7 @@
     <script src="/static/chargers.js?v={{ asset_version }}"></script>
     <script src="/static/demand.js?v={{ asset_version }}"></script>
     <script src="/static/routing.js?v={{ asset_version }}"></script>
+    <script src="/static/plane-schema.js?v={{ asset_version }}"></script>
     <script src="/static/flight-model.js?v={{ asset_version }}"></script>
     <script src="/static/recompute.js?v={{ asset_version }}"></script>
     <!-- domain modules -->
@@ -2714,7 +2759,7 @@
                 } else {
                     km = hk(O, D) * (circular ? 2 : 1);   // stop-less circular: show the full loop out-and-back
                 }
-                // Direct-flight range check against current Model settings —
+                // Direct-flight range check against current Route settings —
                 // surfaces the over-range condition in the always-visible pill
                 // ONLY when "Plan with charging stops" is off (km is the direct leg then).
                 const plane = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
@@ -2726,12 +2771,17 @@
                     // km, so using the pad-carved reach here would double-count it. Equivalent to
                     // the planner's rawKm·route + sid ≤ full range, just in routed units.
                     const maxLeg = _availRangeShownKm(plane);   // full available range (routed km)
-                    // Divert reserve (when on): the destination must also reach its nearest alternate.
-                    // km + maxLeg are in routed (padded) units, so the raw alternate_km adds directly
-                    // (the unpadded /route cancels against the padded scale) — matches validateRoute.
+                    // Divert reserve (when on): the destination must also reach its nearest
+                    // alternate — but only the EXCESS over the flat plane.divert_km already inside
+                    // the IFR reach counts (CNSRouting.divertExcessKm — matches the planner and
+                    // validateRoute). The excess comes back in raw-leg units while km + maxLeg are
+                    // routed (padded) here, so it scales by ×route before adding.
                     const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled());
                     const destFull = (requireAlt && selected.destination.ident) ? airportByIdent[selected.destination.ident] : null;
-                    const altKm = (destFull && destFull.alternate_km != null) ? (+destFull.alternate_km || 0) : 0;
+                    const destAltKm = (destFull && destFull.alternate_km != null) ? (+destFull.alternate_km || 0) : 0;
+                    const regime = (window.CNSFlight && CNSFlight.effectiveRegime) ? CNSFlight.effectiveRegime(plane, _ruleModeOverride || undefined) : 'ifr';
+                    const route = (regime === 'ifr' && window.CNSSettings) ? CNSSettings.routingFactor() : 1.0;
+                    const altKm = route * CNSRouting.divertExcessKm(destAltKm, regime === 'ifr' ? (+plane.divert_km || 0) : 0, route);
                     if (km + altKm > maxLeg) {
                         warn = ` <span class="traj-warn">⚠ ${fmtDist(km + altKm - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
@@ -2788,7 +2838,7 @@
             return netOn ? _fullNetworkIdents() : new Set();
         }
         function _routingOptions() {
-            // Reserve margin is now exclusively handled by the Model settings
+            // Reserve margin is now exclusively handled by the Route settings
             // (landing-reserve toggle, with per-aircraft min_landing_soc). The
             // routing planner reads CNSSettings.usableFraction directly, so we
             // no longer pass reservePct here.
@@ -2806,6 +2856,7 @@
         // payload (payload.plane) and is NEVER written back to planes.json.
         let _planeOverride = null;
         let _availRangeOverride = null;   // per-flight "available range" override (km), or null = use the computed value
+        let _ruleModeOverride = null;     // per-route VFR/IFR override ('vfr'|'ifr'), or null = inherit the global default (Route settings)
         function _basePlane() {
             const id = document.getElementById('plane').value;
             return customById[id] || BUILTIN_PLANES_BY_ID[id] || null;
@@ -2820,29 +2871,32 @@
         }
         function _selectedPlane() { return selectedPlaneSpec(); }
         function _usableFrac(p) { return (window.CNSSettings && p) ? CNSSettings.usableFraction(p) : 1.0; }
-        // Great-circle reach the planner + range checks enforce: range × usableFraction
-        // (usable battery after the landing reserve), MINUS the fixed SID/STAR terminal km,
-        // ÷ routing padding. So a leg fits iff rawKm·route + sidStar ≤ the full available
-        // range — the pad counts against the plane's max range (the leg carries the pad).
-        // The DISPLAYED available range (_availRangeShownKm) stays the FULL figure, so the
-        // headline max range doesn't shrink; only the routing reach reserves the pad.
         function _availableRangeKm(plane) {
             const p = plane || selectedPlaneSpec();
             if (!p || !p.range_km) return null;
-            const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
-            const base = _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
-            return Math.max(0, base - sid / route);   // carve out the SID/STAR pad (great-circle equivalent)
+            const ruleMode = _ruleModeOverride || undefined;
+            if (_availRangeOverride == null) return CNSFlight.availableRangeKm(p, { ruleMode });
+            // manual override replaces the planning range; carve sidStar/route the same way the engine does
+            const regime = CNSFlight.effectiveRegime(p, ruleMode);
+            const route = (regime === 'ifr' && window.CNSSettings) ? CNSSettings.routingFactor() : 1.0;
+            const sid = (regime === 'ifr' && window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
+            return (route > 0) ? Math.max(0, _availRangeOverride - sid) / route : 0;
         }
-        // The available range to DISPLAY/EDIT: the FULL usable range — undo the /route AND add
-        // back the SID/STAR pad carved out of the reach, so the headline max range stays whole.
-        // The pad shows up in the LEG distance, not here; the router uses _availableRangeKm.
+        // The available range to DISPLAY/EDIT: the regime PLANNING range (never the gross catalog km).
+        // The sidStar pad shows up in the LEG distance, not here; the router uses _availableRangeKm.
         function _availRangeShownKm(plane) {
-            const a = _availableRangeKm(plane);
-            if (a == null) return null;
-            const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
-            return a * route + sid;   // = base·route = the full available range, pad-independent
+            const p = plane || selectedPlaneSpec();
+            if (!p || !p.range_km) return null;
+            return _availRangeOverride != null ? _availRangeOverride : CNSFlight.planningRangeKm(p, { ruleMode: _ruleModeOverride || undefined });
+        }
+        // Displayed leg length — must match the engine's per-leg distKm (regime-gated pads).
+        function _dispLegKm(a, b, plane) {
+            const p = plane || selectedPlaneSpec();
+            const regime = (window.CNSFlight && p) ? CNSFlight.effectiveRegime(p, _ruleModeOverride || undefined) : 'ifr';
+            const raw = CNSRouting.haversineKm(a, b);
+            const route = (regime === 'ifr' && window.CNSSettings) ? CNSSettings.routingFactor() : 1.0;
+            const sid = (regime === 'ifr' && window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
+            return raw * route + sid;
         }
         function _terminus() {
             if (!selected.origin || !selected.destination) return null;
@@ -2861,21 +2915,22 @@
             plannedLegIssues = []; plannedError = null;
             const t = _terminus(); const plane = _selectedPlane();
             if (!t || !plane) return;
-            // Effective reach honours the model landing-reserve setting
-            // when on; otherwise it's nameplate range (no advanced override).
-            const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
-            const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
             const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
-            // Mirror routing.js's altReserveKm (line 89): when the alternate reserve is on, each
-            // ARRIVAL node must ALSO hold enough range to divert to its nearest airport
-            // (alternate_km / route — unpadded, a divert is flown direct). 0 when off, so the
-            // per-leg test stays byte-identical to before and matches what the planner enforces.
+            // Mirror routing.js's altReserveKm (excess-over-flat contract): each ARRIVAL node
+            // must also hold enough range to divert to its nearest airport, but the flat
+            // plane.divert_km (IFR) already lives INSIDE maxLeg — so a node's alternate_km
+            // counts only its EXCESS over that flat figure (CNSRouting.divertExcessKm; the
+            // alternate is de-inflated by route first — a divert is flown direct, unpadded).
+            // 0 when off, so the per-leg test matches what the planner enforces.
+            const regime = (window.CNSFlight && CNSFlight.effectiveRegime) ? CNSFlight.effectiveRegime(plane, _ruleModeOverride || undefined) : 'ifr';
+            const route = (regime === 'ifr' && window.CNSSettings) ? CNSSettings.routingFactor() : 1.0;
+            const flatDivertKm = (regime === 'ifr') ? (+plane.divert_km || 0) : 0;
             const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled());
             const altReserveKm = (wp) => {
                 if (!requireAlt || !wp) return 0;
                 const full = wp.ident ? airportByIdent[wp.ident] : null;
                 const km = (full && full.alternate_km != null) ? +full.alternate_km : (+wp.alternate_km || 0);
-                return (isFinite(km) ? km : 0) / route;
+                return CNSRouting.divertExcessKm(isFinite(km) ? km : 0, flatDivertKm, route);
             };
             const chain = _ringChain(t);
             for (let i = 0; i < chain.length - 1; i++) {
@@ -2892,7 +2947,7 @@
         // fields and fills any over-range gap between them with auto-stops
         // (runs CNSRouting.planRoute once per segment, n−1 times for n
         // waypoints). When the toggle is off it's a direct flight; we still
-        // validate so plannedLegIssues reflects current Model settings.
+        // validate so plannedLegIssues reflects current Route settings.
         // True only while the recompute triggered by the user's own toggle-on click runs
         // (set/cleared in the withStops change handler) — gates the no-stops auto-off.
         let _stopsUserToggle = false;
@@ -2927,13 +2982,17 @@
 
             // Preserve manual stops, auto-fill each gap — the shared routing core
             // (CNSRecompute re-plans saved flights through the SAME planChain).
+            // ruleMode is added on TOP of _routingOptions() here (not baked into that
+            // shared helper) — _routingOptions() also feeds _recomputeCtx() for the
+            // bulk re-plan of every OTHER saved flight, which must NOT inherit the
+            // live planner's currently-open-form override.
             const chainRes = CNSRouting.planChain({
                 origin: t.origin, dest: t.dest, manualStops: manual, plane,
                 allowedTypes: _allowedTypes(), allAirports,
                 allowedIdents: _plannerAllowedIdents(),
                 blacklist: _blacklistedStopIdents,
                 maxLegKm: _availableRangeKm(plane),
-                options: _routingOptions(),
+                options: Object.assign({}, _routingOptions(), { ruleMode: _ruleModeOverride || undefined }),
             });
             if (chainRes.error && manual.length === 0) { plannedError = chainRes.error; renderStops(); return; }
             plannedStops = chainRes.stops;
@@ -2947,7 +3006,7 @@
                     origin: t.dest, destination: t.origin, plane,
                     allAirports: allAirports.filter(ap => !used.has(ap.ident) && !_blacklistedStopIdents.has(ap.ident)),
                     allowedTypes: _allowedTypes(), allowedIdents: _plannerAllowedIdents(),
-                    options: Object.assign({}, _routingOptions(), { maxLegKm: _availableRangeKm(plane) }),
+                    options: Object.assign({}, _routingOptions(), { maxLegKm: _availableRangeKm(plane), ruleMode: _ruleModeOverride || undefined }),
                 });
                 if (seg.error) { if (!plannedError) plannedError = seg.error; }
                 else closingStops = (seg.stops || []).map(s => ({ ...s, _auto: true }));
@@ -3037,7 +3096,7 @@
                         origin: a, destination: b, plane,
                         allAirports: filtered, allowedTypes: types,
                         allowedIdents: idents,
-                        options: { ..._routingOptions(), maxLegKm: maxLeg },
+                        options: { ..._routingOptions(), maxLegKm: maxLeg, ruleMode: _ruleModeOverride || undefined },
                     });
                     return !r.error;
                 });
@@ -3480,10 +3539,15 @@
             renderStops();
             clearRoute(); setRoute([]);   // route gone → revert any blue route teardrops to orange
         });
-        // (advReserve was removed when the global Model settings took over reserve handling)
+        // (advReserve was removed when the global Route settings took over reserve handling)
         // Switching planes re-plans the route (range changes auto-stops) AND must
         // redraw the map — recomputeRoute only updates the stop chain + validation.
-        document.getElementById('plane').addEventListener('change', () => { _planeOverride = null; _availRangeOverride = null; renderPlaneSpecCard(); smartReplan(); drawLiveRoute(); });
+        document.getElementById('plane').addEventListener('change', () => {
+            _planeOverride = null; _availRangeOverride = null;
+            // A VFR-only aircraft can't carry a stale IFR/VFR pin behind its forced gate.
+            if (window.CNSPlaneSchema && !CNSPlaneSchema.ifrCapable(selectedPlaneSpec())) _ruleModeOverride = null;
+            renderPlaneSpecCard(); smartReplan(); drawLiveRoute();
+        });
 
         // ---- Selected-aircraft spec card + per-flight override --------------
         // ---------- Aircraft photo-grid picker ----------
@@ -3495,7 +3559,9 @@
             const bits = [];
             if (p.seats != null) bits.push(p.seats + ' seats');
             if (p.battery_kwh != null) bits.push(fmtEnergy(+p.battery_kwh));
-            if (p.range_km != null) bits.push(fmtDist(+p.range_km));
+            const planKm = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(p) : null;
+            if (planKm > 0) bits.push(fmtDist(planKm));
+            else if (p.training_range_km) bits.push(fmtDist(+p.training_range_km) + ' local');
             if (p.speed_kmh != null) bits.push(fmtSpeed(+p.speed_kmh));
             return bits.join(' · ');
         }
@@ -3614,10 +3680,10 @@
             const fill = document.getElementById('reachFill');
             if (!fill || !spec) return;
             const avail = _availRangeShownKm(spec);
-            const cat = +spec.range_km || 0;
+            const best = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(spec, { ruleMode: 'vfr' }) : 0;
             document.getElementById('reachVal').textContent = (avail == null) ? '—' : fmtDist(avail);
-            document.getElementById('reachCat').textContent = cat ? fmtDist(cat) : '—';
-            fill.style.width = (cat > 0 && avail != null ? Math.max(0, Math.min(100, avail / cat * 100)) : 0) + '%';
+            document.getElementById('reachCat').textContent = best > 0 ? fmtDist(best) : '—';
+            fill.style.width = (best > 0 && avail != null ? Math.max(0, Math.min(100, avail / best * 100)) : 0) + '%';
         }
         // ---------- trip-type segmented control ----------
         (function () {
@@ -3642,6 +3708,38 @@
             sel.addEventListener('change', sync);
             sync();
         })();
+        // ---------- per-route Rules (VFR/IFR) segmented control ----------
+        // Auto (_ruleModeOverride = null) inherits the Route-settings global default;
+        // VFR/IFR pin this route. VFR-only aircraft (!ifrCapable) force VFR and disable
+        // all three buttons — the operator can't opt a trainer into IFR from here.
+        function syncRuleModeSeg() {
+            const seg = document.getElementById('ruleModeSeg');
+            if (!seg) return;
+            const spec = selectedPlaneSpec();
+            const vfrOnly = !!(window.CNSPlaneSchema && spec && !CNSPlaneSchema.ifrCapable(spec));
+            const active = vfrOnly ? 'vfr' : (_ruleModeOverride || 'auto');
+            seg.querySelectorAll('.trip-seg-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.rm === active);
+                b.disabled = vfrOnly;
+                b.title = vfrOnly ? 'VFR only — type certificate' : (b.dataset.rm === 'auto' ? 'Uses the global default' : '');
+            });
+        }
+        (function () {
+            const seg = document.getElementById('ruleModeSeg');
+            if (!seg) return;
+            seg.querySelectorAll('.trip-seg-btn').forEach(b => b.addEventListener('click', () => {
+                if (b.disabled) return;
+                const next = b.dataset.rm === 'auto' ? null : b.dataset.rm;
+                if (next === _ruleModeOverride) return;
+                _ruleModeOverride = next;
+                renderPlaneSpecCard(); smartReplan(); drawLiveRoute();   // renderPlaneSpecCard() re-syncs this control too (VFR-only gating shares its plane read)
+            }));
+            // customById (script-scoped, declared much later) isn't initialized yet at
+            // THIS load-time call — selectedPlaneSpec()/_basePlane() would throw a TDZ
+            // ReferenceError. Harmless to skip: renderPlaneSpecCard() re-syncs this
+            // control on the very first real plane interaction anyway.
+            try { syncRuleModeSeg(); } catch (e) { /* pre-init: customById not loaded yet */ }
+        })();
 
         function renderPlaneSpecCard() {
             const card = document.getElementById('planeSpecCard');
@@ -3655,6 +3753,10 @@
             if (spec.image) { thumb.src = '/pics/' + spec.image; thumb.alt = spec.name; thumb.classList.remove('d-none'); }
             else thumb.classList.add('d-none');
             document.getElementById('psName').textContent = spec.name;
+            const vfrOnly = document.getElementById('psVfrOnly');
+            if (vfrOnly) vfrOnly.classList.toggle('d-none',
+                !(window.CNSPlaneSchema && spec && !CNSPlaneSchema.ifrCapable(spec)));
+            if (typeof syncRuleModeSeg === 'function') syncRuleModeSeg();
             _refreshSpecStats(spec);
             // Prefill the override with the current available range so the operator
             // sees the value they're editing (blank = use the computed default).
@@ -3664,7 +3766,9 @@
         }
         function _refreshSpecStats(spec) {
             _renderReachBar(spec);   // the bar IS the visible 'available range' — every stat refresh updates it
-            document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
+            const _plan = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(spec) : null;
+            document.getElementById('psRange').textContent =
+                _plan > 0 ? fmtDist(_plan) : (spec.training_range_km ? fmtDist(spec.training_range_km) + ' local' : '—');
             document.getElementById('psBattery').textContent = fmtEnergy(spec.battery_kwh || 0);
             document.getElementById('psSpeed').textContent = (typeof fmtSpeed === 'function') ? fmtSpeed(spec.speed_kmh) : (spec.speed_kmh + ' km/h');
             document.getElementById('psSeats').textContent = spec.seats != null ? spec.seats : '—';
@@ -3683,10 +3787,12 @@
             if (toggle && panel) toggle.addEventListener('click', () => panel.classList.toggle('d-none'));
             function onEdit() {
                 const v = parseFloat(document.getElementById('psoAvailRange').value);
-                // The field shows the FULL range when the engine is on; store the great-circle
-                // reach the router uses (/route) so reachability stays single-count.
-                const _r = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-                _availRangeOverride = (isFinite(v) && v > 0) ? (v / _r) : null;   // field shows the full range; store the great-circle reach the router uses
+                // The field shows _availRangeShownKm (the regime PLANNING range) and
+                // _availRangeShownKm returns _availRangeOverride verbatim when set —
+                // so store the typed value as-is; _availableRangeKm carves sidStar/route
+                // out for the router itself. (No /route here — that round-tripped the
+                // OLD shown-range formula, which no longer applies post-seam.)
+                _availRangeOverride = (isFinite(v) && v > 0) ? v : null;
                 const card = document.getElementById('planeSpecCard');
                 const spec = selectedPlaneSpec();
                 if (spec) _refreshSpecStats(spec);
@@ -4168,20 +4274,17 @@
         }
         // ---- Flight engine (static/flight-model.js) bridge ------------------------
         // Distance to SHOW in the planning aids (trajectory pill + suggested route): the
-        // ROUTED leg length = great-circle × routing padding + the fixed SID/STAR pad,
-        // so it equals the engine's per-leg distKm and moves with BOTH distance factors
-        // (the result panel reads the same profile). Called once per leg, so the fixed pad
-        // lands on each leg. The reach math itself stays great-circle and pad-free (see
-        // maxLeg) — only the shown number carries the padding.
+        // regime-gated leg length (see _dispLegKm), so it equals the engine's per-leg
+        // distKm and moves with BOTH distance factors (the result panel reads the same
+        // profile) — VFR legs don't carry IFR routing/SID-STAR pads the engine no longer
+        // burns. No plane in scope at these call sites, so it reads selectedPlaneSpec().
         function _dispKm(a, b) {
-            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
-            if (window.CNSRouting) return CNSRouting.routedKm(a, b) + sid;   // routed (great-circle × padding) + SID/STAR terminal km
-            return haversineKm([a.lat, a.lon], [b.lat, b.lon]) + sid;   // pre-CNSRouting fallback (great-circle) + pad
+            return _dispLegKm(a, b);
         }
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
         // origin + planned stops + dest; the engine OWNS the retour mirror + training
-        // loop (R1). Preview target is the GLOBAL default (the flight isn't in the
-        // network yet, so no per-airport SoC overrides apply).
+        // loop (R1). Preview target has no per-airport SoC overrides (the flight isn't
+        // in the network yet) but DOES honour the planner's per-route rule-mode override.
         function _engineProfile(data) {
             // The simulated result carries _origin/_dest; the LIVE PREVIEW (drawLiveRoute)
             // carries origin/destination (no underscore). Accept BOTH, else the preview map
@@ -4195,6 +4298,7 @@
                 const waypoints = (data.trip_type === 'training') ? [wp(o)] : [wp(o), ...stops, wp(d)];
                 return CNSFlight.simulateTrip(selectedPlaneSpec(), waypoints, {
                     tripType: data.trip_type,
+                    ruleMode: _ruleModeOverride || undefined,
                     getTargetSoc: () => (window.CNSDemand && CNSDemand.resolveTargetSoc ? CNSDemand.resolveTargetSoc({}) : null),
                     getChargerKw: () => (data.charger && data.charger.power_kw) || 0,
                     trainingRangeKm: data.training_range_km,
@@ -4536,7 +4640,7 @@
 
         let _lastResultData = null;
         function renderResult(data) {
-            _lastResultData = data;   // remembered so Model-settings changes re-render live
+            _lastResultData = data;   // remembered so Route-settings changes re-render live
             const p = data.plane;
             // Multi-leg result has totals in different fields; map them to a unified shape
             const isMulti = !!data.multi_leg;
@@ -4616,10 +4720,15 @@
             // Aircraft specs now live on the in-form spec card (F6) — the result
             // panel only echoes the model name beside the photo.
             document.getElementById('acName').textContent = p.name;
+            // Regime chip (C4): the trip's EFFECTIVE rules — same seam _dispLegKm uses
+            // (p is the same plane object rendered throughout this panel; _ruleModeOverride
+            // is this route's override, or undefined = inherit the global default).
+            document.getElementById('rmChip').textContent = (window.CNSFlight && CNSFlight.effectiveRegime)
+                ? CNSFlight.effectiveRegime(p, _ruleModeOverride || undefined).toUpperCase() : '';
 
             // ---- Route: one row per action, driven by the SAME phases the headline
             //      and DES use (taper- + charge-target-aware), so every per-stop time
-            //      and energy reconciles with the totals and updates live with Model
+            //      and energy reconciles with the totals and updates live with Route
             //      settings. The terminal top-up is NOT shown here — it happens after
             //      arrival and belongs to the Charging section. ---------------------
             const _esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -4713,9 +4822,13 @@
             document.getElementById('hlRevenueSub').textContent =
                 `${num(_kwhShown)} kWh · €${_rate.toFixed(2)}/kWh` + (_fN > 1 ? ` · ${_fN}×` : '');
 
+            // Audit trail shows the DISPLAYED range (planning ceiling), never the gross catalog
+            // figure — same reasoning as psUsage (spec-card): the ratio itself (avg_usage_kwh_per_100km)
+            // is server-computed and unchanged; only the visible divisor operand is swapped.
+            const _pRangeShown = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(p) : (p.range_km || 0);
             const common = [
                 `avg usage      = battery / range × 100`,
-                `               = ${p.battery_kwh} kWh / ${p.range_km} km × 100 = ${p.avg_usage_kwh_per_100km} kWh/100km`, ``,
+                `               = ${p.battery_kwh} kWh / ${Math.round(_pRangeShown)} km × 100 = ${p.avg_usage_kwh_per_100km} kWh/100km`, ``,
             ];
             let lines;
             if (isMulti) {
@@ -4813,7 +4926,7 @@
             if (grp) hdr.setAttribute('aria-expanded', String(!grp.classList.toggle('collapsed')));
         });
 
-        // Live-refresh the result panel when Model settings change (charge target,
+        // Live-refresh the result panel when Route settings change (charge target,
         // taper, charger efficiency …) so the preview never goes stale — no re-sim.
         let _lastRoutingSig = null;   // routing-relevant model factors, to detect when a replan is needed
         if (window.CNSSettings && CNSSettings.subscribe) {
@@ -4855,15 +4968,15 @@
                         : 'Please pick both airports from the suggestions list.';
                 errDiv.classList.remove('d-none'); syncUnset('origin'); if (!isTraining && tripType !== 'circular') syncUnset('destination'); return;
             }
-            // Re-validate against the current model settings + chain BEFORE
-            // calling the backend. The backend doesn't know about Model
+            // Re-validate against the current route settings + chain BEFORE
+            // calling the backend. The backend doesn't know about Route
             // settings (reserve / padding etc.) so we block here to keep the
             // calculated result consistent with what the planner is showing.
             if (!isTraining) {
                 validateRoute();
                 if (plannedLegIssues.length) {
                     document.getElementById('result').classList.add('d-none');
-                    errDiv.innerHTML = `<strong>Cannot simulate:</strong> ${plannedError || 'one or more legs exceed the aircraft\'s available range.'} Adjust the route, change aircraft, or relax Model settings.`;
+                    errDiv.innerHTML = `<strong>Cannot simulate:</strong> ${plannedError || 'one or more legs exceed the aircraft\'s available range.'} Adjust the route, change aircraft, or relax Route settings.`;
                     errDiv.classList.remove('d-none');
                     return;
                 }
@@ -4941,7 +5054,7 @@
             // Hide ALL stops-related affordances in training mode — a training
             // flight loops around a single airport, so the destination, the
             // + Add stop link, the stops container, the suggested route panel
-            // and the model-settings toggle row are all irrelevant. Stop
+            // and the route-settings toggle row are all irrelevant. Stop
             // FIELDS aren't destroyed (just hidden) so switching back to
             // one-way/retour restores the user's draft.
             destField.classList.toggle('d-none', isTraining || isCircular);
@@ -5043,14 +5156,20 @@
         function _recomputeCtx() {
             // Saved flights are immune to MAP options: the recompute pool is the FULL
             // catalog (every size class + every network site). Feasibility is a pure
-            // physics verdict driven by Model settings — the map filters are a view
+            // physics verdict driven by Route settings — the map filters are a view
             // lens for the live planner only (see the 2026-06-10 hierarchy spec).
             return {
                 allAirports,
                 allowedTypes: ['small_airport', 'medium_airport', 'large_airport'],
                 allowedIdents: new Set(Object.keys(nrgChargerDb || {})),
+                // Fallbacks only: CNSRecompute resolves each trip's plane via
+                // CNSFlight.tripPlane (catalog heal — divert_km/measurements ride along)
+                // and its reach via CNSFlight.availableRangeKm under the trip's own rm.
+                // Both must stay PURE of the live form — never _availableRangeKm(), which
+                // reads _ruleModeOverride/_availRangeOverride (they describe the flight
+                // being planned, not a saved one).
                 planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate }),
-                availableRangeKm: (plane) => _availableRangeKm(plane),
+                availableRangeKm: (plane) => CNSFlight.availableRangeKm(plane),
                 routingOptions: _routingOptions(),   // soft Prefer bias — stop choice, never feasibility
             };
         }
@@ -5176,8 +5295,13 @@
                     const infeasibleBadge = (t.feasible === false)
                         ? ` <span class="tag-infeasible" title="${(t.infeasibleReason || 'No valid route at the current settings').replace(/"/g, '&quot;')}">⚠ no route</span>`
                         : '';
+                    // Regime chip (C4): the trip's EFFECTIVE rules — t.rm absent falls back to
+                    // the global default inside effectiveRegime, which is the point (a saved
+                    // trip with no override still shows what it flies under today).
+                    const rmChip = (window.CNSFlight && CNSFlight.effectiveRegime)
+                        ? `<span class="rm-chip">${CNSFlight.effectiveRegime(CNSFlight.tripPlane(t), t.rm).toUpperCase()}</span>` : '';
                     return `<tr class="folder-trip${t.feasible === false ? ' folder-trip-infeasible' : ''}">
-                        <td>${roleTag} ${dir}${infeasibleBadge}</td>
+                        <td>${roleTag} ${dir}${infeasibleBadge}${rmChip}</td>
                         <td>${escHtml(t.planeName)}</td>
                         <td>${tripLabel}</td>
                         <td><div class="input-group input-group-sm" style="width:150px">
@@ -5272,7 +5396,7 @@
                         </div>
                         <div class="soc-panel ${targetSoc != null ? '' : 'd-none'}" data-soc-ident="${ident}">
                             <div class="soc-row">
-                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="auto" ${targetSoc == null ? 'checked' : ''}><span>Auto — use the global default charge target (Model settings)</span></label>
+                                <label class="opt-check"><input type="radio" name="soc-${ident}" value="auto" ${targetSoc == null ? 'checked' : ''}><span>Auto — use the global default charge target (Route settings)</span></label>
                             </div>
                             <div class="soc-row">
                                 <label class="opt-check"><input type="radio" name="soc-${ident}" value="target" ${targetSoc != null ? 'checked' : ''}><span>Charge to at least</span></label>
@@ -5430,6 +5554,7 @@
                 // freq>1 — one-way is always separate. Read from the selector.
                 fleetMode: (document.querySelector('input[name="fleetMode"]:checked') || {}).value || 'separate',
             };
+            if (_ruleModeOverride) trip.rm = _ruleModeOverride;   // absent = inherit the global default (Route settings)
             if (d.multi_leg) {
                 // Multi-leg: save the full chain so computeAirports can attribute each charge event.
                 Object.assign(trip, {
@@ -5537,6 +5662,7 @@
         // recharge energy and timings stay consistent with the rest of the app.
         let _editFlightModal = null;
         let _editingFlight = null;   // { tripId, ident }
+        let _efRuleModeOverride = null;   // the modal's pending Rules choice ('vfr'|'ifr'|null=Auto), mirrors _ruleModeOverride
 
         const _editPlaneSpec = (id) => customById[id] || BUILTIN_PLANES_BY_ID[id] || null;
         const _editPlaneList = () => BUILTIN_PLANES.concat(window.CNSPlanes ? CNSPlanes.list() : []);
@@ -5550,13 +5676,32 @@
             else { thumb.removeAttribute('src'); thumb.classList.add('d-none'); }
             if (nameEl) nameEl.textContent = spec ? spec.name : '';
             if (spec) {
-                const range = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
+                // Never present the gross catalog range_km — same rule as _planeSpecsLine (photo-grid
+                // tiles): show the regime planning ceiling, training-loop reach for training-only planes.
+                const _plan = (window.CNSFlight && CNSFlight.planningRangeKm) ? CNSFlight.planningRangeKm(spec) : null;
+                const range = _plan > 0 ? fmtDist(_plan) : (spec.training_range_km ? fmtDist(+spec.training_range_km) + ' local' : '—');
                 specEl.textContent = `${spec.battery_kwh || 0} kWh · ${range}${spec.seats ? ' · ' + spec.seats + ' seats' : ''}`;
             } else specEl.textContent = '';
         }
         function _updateEditFleetVisibility() {
             const tt = document.getElementById('efTripType').value;
             document.getElementById('efFleetRow').classList.toggle('d-none', !(tt === 'retour' || tt === 'training' || tt === 'circular'));
+        }
+        // Mirrors the planner's syncRuleModeSeg/gating, scoped to the modal's own
+        // #efRuleModeSeg + _efRuleModeOverride and the modal's OWN plane selection
+        // (#efPlane), which can change independently of the trip's saved plane.
+        function _syncEfRuleModeSeg() {
+            const seg = document.getElementById('efRuleModeSeg');
+            if (!seg) return;
+            const spec = _editPlaneSpec(document.getElementById('efPlane').value);
+            const vfrOnly = !!(window.CNSPlaneSchema && spec && !CNSPlaneSchema.ifrCapable(spec));
+            if (vfrOnly) _efRuleModeOverride = null;   // no stale IFR/VFR pin behind a forced-VFR gate
+            const active = vfrOnly ? 'vfr' : (_efRuleModeOverride || 'auto');
+            seg.querySelectorAll('.trip-seg-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.rm === active);
+                b.disabled = vfrOnly;
+                b.title = vfrOnly ? 'VFR only — type certificate' : (b.dataset.rm === 'auto' ? 'Uses the global default' : '');
+            });
         }
 
         function openFlightEdit(tripId, ident) {
@@ -5570,6 +5715,7 @@
                 : t.tripType === 'circular' ? `${t.originName} → ${t.destName} → ${t.originName}`
                 : `${t.originName} → ${t.destName}`;
             document.getElementById('efTripType').value = t.tripType || 'one-way';
+            _efRuleModeOverride = t.rm || null;
 
             // Aircraft options (catalog + custom). Keep the trip's current plane in
             // the list even if it has since been removed from the catalog/customs.
@@ -5582,6 +5728,7 @@
                 `<option value="${escHtml(p.id)}">${escHtml(p.name)} — ${p.battery_kwh || '?'} kWh${customById[p.id] ? ' (custom)' : ''}</option>`).join('');
             planeSel.value = t.planeId;
             _refreshEditThumb();
+            _syncEfRuleModeSeg();
 
             // Charger options = the chargers available AT THIS AIRPORT (+ Auto).
             // Picking one pins the flight to it (manual-first). The current pin is
@@ -5638,6 +5785,7 @@
                 freqN: o.freqN, freqUnit: o.freqUnit, fleetMode: o.fleetMode,
                 chargerOverride: o.chargerOverride || undefined,
             };
+            if (o.rm) trip.rm = o.rm;   // absent = inherit the global default (Route settings)
             if (d.multi_leg) {
                 Object.assign(trip, {
                     multiLeg: true,
@@ -5658,8 +5806,17 @@
             return trip;
         }
 
-        document.getElementById('efPlane').addEventListener('change', _refreshEditThumb);
+        document.getElementById('efPlane').addEventListener('change', () => { _refreshEditThumb(); _syncEfRuleModeSeg(); });
         document.getElementById('efTripType').addEventListener('change', _updateEditFleetVisibility);
+        (function () {
+            const seg = document.getElementById('efRuleModeSeg');
+            if (!seg) return;
+            seg.querySelectorAll('.trip-seg-btn').forEach(b => b.addEventListener('click', () => {
+                if (b.disabled) return;
+                _efRuleModeOverride = b.dataset.rm === 'auto' ? null : b.dataset.rm;
+                _syncEfRuleModeSeg();
+            }));
+        })();
         document.getElementById('efSave').addEventListener('click', async () => {
             if (!_editingFlight) return;
             const err = document.getElementById('efError');
@@ -5685,12 +5842,14 @@
                 return;
             }
 
-            // Pure-metadata changes (freq / fleet / charger pin) need no backend
-            // round-trip; only an aircraft or flight-type change re-simulates.
+            // Pure-metadata changes (freq / fleet / charger pin / Rules) need no backend
+            // round-trip — sim.py has no concept of ruleMode (client-side seam only,
+            // same raw energy either way); only an aircraft or flight-type change re-simulates.
             const needsSim = (newPlaneId !== prev.planeId) || (newTripType !== prev.tripType);
             if (!needsSim) {
                 err.classList.add('d-none');
                 trips[idx] = { ...prev, freqN, freqUnit, fleetMode, chargerOverride: chargerOverride || undefined };
+                if (_efRuleModeOverride) trips[idx].rm = _efRuleModeOverride; else delete trips[idx].rm;
                 saveFolder(trips); renderFolder(); _editFlightModal.hide();
                 return;
             }
@@ -5713,7 +5872,7 @@
                 const resp = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 const d = await resp.json();
                 if (d.error) { err.textContent = d.error; err.classList.remove('d-none'); return; }
-                trips[idx] = _rebuildEditedTrip(prev, d, { freqN, freqUnit, fleetMode, chargerOverride });
+                trips[idx] = _rebuildEditedTrip(prev, d, { freqN, freqUnit, fleetMode, chargerOverride, rm: _efRuleModeOverride });
                 saveFolder(trips); renderFolder(); _editFlightModal.hide();
             } catch (e) {
                 err.textContent = (e && e.message) || 'Could not update the flight.';
@@ -5723,7 +5882,7 @@
             }
         });
 
-        // ---- Model settings modal -------------------------------------------
+        // ---- Route settings modal -------------------------------------------
         (function () {
             const map = {
                 landingReserve:    { check: 'rsLandingReserve', extras: { minLandingSoc: { input: 'rsMinSoc',     valEl: 'rsMinSocVal',     fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
@@ -5754,6 +5913,7 @@
                 });
                 updateBadge();
                 syncRate();
+                syncRuleModeRow();
                 drawTaperCurve();
             }
             function commit(key, patch) {
@@ -5801,6 +5961,30 @@
                 rateSl.addEventListener('input', () => { if (rateVal) rateVal.textContent = fmtRate(+rateSl.value); });
                 rateSl.addEventListener('change', () => CNSSettings.save({ chargeRate: { value: +rateSl.value / 100 } }));
             }
+
+            // B1: VFR/IFR flight-rules global default — a two-button segmented control,
+            // not an opt-in factor, so it lives outside the checkbox-driven `map` above.
+            // Changing it saves through CNSSettings (fires the CNSSettings.subscribe
+            // cascade below, incl. recomputeAllFlightsDebounced) and additionally
+            // refreshes the plane-spec card + live route inline, per spec.
+            function syncRuleModeRow() {
+                const row = document.getElementById('msRuleMode');
+                if (!row) return;
+                const cur = CNSSettings.ruleMode();
+                row.querySelectorAll('[data-rm]').forEach(b => b.classList.toggle('active', b.dataset.rm === cur));
+            }
+            (function () {
+                const row = document.getElementById('msRuleMode');
+                if (!row) return;
+                row.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => {
+                    if (b.dataset.rm === CNSSettings.ruleMode()) return;
+                    CNSSettings.save({ ruleMode: { value: b.dataset.rm } });   // fires the CNSSettings.subscribe recompute cascade
+                    syncRuleModeRow();
+                    if (typeof renderPlaneSpecCard === 'function') renderPlaneSpecCard();
+                    if (typeof smartReplan === 'function') smartReplan();
+                    if (typeof drawLiveRoute === 'function') drawLiveRoute();
+                }));
+            })();
 
             // F9: live SoC -> effective-power curve, normalised to the C-rate-capped
             // peak. Flat to the knee, then exponential roll-off to the floor at 100%
@@ -5865,7 +6049,7 @@
             });
 
             document.getElementById('rsResetBtn').addEventListener('click', () => {
-                if (confirm('Reset all model settings to defaults (realistic model on)?')) {
+                if (confirm('Reset all route settings to defaults (realistic model on)?')) {
                     CNSSettings.reset();
                     syncFromState();
                 }
