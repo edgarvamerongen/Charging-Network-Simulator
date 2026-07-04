@@ -45,8 +45,8 @@ const approx = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 
 console.log('CNSSettings (static/settings.js) — node harness\n');
 
-// ---- v5 defaults: reserve + taper + SID/STAR + alternate ON; routing padding, efficiency OFF ----
-test('v5 defaults: reserve/taper/SID-STAR/alternate ON, routing/efficiency OFF', () => {
+// ---- v6 defaults: reserve + taper + SID/STAR + alternate ON; routing padding, efficiency OFF ----
+test('v6 defaults: reserve/taper/SID-STAR/alternate ON, routing/efficiency OFF', () => {
   const { S } = loadSettings();
   assert.ok(approx(S.usableFraction({}), 0.70), 'reserve default 30% -> usable 0.70');
   assert.equal(S.routingFactor(), 1.0, 'routing padding OFF by default -> identity');

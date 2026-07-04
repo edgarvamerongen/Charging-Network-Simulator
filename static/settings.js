@@ -52,7 +52,9 @@ window.CNSSettings = (function () {
     // v4: landing-reserve default drops 30% → 20%; the catalog ranges in planes.json
     // are recalibrated against it (range_km = familiar available range ÷ 0.8).
     // v5: alternate reserve + SID/STAR padding default ON (realistic ops out of the box).
-    const KEY = 'cns_settings_v5';
+    // v6: landing-reserve floor recalibrated 0.20 → 0.30 (perf-engine cutover; catalog gross
+    // ranges re-derived against the 30% floor) — retires persisted 0.20 blobs.
+    const KEY = 'cns_settings_v6';
     const DEFAULTS = Object.freeze({
         landingReserve:    { enabled: true,  minLandingSoc: 0.30 },   // 0..1 — advised industry floor (battery health); gross figures recalibrated to this
         alternateReserve:  { enabled: true },                        // divert-to-nearest-airport reserve; uses each airport's pre-baked alternate_km
