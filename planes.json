@@ -28,6 +28,7 @@
     "svg": "beta.svg",
     "default_charger_id": "dc_320",
     "class": "commuter",
+    "ifr_capable": { "value": true, "source": "design intent — commuter/regional IFR ops; confirm vs type certificate when published", "confidence": "estimated" },
     "surfaces_ok": ["paved"],
     "measurements": [
       { "quantity": "range_km", "value": 630, "basis": "gross", "source": "Beta Alia CX300 — ~336 nm demonstrated", "confidence": "estimated" }
@@ -45,6 +46,7 @@
     "svg": "vaeridion.svg",
     "default_charger_id": "dc_1000",
     "class": "regional",
+    "ifr_capable": { "value": true, "source": "design intent — commuter/regional IFR ops; confirm vs type certificate when published", "confidence": "estimated" },
     "mtow_kg": { "value": 5700, "source": "Vaeridion spec sheet 2026", "confidence": "manufacturer-stated" },
     "reserve_included": { "regime": "ifr", "diversion_km": 80, "loiter_min": 30 },
     "surfaces_ok": ["paved", "grass"],
@@ -67,6 +69,7 @@
     "svg": "vaeridion.svg",
     "default_charger_id": "dc_1000",
     "class": "regional",
+    "ifr_capable": { "value": true, "source": "design intent — commuter/regional IFR ops; confirm vs type certificate when published", "confidence": "estimated" },
     "surfaces_ok": ["paved"]
   },
   {
@@ -84,6 +87,7 @@
       "max": 2
     },
     "class": "regional",
+    "ifr_capable": { "value": true, "source": "design intent — commuter/regional IFR ops; confirm vs type certificate when published", "confidence": "estimated" },
     "mtow_kg": { "value": 80000, "source": "FlightGlobal 2026-04 — MTOW raised above 80 t", "confidence": "estimated" },
     "surfaces_ok": ["paved"]
   }
