@@ -27,6 +27,7 @@ window.CNSFlightEntry = (function () {
             range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,
             freqN: opts.freqN, freqUnit: opts.freqUnit, fleetMode: 'separate',
         };
+        if (opts.rm) e.rm = opts.rm;   // per-route saved regime (C1); absent -> inherit the global default
         if (d.multi_leg) {
             Object.assign(e, {
                 multiLeg: true, flightTimeH: d.total_flight_time_h,

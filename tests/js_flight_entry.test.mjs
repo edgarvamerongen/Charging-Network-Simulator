@@ -46,6 +46,28 @@ test('fromSim maps a single-leg response and preserves the explicit id', () => {
   assert.equal(e.speed_kmh, 250);
 });
 
+test('fromSim carries an explicit rm (ruleMode) override onto the entry', () => {
+  const E = load();
+  const d = {
+    plane: { id: 'beta_plane', name: 'Beta Alia', svg: 'beta.svg', battery_kwh: 225, c_rate: 1, range_km: 500, speed_kmh: 250 },
+    charger: { name: 'Cube 320', power_kw: 320 },
+    trip_type: 'oneway', leg_energy_kwh: 154.3, recharge_energy_kwh: 154.3, flight_time_h: 1.4,
+  };
+  const e = E.fromSim(d, { origin: ORIGIN, dest: DEST, chargerId: 'dc_320', freqN: 2, freqUnit: 'day', id: 'f1', rm: 'ifr' });
+  assert.equal(e.rm, 'ifr');
+});
+
+test('fromSim leaves rm absent when no override is given (inherits the global default)', () => {
+  const E = load();
+  const d = {
+    plane: { id: 'beta_plane', name: 'Beta Alia', svg: 'beta.svg', battery_kwh: 225, c_rate: 1, range_km: 500, speed_kmh: 250 },
+    charger: { name: 'Cube 320', power_kw: 320 },
+    trip_type: 'oneway', leg_energy_kwh: 154.3, recharge_energy_kwh: 154.3, flight_time_h: 1.4,
+  };
+  const e = E.fromSim(d, { origin: ORIGIN, dest: DEST, chargerId: 'dc_320', freqN: 2, freqUnit: 'day', id: 'f1' });
+  assert.equal('rm' in e, false);
+});
+
 test('fromSim carries multi-leg fields through', () => {
   const E = load();
   const d = {

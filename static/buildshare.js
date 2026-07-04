@@ -4,10 +4,14 @@
  *
  * A build blob is { v:1, k:'build', fl:[...flights...], cfg, sch, ms }, stored
  * verbatim by the existing /api/share slug store. Per flight we keep only the
- * INPUTS (plane, charger, trip type, frequency, origin/destination/stops). The
- * computed energies are deliberately dropped and recomputed on open via
- * /api/simulate, so a shared build never goes stale when the catalog or model
- * changes — the same philosophy as the single-route share re-planning its stops.
+ * INPUTS (plane, charger, trip type, frequency, origin/destination/stops, and
+ * the optional per-route rm VFR/IFR override — absent = inherit the global
+ * default). The computed energies are deliberately dropped and recomputed on
+ * open via /api/simulate, so a shared build never goes stale when the catalog
+ * or model changes — the same philosophy as the single-route share re-planning
+ * its stops. rm itself never reaches /api/simulate (sim.py has no ruleMode
+ * concept — client-side seam only); it's re-applied to the restored folder
+ * entry after the sim response comes back.
  *
  * Browser globals (CNSDemand, CNSState, CNSShare, CNSSettings, CNSFlightEntry,
  * renderFolder) are read LAZILY inside functions and typeof-guarded, so loading
@@ -37,6 +41,7 @@ window.CNSBuildShare = (function () {
                 t: t.tripType, fn: t.freqN, fu: t.freqUnit,
                 o: _pt(t.originIdent, t.originName, t.originLat, t.originLon),
             };
+            if (t.rm) rec.rm = t.rm;   // per-route saved regime (C1); absent -> inherit the global default
             if (t.tripType !== 'training' && t.destIdent) {
                 rec.d = _pt(t.destIdent, t.destName, t.destLat, t.destLon);
             }
@@ -85,6 +90,7 @@ window.CNSBuildShare = (function () {
         return FE.fromSim(d, {
             origin: wp(fl.o), dest: fl.d ? wp(fl.d) : wp(fl.o),
             chargerId: fl.c, freqN: fl.fn, freqUnit: fl.fu, id: fl.id,
+            rm: fl.rm || undefined,   // per-route saved regime (C1); absent -> inherit the global default
         });
     }
 

@@ -72,6 +72,9 @@ window.CNSShare = (function () {
             c: val('charger'),
             w: !!(ws && ws.checked),
         };
+        // Per-route VFR/IFR override (planner global `_ruleModeOverride`); absent =
+        // inherit the global default (Model settings), same absent-safe pattern as `t`.
+        if (typeof _ruleModeOverride !== 'undefined' && _ruleModeOverride) st.rm = _ruleModeOverride;
         const ms = _settingsDelta();
         if (ms) st.ms = ms;
         return st;
@@ -97,6 +100,11 @@ window.CNSShare = (function () {
         // 3. Aircraft (drives the default charger), then override the charger explicitly.
         if (st.a) { optExists('plane', st.a) ? fire('plane', st.a) : miss.push('aircraft'); }
         if (st.c) { optExists('charger', st.c) ? fire('charger', st.c) : miss.push('charger'); }
+
+        // 3b. Per-route Rules (VFR/IFR) override; absent -> inherit the global default
+        // (Model settings). renderPlaneSpecCard() below re-syncs the segmented control
+        // (and re-applies VFR-only gating for the now-selected aircraft).
+        if (st.rm && typeof _ruleModeOverride !== 'undefined') _ruleModeOverride = st.rm;
 
         // 4. Frequency.
         const fn = document.getElementById('freqN');
