@@ -2771,12 +2771,17 @@
                     // km, so using the pad-carved reach here would double-count it. Equivalent to
                     // the planner's rawKm·route + sid ≤ full range, just in routed units.
                     const maxLeg = _availRangeShownKm(plane);   // full available range (routed km)
-                    // Divert reserve (when on): the destination must also reach its nearest alternate.
-                    // km + maxLeg are in routed (padded) units, so the raw alternate_km adds directly
-                    // (the unpadded /route cancels against the padded scale) — matches validateRoute.
+                    // Divert reserve (when on): the destination must also reach its nearest
+                    // alternate — but only the EXCESS over the flat plane.divert_km already inside
+                    // the IFR reach counts (CNSRouting.divertExcessKm — matches the planner and
+                    // validateRoute). The excess comes back in raw-leg units while km + maxLeg are
+                    // routed (padded) here, so it scales by ×route before adding.
                     const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled());
                     const destFull = (requireAlt && selected.destination.ident) ? airportByIdent[selected.destination.ident] : null;
-                    const altKm = (destFull && destFull.alternate_km != null) ? (+destFull.alternate_km || 0) : 0;
+                    const destAltKm = (destFull && destFull.alternate_km != null) ? (+destFull.alternate_km || 0) : 0;
+                    const regime = (window.CNSFlight && CNSFlight.effectiveRegime) ? CNSFlight.effectiveRegime(plane, _ruleModeOverride || undefined) : 'ifr';
+                    const route = (regime === 'ifr' && window.CNSSettings) ? CNSSettings.routingFactor() : 1.0;
+                    const altKm = route * CNSRouting.divertExcessKm(destAltKm, regime === 'ifr' ? (+plane.divert_km || 0) : 0, route);
                     if (km + altKm > maxLeg) {
                         warn = ` <span class="traj-warn">⚠ ${fmtDist(km + altKm - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
@@ -2910,21 +2915,22 @@
             plannedLegIssues = []; plannedError = null;
             const t = _terminus(); const plane = _selectedPlane();
             if (!t || !plane) return;
-            // Effective reach honours the model landing-reserve setting
-            // when on; otherwise it's nameplate range (no advanced override).
-            const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
-            const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
             const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
-            // Mirror routing.js's altReserveKm (line 89): when the alternate reserve is on, each
-            // ARRIVAL node must ALSO hold enough range to divert to its nearest airport
-            // (alternate_km / route — unpadded, a divert is flown direct). 0 when off, so the
-            // per-leg test stays byte-identical to before and matches what the planner enforces.
+            // Mirror routing.js's altReserveKm (excess-over-flat contract): each ARRIVAL node
+            // must also hold enough range to divert to its nearest airport, but the flat
+            // plane.divert_km (IFR) already lives INSIDE maxLeg — so a node's alternate_km
+            // counts only its EXCESS over that flat figure (CNSRouting.divertExcessKm; the
+            // alternate is de-inflated by route first — a divert is flown direct, unpadded).
+            // 0 when off, so the per-leg test matches what the planner enforces.
+            const regime = (window.CNSFlight && CNSFlight.effectiveRegime) ? CNSFlight.effectiveRegime(plane, _ruleModeOverride || undefined) : 'ifr';
+            const route = (regime === 'ifr' && window.CNSSettings) ? CNSSettings.routingFactor() : 1.0;
+            const flatDivertKm = (regime === 'ifr') ? (+plane.divert_km || 0) : 0;
             const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled());
             const altReserveKm = (wp) => {
                 if (!requireAlt || !wp) return 0;
                 const full = wp.ident ? airportByIdent[wp.ident] : null;
                 const km = (full && full.alternate_km != null) ? +full.alternate_km : (+wp.alternate_km || 0);
-                return (isFinite(km) ? km : 0) / route;
+                return CNSRouting.divertExcessKm(isFinite(km) ? km : 0, flatDivertKm, route);
             };
             const chain = _ringChain(t);
             for (let i = 0; i < chain.length - 1; i++) {
