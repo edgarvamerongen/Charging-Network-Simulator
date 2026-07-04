@@ -172,7 +172,8 @@ class TestEmbedRoute(unittest.TestCase):
         r = self.client.get('/embed?origin=EHAM&plane=beta_plane')
         self.assertEqual(r.status_code, 200)
         body = r.data.decode()
-        m = _json.loads(_re_find(body, r'var rangeKm\s*=\s*(.+?);'))
+        # greedy to line end — captures the full JSON statement (strings may contain ';')
+        m = _json.loads(_re_find(body, r'var rangeKm\s*=\s*(.+);'))
         self.assertAlmostEqual(m, 203.5)
 
     def test_embed_plane_json_omits_confidential_range_fields(self):
@@ -183,7 +184,8 @@ class TestEmbedRoute(unittest.TestCase):
         be sitting in the public, cached page's view-source otherwise."""
         import json as _json
         r = self.client.get('/embed?origin=EHAM&plane=beta_plane')
-        plane = _json.loads(_re_find(r.data.decode(), r'var plane\s*=\s*(.+?);'))
+        # greedy to line end — captures the full JSON statement (strings may contain ';')
+        plane = _json.loads(_re_find(r.data.decode(), r'var plane\s*=\s*(.+);'))
         self.assertNotIn('range_km', plane)
         self.assertNotIn('measurements', plane)
         self.assertEqual(plane.get('id'), 'beta_plane')  # non-confidential fields still flow
