@@ -42,6 +42,7 @@
     "battery_kwh": 600,
     "range_km": 700,
     "speed_kmh": 435,
+    "divert_km": 80,
     "image": "vaeridion.jpg",
     "svg": "vaeridion.svg",
     "default_charger_id": "dc_1000",
