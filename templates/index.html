@@ -5156,8 +5156,14 @@
                 allAirports,
                 allowedTypes: ['small_airport', 'medium_airport', 'large_airport'],
                 allowedIdents: new Set(Object.keys(nrgChargerDb || {})),
+                // Fallbacks only: CNSRecompute resolves each trip's plane via
+                // CNSFlight.tripPlane (catalog heal — divert_km/measurements ride along)
+                // and its reach via CNSFlight.availableRangeKm under the trip's own rm.
+                // Both must stay PURE of the live form — never _availableRangeKm(), which
+                // reads _ruleModeOverride/_availRangeOverride (they describe the flight
+                // being planned, not a saved one).
                 planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate }),
-                availableRangeKm: (plane) => _availableRangeKm(plane),
+                availableRangeKm: (plane) => CNSFlight.availableRangeKm(plane),
                 routingOptions: _routingOptions(),   // soft Prefer bias — stop choice, never feasibility
             };
         }
