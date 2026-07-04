@@ -405,6 +405,7 @@ class SpreadsheetBuilder:
         r += 1
         for pl in self.planes:
             regime = 'ifr' if ifr_capable(pl) else 'vfr'
+            # server-side default-configuration figure (no per-user settings)
             range_km = usable_range(pl, regime, alternate_km=(pl.get('divert_km') or 0))
             vals = [pl.get('id'), pl.get('name'), _num(pl.get('battery_kwh')), _num(round(range_km, 1)),
                     _num(pl.get('speed_kmh')), _num(pl.get('seats')), _num(pl.get('load_kg'))]

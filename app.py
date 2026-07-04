@@ -519,6 +519,7 @@ def embed():
     range_km = 0
     if tier == 'range':
         regime = 'ifr' if ifr_capable(plane) else 'vfr'
+        # server-side default-configuration figure (no per-user settings)
         range_km = usable_range(plane, regime, alternate_km=(plane.get('divert_km') or 0))
         olat, olon = origin['latitude_deg'], origin['longitude_deg']
         for ap in airports:

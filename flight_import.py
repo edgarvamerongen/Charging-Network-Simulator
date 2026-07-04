@@ -95,6 +95,7 @@ def build_blob(payload, resolve, planes_by_id):
     charger = defaults.get('charger') or _DEFAULT_CHARGER
     default_plane = planes_by_id.get(plane) or {}
     regime = 'ifr' if ifr_capable(default_plane) else 'vfr'
+    # server-side default-configuration figure (no per-user settings)
     plane_range = usable_range(default_plane, regime,
                                alternate_km=(default_plane.get('divert_km') or 0))
 

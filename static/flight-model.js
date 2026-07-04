@@ -37,9 +37,17 @@ window.CNSFlight = (function () {
     function _usableFraction(plane) { const s = _settings(); return s && s.usableFraction ? s.usableFraction(plane) : 1; }
     function _ruleMode() { const s = _settings(); return s && s.ruleMode ? s.ruleMode() : 'ifr'; }
     function _ifrCapable(plane) { const ps = window.CNSPlaneSchema; return (ps && ps.ifrCapable) ? !!ps.ifrCapable(plane) : true; }
-    // Great-circle usable range for a regime: gross×(1−min_soc) − reserve(regime). Falls back to the old
-    // flat usableFraction reach if the schema module isn't loaded (keeps the pre-cutover node harness alive).
-    function _usableRangeKm(plane, regime) { const ps = window.CNSPlaneSchema; const div = +plane.divert_km || 0; return (ps && ps.usableRange) ? ps.usableRange(plane, regime, null, { alternateKm: div }) : ((+plane.range_km || 0) * _usableFraction(plane)); }
+    // Great-circle usable range for a regime: gross×(1−min_soc) − reserve(regime). The min-SoC
+    // floor follows the Route-settings slider (minSoc = 1 − usableFraction: default 0.30 —
+    // identical to the schema constant — and 0 with the toggle off), so ONE control drives both
+    // the energy floor and the reach. Falls back to the old flat usableFraction reach if the
+    // schema module isn't loaded (keeps the pre-cutover node harness alive).
+    function _usableRangeKm(plane, regime) {
+        const ps = window.CNSPlaneSchema; const div = +plane.divert_km || 0;
+        if (!(ps && ps.usableRange)) return (+plane.range_km || 0) * _usableFraction(plane);
+        const f = _usableFraction(plane);
+        return ps.usableRange(plane, regime, null, { alternateKm: div, minSoc: (f > 0 && f <= 1) ? (1 - f) : undefined });
+    }
     function _gridDemandFactor() { const s = _settings(); return s && s.gridDemandFactor ? s.gridDemandFactor() : 1; }
     function _chargeTargetDefault() { const s = _settings(); return s && s.chargeTargetDefault ? s.chargeTargetDefault() : null; }
     function _effectiveChargePower(kw, batt, cr) { const s = _settings(); return (s && s.effectiveChargePower) ? s.effectiveChargePower(kw, batt, cr) : (kw || 0); }
@@ -97,13 +105,12 @@ window.CNSFlight = (function () {
         const batt = Math.max(0, +plane.battery_kwh || 0);
         const range = Math.max(0, +plane.range_km || 0);
         const speed = Math.max(0, +plane.speed_kmh || 0);
-        const planRangeKm = _usableRangeKm(plane, regime);            // regime planning range = the cross-country REACH (great-circle): gross×(1−min_soc) − reserve(regime). Divert/alternate stays per-node in CNSRouting.
-        const usableFrac = _usableFraction(plane);                    // min-SoC floor (battery-health reserve, ~20%) — the chargeable/usable ENERGY
+        const usableFrac = _usableFraction(plane);                    // min-SoC floor (battery-health reserve, 30% default) — the chargeable/usable ENERGY
         const usable = batt * usableFrac;                             // usable ENERGY for charge + training caps (down to the floor). The regime hold reserve shortens the REACH (availRangeKm), NOT this — else a short-endurance trainer (Velis) wrongly shows 0 usable.
         const reserve = batt - usable;
         const ePerKm = range > 0 ? batt / range : 0;
         const cRate = plane.c_rate;                                   // vestigial; effectiveChargePower handles null
-        const availRangeKm = availableRangeKm(plane, { ruleMode: opts.ruleMode });   // the seam — identical math, one owner
+        const availRangeKm = availableRangeKm(plane, { ruleMode: opts.ruleMode });   // the seam — identical math, one owner. The flat plane.divert_km folds into this reach; per-node alternates count only their excess (routing.js divertExcessKm).
         const getTarget = (typeof opts.getTargetSoc === 'function') ? opts.getTargetSoc : (() => _chargeTargetDefault());
         const getChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => +opts.chargerKw || 0);
         // Interim-deficit charging (per-rotation opts supplied by the scheduler): a shared aircraft

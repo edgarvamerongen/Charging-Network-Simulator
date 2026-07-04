@@ -222,6 +222,31 @@ for (const c of golden.cases) {
   }
 })();
 
+// ---- Fix 5: the Route-settings min-SoC slider drives the REACH, not just the energy floor ----
+// minSoc = 1 − usableFraction threads through _usableRangeKm → planningRangeKm, restoring
+// one-control-full-effect coherence (the spec-card tooltips promise it). At the default
+// (enabled, 0.30) this is numerically IDENTICAL to the schema constant — goldens pinned.
+// At 0.40: beta VFR planning = 630×0.60 − 125 = 253. Toggle OFF → minSoc 0 → 630 − 125
+// = 505: more reach, but still never the confidential gross 630.
+(function minSocReachSeam() {
+  const S = loadStack();
+  const beta = PLANES['beta_plane'];
+  const eq = (a, b) => Math.abs(a - b) < 1e-6;
+  S.CNSSettings.reset();
+  S.CNSSettings.save({ landingReserve: { enabled: true, minLandingSoc: 0.40 } });
+  const at40 = S.CNSFlight.planningRangeKm(beta, { ruleMode: 'vfr' });
+  S.CNSSettings.save({ landingReserve: { enabled: false } });
+  const off = S.CNSFlight.planningRangeKm(beta, { ruleMode: 'vfr' });
+  const checks = [
+    [eq(at40, 253), `minSoc 0.40 → beta VFR planning = 630×0.60 − 125 = 253 (got ${at40})`],
+    [eq(off, 505), `reserve OFF → minSoc 0 → 630 − 125 = 505, never the gross (got ${off})`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    minSoc-reach — ${msg}`); }
+    else { fail++; console.log(`  FAIL  minSoc-reach — ${msg}`); }
+  }
+})();
+
 // ---- tripPlane: catalog planes ignore stale per-trip physics snapshots (auto-migration) ----
 // No `customPlane` flag exists anywhere in the codebase (grepped); the real detection mechanism
 // mirrors profileForTrip's own lookup (:246) and report.js's _usedPlanes (:211): a plane is
