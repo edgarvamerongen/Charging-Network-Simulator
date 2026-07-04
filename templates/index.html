@@ -1786,6 +1786,7 @@
                         <img id="psThumb" class="ps-thumb ps-id-hidden d-none" alt="">
                         <div class="ps-main">
                             <div class="ps-name ps-id-hidden" id="psName"></div>
+                            <span id="psVfrOnly" class="badge text-bg-secondary d-none">VFR only</span>
                             <div class="reach-row">
                                 <div class="reach-label">Usable reach: <strong id="reachVal">—</strong> of <span id="reachCat">—</span> VFR max <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></div>
                                 <div class="reach-bar"><div class="reach-fill" id="reachFill"></div></div>
@@ -3676,6 +3677,9 @@
             if (spec.image) { thumb.src = '/pics/' + spec.image; thumb.alt = spec.name; thumb.classList.remove('d-none'); }
             else thumb.classList.add('d-none');
             document.getElementById('psName').textContent = spec.name;
+            const vfrOnly = document.getElementById('psVfrOnly');
+            if (vfrOnly) vfrOnly.classList.toggle('d-none',
+                !(window.CNSPlaneSchema && spec && !CNSPlaneSchema.ifrCapable(spec)));
             _refreshSpecStats(spec);
             // Prefill the override with the current available range so the operator
             // sees the value they're editing (blank = use the computed default).
