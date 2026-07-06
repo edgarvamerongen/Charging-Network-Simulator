@@ -140,6 +140,12 @@ test('VFR add-back: incl_reserve(ifr) plane extrapolates the diversion back in (
   assert.equal(S.usableRange(v, 'vfr'), 480);   // 400 + 80 diversion + (30−30) loiter delta
   assert.equal(S.usableRange(v, 'vfr_night'), 480); // night reserve (45) > baked loiter (30) → loiter credit clamps to 0, diversion credit survives
 });
+test('VFR add-back: Elysian E9X — 800-1,000km is IFR-effective (CE Delft/de Vries 2024), not gross (§13.3)', () => {
+  const planes = JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8'));
+  const e = planes.find(p => S.value(p, 'id') === 'elysian_e9x');
+  assert.equal(S.usableRange(e, 'ifr'), 800);        // published incl-reserve figure (conservative end), short-circuits the build-down
+  assert.equal(S.usableRange(e, 'vfr'), 980);        // 800 + 0 diversion + (45−30)/60 × 720 loiter delta
+});
 test('fleet invariant: 0 <= usableRange(ifr) <= usableRange(vfr) for every catalog plane', () => {
   const planes = JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8'));
   for (const p of planes) {

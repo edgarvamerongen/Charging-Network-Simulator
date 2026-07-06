@@ -79,7 +79,7 @@
     "seats": 90,
     "load_kg": 9000,
     "battery_kwh": 14000,
-    "range_km": 1000,
+    "range_km": 800,
     "speed_kmh": 720,
     "image": "elysian.jpg",
     "svg": "vaeridion.svg",
@@ -90,6 +90,10 @@
     "class": "regional",
     "ifr_capable": { "value": true, "source": "design intent — commuter/regional IFR ops; confirm vs type certificate when published", "confidence": "estimated" },
     "mtow_kg": { "value": 80000, "source": "FlightGlobal 2026-04 — MTOW raised above 80 t", "confidence": "estimated" },
-    "surfaces_ok": ["paved"]
+    "reserve_included": { "regime": "ifr", "diversion_km": 0, "loiter_min": 45 },
+    "surfaces_ok": ["paved"],
+    "measurements": [
+      { "quantity": "range_km", "value": 800, "conditions": { "regime": "ifr" }, "basis": "usable_incl_reserve", "source": "CE Delft (Jan 2025), \"Climate Change Impact Analysis of Electric Aviation\" — E9X designed for 800-1,000 km missions (citing de Vries et al. 2024 AIAA SciTech \"Conceptual Design of a 90-Seater\"); 800 km (the conservative end) taken as the IFR-effective (post-reserve) design figure, NOT a gross figure — no independent gross/pre-reserve range is known, so the live range_km scalar (used for ePerKm) is left at this same value as an approximation, pending a sourced gross figure", "confidence": "estimated" }
+    ]
   }
 ]

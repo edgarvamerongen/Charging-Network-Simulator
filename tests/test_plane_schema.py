@@ -184,6 +184,13 @@ class TestUsableRange(unittest.TestCase):
         self.assertEqual(plane_schema.usable_range(v, "vfr"), 480)   # 400 + 80 diversion + (30−30) loiter delta
         self.assertEqual(plane_schema.usable_range(v, "vfr_night"), 480)  # night reserve (45) > baked loiter (30) -> loiter credit clamps to 0, diversion credit survives
 
+    def test_catalog_elysian_vfr_addback(self):
+        # 800-1,000 km (CE Delft Jan 2025 / de Vries et al. 2024 AIAA) is IFR-EFFECTIVE,
+        # not gross -- it must short-circuit the build-down like Vaeridion, not feed it.
+        e = next(p for p in _catalog() if plane_schema.value(p, "id") == "elysian_e9x")
+        self.assertEqual(plane_schema.usable_range(e, "ifr"), 800)
+        self.assertEqual(plane_schema.usable_range(e, "vfr"), 980)  # 800 + 0 diversion + (45-30)/60 * 720 loiter delta
+
     def test_catalog_fleet_invariant_ifr_le_vfr(self):
         for p in _catalog():
             ifr = plane_schema.usable_range(p, "ifr")
