@@ -72,11 +72,6 @@ KT_TO_KMH = 1.852
 # Snapshots retained (newest-first) after each successful sync.
 SNAPSHOT_KEEP = 30
 
-# Abort the whole sync (leave last-good untouched) if the fresh result collapses
-# to below this fraction of the previous catalog — guards against a Notion
-# outage / accidental mass-unpublish silently emptying CNS.
-MIN_FRACTION_OF_LAST_GOOD = 0.5
-
 _REGIME_CANON = {"vfr": "VFR", "ifr+reserves": "IFR+reserves", "ifr": "IFR+reserves"}
 
 
@@ -336,7 +331,6 @@ def transform(aircraft_pages, profile_pages, known_charger_ids, last_good_by_id=
     result is too suspicious to write, else None.
     """
     last_good_by_id = last_good_by_id or {}
-    last_good_count = len(last_good_by_id)
 
     aircraft = [parse_aircraft(pg) for pg in aircraft_pages]
     profiles = [parse_profile(pg) for pg in profile_pages]
@@ -379,12 +373,21 @@ def transform(aircraft_pages, profile_pages, known_charger_ids, last_good_by_id=
         entries.extend(built)
         ok_ids.extend(e["id"] for e in built)
 
+    # Guardrails. Availability is controlled by the `CNS` checkbox, so
+    # intentionally hiding planes — even most of them — must be honored: we do
+    # NOT abort on a shrinking catalog. We only refuse to publish when the result
+    # is almost certainly a fault rather than an edit:
+    #   * Notion returned no aircraft at all (broken integration / lost DB share /
+    #     an empty 200 the network-error path can't catch), or
+    #   * nothing is left to publish (every row is unchecked or quarantined) — an
+    #     empty catalog would blank the app.
     abort = None
-    if not ok_ids and not carried:
-        abort = "no valid aircraft emitted"
-    elif last_good_count and len(entries) < MIN_FRACTION_OF_LAST_GOOD * last_good_count:
-        abort = (f"emitted {len(entries)} entries < {int(MIN_FRACTION_OF_LAST_GOOD * 100)}% "
-                 f"of last-good {last_good_count} — refusing to shrink the catalog")
+    if not aircraft_pages:
+        abort = ("Notion returned no aircraft — check the CNS-Connector integration "
+                 "is still shared with the Aircraft database")
+    elif not entries:
+        abort = ("no aircraft to publish — every row is CNS-unchecked or failed "
+                 "validation; keeping the last-good catalog")
 
     report = {
         "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

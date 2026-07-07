@@ -213,20 +213,33 @@ class TransformTest(unittest.TestCase):
         self.assertEqual(entries[0]["regime"], "VFR")     # trimmed + canonicalized
         self.assertEqual(entries[0]["surface"], "grass")  # trimmed + lowered
 
-    def test_global_abort_on_empty_pull(self):
+    def test_empty_pull_aborts(self):
+        # No aircraft pages at all == broken pull → refuse to publish.
         entries, report = ns.transform([], [], KNOWN_CHARGERS, {})
         self.assertEqual(entries, [])
-        self.assertEqual(report["abort"], "no valid aircraft emitted")
+        self.assertIn("no aircraft", report["abort"])
 
-    def test_global_abort_on_catalog_shrink(self):
+    def test_intentional_shrink_is_allowed(self):
+        # CNS is the availability switch: turning most planes off must be honored,
+        # NOT blocked as a suspicious shrink (last-good had 4, only 1 stays on).
         last_good = {f"p{i}": {"id": f"p{i}", "name": f"P{i}", "battery_kwh": 1,
                                "range_km": 1, "speed_kmh": 100} for i in range(4)}
         ac = [aircraft("A", name="Solo", slug="solo", battery=100, cruise=100)]
         pr = [profile("P", "A", emit="solo", rng=100)]
         entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, last_good)
-        self.assertEqual(len(entries), 1)                 # 1 emitted vs 4 last-good
-        self.assertIsNotNone(report["abort"])
-        self.assertIn("50%", report["abort"])
+        self.assertEqual([e["id"] for e in entries], ["solo"])
+        self.assertIsNone(report["abort"])                # shrink allowed
+
+    def test_all_hidden_aborts_keeps_last_good(self):
+        # Every aircraft unchecked → nothing to publish → abort (keep last-good).
+        ac = [aircraft("A", name="Off1", slug="off1", cns=False),
+              aircraft("B", name="Off2", slug="off2", cns=False)]
+        pr = [profile("P1", "A", emit="off1", rng=100),
+              profile("P2", "B", emit="off2", rng=100)]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertEqual(entries, [])
+        self.assertIn("no aircraft to publish", report["abort"])
+        self.assertEqual(sorted(report["hidden"]), ["off1", "off2"])
 
     def test_unknown_charger_id_quarantines(self):
         ac = [aircraft("A", name="X", slug="x", battery=100, cruise=100,
