@@ -47,6 +47,14 @@ simulator = Simulator(base_dir=os.path.dirname(os.path.abspath(__file__)))
 # create at import so every gunicorn worker is ready; see shares.py.
 shares.init_db()
 
+
+@app.before_request
+def _refresh_catalog():
+    """Pick up an out-of-band notion_sync.py run (data/planes.generated.json
+    changed) without a restart — each gunicorn worker notices on its next
+    request. Cheap mtime stat; see Simulator.maybe_reload_planes()."""
+    simulator.maybe_reload_planes()
+
 # ---------------------------------------------------------------------------
 # Authentication & hardening
 # ---------------------------------------------------------------------------
@@ -848,10 +856,13 @@ def simulate_flight():
     if not all([origin, destination]) or not (plane_id or plane_obj) or not (charger_id or charger_obj):
         return jsonify({"error": "Missing parameters"}), 400
 
-    # Origin == destination is only meaningful for training (circular pattern).
-    # For one-way / retour it produces success:true with all-zero numbers, which
-    # is misleading. Reject early with a clear message.
-    if trip_type != 'training':
+    # Origin == destination on a STOP-LESS one-way / retour is a degenerate
+    # zero-distance flight (success:true with all-zero numbers) — reject early.
+    # A multi-stop trip that returns to base is a legitimate rotation
+    # (e.g. AMS->LHR->AMS->...->AMS) — with stops the legs have real distance, so
+    # this is NOT degenerate. The relaxation deliberately covers ALL non-training
+    # types (oneway/retour/circular): skip the check whenever stops are present.
+    if trip_type != 'training' and not stops:
         same = False
         if isinstance(origin, dict) and isinstance(destination, dict):
             same = (origin.get('lat') == destination.get('lat')
