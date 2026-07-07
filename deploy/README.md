@@ -1,11 +1,17 @@
 # CNS deploy assets
 
-## Nightly Notion → catalog sync (`cns-sync.service` + `cns-sync.timer`)
+## Notion → catalog sync (`cns-sync.service` + `cns-sync.timer`)
 
-Pulls the aircraft catalog from Notion into `data/planes.generated.json` once a
-night. On-demand syncs also run from the app (**Model settings → Aircraft catalog
-→ Sync from Notion**) and from the CLI (`./venv/bin/python notion_sync.py`). See
-`NOTION_CATALOG_PLAN.md` for the full design.
+Pulls the aircraft catalog from Notion into `data/planes.generated.json` **every
+15 minutes** (`OnCalendar=*:0/15`, plus once ~2 min after boot), so a colleague's
+Notion edit reaches the CNS within ~15 min with no manual step. On-demand syncs
+also run from the CLI (`./venv/bin/python notion_sync.py`) and the token-gated
+endpoint (`POST /api/admin/sync-catalog`, `Authorization: Bearer $CNS_SYNC_TOKEN`
+— there is no in-app button; it was removed so shared-password visitors can't
+trigger Notion pulls). See `NOTION_CATALOG_PLAN.md` for the full design.
+
+> **Changing cadence:** after editing `cns-sync.timer`, re-copy it and
+> `sudo systemctl daemon-reload && sudo systemctl restart cns-sync.timer`.
 
 ### Prerequisites
 - `/etc/cns.env` has `CNS_NOTION_TOKEN`, `CNS_NOTION_AIRCRAFT_DB`,

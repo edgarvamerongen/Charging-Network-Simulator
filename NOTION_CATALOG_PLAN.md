@@ -361,7 +361,7 @@ aircraft/profiles from Notion; one simulation per aircraft runs sanely; a
 hidden aircraft does not appear; existing test suite still passes.
 
 **Phase 2 — triggers.** `/api/admin/sync-catalog` + settings button +
-`CNS_SYNC_TOKEN`; systemd service+timer (nightly, §12); snapshot pruning.
+`CNS_SYNC_TOKEN`; systemd service+timer (every 15 min, §12); snapshot pruning.
 Failure drill (§11) passes.
 
 **Phase 3 — CUTOVER (delete the old system).**
@@ -450,10 +450,10 @@ set -a; . /etc/cns.env; set +a
 ./venv/bin/python notion_sync.py --dry-run   # inspect first
 ./venv/bin/python notion_sync.py             # real run; mtime reload picks it up
 
-# --- nightly timer (phase 2): cns-sync.service + cns-sync.timer ---
+# --- sync timer (phase 2): cns-sync.service + cns-sync.timer ---
 # service: Type=oneshot, User=cns, WorkingDirectory=app dir,
 #          EnvironmentFile=/etc/cns.env, ExecStart=<venv python> notion_sync.py
-# timer:   OnCalendar=daily (03:00), Persistent=true
+# timer:   OnCalendar=*:0/15 (every 15 min) + OnBootSec=2min, Persistent=true
 sudo systemctl enable --now cns-sync.timer
 
 # --- phase 3 (cutover) precheck ---
@@ -463,7 +463,7 @@ cat ~/Charging-Network-Simulator/data/custom_planes.json   # migrate keepers to 
 Colleague workflow (document on the Notion page itself): edit/add rows →
 tick `CNS` when the aircraft is ready to appear, and give it exactly
 one `Default` profile → press "Sync from Notion" in CNS settings (or wait for
-the nightly sync) → check the reported summary.
+the 15-min timer) → check the reported summary.
 
 ## 13. Known limitations & risks (accepted)
 

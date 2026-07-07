@@ -1,9 +1,13 @@
-# Nightly trigger for cns-sync.service (03:00 local). Install: see deploy/README.md.
+# Trigger for cns-sync.service — every 15 min, so Notion edits reach the CNS
+# without waiting for a nightly run or a manual poke. Install: see deploy/README.md.
 [Unit]
-Description=Nightly CNS aircraft catalog sync from Notion
+Description=CNS aircraft catalog sync from Notion (every 15 min)
 
 [Timer]
-OnCalendar=*-*-* 03:00:00
+OnCalendar=*:0/15
+# Fire ~2 min after boot too, so a restart doesn't wait up to 15 min for the
+# first sync. Cost is trivial: each run is 2 Notion API requests.
+OnBootSec=2min
 Persistent=true
 
 [Install]
