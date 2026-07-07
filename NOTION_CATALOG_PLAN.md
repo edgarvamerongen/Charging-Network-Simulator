@@ -1,7 +1,9 @@
 # Notion Aircraft Catalog — Complete Integration Plan
 
-**Status:** approved by Edgar, not yet implemented. Phase 0 (Notion setup) is
-in progress on Edgar's side.
+**Status:** approved by Edgar. **Phase 0 is DONE** (2026-07-07): both Notion
+databases exist, are seeded, are shared with CNS-Connector, and were verified
+via the API — see §4 for the live database IDs and as-built deviations.
+Implementation (phase 1+) not yet started.
 **Written:** 2026-07-07 by a Claude session, as a handoff guide for a future
 session (Opus) that will implement it. Revised same day after Edgar's review —
 see D9/D10. Decisions below are LOCKED with Edgar — do not re-litigate them;
@@ -53,7 +55,7 @@ Decisions locked with Edgar (2026-07-07):
 | D7 | Validation failures | **Per-aircraft quarantine with carry-forward** (§8), not all-or-nothing. |
 | D8 | Chargers catalog | Stays in `chargers.json` (dev-managed) for now. Aircraft↔charger link lives in Notion as a multi-select of charger ids. Moving chargers to Notion is a possible later phase, same pattern. |
 | D9 | **No legacy-compat constraint.** | The tool has not shipped — there are no users, saved links, or results to protect. The generated catalog does NOT need to reproduce today's `planes.json` values; seeds use best-known real figures; verification is **functional**, not byte-comparison. Optimize the end-state; leave no shrapnel from the old system. |
-| D10 | Catalog visibility | Aircraft rows carry a **`Show in CNS` checkbox**; unchecked aircraft (and their profiles) are silently excluded from the sync output. This is how colleagues stage "planes to come". |
+| D10 | Catalog visibility | Aircraft rows carry a **`CNS` checkbox** (as-built name — an earlier draft called it "Show in CNS"); unchecked aircraft (and their profiles) are silently excluded from the sync output. This is how colleagues stage "planes to come". |
 
 ## 2. Verified current state (file:line, checked 2026-07-07)
 
@@ -110,24 +112,36 @@ fast with an actionable error. Properties preserved: load-once/no-per-request-IO
 (mtime stat is ~µs), works through Notion outages (last-good file + snapshots),
 a bad Notion edit can never take the app down (§8).
 
-## 4. Notion workspace setup (phase 0 — Edgar, mostly done)
+## 4. Notion workspace setup (phase 0 — DONE 2026-07-07, verified via API)
 
-1. ✅ Internal integration **CNS-Connector** exists (workspace NRG2fly; token
-   verified 2026-07-07). Secret → `CNS_NOTION_TOKEN` in `/etc/cns.env` ONLY.
-2. Create the two databases by pasting the **Appendix A prompt** into Notion's
-   AI assistant, then run the 30-second verification checklist (Appendix A.2)
-   — AI output must be checked because the sync matches properties **by exact
-   name**.
-3. Share both databases with the integration: ••• → Connections →
-   CNS-Connector. (As of 2026-07-07 the integration can see nothing — this
-   step is what fixes that.)
-4. Copy both database IDs (the 32-hex segment of each DB's URL) →
-   `CNS_NOTION_AIRCRAFT_DB`, `CNS_NOTION_PROFILES_DB` in `/etc/cns.env`.
-5. Seed rows are created by the same Appendix A prompt. Per **D9** they are
-   best-known real values (e.g. Velis cruise 80 kt from Edgar's spec sheet,
-   not a number reverse-engineered from the old JSON) — colleagues should
-   review and correct them in Notion afterwards; that's the point of the
-   system.
+As-built state, confirmed by querying the live databases with the
+CNS-Connector token:
+
+- ✅ Integration **CNS-Connector** (workspace NRG2fly), token works. Secret →
+  `CNS_NOTION_TOKEN` in `/etc/cns.env` ONLY — never in the repo.
+- ✅ **Aircraft** database: `3a08f9303e8848e797056c3f62c75178`
+  → `CNS_NOTION_AIRCRAFT_DB`
+- ✅ **Performance Profiles** database: `0a16fd09aabb490ebe1f1119687c9bdc`
+  → `CNS_NOTION_PROFILES_DB`
+- ✅ Both shared with the integration; relation Profiles→Aircraft wired
+  correctly; 4 seeded aircraft + 5 profiles verified (emit ids
+  `pipistrel_velis`, `beta_plane`, `vaeridion`, `vaeridion_light`,
+  `elysian_e9x`; exactly one Default per aircraft).
+- ⚠️ As-built deviations from the original draft (schema §5 below reflects
+  reality — **code targets these names**):
+  - the visibility checkbox is named **`CNS`**, not "Show in CNS";
+  - Edgar added **`Max kW`** (number — aircraft-side max charging power
+    acceptance) and **`Country`** (rich text — country of manufacturing) to
+    Aircraft.
+- ⚠️ One stray empty Aircraft row exists (only `CNS` unchecked, no data) —
+  harmless (hidden rows are skipped) but should be deleted in Notion.
+
+Remaining phase-0 step for Edgar: put the token + both database IDs into
+`/etc/cns.env` (§12 — the IDs are pre-filled there).
+
+Seed values are best-known real figures per **D9** (e.g. Velis cruise 80 kt
+from Edgar's spec sheet, not reverse-engineered from the old JSON) —
+colleagues refine them in Notion; that's the point of the system.
 
 ## 5. Notion schema (exact)
 
@@ -137,7 +151,7 @@ a bad Notion edit can never take the app down (§8).
 |---|---|---|---|
 | `Name` | Title | yes | e.g. "Vaeridion Microliner" (no profile suffix) |
 | `Slug` | Rich text | yes | stable grouping id, `[a-z0-9_]+`, unique |
-| `Show in CNS` | Checkbox | yes | **D10** — unchecked = aircraft (and all its profiles) excluded from the sync output; how "planes to come" are staged |
+| `CNS` | Checkbox | yes | **D10** — unchecked = aircraft (and all its profiles) excluded from the sync output; how "planes to come" are staged |
 | `OEM` | Select | no | Pipistrel, Beta, Vaeridion, Elysian, … |
 | `Type` | Select | no | CTOL / STOL / eVTOL |
 | `Status` | Select | no | concept / under construction / prototype flying / certified |
@@ -145,6 +159,8 @@ a bad Notion edit can never take the app down (§8).
 | `Propulsion` | Select | no | fully electric / hybrid / hydrogen |
 | `Battery (kWh)` | Number | yes | plain number |
 | `Cruise speed (kt)` | Number | yes | knots; transform emits `speed_kmh = round(kt × 1.852)` |
+| `Max kW` | Number | no | aircraft-side max charging power acceptance; emits `max_charge_kw`. Passthrough in v1 — the sim does NOT yet cap charger power with it (listed as future work, §10) |
+| `Country` | Rich text | no | country of manufacturing (free text, e.g. "NL, DE"); emits `country` |
 | `MTOW (kg)` | Number | no | |
 | `Training range (km)` | Number | no | emits `training_range_km` (Velis) |
 | `Simultaneous charging max` | Number | no | ≥2 emits `simultaneous_charging {enabled:true, max:N}` |
@@ -174,7 +190,13 @@ a bad Notion edit can never take the app down (§8).
 
 ### 5.3 Seed data (best-known values per D9 — colleagues refine in Notion)
 
-Aircraft rows (all `Show in CNS` ✔):
+> **As-built note:** the live databases already contain these rows (verified
+> 2026-07-07), plus values Edgar filled in beyond the seed: `Max kW`
+> (Velis 40, Beta 400, Vaeridion 800), `Country` (SI / USA / "NL, DE" / NL)
+> and Beta's Status = prototype flying. **The live databases are the truth**;
+> the tables below are the historical seed reference.
+
+Aircraft rows (all `CNS` ✔):
 
 | Name | Slug | Status / cert | Battery (kWh) | Cruise (kt) | Training range | Sim. charging max | Chargers (order matters) | Image / SVG |
 |---|---|---|---|---|---|---|---|---|
@@ -199,7 +221,7 @@ JSON's 150 to 148 km/h because 80 kt is the real figure — accepted per D9.)
 ## 6. Transform & emission rules (`notion_sync.py`)
 
 The generated file keeps **today's `planes.json` shape**: a JSON array with one
-entry **per profile** of every `Show in CNS` aircraft (this is exactly the
+entry **per profile** of every `CNS` aircraft (this is exactly the
 trick the old catalog played with vaeridion/vaeridion_light, so zero frontend
 changes are needed in v1; a proper per-sim profile picker can come later and
 would collapse this).
@@ -220,9 +242,14 @@ Per emitted entry:
   `Simultaneous charging max` ≥ 2 (omit otherwise).
 - **Metadata keys** (additive; templates/JS ignore unknown keys today, and may
   start displaying them later): `aircraft_id` (Slug), `oem`, `type`, `status`,
-  `certification_year`, `propulsion`, `mtow_kg`, `regime`, `surface`,
-  `min_runway_m`, `max_flight_duration_min`, `profile_label`, `source`,
-  `confidence` — each omitted when blank.
+  `certification_year`, `propulsion`, `max_charge_kw` (← `Max kW`),
+  `country` (← `Country`), `mtow_kg`, `regime`, `surface`, `min_runway_m`,
+  `max_flight_duration_min`, `profile_label`, `source`, `confidence` — each
+  omitted when blank. Note `max_charge_kw` is passthrough-only in v1: the sim
+  keeps using the charger's rated kW unmodified (wiring
+  `min(charger_kw, max_charge_kw)` into charge-time math is future work, §10 —
+  it would change sim results, e.g. Vaeridion accepts 800 kW but is paired
+  with the 1000 kW charger).
 
 Normalization applied to every Notion string before use: trim, collapse inner
 whitespace; selects compared case-insensitively; `Emit ID`/`Slug` lowercased
@@ -253,7 +280,7 @@ Ordering: aircraft by Notion creation time, profiles default-first.
   This is the "you own your data" guarantee against Notion lock-in.
 - **Report**: write `data/sync_report.json`:
   `{synced_at, emitted, ok: [ids], hidden: [slugs], skipped: [{slug, errors:[...]}], carried_forward: [ids], notion_pages_read}`.
-  The CLI prints it; the endpoint returns it. (`hidden` = `Show in CNS`
+  The CLI prints it; the endpoint returns it. (`hidden` = `CNS`
   unchecked — informational, never an error.)
 - CLI: `./venv/bin/python notion_sync.py [--dry-run]` (dry-run: full pull +
   validate + report to stdout, no file writes). Reads env from the process
@@ -279,7 +306,7 @@ select option outside the documented sets.
 **Quarantine with carry-forward:** a quarantined aircraft's entries are copied
 from the last-good `planes.generated.json` (matched by `id`) so a colleague's
 typo never *removes* a plane from CNS; if no last-good entry exists, skip.
-(An aircraft deliberately unchecked from `Show in CNS` is NOT carried forward
+(An aircraft deliberately unchecked from `CNS` is NOT carried forward
 — hiding is a valid edit, not an error.)
 **Global abort** (keep last-good file untouched, exit non-zero): zero valid
 aircraft, or emitted entry count < 50% of the last-good count, or Notion
@@ -328,7 +355,7 @@ in `/etc/cns.env`.
 Build `notion_sync.py` (§6–8), the loader + mtime reload (§9, with the
 transitional `planes.json` fallback), and `tests/test_notion_sync.py` (§11).
 Edgar runs `--dry-run` then a real sync on the VPS. **Gate (functional, per
-D9):** sync exits 0; the aircraft picker lists exactly the `Show in CNS`
+D9):** sync exits 0; the aircraft picker lists exactly the `CNS`
 aircraft/profiles from Notion; one simulation per aircraft runs sanely; a
 hidden aircraft does not appear; existing test suite still passes.
 
@@ -356,8 +383,11 @@ Trigger: Edgar says the new method works. No waiting period (D9). One commit:
    `static/tour.js` references plane ids.
 
 **Later (optional, out of scope):** per-simulation profile picker in the UI
-(schema already carries `aircraft_id`/`profile_label`); chargers catalog to
-Notion (D8); image sync from Notion.
+(schema already carries `aircraft_id`/`profile_label`); sim caps effective
+charging power at `min(charger_kw, max_charge_kw)` — data already synced,
+touches charge-time math in `sim.py` + `static/` mirrors, changes results
+(Vaeridion: 1000 kW charger vs 800 kW acceptance); chargers catalog to Notion
+(D8); image sync from Notion.
 
 ## 11. Verification (per phase)
 
@@ -374,7 +404,7 @@ Notion (D8); image sync from Notion.
   a file touch).
 - **E2E (phase 1, Edgar on VPS):** run sync, restart service, load app —
   picker matches Notion, one simulation per aircraft completes; untick
-  `Show in CNS` on one aircraft, re-sync, confirm it vanishes; re-tick,
+  `CNS` on one aircraft, re-sync, confirm it vanishes; re-tick,
   re-sync, it returns.
 - **Failure drill (phase 2):** blank out Battery for one aircraft in Notion →
   sync → CNS keeps serving that aircraft (carry-forward), report shows the
@@ -392,8 +422,8 @@ Notion (D8); image sync from Notion.
 # --- one-time (phase 0/1) ---
 sudo tee -a /etc/cns.env >/dev/null <<'EOF'
 CNS_NOTION_TOKEN=<the CNS-Connector secret — never commit it anywhere>
-CNS_NOTION_AIRCRAFT_DB=<32-hex id from the Aircraft DB URL>
-CNS_NOTION_PROFILES_DB=<32-hex id from the Profiles DB URL>
+CNS_NOTION_AIRCRAFT_DB=3a08f9303e8848e797056c3f62c75178
+CNS_NOTION_PROFILES_DB=0a16fd09aabb490ebe1f1119687c9bdc
 CNS_SYNC_TOKEN=<generate: openssl rand -hex 24>
 EOF
 
@@ -418,7 +448,7 @@ cat ~/Charging-Network-Simulator/data/custom_planes.json   # migrate keepers to 
 ```
 
 Colleague workflow (document on the Notion page itself): edit/add rows →
-tick `Show in CNS` when the aircraft is ready to appear, and give it exactly
+tick `CNS` when the aircraft is ready to appear, and give it exactly
 one `Default` profile → press "Sync from Notion" in CNS settings (or wait for
 the nightly sync) → check the reported summary.
 
@@ -443,7 +473,12 @@ the nightly sync) → check the reported summary.
 
 ---
 
-## Appendix A — Notion AI prompt (Edgar pastes this into Notion's assistant)
+## Appendix A — Notion AI prompt (HISTORICAL — already executed 2026-07-07)
+
+> The databases exist and are verified (§4). Keep this only as a recreation
+> recipe if they're ever lost. It does NOT include the post-creation additions
+> (`Max kW`, `Country` on Aircraft — see §5.1); the checkbox below reflects
+> the as-built name `CNS`.
 
 ### A.1 The prompt
 
@@ -455,7 +490,7 @@ case-sensitively). Do not add, rename, or remove properties.
 DATABASE 1 — name it "Aircraft", with these properties:
 - "Name" (title)
 - "Slug" (text)
-- "Show in CNS" (checkbox)
+- "CNS" (checkbox)
 - "OEM" (select — options: Pipistrel, Beta, Vaeridion, Elysian)
 - "Type" (select — options: CTOL, STOL, eVTOL)
 - "Status" (select — options: concept, under construction, prototype flying, certified)
@@ -489,7 +524,7 @@ DATABASE 2 — name it "Performance Profiles", with these properties:
 - "Source" (text)
 - "Confidence" (select — options: certified, manufacturer-stated, estimated)
 
-Then add these 4 rows to "Aircraft" (Show in CNS checked on all):
+Then add these 4 rows to "Aircraft" (CNS checked on all):
 1. Name: Velis Electro | Slug: pipistrel_velis | OEM: Pipistrel | Type: CTOL |
    Status: certified | Propulsion: fully electric | Battery (kWh): 22 |
    Cruise speed (kt): 80 | Training range (km): 87.5 | Chargers: dc_22 |
@@ -526,10 +561,10 @@ Then add these 5 rows to "Performance Profiles":
 
 ### A.2 After the bot finishes — Edgar's 30-second checklist
 
-1. Property names match §5 **exactly** (especially `Show in CNS`, `Emit ID`,
+1. Property names match §5 **exactly** (especially `CNS`, `Emit ID`,
    `Battery (kWh)`, `Cruise speed (kt)` — AI assistants love to "fix" names).
    Types too: `Slug`/`Emit ID`/`Image`/`SVG` are plain text, not select.
-2. Every aircraft row: `Show in CNS` ✔, `Slug` filled.
+2. Every aircraft row: `CNS` ✔, `Slug` filled.
 3. Every profile row: linked to its `Aircraft`, `Emit ID` filled, exactly one
    `Default` ✔ per aircraft.
 4. If the bot mangled the seed rows, fix them by hand from §5.3 — the schema
