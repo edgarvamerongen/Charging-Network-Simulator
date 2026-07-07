@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { loadStack, AP } from './golden_capture.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8')).map(p => [p.id, p]));
+const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO, 'tests', 'fixtures', 'planes.fixture.json'), 'utf8')).map(p => [p.id, p]));
 const BASE = process.env.CNS_BASE_URL || 'http://127.0.0.1:5055';
 const CHARGERS = { dc_250: { id: 'dc_250', name: '250 kW DC', power_kw: 250 }, dc_60: { id: 'dc_60', name: '60 kW DC', power_kw: 60 } };
 const co = (k) => ({ ident: k, name: AP[k].name, lat: AP[k].lat, lon: AP[k].lon });

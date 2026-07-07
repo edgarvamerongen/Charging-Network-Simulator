@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { loadStack, AP } from './golden_capture.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8')).map(p => [p.id, p]));
+const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO, 'tests', 'fixtures', 'planes.fixture.json'), 'utf8')).map(p => [p.id, p]));
 const GP = path.join(REPO, 'tests', 'goldens', 'flight-current.golden.json');
 if (!fs.existsSync(GP)) { console.log('SKIP: no golden (run node tests/golden_capture.mjs).'); process.exit(0); }
 const golden = JSON.parse(fs.readFileSync(GP, 'utf8'));
