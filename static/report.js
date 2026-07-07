@@ -214,6 +214,7 @@ window.CNSReport = (function () {
                 name: t.planeName,
                 svg: t.planeSvg || (cat && cat.svg) || '',
                 image: (cat && cat.image) || '',
+                image_url: (cat && cat.image_url) || '',
                 battery_kwh: (cat && cat.battery_kwh) ?? t.battery ?? 0,
                 range_km: (cat && cat.range_km) ?? 0,
                 speed_kmh: (cat && cat.speed_kmh) ?? 0,

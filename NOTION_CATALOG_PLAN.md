@@ -165,7 +165,8 @@ colleagues refine them in Notion; that's the point of the system.
 | `Training range (km)` | Number | no | emits `training_range_km` (Velis) |
 | `Simultaneous charging max` | Number | no | ≥2 emits `simultaneous_charging {enabled:true, max:N}` |
 | `Chargers` | Multi-select | no | options are charger **ids** from `chargers.json` (see Appendix A for the full list); **first selected = default** → `default_charger_id`; empty allowed (Elysian) |
-| `Image` | Rich text | no | filename existing in `pics/` |
+| `Photo` | Files & media | no | **preferred picture source** — upload an image here in Notion and the sync downloads it to `data/plane_images/` and emits `image_url` (served at `/plane-images/`). First file wins. Takes precedence over `Image` in the picker + PDF; falls back to `Image` when absent. Colleagues can now add an aircraft's picture with no code/commit. |
+| `Image` | Rich text | no | filename existing in `pics/` — fallback when `Photo` is empty |
 | `SVG` | Rich text | no | filename existing in `pics/plane_svgs/` |
 | `Notes` | Rich text | no | ignored by sync |
 
@@ -387,7 +388,19 @@ Trigger: Edgar says the new method works. No waiting period (D9). One commit:
 charging power at `min(charger_kw, max_charge_kw)` — data already synced,
 touches charge-time math in `sim.py` + `static/` mirrors, changes results
 (Vaeridion: 1000 kW charger vs 800 kW acceptance); chargers catalog to Notion
-(D8); image sync from Notion.
+(D8).
+
+**Picture pipeline (SHIPPED — post-phase-3 UI round):** the Aircraft `Photo`
+(Files & media) property is the preferred image source. Notion's own file urls
+are short-lived signed links, so the sync **downloads** each emitted aircraft's
+photo into `data/plane_images/` (gitignored) and emits `image_url`
+(`notion_sync.apply_photos`); `app.py` serves it at `/plane-images/`. Cached by
+filename (`<slug>__<original>`), stale siblings pruned on replacement. Photo
+failures are **warnings only** (`report['images']` + `image_warnings`) — the
+aircraft falls back to its `pics/`-based `Image` and the sync never aborts.
+Precedence (picker stage/thumb/spec-card + PDF report): `image_url` → `Image` →
+glyph. This closes the old "images still need a dev" limitation for the common
+case; only `SVG` glyphs and brand assets remain in `pics/`.
 
 ## 11. Verification (per phase)
 
@@ -454,9 +467,13 @@ the nightly sync) → check the reported summary.
 
 ## 13. Known limitations & risks (accepted)
 
-- **Images still need a dev**: `Image` references files committed under
-  `pics/`; a brand-new aircraft photo requires a git commit. (Notion file
-  upload → auto-download is a possible later enhancement.)
+- **Images**: RESOLVED for the common case — the `Photo` property lets
+  colleagues attach a picture in Notion (downloaded on sync, §10). Only `SVG`
+  route glyphs and brand assets still live in `pics/` and need a commit.
+- **Photo storage is per-server**: `data/plane_images/` is local to the VPS
+  (gitignored, like the generated catalog). A fresh deploy re-downloads on the
+  first sync; it is not committed, so back it up with the catalog snapshots if
+  offline resilience matters.
 - **Notion select drift** is mitigated by normalization (§6) but colleagues
   can still invent new option values — they surface as warnings, not failures.
 - **Notion outage / token revocation**: CNS keeps serving the last-good file

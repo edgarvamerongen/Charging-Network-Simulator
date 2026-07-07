@@ -251,6 +251,80 @@ class TransformTest(unittest.TestCase):
         self.assertTrue(any("unknown charger" in e for e in report["skipped"][0]["errors"]))
 
 
+def _files(entries):
+    """Notion files property: entries = [(name, url, kind)] with kind file|external."""
+    fs = []
+    for name, url, kind in entries:
+        f = {"name": name, "type": kind}
+        f[kind] = {"url": url}
+        fs.append(f)
+    return {"type": "files", "files": fs}
+
+
+class PhotoPipelineTest(unittest.TestCase):
+    """Notion "Photo" uploads → data/plane_images + image_url (warnings-only)."""
+
+    def _entries_and_pages(self, photo_prop):
+        ac = [aircraft("A", name="Velis", slug="pipistrel_velis",
+                       props={"Photo": photo_prop} if photo_prop else None)]
+        pr = [profile("P", "A", emit="pipistrel_velis")]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertIsNone(report["abort"])
+        return entries, ac, report
+
+    def test_files_property_extraction_signed_and_external(self):
+        prop = _files([("shot.jpg", "https://s3/signed", "file"),
+                       ("ext.png", "https://x/ext.png", "external")])
+        self.assertEqual(ns._extract(prop), [
+            {"name": "shot.jpg", "url": "https://s3/signed"},
+            {"name": "ext.png", "url": "https://x/ext.png"}])
+
+    def test_photo_filename_sanitized_and_extension_guarded(self):
+        self.assertEqual(ns._photo_filename("velis", "My Photo (1).JPG"), "velis__My_Photo_1.jpg")
+        self.assertEqual(ns._photo_filename("velis", "../../etc/passwd"), "velis__passwd.jpg")
+        self.assertEqual(ns._photo_filename("velis", ""), "velis__photo.jpg")
+
+    def test_download_patches_entries_and_caches_and_prunes(self):
+        entries, pages, report = self._entries_and_pages(
+            _files([("new.jpg", "https://s3/a", "file")]))
+        with tempfile.TemporaryDirectory() as base:
+            pdir = os.path.join(base, "data", ns.PHOTO_DIR)
+            os.makedirs(pdir)
+            with open(os.path.join(pdir, "pipistrel_velis__old.jpg"), "wb") as f:
+                f.write(b"stale")
+            calls = []
+            ns.apply_photos(entries, pages, base, report,
+                            fetch=lambda url: calls.append(url) or b"JPEGDATA")
+            self.assertEqual(calls, ["https://s3/a"])
+            self.assertEqual(entries[0]["image_url"], "/plane-images/pipistrel_velis__new.jpg")
+            self.assertTrue(os.path.exists(os.path.join(pdir, "pipistrel_velis__new.jpg")))
+            self.assertFalse(os.path.exists(os.path.join(pdir, "pipistrel_velis__old.jpg")))
+            self.assertEqual(report["images"],
+                             {"linked": 1, "downloaded": 1, "cached": 0, "failed": 0})
+            # second sync: same filename → served from cache, no fetch
+            report2 = {"images": {}, "image_warnings": []}
+            ns.apply_photos(entries, pages, base, report2, fetch=lambda url: self.fail("refetched"))
+            self.assertEqual(report2["images"]["cached"], 1)
+
+    def test_download_failure_is_warning_not_fatal(self):
+        entries, pages, report = self._entries_and_pages(
+            _files([("x.jpg", "https://s3/broken", "file")]))
+        def boom(url):
+            raise RuntimeError("403 expired")
+        with tempfile.TemporaryDirectory() as base:
+            ns.apply_photos(entries, pages, base, report, fetch=boom)
+        self.assertNotIn("image_url", entries[0])
+        self.assertEqual(report["images"]["failed"], 1)
+        self.assertIn("pipistrel_velis", report["image_warnings"][0])
+
+    def test_no_photo_property_is_noop(self):
+        entries, pages, report = self._entries_and_pages(None)
+        with tempfile.TemporaryDirectory() as base:
+            ns.apply_photos(entries, pages, base, report, fetch=lambda url: self.fail("fetched"))
+        self.assertNotIn("image_url", entries[0])
+        self.assertEqual(report["images"]["linked"], 0)
+
+
 class PropertyExtractionTest(unittest.TestCase):
     def test_rich_text_runs_are_concatenated(self):
         prop = {"type": "rich_text",

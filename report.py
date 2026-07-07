@@ -151,6 +151,23 @@ def _safe_pics_path(rel) -> str:
     return ''
 
 
+PLANE_IMG_DIR = os.path.join(ROOT, 'data', 'plane_images')
+
+
+def _safe_plane_image_path(rel) -> str:
+    """Resolve an emitted '/plane-images/<fname>' url (Notion-synced photo,
+    see notion_sync.apply_photos) to its file under data/plane_images, with the
+    same traversal guard as _safe_pics_path. Returns '' when unsafe/absent."""
+    if not rel or not isinstance(rel, str):
+        return ''
+    name = rel[len('/plane-images/'):] if rel.startswith('/plane-images/') else rel
+    base = os.path.realpath(PLANE_IMG_DIR)
+    real = os.path.realpath(os.path.join(base, name))
+    if real != base and real.startswith(base + os.sep):
+        return real
+    return ''
+
+
 def _file_data_uri(path: str) -> str:
     """Embed a local file as a data: URI so WeasyPrint doesn't have to fetch it."""
     if not path or not os.path.exists(path):
@@ -1031,7 +1048,9 @@ def generate_pdf(payload, css_url, request_root):
         svg = p.get('svg')
         p['svg_data_uri'] = _file_data_uri(_safe_pics_path(os.path.join('plane_svgs', svg))) if svg else ''
         img = p.get('image')
-        p['image_data_uri'] = _file_data_uri(_safe_pics_path(img)) if img else ''
+        notion_photo = _safe_plane_image_path(p.get('image_url'))
+        p['image_data_uri'] = _file_data_uri(notion_photo) if notion_photo \
+            else (_file_data_uri(_safe_pics_path(img)) if img else '')
 
     # network map — markers from EVERY route waypoint (so charging stops are
     # visible, not just the focus airport). Ends of a leg = terminal, middle

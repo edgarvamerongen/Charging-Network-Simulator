@@ -1453,6 +1453,23 @@
         .pk-btn:disabled { opacity: .45; cursor: default; }
         .pk-seg.pk-locked .pk-btn { opacity: .55; cursor: default; }
         .pk-seg.pk-locked .pk-btn[aria-pressed="true"] { opacity: .8; }
+        /* Status badge, top-left of the stage (mirrors the knobs top-right). */
+        .plane-status { position: absolute; top: 8px; left: 8px; z-index: 3; display: flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgba(43,47,90,.78); color: #fff; font-size: .6rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; box-shadow: 0 1px 5px rgba(0,0,0,.3); pointer-events: none; }
+        .plane-status .st-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa1b5; flex: 0 0 auto; }
+        .plane-status.s-certified .st-dot { background: #43c463; }
+        .plane-status.s-prototype-flying .st-dot { background: #ffc94d; }
+        .plane-status.s-under-construction .st-dot { background: #ff9d4d; }
+        .plane-status.s-concept .st-dot { background: #b7bdd1; }
+        /* Catalog filters above the carousel: Type / Propulsion chip rows. A row
+           only renders when the catalog has values for it; chips that would leave
+           zero aircraft (given the other filter) are disabled, so no dead ends. */
+        .plane-filters { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 6px; }
+        .pf-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+        .pf-label { font-size: .58rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+        .pf-chip { border: 1px solid var(--panel-border); border-radius: 999px; background: transparent; padding: 1px 8px; font-size: .62rem; font-weight: 600; color: var(--ink); cursor: pointer; text-transform: capitalize; transition: background .14s ease, color .14s ease, border-color .14s ease; }
+        .pf-chip:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--brand-ink, #2b2f5a); }
+        .pf-chip[aria-pressed="true"] { background: var(--brand-ink, #2b2f5a); border-color: var(--brand-ink, #2b2f5a); color: #fff; }
+        .pf-chip:disabled { opacity: .35; cursor: default; }
         /* Charger carousel — full-bleed image of the selected charger; chevrons float on
            top with a side hover-shade; navigation loops. Drives the hidden #charger select. */
         .charger-carousel { position: relative; margin-top: 2px; border-radius: var(--radius-sm); overflow: hidden; border: 1.5px solid var(--panel-border); }
@@ -1788,6 +1805,7 @@
                     </select>
                     <!-- Carousel picker (same pattern as the charger picker below) drives
                          the hidden #plane select via value + change event. -->
+                    <div id="planeFilters" class="plane-filters" aria-label="Aircraft filters"></div>
                     <div class="plane-carousel">
                         <div id="planePicker" class="plane-stage" aria-live="polite" aria-label="Selected aircraft"></div>
                         <button type="button" class="plane-nav plane-prev" data-dir="-1" aria-label="Previous aircraft"><span>‹</span></button>
@@ -3502,6 +3520,16 @@
             });
             return order.map(k => ({ key: k, entries: by[k] }));
         })();
+        // Photo precedence: Notion-synced photo (served from data/plane_images)
+        // wins over the committed pics/ file; glyph when neither exists.
+        const _planeImg = p => p.image_url || (p.image ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '');
+        // Catalog filters (Type / Propulsion). null = All. They narrow which
+        // airframes the strip + arrows offer; the hidden select is untouched.
+        const _FILTER_DIMS = [{ key: 'type', label: 'Type' }, { key: 'propulsion', label: 'Propulsion' }];
+        const _planeFilters = { type: null, propulsion: null };
+        const _acField = (g, k) => String(g.entries[0][k] || '');
+        const _visibleGroups = () => AIRCRAFT_GROUPS.filter(g =>
+            _FILTER_DIMS.every(d => !_planeFilters[d.key] || _acField(g, d.key) === _planeFilters[d.key]));
         const _groupOf = id => AIRCRAFT_GROUPS.find(g => g.entries.some(p => p.id === id)) || null;
         const _profileMemory = {};                 // aircraft key → last used row id (per pageload)
         const _pkLabel = p => p.profile_label || 'Standard';
@@ -3557,10 +3585,16 @@
             const g = _groupOf(p.id);
             if (g) _profileMemory[g.key] = p.id;   // every change path feeds the memory
             const specs = _planeSpecsLine(p);
-            const src = p.image ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '';
+            const src = _planeImg(p);
+            // Status badge (top-left): status + expected certification year while
+            // not yet certified. Emitted metadata, absent on legacy/custom rows.
+            const st = p.status ? String(p.status) : '';
+            const stTxt = st + ((p.certification_year && st !== 'certified') ? ' · ' + p.certification_year : '');
+            const stHtml = st ? `<div class="plane-status s-${st.toLowerCase().replace(/[^a-z0-9]+/g, '-')}"><span class="st-dot"></span>${escHtml(stTxt)}</div>` : '';
             host.innerHTML = `<div class="plane-card" title="${escHtml(p.name + ' — ' + specs)}">` +
                 (src ? `<img src="${src}" alt="" loading="lazy">` : '<div class="plane-glyph">✈</div>') +
                 `<div class="plane-overlay"><div class="plane-name">${escHtml(_airframeName(p))}</div><div class="plane-specs">${escHtml(specs)}</div></div></div>` +
+                stHtml +
                 (g ? _renderPlaneKnobs(g, p) : '');
             // Knob clicks swap WITHIN the group: same airframe, different catalog row.
             host.querySelectorAll('.pk-btn:not(:disabled)').forEach(b => b.addEventListener('click', () => {
@@ -3584,9 +3618,9 @@
             const strip = document.getElementById('planeStrip');
             const sel = document.getElementById('plane');
             if (!strip || !sel) return;
-            strip.innerHTML = AIRCRAFT_GROUPS.map(g => {
+            strip.innerHTML = _visibleGroups().map(g => {
                 const p = g.entries[0];
-                const src = p.image ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '';
+                const src = _planeImg(p);
                 const nm = _airframeName(p);
                 const badge = g.entries.length > 1 ? `<span class="plane-thumb-count">${g.entries.length}</span>` : '';
                 return `<button type="button" class="plane-thumb" role="tab" data-group="${escHtml(g.key)}" aria-selected="false" title="${escHtml(nm)}" aria-label="${escHtml(nm)}">`
@@ -3602,7 +3636,7 @@
             const strip = document.getElementById('planeStrip');
             const sel = document.getElementById('plane');
             if (!strip || !sel) return;
-            if (strip.children.length !== AIRCRAFT_GROUPS.length) renderPlaneStrip();
+            if (strip.children.length !== _visibleGroups().length) renderPlaneStrip();
             const cur = _groupOf(sel.value);
             let active = null;
             strip.querySelectorAll('.plane-thumb').forEach(t => {
@@ -3612,17 +3646,47 @@
             });
             if (active) strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
         }
+        function renderPlaneFilters() {
+            const host = document.getElementById('planeFilters');
+            if (!host) return;
+            const dims = _FILTER_DIMS.map(d => {
+                const values = [];
+                AIRCRAFT_GROUPS.forEach(g => { const v = _acField(g, d.key); if (v && !values.includes(v)) values.push(v); });
+                return { ...d, values };
+            }).filter(d => d.values.length);
+            host.innerHTML = dims.map(d => {
+                const chips = [null, ...d.values].map(v => {
+                    const on = v === null ? !_planeFilters[d.key] : _planeFilters[d.key] === v;
+                    // Would picking this value (other filter as-is) leave any aircraft?
+                    const ok = v === null || AIRCRAFT_GROUPS.some(g => _acField(g, d.key) === v &&
+                        _FILTER_DIMS.every(o => o.key === d.key || !_planeFilters[o.key] || _acField(g, o.key) === _planeFilters[o.key]));
+                    return `<button type="button" class="pf-chip" data-dim="${escHtml(d.key)}" data-val="${escHtml(v ?? '')}" aria-pressed="${String(on)}" ${ok ? '' : 'disabled'}>${escHtml(v === null ? 'All' : v)}</button>`;
+                }).join('');
+                return `<span class="pf-group"><span class="pf-label">${escHtml(d.label)}</span>${chips}</span>`;
+            }).join('');
+            host.querySelectorAll('.pf-chip:not(:disabled)').forEach(c => c.addEventListener('click', () => {
+                _planeFilters[c.dataset.dim] = c.dataset.val || null;
+                renderPlaneFilters();
+                renderPlaneStrip();
+                const vis = _visibleGroups();
+                const cur = _groupOf(document.getElementById('plane').value);
+                if (vis.length && (!cur || !vis.some(g => g.key === cur.key))) _selectPlane(_groupEntryId(vis[0]));
+                else syncPlaneStrip();
+            }));
+        }
         // Any #plane change (pick / tour / default prefill) re-renders the stage.
         document.getElementById('plane').addEventListener('change', renderPlanePicker);
         // ‹ › step to prev/next AIRFRAME, LOOPING (wrap around both ways).
         document.querySelectorAll('.plane-nav').forEach(btn => btn.addEventListener('click', () => {
             const sel = document.getElementById('plane');
-            if (!AIRCRAFT_GROUPS.length) return;
-            let i = AIRCRAFT_GROUPS.findIndex(g => g.entries.some(p => p.id === sel.value));
+            const vis = _visibleGroups();
+            if (!vis.length) return;
+            let i = vis.findIndex(g => g.entries.some(p => p.id === sel.value));
             if (i < 0) i = 0;
-            i = (i + (+btn.dataset.dir) + AIRCRAFT_GROUPS.length) % AIRCRAFT_GROUPS.length;
-            _selectPlane(_groupEntryId(AIRCRAFT_GROUPS[i]));
+            i = (i + (+btn.dataset.dir) + vis.length) % vis.length;
+            _selectPlane(_groupEntryId(vis[i]));
         }));
+        renderPlaneFilters();
         renderPlanePicker();
         // ---------- charger carousel (single full-bleed image; loops; mirrors #charger) ----------
         function renderChargerPicker() {
@@ -3748,7 +3812,7 @@
             const spec = selectedPlaneSpec();
             card.classList.remove('d-none');
             const thumb = document.getElementById('psThumb');
-            if (spec.image) { thumb.src = '/pics/' + spec.image; thumb.alt = spec.name; thumb.classList.remove('d-none'); }
+            if (spec.image_url || spec.image) { thumb.src = spec.image_url || ('/pics/' + spec.image); thumb.alt = spec.name; thumb.classList.remove('d-none'); }
             else thumb.classList.add('d-none');
             document.getElementById('psName').textContent = spec.name;
             _refreshSpecStats(spec);
