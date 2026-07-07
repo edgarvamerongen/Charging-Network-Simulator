@@ -1444,7 +1444,7 @@
            WHICH catalog row (performance profile + VFR/IFR) feeds the sim. Greyed,
            not hidden, when the aircraft has only one choice — colleagues should see
            the dimension exists (rows come from Notion). Sits above .plane-nav (z:2). */
-        .plane-knobs { position: absolute; top: 8px; right: 8px; z-index: 3; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+        .plane-knobs { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; flex: 0 0 auto; margin-left: auto; pointer-events: auto; }
         .pk-seg { display: flex; border-radius: 999px; overflow: hidden; box-shadow: 0 1px 5px rgba(0,0,0,.3); }
         .pk-btn { border: 0; padding: 3px 9px; font-size: .6rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: rgba(43,47,90,.78); color: #fff; cursor: pointer; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background .14s ease, color .14s ease; }
         .pk-btn + .pk-btn { border-left: 1px solid rgba(255,255,255,.28); }
@@ -1453,11 +1453,17 @@
         .pk-btn:disabled { opacity: .45; cursor: default; }
         .pk-seg.pk-locked .pk-btn { opacity: .55; cursor: default; }
         .pk-seg.pk-locked .pk-btn[aria-pressed="true"] { opacity: .8; }
-        /* Status badge, top-left of the stage (mirrors the knobs top-right). */
-        .plane-status { position: absolute; top: 8px; left: 8px; z-index: 3; display: flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgba(43,47,90,.78); color: #fff; font-size: .6rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; box-shadow: 0 1px 5px rgba(0,0,0,.3); pointer-events: none; }
+        /* Top overlay row: status badge left, knobs right — ONE flex container so
+           the two can never overlap. When space runs out the informational badge
+           shrinks and ellipsizes (full text in its title); the interactive knobs
+           keep their full size. */
+        .plane-topbar { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 3; display: flex; align-items: flex-start; gap: 8px; pointer-events: none; }
+        .plane-status { display: flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgba(43,47,90,.78); color: #fff; font-size: .6rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; box-shadow: 0 1px 5px rgba(0,0,0,.3); pointer-events: none; flex: 0 1 auto; min-width: 0; }
+        .plane-status .st-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .plane-status .st-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa1b5; flex: 0 0 auto; }
         .plane-status.s-certified .st-dot { background: #43c463; }
-        .plane-status.s-prototype-flying .st-dot { background: #ffc94d; }
+        .plane-status.s-prototype-flying .st-dot { background: #5aa9e6; }
+        .plane-status.s-in-development .st-dot { background: #c98a4b; }
         .plane-status.s-under-construction .st-dot { background: #ff9d4d; }
         .plane-status.s-concept .st-dot { background: #b7bdd1; }
         /* Catalog filters above the carousel: Type / Propulsion chip rows. A row
@@ -3590,12 +3596,11 @@
             // not yet certified. Emitted metadata, absent on legacy/custom rows.
             const st = p.status ? String(p.status) : '';
             const stTxt = st + ((p.certification_year && st !== 'certified') ? ' · ' + p.certification_year : '');
-            const stHtml = st ? `<div class="plane-status s-${st.toLowerCase().replace(/[^a-z0-9]+/g, '-')}"><span class="st-dot"></span>${escHtml(stTxt)}</div>` : '';
+            const stHtml = st ? `<div class="plane-status s-${st.toLowerCase().replace(/[^a-z0-9]+/g, '-')}" title="${escHtml(stTxt)}"><span class="st-dot"></span><span class="st-txt">${escHtml(stTxt)}</span></div>` : '';
             host.innerHTML = `<div class="plane-card" title="${escHtml(p.name + ' — ' + specs)}">` +
                 (src ? `<img src="${src}" alt="" loading="lazy">` : '<div class="plane-glyph">✈</div>') +
                 `<div class="plane-overlay"><div class="plane-name">${escHtml(_airframeName(p))}</div><div class="plane-specs">${escHtml(specs)}</div></div></div>` +
-                stHtml +
-                (g ? _renderPlaneKnobs(g, p) : '');
+                `<div class="plane-topbar">${stHtml}${g ? _renderPlaneKnobs(g, p) : ''}</div>`;
             // Knob clicks swap WITHIN the group: same airframe, different catalog row.
             host.querySelectorAll('.pk-btn:not(:disabled)').forEach(b => b.addEventListener('click', () => {
                 const curLabel = _pkLabel(p);
