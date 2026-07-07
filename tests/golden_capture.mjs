@@ -22,7 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
 const BASE = process.env.CNS_BASE_URL || 'http://127.0.0.1:5055';
 const PLANES = Object.fromEntries(
-  JSON.parse(fs.readFileSync(path.join(REPO, 'planes.json'), 'utf8')).map(p => [p.id, p]));
+  JSON.parse(fs.readFileSync(path.join(REPO, 'tests', 'fixtures', 'planes.fixture.json'), 'utf8')).map(p => [p.id, p]));
 
 // ---- load the real stack into one vm context (window === global, like the browser)
 export function loadStack() {

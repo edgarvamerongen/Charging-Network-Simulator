@@ -111,5 +111,23 @@ class TestSafePicsPath(unittest.TestCase):
         self.assertEqual(report._safe_pics_path(None), '')
 
 
+class TestSafePlaneImagePath(unittest.TestCase):
+    """Path-traversal guard for Notion-synced photo urls (image_url) embedded
+    into the PDF — mirrors _safe_pics_path but rooted at data/plane_images."""
+
+    def test_traversal_and_absolute_rejected(self):
+        for bad in ('/plane-images/../sync_report.json', '../../etc/passwd',
+                    '/etc/passwd', '/plane-images/../../app.py'):
+            self.assertEqual(report._safe_plane_image_path(bad), '', bad)
+
+    def test_benign_url_stays_inside_dir(self):
+        p = report._safe_plane_image_path('/plane-images/beta_alia__x.png')
+        self.assertTrue(p.startswith(os.path.realpath(report.PLANE_IMG_DIR) + os.sep), p)
+
+    def test_empty_is_blank(self):
+        self.assertEqual(report._safe_plane_image_path(''), '')
+        self.assertEqual(report._safe_plane_image_path(None), '')
+
+
 if __name__ == '__main__':
     unittest.main()

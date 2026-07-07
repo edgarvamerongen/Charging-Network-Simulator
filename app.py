@@ -106,8 +106,8 @@ app.config.update(
 # 'pics' is public so link scrapers (WhatsApp/LinkedIn) can fetch the og share
 # card + icons after being bounced to /login — it serves only brand/catalog
 # images, never user data.
-_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics', 'embed', 'api_import',
-                     'sync_catalog'}
+_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics', 'plane_images',
+                     'embed', 'api_import', 'sync_catalog'}
 
 # In-memory brute-force throttle for the login form. Per-worker (not shared
 # across gunicorn workers), which is fine for slowing guessing of a single
@@ -575,6 +575,15 @@ def index_mobile():
 @app.route('/pics/<path:filename>')
 def pics(filename):
     return send_from_directory('pics', filename)
+
+
+@app.route('/plane-images/<path:filename>')
+def plane_images(filename):
+    # Aircraft photos uploaded in Notion, downloaded by notion_sync.py into
+    # data/plane_images/ (Notion's own file urls are short-lived signed links).
+    # Public for the same reason as /pics: catalog imagery only, never user data;
+    # send_from_directory refuses path traversal.
+    return send_from_directory(os.path.join(DATA_DIR, 'plane_images'), filename)
 
 
 @app.route('/api/airports', methods=['GET'])

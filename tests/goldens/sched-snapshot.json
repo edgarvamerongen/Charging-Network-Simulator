@@ -109,19 +109,19 @@
       "rotations": [
         {
           "takeoff": 420,
-          "end": 467.21,
+          "end": 467.81,
           "phases": [
             {
               "kind": "fly",
               "ident": null,
               "start": 420,
-              "dur": 34.8,
+              "dur": 35.4,
               "energy": 0
             },
             {
               "kind": "charge",
               "ident": "EHAM",
-              "start": 454.8,
+              "start": 455.4,
               "dur": 12.41,
               "energy": 17.6
             }

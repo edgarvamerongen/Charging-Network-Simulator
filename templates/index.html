@@ -1438,6 +1438,44 @@
         .plane-thumb:hover { opacity: 1; }
         .plane-thumb[aria-selected="true"] { opacity: 1; border-color: var(--brand-ink, #2b2f5a); }
         .plane-thumb-glyph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--brand-ink, #2b2f5a); }
+        .plane-thumb { position: relative; }
+        .plane-thumb-count { position: absolute; top: 1px; right: 1px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; background: var(--brand-ink, #2b2f5a); color: #fff; font-size: .55rem; font-weight: 800; line-height: 13px; text-align: center; pointer-events: none; }
+        /* Profile / regime knobs on the stage: one thumb per airframe, these pick
+           WHICH catalog row (performance profile + VFR/IFR) feeds the sim. Greyed,
+           not hidden, when the aircraft has only one choice — colleagues should see
+           the dimension exists (rows come from Notion). Sits above .plane-nav (z:2). */
+        .plane-knobs { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; flex: 0 0 auto; margin-left: auto; pointer-events: auto; }
+        .pk-seg { display: flex; border-radius: 999px; overflow: hidden; box-shadow: 0 1px 5px rgba(0,0,0,.3); }
+        .pk-btn { border: 0; padding: 3px 9px; font-size: .6rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: rgba(43,47,90,.78); color: #fff; cursor: pointer; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background .14s ease, color .14s ease; }
+        .pk-btn + .pk-btn { border-left: 1px solid rgba(255,255,255,.28); }
+        .pk-btn:hover:not(:disabled):not([aria-pressed="true"]) { background: rgba(43,47,90,.95); }
+        .pk-btn[aria-pressed="true"] { background: #fff; color: var(--brand-ink, #2b2f5a); }
+        .pk-btn:disabled { opacity: .45; cursor: default; }
+        .pk-seg.pk-locked .pk-btn { opacity: .55; cursor: default; }
+        .pk-seg.pk-locked .pk-btn[aria-pressed="true"] { opacity: .8; }
+        /* Top overlay row: status badge left, knobs right — ONE flex container so
+           the two can never overlap. When space runs out the informational badge
+           shrinks and ellipsizes (full text in its title); the interactive knobs
+           keep their full size. */
+        .plane-topbar { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 3; display: flex; align-items: flex-start; gap: 8px; pointer-events: none; }
+        .plane-status { display: flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgba(43,47,90,.78); color: #fff; font-size: .6rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; box-shadow: 0 1px 5px rgba(0,0,0,.3); pointer-events: none; flex: 0 1 auto; min-width: 0; }
+        .plane-status .st-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .plane-status .st-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa1b5; flex: 0 0 auto; }
+        .plane-status.s-certified .st-dot { background: #43c463; }
+        .plane-status.s-prototype-flying .st-dot { background: #5aa9e6; }
+        .plane-status.s-in-development .st-dot { background: #c98a4b; }
+        .plane-status.s-under-construction .st-dot { background: #ff9d4d; }
+        .plane-status.s-concept .st-dot { background: #b7bdd1; }
+        /* Catalog filters above the carousel: Type / Propulsion chip rows. A row
+           only renders when the catalog has values for it; chips that would leave
+           zero aircraft (given the other filter) are disabled, so no dead ends. */
+        .plane-filters { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 6px; }
+        .pf-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+        .pf-label { font-size: .58rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+        .pf-chip { border: 1px solid var(--panel-border); border-radius: 999px; background: transparent; padding: 1px 8px; font-size: .62rem; font-weight: 600; color: var(--ink); cursor: pointer; text-transform: capitalize; transition: background .14s ease, color .14s ease, border-color .14s ease; }
+        .pf-chip:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--brand-ink, #2b2f5a); }
+        .pf-chip[aria-pressed="true"] { background: var(--brand-ink, #2b2f5a); border-color: var(--brand-ink, #2b2f5a); color: #fff; }
+        .pf-chip:disabled { opacity: .35; cursor: default; }
         /* Charger carousel — full-bleed image of the selected charger; chevrons float on
            top with a side hover-shade; navigation loops. Drives the hidden #charger select. */
         .charger-carousel { position: relative; margin-top: 2px; border-radius: var(--radius-sm); overflow: hidden; border: 1.5px solid var(--panel-border); }
@@ -1773,6 +1811,7 @@
                     </select>
                     <!-- Carousel picker (same pattern as the charger picker below) drives
                          the hidden #plane select via value + change event. -->
+                    <div id="planeFilters" class="plane-filters" aria-label="Aircraft filters"></div>
                     <div class="plane-carousel">
                         <div id="planePicker" class="plane-stage" aria-live="polite" aria-label="Selected aircraft"></div>
                         <button type="button" class="plane-nav plane-prev" data-dir="-1" aria-label="Previous aircraft"><span>‹</span></button>
@@ -3468,64 +3507,191 @@
             if (p.speed_kmh != null) bits.push(fmtSpeed(+p.speed_kmh));
             return bits.join(' · ');
         }
-        // Aircraft carousel — single full-bleed image of the selected aircraft with
+        // Aircraft carousel — single full-bleed image of the selected AIRFRAME with
         // looping ‹ › nav + a thumbnail strip, mirroring the charger picker. Drives
-        // the hidden #plane select. (Kept the name renderPlanePicker so existing
-        // callers — the units toggle and startup — need no change.)
+        // the hidden #plane select. The catalog emits one entry per performance
+        // profile (same airframe can appear as several rows — see
+        // NOTION_CATALOG_PLAN.md §6); the picker groups those rows by aircraft_id
+        // so the strip/arrows cycle airframes, and on-stage knobs choose which
+        // profile row (and VFR/IFR regime) actually feeds the sim. The hidden
+        // select still holds every row, so share links, the tour and the scheduler
+        // keep addressing exact catalog ids. (Kept the name renderPlanePicker so
+        // existing callers — the units toggle and startup — need no change.)
+        const AIRCRAFT_GROUPS = (() => {
+            const order = [], by = {};
+            BUILTIN_PLANES.forEach(p => {
+                const k = p.aircraft_id || p.id;   // customs/legacy rows: id doubles as key
+                if (!by[k]) { by[k] = []; order.push(k); }
+                by[k].push(p);                     // sync emits the default profile first
+            });
+            return order.map(k => ({ key: k, entries: by[k] }));
+        })();
+        // Photo precedence: Notion-synced photo (served from data/plane_images)
+        // wins over the committed pics/ file; glyph when neither exists.
+        const _planeImg = p => p.image_url || (p.image ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '');
+        // Catalog filters (Type / Propulsion). null = All. They narrow which
+        // airframes the strip + arrows offer; the hidden select is untouched.
+        const _FILTER_DIMS = [{ key: 'type', label: 'Type' }, { key: 'propulsion', label: 'Propulsion' }];
+        const _planeFilters = { type: null, propulsion: null };
+        const _acField = (g, k) => String(g.entries[0][k] || '');
+        const _visibleGroups = () => AIRCRAFT_GROUPS.filter(g =>
+            _FILTER_DIMS.every(d => !_planeFilters[d.key] || _acField(g, d.key) === _planeFilters[d.key]));
+        const _groupOf = id => AIRCRAFT_GROUPS.find(g => g.entries.some(p => p.id === id)) || null;
+        const _profileMemory = {};                 // aircraft key → last used row id (per pageload)
+        const _pkLabel = p => p.profile_label || 'Standard';
+        const _REGIMES = ['VFR', 'IFR+reserves'];  // canonical emitted values (notion_sync)
+        const _regShort = r => r === 'IFR+reserves' ? 'IFR' : r;
+        // Airframe display name: emitted names embed the profile for multi-profile
+        // aircraft ("Vaeridion Microliner — Max (9 seats)"); the stage shows the
+        // airframe big and leaves the profile to the knob.
+        function _airframeName(p) {
+            const suffix = p.profile_label ? ' — ' + p.profile_label : '';
+            return suffix && String(p.name || '').endsWith(suffix)
+                ? p.name.slice(0, p.name.length - suffix.length) : (p.name || '');
+        }
+        function _selectPlane(id) {
+            const sel = document.getElementById('plane');
+            if (!sel || sel.value === id || !BUILTIN_PLANES_BY_ID[id]) return;
+            sel.value = id; sel.dispatchEvent(new Event('change'));
+        }
+        // Entering a group (thumb click / arrows): reuse the profile the user last
+        // had on that airframe, else its catalog default (first emitted row).
+        const _groupEntryId = g => (_profileMemory[g.key] && g.entries.some(p => p.id === _profileMemory[g.key]))
+            ? _profileMemory[g.key] : g.entries[0].id;
+        function _renderPlaneKnobs(g, cur) {
+            // Profile rows are freeform per aircraft (label + regime pairs from
+            // Notion) — no fixed Max/Light taxonomy. Both knobs stay visible but
+            // lock (greyed) when the airframe offers no alternative, so the
+            // dimension is discoverable even where the catalog has one row.
+            const labels = [];
+            g.entries.forEach(p => { const l = _pkLabel(p); if (!labels.includes(l)) labels.push(l); });
+            const curLabel = _pkLabel(cur);
+            const profLocked = labels.length < 2;
+            const profSeg = labels.map(l =>
+                `<button type="button" class="pk-btn" data-pk="profile" data-label="${escHtml(l)}" aria-pressed="${String(l === curLabel)}" ${profLocked ? 'disabled' : ''} title="${escHtml(profLocked ? 'Only one performance profile for this aircraft in the catalog' : 'Performance profile: ' + l)}">${escHtml(l)}</button>`).join('');
+            const present = _REGIMES.filter(r => g.entries.some(p => p.regime === r));
+            const regLocked = present.length < 2;
+            const regSeg = _REGIMES.map(r => {
+                const exists = present.includes(r);
+                const title = exists ? (r === 'IFR+reserves' ? 'Range incl. IFR reserves' : 'VFR range')
+                    : `No ${_regShort(r)} profile for this aircraft in the catalog`;
+                return `<button type="button" class="pk-btn" data-pk="regime" data-regime="${escHtml(r)}" aria-pressed="${String(r === cur.regime)}" ${exists && !regLocked ? '' : 'disabled'} title="${escHtml(title)}">${escHtml(_regShort(r))}</button>`;
+            }).join('');
+            return `<div class="plane-knobs" aria-label="Performance profile">`
+                + `<div class="pk-seg ${profLocked ? 'pk-locked' : ''}" role="group" aria-label="Profile">${profSeg}</div>`
+                + `<div class="pk-seg ${regLocked ? 'pk-locked' : ''}" role="group" aria-label="Flight rules">${regSeg}</div>`
+                + `</div>`;
+        }
         function renderPlanePicker() {
             const host = document.getElementById('planePicker');
             const sel = document.getElementById('plane');
             if (!host || !sel) return;
             const p = BUILTIN_PLANES_BY_ID[sel.value];
             if (!p) return;
+            const g = _groupOf(p.id);
+            if (g) _profileMemory[g.key] = p.id;   // every change path feeds the memory
             const specs = _planeSpecsLine(p);
-            const src = p.image ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '';
+            const src = _planeImg(p);
+            // Status badge (top-left): status + expected certification year while
+            // not yet certified. Emitted metadata, absent on legacy/custom rows.
+            const st = p.status ? String(p.status) : '';
+            const stTxt = st + ((p.certification_year && st !== 'certified') ? ' · ' + p.certification_year : '');
+            const stHtml = st ? `<div class="plane-status s-${st.toLowerCase().replace(/[^a-z0-9]+/g, '-')}" title="${escHtml(stTxt)}"><span class="st-dot"></span><span class="st-txt">${escHtml(stTxt)}</span></div>` : '';
             host.innerHTML = `<div class="plane-card" title="${escHtml(p.name + ' — ' + specs)}">` +
                 (src ? `<img src="${src}" alt="" loading="lazy">` : '<div class="plane-glyph">✈</div>') +
-                `<div class="plane-overlay"><div class="plane-name">${escHtml(p.name)}</div><div class="plane-specs">${escHtml(specs)}</div></div></div>`;
+                `<div class="plane-overlay"><div class="plane-name">${escHtml(_airframeName(p))}</div><div class="plane-specs">${escHtml(specs)}</div></div></div>` +
+                `<div class="plane-topbar">${stHtml}${g ? _renderPlaneKnobs(g, p) : ''}</div>`;
+            // Knob clicks swap WITHIN the group: same airframe, different catalog row.
+            host.querySelectorAll('.pk-btn:not(:disabled)').forEach(b => b.addEventListener('click', () => {
+                const curLabel = _pkLabel(p);
+                let target = null;
+                if (b.dataset.pk === 'profile') {
+                    // Prefer the clicked label in the current regime, else its first row.
+                    target = g.entries.find(e => _pkLabel(e) === b.dataset.label && e.regime === p.regime)
+                        || g.entries.find(e => _pkLabel(e) === b.dataset.label);
+                } else {
+                    // Prefer the current label in the clicked regime, else that
+                    // regime's first (default-ordered) row — labels may be sparse.
+                    target = g.entries.find(e => e.regime === b.dataset.regime && _pkLabel(e) === curLabel)
+                        || g.entries.find(e => e.regime === b.dataset.regime);
+                }
+                if (target) _selectPlane(target.id);
+            }));
             syncPlaneStrip();
         }
         function renderPlaneStrip() {
             const strip = document.getElementById('planeStrip');
             const sel = document.getElementById('plane');
             if (!strip || !sel) return;
-            strip.innerHTML = [...sel.options].map(o => {
-                const p = BUILTIN_PLANES_BY_ID[o.value];
-                const src = (p && p.image) ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '';
-                const nm = p ? p.name : (o.textContent || '').trim();
-                return `<button type="button" class="plane-thumb" role="tab" data-val="${escHtml(o.value)}" aria-selected="${String(o.value === sel.value)}" title="${escHtml(nm)}" aria-label="${escHtml(nm)}">`
+            strip.innerHTML = _visibleGroups().map(g => {
+                const p = g.entries[0];
+                const src = _planeImg(p);
+                const nm = _airframeName(p);
+                const badge = g.entries.length > 1 ? `<span class="plane-thumb-count">${g.entries.length}</span>` : '';
+                return `<button type="button" class="plane-thumb" role="tab" data-group="${escHtml(g.key)}" aria-selected="false" title="${escHtml(nm)}" aria-label="${escHtml(nm)}">`
                     + (src ? `<img src="${src}" alt="" loading="lazy">` : '<span class="plane-thumb-glyph">✈</span>')
-                    + `</button>`;
+                    + badge + `</button>`;
             }).join('');
             strip.querySelectorAll('.plane-thumb').forEach(t => t.addEventListener('click', () => {
-                if (sel.value === t.dataset.val) return;
-                sel.value = t.dataset.val; sel.dispatchEvent(new Event('change'));
+                const g = AIRCRAFT_GROUPS.find(x => x.key === t.dataset.group);
+                if (g) _selectPlane(_groupEntryId(g));
             }));
         }
         function syncPlaneStrip() {
             const strip = document.getElementById('planeStrip');
             const sel = document.getElementById('plane');
             if (!strip || !sel) return;
-            if (strip.children.length !== sel.options.length) renderPlaneStrip();
+            if (strip.children.length !== _visibleGroups().length) renderPlaneStrip();
+            const cur = _groupOf(sel.value);
             let active = null;
             strip.querySelectorAll('.plane-thumb').forEach(t => {
-                const on = t.dataset.val === sel.value;
+                const on = !!cur && t.dataset.group === cur.key;
                 t.setAttribute('aria-selected', String(on));
                 if (on) active = t;
             });
             if (active) strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
         }
+        function renderPlaneFilters() {
+            const host = document.getElementById('planeFilters');
+            if (!host) return;
+            const dims = _FILTER_DIMS.map(d => {
+                const values = [];
+                AIRCRAFT_GROUPS.forEach(g => { const v = _acField(g, d.key); if (v && !values.includes(v)) values.push(v); });
+                return { ...d, values };
+            }).filter(d => d.values.length);
+            host.innerHTML = dims.map(d => {
+                const chips = [null, ...d.values].map(v => {
+                    const on = v === null ? !_planeFilters[d.key] : _planeFilters[d.key] === v;
+                    // Would picking this value (other filter as-is) leave any aircraft?
+                    const ok = v === null || AIRCRAFT_GROUPS.some(g => _acField(g, d.key) === v &&
+                        _FILTER_DIMS.every(o => o.key === d.key || !_planeFilters[o.key] || _acField(g, o.key) === _planeFilters[o.key]));
+                    return `<button type="button" class="pf-chip" data-dim="${escHtml(d.key)}" data-val="${escHtml(v ?? '')}" aria-pressed="${String(on)}" ${ok ? '' : 'disabled'}>${escHtml(v === null ? 'All' : v)}</button>`;
+                }).join('');
+                return `<span class="pf-group"><span class="pf-label">${escHtml(d.label)}</span>${chips}</span>`;
+            }).join('');
+            host.querySelectorAll('.pf-chip:not(:disabled)').forEach(c => c.addEventListener('click', () => {
+                _planeFilters[c.dataset.dim] = c.dataset.val || null;
+                renderPlaneFilters();
+                renderPlaneStrip();
+                const vis = _visibleGroups();
+                const cur = _groupOf(document.getElementById('plane').value);
+                if (vis.length && (!cur || !vis.some(g => g.key === cur.key))) _selectPlane(_groupEntryId(vis[0]));
+                else syncPlaneStrip();
+            }));
+        }
         // Any #plane change (pick / tour / default prefill) re-renders the stage.
         document.getElementById('plane').addEventListener('change', renderPlanePicker);
-        // ‹ › step to prev/next aircraft, LOOPING (wrap around both ways).
+        // ‹ › step to prev/next AIRFRAME, LOOPING (wrap around both ways).
         document.querySelectorAll('.plane-nav').forEach(btn => btn.addEventListener('click', () => {
             const sel = document.getElementById('plane');
-            const opts = [...sel.options];
-            if (!opts.length) return;
-            let i = opts.findIndex(o => o.value === sel.value); if (i < 0) i = 0;
-            i = (i + (+btn.dataset.dir) + opts.length) % opts.length;
-            sel.value = opts[i].value; sel.dispatchEvent(new Event('change'));
+            const vis = _visibleGroups();
+            if (!vis.length) return;
+            let i = vis.findIndex(g => g.entries.some(p => p.id === sel.value));
+            if (i < 0) i = 0;
+            i = (i + (+btn.dataset.dir) + vis.length) % vis.length;
+            _selectPlane(_groupEntryId(vis[i]));
         }));
+        renderPlaneFilters();
         renderPlanePicker();
         // ---------- charger carousel (single full-bleed image; loops; mirrors #charger) ----------
         function renderChargerPicker() {
@@ -3651,7 +3817,7 @@
             const spec = selectedPlaneSpec();
             card.classList.remove('d-none');
             const thumb = document.getElementById('psThumb');
-            if (spec.image) { thumb.src = '/pics/' + spec.image; thumb.alt = spec.name; thumb.classList.remove('d-none'); }
+            if (spec.image_url || spec.image) { thumb.src = spec.image_url || ('/pics/' + spec.image); thumb.alt = spec.name; thumb.classList.remove('d-none'); }
             else thumb.classList.add('d-none');
             document.getElementById('psName').textContent = spec.name;
             _refreshSpecStats(spec);

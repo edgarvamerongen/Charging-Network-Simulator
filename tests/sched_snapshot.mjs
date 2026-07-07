@@ -3,7 +3,7 @@
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { loadStack, AP } from './golden_capture.mjs';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO,'planes.json'),'utf8')).map(p=>[p.id,p]));
+const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO,'tests','fixtures','planes.fixture.json'),'utf8')).map(p=>[p.id,p]));
 const BASE = process.env.CNS_BASE_URL || 'http://127.0.0.1:5055';
 const SNAP = path.join(REPO, 'tests', 'goldens', 'sched-snapshot.json');
 const co = k => ({ident:k, name:AP[k].name, lat:AP[k].lat, lon:AP[k].lon});
