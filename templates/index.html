@@ -2183,18 +2183,6 @@
                         </div>
                     </div>
 
-                    <div class="rs-cat">Aircraft catalog</div>
-                    <div class="rs-catalog">
-                        <p class="est-note mb-2">
-                            The fleet is maintained in Notion. Pull the latest published aircraft into the simulator.
-                        </p>
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <button type="button" id="catalogSyncBtn" class="btn btn-outline-secondary btn-sm" title="Pull the published aircraft from the Notion catalog">
-                                <span aria-hidden="true">⟳</span> Sync from Notion
-                            </button>
-                            <span id="catalogSyncStatus" class="est-note" role="status" aria-live="polite"></span>
-                        </div>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" id="rsResetBtn" class="btn btn-outline-secondary me-auto">Reset defaults</button>
@@ -5735,37 +5723,6 @@
                 saveBtn.disabled = false;
             }
         });
-
-        // ---- Aircraft catalog: sync from Notion -----------------------------
-        (function () {
-            const btn = document.getElementById('catalogSyncBtn');
-            const out = document.getElementById('catalogSyncStatus');
-            if (!btn || !out) return;
-            btn.addEventListener('click', async () => {
-                btn.disabled = true;
-                out.textContent = 'Syncing…';
-                try {
-                    const resp = await fetch('/api/admin/sync-catalog', { method: 'POST' });
-                    const rep = await resp.json().catch(() => ({}));
-                    if (resp.ok) {
-                        const parts = [`${rep.emitted || 0} aircraft`];
-                        if ((rep.hidden || []).length) parts.push(`${rep.hidden.length} hidden`);
-                        if ((rep.skipped || []).length) parts.push(`${rep.skipped.length} quarantined`);
-                        out.textContent = parts.join(' · ') + ' — reloading…';
-                        setTimeout(() => location.reload(), 900);   // server-rendered picker
-                    } else if (resp.status === 401) {
-                        out.textContent = 'Not authorized.';
-                        btn.disabled = false;
-                    } else {
-                        out.textContent = 'Aborted: ' + (rep.abort || 'unknown') + ' — catalog unchanged.';
-                        btn.disabled = false;
-                    }
-                } catch (e) {
-                    out.textContent = 'Sync failed: ' + ((e && e.message) || e);
-                    btn.disabled = false;
-                }
-            });
-        })();
 
         // ---- Model settings modal -------------------------------------------
         (function () {

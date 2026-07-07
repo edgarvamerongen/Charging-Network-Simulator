@@ -958,15 +958,15 @@ def api_import():
 @app.route('/api/admin/sync-catalog', methods=['POST'])
 def sync_catalog():
     """Pull the aircraft catalog from Notion into data/planes.generated.json.
-    Two ways to authorize: a logged-in session (the settings-panel button) OR a
-    bearer token (headless: `Authorization: Bearer $CNS_SYNC_TOKEN`), mirroring
-    /api/import. Returns the sync report — 200 on success, 401 unauthorized,
-    502 (with the report's `abort` reason) when the sync refuses to write."""
-    session_ok = (not AUTH_ENABLED) or bool(session.get('authed'))
+    Admin / automation only — authorized solely by a bearer token
+    (`Authorization: Bearer $CNS_SYNC_TOKEN`), mirroring /api/import. There is
+    deliberately NO user-facing trigger: which aircraft are available must not be
+    a UI control, so a logged-in session alone does not authorize. Triggered by
+    the nightly systemd timer, the CLI, or an authorized curl. Returns the sync
+    report — 200 success, 401 unauthorized, 502 (with `abort`) when it won't write."""
     auth = request.headers.get('Authorization', '')
     token = auth[7:] if auth.startswith('Bearer ') else ''
-    token_ok = bool(_SYNC_TOKEN) and hmac.compare_digest(token, _SYNC_TOKEN)
-    if not (session_ok or token_ok):
+    if not (_SYNC_TOKEN and hmac.compare_digest(token, _SYNC_TOKEN)):
         return jsonify({'error': 'Not authorized to sync the catalog.'}), 401
 
     rc, report = notion_sync.sync()

@@ -66,12 +66,13 @@ class SyncCatalogRouteTest(unittest.TestCase):
         self.assertEqual(r.status_code, 502)
         self.assertIn('no valid aircraft', r.get_json()['abort'])
 
-    def test_session_login_authorizes_without_token(self):
-        # The settings-panel button relies on the logged-in session, not a token.
+    def test_session_without_token_is_rejected(self):
+        # No user-facing trigger: a logged-in session alone must NOT authorize a
+        # sync — catalog availability is admin/automation (token) only.
         self.client.post('/login', data={'password': 'test-secret-pw'})
         self._stub(0, _report(emitted=1, ok=['a']))
-        r = self.client.post('/api/admin/sync-catalog')   # no Authorization header
-        self.assertEqual(r.status_code, 200, r.data)
+        r = self.client.post('/api/admin/sync-catalog')   # session, no token
+        self.assertEqual(r.status_code, 401)
 
 
 if __name__ == '__main__':
