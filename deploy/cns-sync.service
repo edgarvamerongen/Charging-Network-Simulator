@@ -1,7 +1,7 @@
 # CNS aircraft catalog sync — pulls Notion → data/planes.generated.json.
-# Install: see deploy/README.md. The paths below MUST match your existing `cns`
-# service — run `systemctl cat cns` and align User / WorkingDirectory / the venv
-# python in ExecStart before installing.
+# Install: see deploy/README.md. Paths target the current deploy (/home/cns/cns);
+# if that ever changes, run `systemctl cat cns` and align User / WorkingDirectory /
+# the venv python in ExecStart.
 [Unit]
 Description=CNS aircraft catalog sync (Notion -> data/planes.generated.json)
 After=network-online.target
@@ -10,7 +10,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=cns
-WorkingDirectory=/home/cns/Charging-Network-Simulator
+WorkingDirectory=/home/cns/cns
 EnvironmentFile=/etc/cns.env
-ExecStart=/home/cns/Charging-Network-Simulator/venv/bin/python notion_sync.py
+ExecStart=/home/cns/cns/venv/bin/python notion_sync.py
 # The running app hot-reloads the new catalog by mtime — no `cns` restart needed.
