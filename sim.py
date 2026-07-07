@@ -4,6 +4,7 @@ import re
 import pandas as pd
 import argparse
 import os
+import threading
 
 # ICAO codes are 4 alphanumerics (e.g. EHAM, LFPG); IATA codes are 3 letters
 # (e.g. CDG, AMS). When the user types one we want an exact ident match, not
@@ -21,17 +22,86 @@ def haversine(lat1, lon1, lat2, lon2):
 
 class Simulator:
     def __init__(self, base_dir="."):
-        planes_file = os.path.join(base_dir, "planes.json")
+        self.base_dir = base_dir
         chargers_file = os.path.join(base_dir, "chargers.json")
         airports_file = os.path.join(base_dir, "european_airports.csv")
-        
-        with open(planes_file, 'r') as f:
-            self.planes = json.load(f)
+
+        # Aircraft catalog: prefer the Notion-synced data/planes.generated.json,
+        # falling back to the tracked planes.json (see NOTION_CATALOG_PLAN.md).
+        # The fallback is transitional — removed at cutover (Phase 3).
+        self._generated_planes_path = os.path.join(base_dir, "data", "planes.generated.json")
+        self._planes_fallback_path = os.path.join(base_dir, "planes.json")
+        self._planes_lock = threading.Lock()
+        self._gen_seen_mtime = None
+        self.planes_source = None
+        self.planes = self._load_planes()
+
         with open(chargers_file, 'r') as f:
             self.chargers = json.load(f)
-        
+
         # Replace NaNs with empty string so JSON serialization doesn't fail
         self.airports_df = pd.read_csv(airports_file).fillna("")
+
+    # -- aircraft catalog loading -------------------------------------------
+    _REQUIRED_PLANE_KEYS = ("id", "name", "battery_kwh", "range_km", "speed_kmh")
+
+    @classmethod
+    def _valid_planes(cls, data):
+        """A usable catalog is a non-empty list of dicts that each carry the
+        three fields the engine divides/multiplies on (plus id/name)."""
+        return isinstance(data, list) and len(data) > 0 and all(
+            isinstance(p, dict) and all(k in p for k in cls._REQUIRED_PLANE_KEYS)
+            for p in data)
+
+    def _read_generated(self):
+        """Parsed generated catalog if present and shape-valid, else None."""
+        try:
+            with open(self._generated_planes_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return None
+        return data if self._valid_planes(data) else None
+
+    def _load_planes(self):
+        gen = self._read_generated()
+        if gen is not None:
+            try:
+                self._gen_seen_mtime = os.path.getmtime(self._generated_planes_path)
+            except OSError:
+                self._gen_seen_mtime = None
+            self.planes_source = self._generated_planes_path
+            return gen
+        # Fall back to the tracked catalog (raises if it too is missing — the
+        # app cannot run without a catalog).
+        self.planes_source = self._planes_fallback_path
+        with open(self._planes_fallback_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def maybe_reload_planes(self):
+        """Cheap per-request refresh: when data/planes.generated.json changes
+        (an out-of-band notion_sync.py run), swap the in-memory catalog.
+
+        gunicorn runs multiple workers, so a sync can't reach into each worker —
+        instead every worker notices the new mtime on its next request. A stat is
+        ~microseconds, so the load-once/no-per-request-IO property effectively
+        survives. Never raises; keeps the current catalog on any error.
+        """
+        try:
+            mtime = os.path.getmtime(self._generated_planes_path)
+        except OSError:
+            return  # no generated file yet — stay on the current catalog
+        if mtime == self._gen_seen_mtime:
+            return
+        with self._planes_lock:
+            if mtime == self._gen_seen_mtime:  # re-check under lock
+                return
+            # Mark this mtime examined (even if it turns out invalid) so we don't
+            # re-read an unchanged bad file on every subsequent request.
+            self._gen_seen_mtime = mtime
+            data = self._read_generated()
+            if data is not None:
+                self.planes = data
+                self.planes_source = self._generated_planes_path
 
     def get_all_airports(self):
         # We'll return just enough data for the map + autocomplete to reduce payload size

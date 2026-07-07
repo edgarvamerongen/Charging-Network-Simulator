@@ -47,6 +47,14 @@ simulator = Simulator(base_dir=os.path.dirname(os.path.abspath(__file__)))
 # create at import so every gunicorn worker is ready; see shares.py.
 shares.init_db()
 
+
+@app.before_request
+def _refresh_catalog():
+    """Pick up an out-of-band notion_sync.py run (data/planes.generated.json
+    changed) without a restart — each gunicorn worker notices on its next
+    request. Cheap mtime stat; see Simulator.maybe_reload_planes()."""
+    simulator.maybe_reload_planes()
+
 # ---------------------------------------------------------------------------
 # Authentication & hardening
 # ---------------------------------------------------------------------------
