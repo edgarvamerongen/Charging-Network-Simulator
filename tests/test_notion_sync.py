@@ -268,12 +268,13 @@ class PropertyExtractionTest(unittest.TestCase):
 
 class GeneratedCatalogLoaderTest(unittest.TestCase):
     """sim.Simulator catalog loader — built via __new__ to skip the heavy
-    airports CSV read (this test is only about plane loading)."""
+    airports CSV read. Post-cutover the generated file is the single source of
+    truth: there is NO planes.json fallback, so a missing/invalid catalog fails
+    fast rather than serving stale data."""
 
     def _bare(self, tmp):
         s = sim.Simulator.__new__(sim.Simulator)
         s._generated_planes_path = os.path.join(tmp, "data", "planes.generated.json")
-        s._planes_fallback_path = os.path.join(tmp, "planes.json")
         s._planes_lock = threading.Lock()
         s._gen_seen_mtime = None
         s.planes_source = None
@@ -287,19 +288,13 @@ class GeneratedCatalogLoaderTest(unittest.TestCase):
         if mtime is not None:
             os.utime(path, (mtime, mtime))
 
-    def test_prefers_generated_then_reloads_on_change(self):
+    def test_loads_generated_then_reloads_on_change(self):
         tmp = tempfile.mkdtemp()
         s = self._bare(tmp)
-        self._write(s._planes_fallback_path,
-                    [{"id": "fb", "name": "FB", "battery_kwh": 1, "range_km": 1, "speed_kmh": 1}])
-        s.planes = s._load_planes()
-        self.assertTrue(s.planes_source.endswith("planes.json"))   # no generated yet
-        self.assertEqual(s.planes[0]["id"], "fb")
-
         self._write(s._generated_planes_path,
                     [{"id": "g1", "name": "G1", "battery_kwh": 2, "range_km": 2, "speed_kmh": 2}],
                     mtime=1000)
-        s.maybe_reload_planes()
+        s.planes = s._load_planes()
         self.assertTrue(s.planes_source.endswith("planes.generated.json"))
         self.assertEqual(s.planes[0]["id"], "g1")
 
@@ -309,35 +304,32 @@ class GeneratedCatalogLoaderTest(unittest.TestCase):
         s.maybe_reload_planes()
         self.assertEqual(s.planes[0]["id"], "g2")
 
-    def test_invalid_generated_keeps_previous(self):
+    def test_missing_catalog_raises(self):
+        # No generated file and no fallback → fail fast (Phase 3 cutover).
+        s = self._bare(tempfile.mkdtemp())
+        with self.assertRaises(RuntimeError):
+            s._load_planes()
+
+    def test_invalid_generated_raises_on_load(self):
+        # Present but shape-invalid (missing speed_kmh) → RuntimeError, not fallback.
+        s = self._bare(tempfile.mkdtemp())
+        self._write(s._generated_planes_path,
+                    [{"id": "bad", "name": "Bad", "battery_kwh": 2, "range_km": 2}], mtime=1000)
+        with self.assertRaises(RuntimeError):
+            s._load_planes()
+
+    def test_invalid_generated_keeps_previous_on_reload(self):
         tmp = tempfile.mkdtemp()
         s = self._bare(tmp)
-        self._write(s._planes_fallback_path,
-                    [{"id": "fb", "name": "FB", "battery_kwh": 1, "range_km": 1, "speed_kmh": 1}])
-        s.planes = s._load_planes()
         self._write(s._generated_planes_path,
                     [{"id": "g1", "name": "G1", "battery_kwh": 2, "range_km": 2, "speed_kmh": 2}],
                     mtime=1000)
-        s.maybe_reload_planes()
-
+        s.planes = s._load_planes()
         with open(s._generated_planes_path, "w") as f:
             f.write("{ not valid json")
         os.utime(s._generated_planes_path, (2000, 2000))
         s.maybe_reload_planes()
         self.assertEqual(s.planes[0]["id"], "g1")         # kept the last good load
-
-    def test_generated_missing_required_key_falls_back(self):
-        tmp = tempfile.mkdtemp()
-        s = self._bare(tmp)
-        self._write(s._planes_fallback_path,
-                    [{"id": "fb", "name": "FB", "battery_kwh": 1, "range_km": 1, "speed_kmh": 1}])
-        # generated present but a plane lacks speed_kmh → invalid shape → fallback
-        self._write(s._generated_planes_path,
-                    [{"id": "bad", "name": "Bad", "battery_kwh": 2, "range_km": 2}],
-                    mtime=1000)
-        s.planes = s._load_planes()
-        self.assertTrue(s.planes_source.endswith("planes.json"))
-        self.assertEqual(s.planes[0]["id"], "fb")
 
 
 if __name__ == "__main__":

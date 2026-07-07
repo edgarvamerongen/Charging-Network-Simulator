@@ -195,12 +195,10 @@ _MOBILE_UA_RE = re.compile(r'Mobi', re.I)
 # keeps the data dir out of version control, so deploys never overwrite user data.
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 CUSTOM_FILES = {
-    'planes':   os.path.join(DATA_DIR, 'custom_planes.json'),
     'chargers': os.path.join(DATA_DIR, 'custom_chargers.json'),
 }
 MAX_CUSTOMS = 5    # per type, keeps the UI tidy and the data file bounded
 LOG_FILES = {
-    'planes':   os.path.join(DATA_DIR, 'planes_log.txt'),
     'chargers': os.path.join(DATA_DIR, 'chargers_log.txt'),
     'auth':     os.path.join(DATA_DIR, 'auth_log.txt'),
 }
@@ -717,82 +715,9 @@ def get_airport_chargers_one(icao):
     return jsonify(airport)
 
 
-# ---- custom planes & chargers (shared across all visitors on this server) ----
-@app.route('/api/custom/planes', methods=['GET'])
-def list_custom_planes():
-    return jsonify(_read_list(CUSTOM_FILES['planes']))
-
-
-@app.route('/api/custom/planes', methods=['POST'])
-def add_custom_plane():
-    p = request.json or {}
-    try:
-        battery = float(p.get('battery_kwh'))
-        rng = float(p.get('range_km'))
-        spd = float(p.get('speed_kmh'))
-    except (TypeError, ValueError):
-        _log('planes', 'REJECT', reason='non-numeric battery/range/speed', name=p.get('name', ''))
-        return jsonify({'error': 'battery_kwh / range_km / speed_kmh must be numbers'}), 400
-    if not p.get('name') or not (battery > 0 and rng > 0 and spd > 0):
-        _log('planes', 'REJECT', reason='missing or non-positive fields', name=p.get('name', ''))
-        return jsonify({'error': 'name + positive battery/range/speed required'}), 400
-    # Reject inf/NaN and absurd-but-finite values that would later overflow
-    # the simulator's energy/time math (see sim.calculate_flight_by_distance).
-    # Ceilings are deliberately generous: ~10× the largest realistic electric
-    # airframe but small enough that distance × kWh/km stays inside float64.
-    if not all(math.isfinite(v) for v in (battery, rng, spd)):
-        _log('planes', 'REJECT', reason='non-finite battery/range/speed', name=p.get('name', ''))
-        return jsonify({'error': 'battery/range/speed must be finite numbers'}), 400
-    if not (battery <= 100_000 and rng <= 50_000 and spd <= 5_000):
-        _log('planes', 'REJECT', reason='value out of range', name=p.get('name', ''))
-        return jsonify({'error': 'battery_kwh ≤ 100000, range_km ≤ 50000, speed_kmh ≤ 5000'}), 400
-
-    with _custom_lock('planes'):
-        data = _read_list(CUSTOM_FILES['planes'])
-        if len(data) >= MAX_CUSTOMS:
-            _log('planes', 'REJECT', reason=f'cap of {MAX_CUSTOMS} reached', name=p.get('name', ''))
-            return jsonify({'error': f'Limit of {MAX_CUSTOMS} custom planes reached — remove one first.'}), 400
-
-        saved = {'id': _accept_client_id(p.get('id'), data) or _new_id('custom'),
-                 'name': str(p['name'])[:80],
-                 'battery_kwh': battery, 'range_km': rng, 'speed_kmh': spd}
-        if p.get('seats') not in (None, ''):
-            try:    saved['seats'] = int(p['seats'])
-            except (TypeError, ValueError): pass
-        if p.get('load_kg') not in (None, ''):
-            try:    saved['load_kg'] = float(p['load_kg'])
-            except (TypeError, ValueError): pass
-        # Optional battery charge C-rate (used by the charging-curve model factor).
-        # Only persist a sane, finite, positive value; otherwise it falls back to
-        # the global slider default at calculation time.
-        if p.get('c_rate') not in (None, ''):
-            try:
-                cr = float(p['c_rate'])
-                if math.isfinite(cr) and 0 < cr <= 10:
-                    saved['c_rate'] = cr
-            except (TypeError, ValueError):
-                pass
-
-        data.append(saved)
-        _write_list(CUSTOM_FILES['planes'], data)
-    _log('planes', 'ADD', **saved)
-    return jsonify(saved), 201
-
-
-@app.route('/api/custom/planes/<plane_id>', methods=['DELETE'])
-def delete_custom_plane(plane_id):
-    with _custom_lock('planes'):
-        data = _read_list(CUSTOM_FILES['planes'])
-        target = next((p for p in data if p.get('id') == plane_id), None)
-        if not target:
-            _log('planes', 'MISS', op='delete', id=plane_id)
-            return jsonify({'error': 'not found'}), 404
-        kept = [p for p in data if p.get('id') != plane_id]
-        _write_list(CUSTOM_FILES['planes'], kept)
-    _log('planes', 'DELETE', id=plane_id, name=target.get('name', ''))
-    return jsonify({'deleted': plane_id})
-
-
+# ---- custom chargers (shared across all visitors on this server) ----
+# Custom planes were retired at the Notion-catalog cutover (Phase 3): the fleet
+# is managed in Notion, so there is no user-facing way to add aircraft anymore.
 @app.route('/api/custom/chargers', methods=['GET'])
 def list_custom_chargers():
     return jsonify(_read_list(CUSTOM_FILES['chargers']))

@@ -1415,30 +1415,29 @@
         }
 
         /* Aircraft photo-grid picker (drives the hidden #plane select) */
-        .plane-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px; }
-        .plane-card {
-            position: relative; border: 1.5px solid var(--panel-border); border-radius: var(--radius-sm);
-            padding: 0; cursor: pointer; background: #f4f1e8; aspect-ratio: 4 / 3; overflow: hidden;
-            transition: border-color .12s, box-shadow .12s;
-        }
-        .plane-card:hover { border-color: var(--brand-ink); }
-        .plane-card[aria-pressed="true"] { border-color: var(--brand-ink); box-shadow: 0 0 0 3px rgba(43,47,90,.18); }
-        .plane-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .18s ease; }
-        .plane-card:hover img { transform: scale(1.05); }
-        .plane-card .plane-overlay {
-            position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 9px 7px;
-            background: linear-gradient(transparent, rgba(43,47,90,.55) 35%, rgba(43,47,90,.94));
-            opacity: 0; transform: translateY(6px); transition: opacity .15s ease, transform .15s ease;
-            text-align: left; pointer-events: none;
-        }
-        .plane-card:hover .plane-overlay, .plane-card:focus-visible .plane-overlay,
-        .plane-card[aria-pressed="true"] .plane-overlay { opacity: 1; transform: none; }
-        .plane-card .plane-name { font-size: .76rem; font-weight: 700; line-height: 1.25; color: #fff; }
-        .plane-card .plane-specs { font-size: .66rem; color: rgba(255,255,255,.8); margin-top: 1px; line-height: 1.3; }
-        .plane-card .custom-tag { position: absolute; top: 6px; right: 6px; z-index: 1; font-size: .6rem; font-weight: 800; letter-spacing: .05em; color: #fff; background: var(--primary); border-radius: 999px; padding: 2px 6px; }
-        .plane-card.plane-add { display: flex; align-items: center; justify-content: center; border-style: dashed; color: var(--muted); font-size: 1.5rem; background: transparent; }
-        .plane-card.plane-add:hover { color: var(--primary); border-color: var(--primary); }
-        .plane-card .plane-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-ink); font-size: 2rem; }
+        /* Aircraft carousel — mirrors the charger carousel below; drives the hidden #plane select. */
+        .plane-carousel { position: relative; margin-top: 2px; border-radius: var(--radius-sm); overflow: hidden; border: 1.5px solid var(--panel-border); }
+        .plane-stage { position: relative; aspect-ratio: 3 / 2; background: #f4f1e8; }
+        .plane-stage .plane-card { position: absolute; inset: 0; display: block; border: 0; padding: 0; background: none; animation: charger-fade .22s ease; }
+        .plane-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .plane-stage .plane-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-ink); font-size: 2.4rem; }
+        .plane-stage .plane-overlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 9px; text-align: left; pointer-events: none; background: linear-gradient(transparent, rgba(43,47,90,.55) 45%, rgba(43,47,90,.92)); }
+        .plane-stage .plane-name { font-size: 1rem; font-weight: 800; color: #fff; line-height: 1.1; letter-spacing: -.01em; }
+        .plane-stage .plane-specs { font-size: .62rem; color: rgba(255,255,255,.82); margin-top: 2px; text-transform: uppercase; letter-spacing: .06em; }
+        .plane-nav { position: absolute; top: 0; bottom: 0; width: 30%; z-index: 2; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; color: #fff; font-size: 26px; line-height: 1; padding: 0 5px; transition: background .16s ease; }
+        .plane-nav span { text-shadow: 0 1px 5px rgba(0,0,0,.6); opacity: .82; transition: opacity .16s ease; }
+        .plane-nav:hover span { opacity: 1; }
+        .plane-prev { left: 0; justify-content: flex-start; }
+        .plane-next { right: 0; justify-content: flex-end; }
+        .plane-prev:hover { background: linear-gradient(to right, rgba(43,47,90,.5), rgba(43,47,90,0)); }
+        .plane-next:hover { background: linear-gradient(to left, rgba(43,47,90,.5), rgba(43,47,90,0)); }
+        .plane-strip { position: relative; display: flex; gap: 6px; overflow-x: auto; margin-top: 6px; padding: 1px; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
+        .plane-strip::-webkit-scrollbar { height: 0; }
+        .plane-thumb { flex: 0 0 auto; width: 46px; height: 38px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: #f4f1e8; opacity: .55; cursor: pointer; transition: opacity .14s ease, border-color .14s ease; }
+        .plane-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .plane-thumb:hover { opacity: 1; }
+        .plane-thumb[aria-selected="true"] { opacity: 1; border-color: var(--brand-ink, #2b2f5a); }
+        .plane-thumb-glyph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--brand-ink, #2b2f5a); }
         /* Charger carousel — full-bleed image of the selected charger; chevrons float on
            top with a side hover-shade; navigation loops. Drives the hidden #charger select. */
         .charger-carousel { position: relative; margin-top: 2px; border-radius: var(--radius-sm); overflow: hidden; border: 1.5px solid var(--panel-border); }
@@ -1769,13 +1768,17 @@
                     <label>Choose your aircraft</label>
                     <select id="plane" class="form-select d-none" tabindex="-1" aria-hidden="true">
                         {% for p in planes %}
-                        <option value="{{ p.id }}">{{ p.name }} — {% if p.battery_kwh >= 1000 %}{{ '%.2f'|format(p.battery_kwh / 1000) }} MWh{% else %}{{ p.battery_kwh }} kWh{% endif %}</option>
+                        <option value="{{ p.id }}" data-image="{{ p.image }}">{{ p.name }} — {% if p.battery_kwh >= 1000 %}{{ '%.2f'|format(p.battery_kwh / 1000) }} MWh{% else %}{{ p.battery_kwh }} kWh{% endif %}</option>
                         {% endfor %}
-                        <option value="__custom__">➕ Add custom plane…</option>
                     </select>
-                    <!-- Photo-grid picker drives the hidden select above (value + change
-                         event), so both existing #plane listeners keep working. -->
-                    <div id="planePicker" class="plane-picker" role="group" aria-label="Choose aircraft"></div>
+                    <!-- Carousel picker (same pattern as the charger picker below) drives
+                         the hidden #plane select via value + change event. -->
+                    <div class="plane-carousel">
+                        <div id="planePicker" class="plane-stage" aria-live="polite" aria-label="Selected aircraft"></div>
+                        <button type="button" class="plane-nav plane-prev" data-dir="-1" aria-label="Previous aircraft"><span>‹</span></button>
+                        <button type="button" class="plane-nav plane-next" data-dir="1" aria-label="Next aircraft"><span>›</span></button>
+                    </div>
+                    <div id="planeStrip" class="plane-strip" role="tablist" aria-label="All aircraft"></div>
                     <!-- Selected-aircraft spec card: thumbnail + key specs, with a
                          collapsible per-flight override (never touches the catalog). -->
                     <div id="planeSpecCard" class="plane-spec-card d-none">
@@ -2252,43 +2255,9 @@
         </div>
     </div>
 
-    <div class="modal fade" id="customPlaneModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add custom aircraft</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-2">
-                        <label class="form-label">Name</label>
-                        <input id="cpName" class="form-control" placeholder="e.g. My eVTOL">
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-6 mb-2"><label class="form-label">Battery capacity <span class="text-muted">(kWh)</span></label>
-                            <input id="cpBattery" type="number" min="1" step="any" class="form-control" placeholder="kWh"></div>
-                        <div class="col-6 mb-2"><label class="form-label">Range <span class="text-muted">(km)</span></label>
-                            <input id="cpRange" type="number" min="1" step="any" class="form-control" placeholder="km"></div>
-                        <div class="col-6 mb-2"><label class="form-label">Cruise speed <span class="text-muted">(km/h)</span></label>
-                            <input id="cpSpeed" type="number" min="1" step="any" class="form-control" placeholder="km/h"></div>
-                        <div class="col-6 mb-2"><label class="form-label">Seats <span class="text-muted">(optional)</span></label>
-                            <input id="cpSeats" type="number" min="0" step="1" class="form-control" placeholder="#"></div>
-                        <div class="col-6 mb-2"><label class="form-label">Max load <span class="text-muted">(kg, optional)</span></label>
-                            <input id="cpLoad" type="number" min="0" step="any" class="form-control" placeholder="kg"></div>
-                        <div class="col-6 mb-2"><label class="form-label">Charge C-rate <span class="text-muted">(optional)</span></label>
-                            <input id="cpCRate" type="number" min="0.1" max="10" step="any" class="form-control" placeholder="e.g. 2.0"></div>
-                    </div>
-                    <div id="cpError" class="text-danger small d-none"></div>
-                    <p class="est-note mb-0 mt-2">Enter metric values (kWh, km, km/h) regardless of the NM/kts display toggle.</p>
-                    <div id="cpList" class="custom-list mt-3"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" id="cpSave" class="btn btn-primary">Add aircraft</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Custom-aircraft modal removed at the Notion-catalog cutover — the fleet is
+         managed in Notion, so there is no user-facing way to add aircraft. -->
+
 
     <!-- Welcome / landing modal — the onboarding entry point, shown on every
          load until the user ticks "don't show again". "Start demo" launches the
@@ -2415,7 +2384,6 @@
     <script src="/static/state.js?v={{ asset_version }}"></script>
     <script src="/static/units.js?v={{ asset_version }}"></script>
     <script src="/static/settings.js?v={{ asset_version }}"></script>
-    <script src="/static/planes.js?v={{ asset_version }}"></script>
     <script src="/static/chargers.js?v={{ asset_version }}"></script>
     <script src="/static/demand.js?v={{ asset_version }}"></script>
     <script src="/static/routing.js?v={{ asset_version }}"></script>
@@ -2809,7 +2777,7 @@
         let _availRangeOverride = null;   // per-flight "available range" override (km), or null = use the computed value
         function _basePlane() {
             const id = document.getElementById('plane').value;
-            return customById[id] || BUILTIN_PLANES_BY_ID[id] || null;
+            return BUILTIN_PLANES_BY_ID[id] || null;
         }
         // Effective spec = catalog plane merged with any active per-flight override.
         // Everything downstream (routing reach, trajectory, preview, simulate)
@@ -3500,34 +3468,65 @@
             if (p.speed_kmh != null) bits.push(fmtSpeed(+p.speed_kmh));
             return bits.join(' · ');
         }
+        // Aircraft carousel — single full-bleed image of the selected aircraft with
+        // looping ‹ › nav + a thumbnail strip, mirroring the charger picker. Drives
+        // the hidden #plane select. (Kept the name renderPlanePicker so existing
+        // callers — the units toggle and startup — need no change.)
         function renderPlanePicker() {
             const host = document.getElementById('planePicker');
-            if (!host) return;
-            const sel = document.getElementById('plane').value;
-            let customs = []; try { customs = Object.values(customById); } catch (e) { /* pre-init: customs not loaded yet */ }
-            const planes = BUILTIN_PLANES.concat(customs);
-            host.innerHTML = planes.map(p => {
-                const specs = _planeSpecsLine(p);
-                const isCustom = !BUILTIN_PLANES_BY_ID[p.id];
-                return `<button type="button" class="plane-card" data-plane="${escHtml(p.id)}" aria-pressed="${String(p.id === sel)}" title="${escHtml(p.name + ' — ' + specs)}" aria-label="${escHtml(p.name)}">` +
-                    (isCustom ? '<span class="custom-tag">CUSTOM</span>' : '') +
-                    (p.image ? `<img src="/pics/${escHtml(p.image)}" alt="">` : '<div class="plane-glyph">✈</div>') +
-                    `<div class="plane-overlay"><div class="plane-name">${escHtml(p.name)}</div><div class="plane-specs">${escHtml(specs)}</div></div></button>`;
-            }).join('') +
-                '<button type="button" class="plane-card plane-add" data-plane="__custom__" title="Add custom aircraft" aria-label="Add custom aircraft">＋</button>';
-            host.querySelectorAll('.plane-card').forEach(el => el.addEventListener('click', () => {
-                const sel2 = document.getElementById('plane');
-                if (sel2.value === el.dataset.plane) return;   // same-value re-pick: a native select wouldn't fire change either
-                sel2.value = el.dataset.plane;
-                sel2.dispatchEvent(new Event('change'));
+            const sel = document.getElementById('plane');
+            if (!host || !sel) return;
+            const p = BUILTIN_PLANES_BY_ID[sel.value];
+            if (!p) return;
+            const specs = _planeSpecsLine(p);
+            const src = p.image ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '';
+            host.innerHTML = `<div class="plane-card" title="${escHtml(p.name + ' — ' + specs)}">` +
+                (src ? `<img src="${src}" alt="" loading="lazy">` : '<div class="plane-glyph">✈</div>') +
+                `<div class="plane-overlay"><div class="plane-name">${escHtml(p.name)}</div><div class="plane-specs">${escHtml(specs)}</div></div></div>`;
+            syncPlaneStrip();
+        }
+        function renderPlaneStrip() {
+            const strip = document.getElementById('planeStrip');
+            const sel = document.getElementById('plane');
+            if (!strip || !sel) return;
+            strip.innerHTML = [...sel.options].map(o => {
+                const p = BUILTIN_PLANES_BY_ID[o.value];
+                const src = (p && p.image) ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '';
+                const nm = p ? p.name : (o.textContent || '').trim();
+                return `<button type="button" class="plane-thumb" role="tab" data-val="${escHtml(o.value)}" aria-selected="${String(o.value === sel.value)}" title="${escHtml(nm)}" aria-label="${escHtml(nm)}">`
+                    + (src ? `<img src="${src}" alt="" loading="lazy">` : '<span class="plane-thumb-glyph">✈</span>')
+                    + `</button>`;
+            }).join('');
+            strip.querySelectorAll('.plane-thumb').forEach(t => t.addEventListener('click', () => {
+                if (sel.value === t.dataset.val) return;
+                sel.value = t.dataset.val; sel.dispatchEvent(new Event('change'));
             }));
         }
-        // Reflect ANY select change on the tiles (tour, default prefill, modal revert).
-        document.getElementById('plane').addEventListener('change', () => {
-            const v = document.getElementById('plane').value;
-            document.querySelectorAll('#planePicker .plane-card').forEach(el =>
-                el.setAttribute('aria-pressed', String(el.dataset.plane === v)));
-        });
+        function syncPlaneStrip() {
+            const strip = document.getElementById('planeStrip');
+            const sel = document.getElementById('plane');
+            if (!strip || !sel) return;
+            if (strip.children.length !== sel.options.length) renderPlaneStrip();
+            let active = null;
+            strip.querySelectorAll('.plane-thumb').forEach(t => {
+                const on = t.dataset.val === sel.value;
+                t.setAttribute('aria-selected', String(on));
+                if (on) active = t;
+            });
+            if (active) strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
+        }
+        // Any #plane change (pick / tour / default prefill) re-renders the stage.
+        document.getElementById('plane').addEventListener('change', renderPlanePicker);
+        // ‹ › step to prev/next aircraft, LOOPING (wrap around both ways).
+        document.querySelectorAll('.plane-nav').forEach(btn => btn.addEventListener('click', () => {
+            const sel = document.getElementById('plane');
+            const opts = [...sel.options];
+            if (!opts.length) return;
+            let i = opts.findIndex(o => o.value === sel.value); if (i < 0) i = 0;
+            i = (i + (+btn.dataset.dir) + opts.length) % opts.length;
+            sel.value = opts[i].value; sel.dispatchEvent(new Event('change'));
+        }));
+        renderPlanePicker();
         // ---------- charger carousel (single full-bleed image; loops; mirrors #charger) ----------
         function renderChargerPicker() {
             const host = document.getElementById('chargerPicker');
@@ -3647,9 +3646,8 @@
         function renderPlaneSpecCard() {
             const card = document.getElementById('planeSpecCard');
             if (!card) return;
-            const id = document.getElementById('plane').value;
             const base = _basePlane();
-            if (!base || id === '__custom__') { card.classList.add('d-none'); return; }
+            if (!base) { card.classList.add('d-none'); return; }
             const spec = selectedPlaneSpec();
             card.classList.remove('d-none');
             const thumb = document.getElementById('psThumb');
@@ -4883,7 +4881,7 @@
             };
             // Custom plane OR an active per-flight override → send the effective
             // spec so the backend computes with the overridden battery/range/etc.
-            if (customById[planeId] || _planeOverride) payload.plane = selectedPlaneSpec();
+            if (_planeOverride) payload.plane = selectedPlaneSpec();
             // server-side custom chargers (id starts with "charger_") aren't in the static catalog —
             // pass the object through so sim.py can size the charge time correctly.
             if (window.CNSChargers && CNSChargers.get(chargerId)) payload.charger = CNSChargers.get(chargerId);
@@ -5539,8 +5537,8 @@
         let _editFlightModal = null;
         let _editingFlight = null;   // { tripId, ident }
 
-        const _editPlaneSpec = (id) => customById[id] || BUILTIN_PLANES_BY_ID[id] || null;
-        const _editPlaneList = () => BUILTIN_PLANES.concat(window.CNSPlanes ? CNSPlanes.list() : []);
+        const _editPlaneSpec = (id) => BUILTIN_PLANES_BY_ID[id] || null;
+        const _editPlaneList = () => BUILTIN_PLANES.slice();
 
         function _refreshEditThumb() {
             const spec = _editPlaneSpec(document.getElementById('efPlane').value);
@@ -5580,7 +5578,7 @@
             }
             const planeSel = document.getElementById('efPlane');
             planeSel.innerHTML = planes.map(p =>
-                `<option value="${escHtml(p.id)}">${escHtml(p.name)} — ${p.battery_kwh || '?'} kWh${customById[p.id] ? ' (custom)' : ''}</option>`).join('');
+                `<option value="${escHtml(p.id)}">${escHtml(p.name)} — ${p.battery_kwh || '?'} kWh</option>`).join('');
             planeSel.value = t.planeId;
             _refreshEditThumb();
 
@@ -5706,7 +5704,6 @@
                     origin, destination: isTraining ? origin : dest,
                     plane_id: newPlaneId, charger_id: prev.chargerId, trip_type: newTripType,
                 };
-                if (customById[newPlaneId]) payload.plane = customById[newPlaneId];
                 if (chargerById[prev.chargerId]) payload.charger = chargerById[prev.chargerId];
                 if (!isTraining && prev.multiLeg && Array.isArray(prev.stops) && prev.stops.length) {
                     payload.stops = prev.stops.map(s => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type }));
@@ -5993,22 +5990,13 @@
             if (lastResult) drawRoute({ ...lastResult, fitBounds: false }); else drawLiveRoute();
         });
 
-        // ---------- custom planes & chargers (data layer: CNSPlanes / CNSChargers; UI wiring below) ----------
-        const customById = {};                                   // populated after CNSPlanes.load()
+        // ---------- custom chargers (data layer: CNSChargers; UI wiring below) ----------
+        // Custom planes were retired at the Notion-catalog cutover; only chargers remain.
         const planeSelect = document.getElementById('plane');
         const chargerSelect = document.getElementById('charger');
-        const customPlaneModal = new bootstrap.Modal(document.getElementById('customPlaneModal'));
         const customChargerModal = new bootstrap.Modal(document.getElementById('customChargerModal'));
-        let prevPlaneValue = planeSelect.value;
         let prevChargerValue = chargerSelect.value;
 
-        function addPlaneOption(p) {
-            const opt = document.createElement('option');
-            opt.value = p.id;
-            opt.textContent = `${p.name} — ${fmtEnergy(p.battery_kwh)} (custom)`;
-            planeSelect.insertBefore(opt, planeSelect.querySelector('option[value="__custom__"]'));
-            renderPlanePicker();
-        }
         function addChargerOption(c) {
             const opt = document.createElement('option');
             opt.value = c.id;
@@ -6018,23 +6006,12 @@
             renderChargerPicker();
         }
 
-        // Open the right modal when the picker hits the "add custom" sentinel.
-        // Also apply any per-aircraft charger default defined in the plane catalog.
+        // When the aircraft changes, apply its per-aircraft charger default (if any).
         planeSelect.addEventListener('change', () => {
-            if (planeSelect.value === '__custom__') {
-                planeSelect.value = prevPlaneValue;
-                // tiles mirror the select via the change reflector — without this the ＋ tile stays pressed
-                planeSelect.dispatchEvent(new Event('change'));
-                ['cpName', 'cpBattery', 'cpRange', 'cpSpeed', 'cpSeats', 'cpLoad'].forEach(id => document.getElementById(id).value = '');
-                document.getElementById('cpError').classList.add('d-none');
-                customPlaneModal.show();
-            } else {
-                prevPlaneValue = planeSelect.value;
-                const planeDef = BUILTIN_PLANES_BY_ID[planeSelect.value];
-                if (planeDef && planeDef.default_charger_id) {
-                    const opt = chargerSelect.querySelector(`option[value="${CSS.escape(planeDef.default_charger_id)}"]`);
-                    if (opt) { chargerSelect.value = planeDef.default_charger_id; prevChargerValue = chargerSelect.value; renderChargerPicker(); }
-                }
+            const planeDef = BUILTIN_PLANES_BY_ID[planeSelect.value];
+            if (planeDef && planeDef.default_charger_id) {
+                const opt = chargerSelect.querySelector(`option[value="${CSS.escape(planeDef.default_charger_id)}"]`);
+                if (opt) { chargerSelect.value = planeDef.default_charger_id; prevChargerValue = chargerSelect.value; renderChargerPicker(); }
             }
         });
         chargerSelect.addEventListener('change', () => {
@@ -6048,16 +6025,6 @@
 
         const MAX_CUSTOMS = 5;
 
-        function removePlaneFromUI(id) {
-            const opt = planeSelect.querySelector(`option[value="${CSS.escape(id)}"]`);
-            if (opt) opt.remove();
-            delete customById[id];
-            if (planeSelect.value === id) {
-                planeSelect.value = planeSelect.options[0].value; prevPlaneValue = planeSelect.value;
-                planeSelect.dispatchEvent(new Event('change'));
-            }
-            renderPlanePicker();
-        }
         function removeChargerFromUI(id) {
             const opt = chargerSelect.querySelector(`option[value="${CSS.escape(id)}"]`);
             if (opt) opt.remove();
@@ -6065,27 +6032,6 @@
             const i = CHARGERS.findIndex(c => c.id === id); if (i >= 0) CHARGERS.splice(i, 1);
             if (chargerSelect.value === id) { chargerSelect.value = chargerSelect.options[0].value; prevChargerValue = chargerSelect.value; }
             renderChargerPicker();
-        }
-
-        function renderPlanesList() {
-            const planes = CNSPlanes.list();
-            const el = document.getElementById('cpList');
-            const rows = planes.length
-                ? '<ul>' + planes.map(p =>
-                    `<li><span><strong>${escHtml(p.name)}</strong> <small>— ${fmtEnergy(p.battery_kwh)} · ${fmtDist(p.range_km)} · ${fmtSpeed(p.speed_kmh)}</small></span>` +
-                    `<button class="cl-rm" type="button" title="Remove" data-rm-plane="${p.id}">×</button></li>`).join('') + '</ul>'
-                : '<div class="cl-empty">No custom aircraft yet.</div>';
-            el.innerHTML =
-                `<div class="cl-head"><span class="cl-title">Your custom aircraft</span><span class="cl-count">${planes.length} / ${MAX_CUSTOMS}</span></div>` + rows;
-            el.querySelectorAll('[data-rm-plane]').forEach(btn => btn.addEventListener('click', async () => {
-                const id = btn.dataset.rmPlane;
-                await CNSPlanes.remove(id); removePlaneFromUI(id); renderPlanesList();
-            }));
-            // Reflect cap on the Add button
-            const atMax = planes.length >= MAX_CUSTOMS;
-            const save = document.getElementById('cpSave');
-            save.disabled = atMax;
-            save.textContent = atMax ? `Limit reached (${MAX_CUSTOMS})` : 'Add aircraft';
         }
 
         function renderChargersList() {
@@ -6108,45 +6054,8 @@
             save.textContent = atMax ? `Limit reached (${MAX_CUSTOMS})` : 'Add charger';
         }
 
-        // Refresh the lists every time a modal opens
-        document.getElementById('customPlaneModal').addEventListener('show.bs.modal', renderPlanesList);
+        // Refresh the list every time the charger modal opens
         document.getElementById('customChargerModal').addEventListener('show.bs.modal', renderChargersList);
-
-        document.getElementById('cpSave').addEventListener('click', async () => {
-            const err = document.getElementById('cpError');
-            err.classList.add('d-none');
-            const name = document.getElementById('cpName').value.trim();
-            const battery = parseFloat(document.getElementById('cpBattery').value);
-            const range = parseFloat(document.getElementById('cpRange').value);
-            const speed = parseFloat(document.getElementById('cpSpeed').value);
-            const seats = parseInt(document.getElementById('cpSeats').value, 10);
-            const load = parseFloat(document.getElementById('cpLoad').value);
-            const cRate = parseFloat(document.getElementById('cpCRate').value);
-            if (!name || !(battery > 0) || !(range > 0) || !(speed > 0)) {
-                err.textContent = 'Enter a name and positive battery (kWh), range (km) and cruise speed (km/h).';
-                err.classList.remove('d-none'); return;
-            }
-            if (!isNaN(cRate) && !(cRate > 0)) {
-                err.textContent = 'Charge C-rate must be a positive number (or leave it blank).';
-                err.classList.remove('d-none'); return;
-            }
-            const draft = { name, battery_kwh: battery, range_km: range, speed_kmh: speed };
-            if (!isNaN(seats)) draft.seats = seats;
-            if (!isNaN(load)) draft.load_kg = load;
-            if (!isNaN(cRate)) draft.c_rate = cRate;
-            try {
-                const p = await CNSPlanes.add(draft);
-                customById[p.id] = p;
-                planeSelect.value = p.id; prevPlaneValue = p.id;
-                addPlaneOption(p);   // rebuilds the picker — value already points at the new plane
-                planeSelect.dispatchEvent(new Event('change'));   // grid + spec card + replan follow
-                customPlaneModal.hide();
-            } catch (e) {
-                err.textContent = e.message || 'Could not add plane.';
-                err.classList.remove('d-none');
-                renderPlanesList();   // keep the count/disabled state in sync
-            }
-        });
 
         document.getElementById('ccSave').addEventListener('click', async () => {
             const err = document.getElementById('ccError');
@@ -6187,10 +6096,6 @@
         // Async startup: load server-side customs BEFORE wiring the scheduler so its
         // charger catalog (chargerById) already knows about them.
         (async () => {
-            if (window.CNSPlanes) {
-                await CNSPlanes.load();
-                CNSPlanes.list().forEach(p => { customById[p.id] = p; addPlaneOption(p); });
-            }
             if (window.CNSChargers) {
                 await CNSChargers.load();
                 CNSChargers.list().forEach(c => { CHARGERS.push(c); chargerById[c.id] = c; addChargerOption(c); });

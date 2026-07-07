@@ -26,11 +26,11 @@ class Simulator:
         chargers_file = os.path.join(base_dir, "chargers.json")
         airports_file = os.path.join(base_dir, "european_airports.csv")
 
-        # Aircraft catalog: prefer the Notion-synced data/planes.generated.json,
-        # falling back to the tracked planes.json (see NOTION_CATALOG_PLAN.md).
-        # The fallback is transitional — removed at cutover (Phase 3).
+        # Aircraft catalog: the Notion-synced data/planes.generated.json is the
+        # single source of truth (see NOTION_CATALOG_PLAN.md). There is no
+        # planes.json fallback — a missing catalog fails fast with an actionable
+        # error rather than silently serving stale data.
         self._generated_planes_path = os.path.join(base_dir, "data", "planes.generated.json")
-        self._planes_fallback_path = os.path.join(base_dir, "planes.json")
         self._planes_lock = threading.Lock()
         self._gen_seen_mtime = None
         self.planes_source = None
@@ -64,18 +64,18 @@ class Simulator:
 
     def _load_planes(self):
         gen = self._read_generated()
-        if gen is not None:
-            try:
-                self._gen_seen_mtime = os.path.getmtime(self._generated_planes_path)
-            except OSError:
-                self._gen_seen_mtime = None
-            self.planes_source = self._generated_planes_path
-            return gen
-        # Fall back to the tracked catalog (raises if it too is missing — the
-        # app cannot run without a catalog).
-        self.planes_source = self._planes_fallback_path
-        with open(self._planes_fallback_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        if gen is None:
+            raise RuntimeError(
+                f"No aircraft catalog at {self._generated_planes_path}. Run "
+                f"notion_sync.py to generate it (or restore data/snapshots/…). "
+                f"Local dev/tests: "
+                f"cp tests/fixtures/planes.fixture.json {self._generated_planes_path}")
+        try:
+            self._gen_seen_mtime = os.path.getmtime(self._generated_planes_path)
+        except OSError:
+            self._gen_seen_mtime = None
+        self.planes_source = self._generated_planes_path
+        return gen
 
     def maybe_reload_planes(self):
         """Cheap per-request refresh: when data/planes.generated.json changes
