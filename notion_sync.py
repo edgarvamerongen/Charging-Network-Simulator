@@ -484,18 +484,33 @@ def _known_charger_ids(base_dir):
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
+def _empty_report(abort=None):
+    """A report with the standard shape but nothing emitted — used for the
+    early failure paths (missing env, Notion pull failed) so every caller sees
+    the same keys."""
+    return {
+        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "emitted": 0, "ok": [], "hidden": [], "skipped": [],
+        "carried_forward": [], "notion_pages_read": 0, "abort": abort,
+    }
+
+
 def sync(dry_run=False, base_dir=BASE_DIR):
     """Pull Notion, transform, and (unless dry-run) write the generated catalog.
-    Returns a process exit code: 0 success, 2 abort (last-good left untouched)."""
+
+    Returns (rc, report): rc 0 = success, rc 2 = abort (last-good left
+    untouched). `report` is ALWAYS a dict — the CLI (main) and the
+    /api/admin/sync-catalog endpoint both surface it, so failure paths carry the
+    same shape with `abort` set. Side-effect-free except the file writes.
+    """
     token = os.environ.get(ENV_TOKEN)
     ac_db = os.environ.get(ENV_AIRCRAFT_DB)
     prof_db = os.environ.get(ENV_PROFILES_DB)
     missing = [n for n, v in ((ENV_TOKEN, token), (ENV_AIRCRAFT_DB, ac_db),
                               (ENV_PROFILES_DB, prof_db)) if not v]
     if missing:
-        print(f"ABORT: missing env: {', '.join(missing)} "
-              f"(source /etc/cns.env before running)", file=sys.stderr)
-        return 2
+        return 2, _empty_report(f"missing env: {', '.join(missing)} "
+                                f"(source /etc/cns.env before running)")
 
     generated = os.path.join(base_dir, "data", "planes.generated.json")
     report_path = os.path.join(base_dir, "data", "sync_report.json")
@@ -505,31 +520,23 @@ def sync(dry_run=False, base_dir=BASE_DIR):
         aircraft_pages = notion_query(ac_db, session)
         profile_pages = notion_query(prof_db, session)
     except (NotionError, requests.RequestException) as exc:
-        print(f"ABORT: Notion pull failed: {exc}", file=sys.stderr)
-        return 2
+        return 2, _empty_report(f"Notion pull failed: {exc}")
 
     last_good = _load_json_list(generated)
     last_good_by_id = {e["id"]: e for e in last_good if isinstance(e, dict) and e.get("id")}
 
     entries, report = transform(aircraft_pages, profile_pages,
                                 _known_charger_ids(base_dir), last_good_by_id)
-
-    print(json.dumps(report, indent=2, ensure_ascii=False))
-
     if report["abort"]:
-        print(f"ABORT: {report['abort']} — leaving {os.path.basename(generated)} "
-              f"untouched", file=sys.stderr)
-        return 2
-
+        return 2, report              # last-good left untouched
     if dry_run:
-        print(f"[dry-run] would write {len(entries)} entries to {generated}", file=sys.stderr)
-        return 0
+        report["dry_run"] = True
+        return 0, report
 
     _atomic_write_json(generated, entries)
     _snapshot(entries, base_dir)
     _atomic_write_json(report_path, report)
-    print(f"OK: wrote {len(entries)} entries to {generated}", file=sys.stderr)
-    return 0
+    return 0, report
 
 
 def main(argv=None):
@@ -537,7 +544,15 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true",
                     help="pull + validate + print the report, but write nothing")
     args = ap.parse_args(argv)
-    return sync(dry_run=args.dry_run)
+    rc, report = sync(dry_run=args.dry_run)
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    if report.get("abort"):
+        print(f"ABORT: {report['abort']}", file=sys.stderr)
+    elif args.dry_run:
+        print(f"[dry-run] would write {report['emitted']} entries", file=sys.stderr)
+    else:
+        print(f"OK: wrote {report['emitted']} entries", file=sys.stderr)
+    return rc
 
 
 if __name__ == "__main__":

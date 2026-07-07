@@ -29,6 +29,7 @@ from spreadsheet import generate_xlsx
 import shares
 import airport_resolver
 import flight_import
+import notion_sync
 
 app = Flask(__name__)
 # Behind the local reverse proxy (Caddy on the VPS) every request reaches gunicorn
@@ -78,6 +79,9 @@ def _refresh_catalog():
 _PASSWORD_HASH = os.environ.get('CNS_PASSWORD_HASH') or ''
 _PASSWORD_PLAIN = os.environ.get('CNS_APP_PASSWORD') or ''
 _IMPORT_TOKEN = os.environ.get('CNS_IMPORT_TOKEN') or ''
+# Bearer token for the headless catalog-sync trigger (POST /api/admin/sync-catalog);
+# the settings-panel button uses the session instead. Loaded like _IMPORT_TOKEN.
+_SYNC_TOKEN = os.environ.get('CNS_SYNC_TOKEN') or ''
 AUTH_ENABLED = bool(_PASSWORD_HASH or _PASSWORD_PLAIN)
 
 _secret_key = os.environ.get('CNS_SECRET_KEY')
@@ -102,7 +106,8 @@ app.config.update(
 # 'pics' is public so link scrapers (WhatsApp/LinkedIn) can fetch the og share
 # card + icons after being bounced to /login — it serves only brand/catalog
 # images, never user data.
-_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics', 'embed', 'api_import'}
+_PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics', 'embed', 'api_import',
+                     'sync_catalog'}
 
 # In-memory brute-force throttle for the login form. Per-worker (not shared
 # across gunicorn workers), which is fine for slowing guessing of a single
@@ -948,6 +953,28 @@ def api_import():
 
     url = request.host_url.rstrip('/') + '/s/' + slug
     return jsonify({'url': url, 'slug': slug, 'report': import_report})
+
+
+@app.route('/api/admin/sync-catalog', methods=['POST'])
+def sync_catalog():
+    """Pull the aircraft catalog from Notion into data/planes.generated.json.
+    Two ways to authorize: a logged-in session (the settings-panel button) OR a
+    bearer token (headless: `Authorization: Bearer $CNS_SYNC_TOKEN`), mirroring
+    /api/import. Returns the sync report — 200 on success, 401 unauthorized,
+    502 (with the report's `abort` reason) when the sync refuses to write."""
+    session_ok = (not AUTH_ENABLED) or bool(session.get('authed'))
+    auth = request.headers.get('Authorization', '')
+    token = auth[7:] if auth.startswith('Bearer ') else ''
+    token_ok = bool(_SYNC_TOKEN) and hmac.compare_digest(token, _SYNC_TOKEN)
+    if not (session_ok or token_ok):
+        return jsonify({'error': 'Not authorized to sync the catalog.'}), 401
+
+    rc, report = notion_sync.sync()
+    if rc == 0 and not report.get('abort'):
+        # Refresh THIS worker now so it serves the new catalog immediately;
+        # other workers pick it up via mtime on their next request.
+        simulator.maybe_reload_planes()
+    return jsonify(report), (200 if rc == 0 else 502)
 
 
 @app.route('/api/report.pdf', methods=['POST'])

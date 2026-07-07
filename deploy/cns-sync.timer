@@ -1,0 +1,10 @@
+# Nightly trigger for cns-sync.service (03:00 local). Install: see deploy/README.md.
+[Unit]
+Description=Nightly CNS aircraft catalog sync from Notion
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
