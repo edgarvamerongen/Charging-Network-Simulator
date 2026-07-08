@@ -100,7 +100,15 @@ def _extract(prop):
         return bool(prop.get("checkbox", False))
     if t == "relation":
         return [r.get("id") for r in (prop.get("relation") or [])]
-    return None  # date/formula/rollup/people/… — not part of our schema
+    if t == "formula":
+        # Unwrap the typed formula payload so a text/number/checkbox field can be
+        # driven by a Notion formula instead of a hand-typed value (e.g. Emit ID
+        # = slug + label suffix). Date-typed formulas map to no schema field.
+        f = prop.get("formula")
+        if isinstance(f, dict) and f.get("type") in ("string", "number", "boolean"):
+            return f.get(f["type"])
+        return None
+    return None  # date/rollup/people/… — not part of our schema
 
 
 def _props(page):

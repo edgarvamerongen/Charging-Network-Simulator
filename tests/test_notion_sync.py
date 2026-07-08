@@ -265,6 +265,25 @@ class PropertyExtractionTest(unittest.TestCase):
         self.assertTrue(ns._extract(_chk(True)))
         self.assertEqual(ns._extract(_rel(["x", "y"])), ["x", "y"])
 
+    def test_formula_result_is_unwrapped_by_subtype(self):
+        # Formula properties surface a typed payload — unwrap it so a field like
+        # Emit ID can be driven by a Notion formula (e.g. slug + label suffix)
+        # instead of a hand-typed value.
+        def _f(sub, val):
+            return {"type": "formula", "formula": {"type": sub, sub: val}}
+        self.assertEqual(ns._extract(_f("string", "vaeridion_light")), "vaeridion_light")
+        self.assertEqual(ns._extract(_f("number", 42)), 42)
+        self.assertTrue(ns._extract(_f("boolean", True)))
+        # date-typed formulas map to no schema field → None (unchanged behaviour).
+        self.assertIsNone(ns._extract(_f("date", {"start": "2026-01-01"})))
+        self.assertIsNone(ns._extract({"type": "formula", "formula": None}))
+
+    def test_formula_emit_id_is_slugged_by_parse_profile(self):
+        page = {"id": "p1", "properties": {
+            "Emit ID": {"type": "formula",
+                        "formula": {"type": "string", "string": "Vaeridion_Light"}}}}
+        self.assertEqual(ns.parse_profile(page)["emit_id"], "vaeridion_light")
+
 
 class GeneratedCatalogLoaderTest(unittest.TestCase):
     """sim.Simulator catalog loader — built via __new__ to skip the heavy
