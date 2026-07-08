@@ -1423,6 +1423,7 @@
         .plane-stage .plane-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-ink); font-size: 2.4rem; }
         .plane-stage .plane-overlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 9px; text-align: left; pointer-events: none; background: linear-gradient(transparent, rgba(43,47,90,.55) 45%, rgba(43,47,90,.92)); }
         .plane-stage .plane-name { font-size: 1rem; font-weight: 800; color: #fff; line-height: 1.1; letter-spacing: -.01em; }
+        .plane-stage .plane-name .plane-oem { color: rgba(255,255,255,.6); font-weight: 600; }
         .plane-stage .plane-specs { font-size: .62rem; color: rgba(255,255,255,.82); margin-top: 2px; text-transform: uppercase; letter-spacing: .06em; }
         .plane-nav { position: absolute; top: 0; bottom: 0; width: 30%; z-index: 2; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; color: #fff; font-size: 26px; line-height: 1; padding: 0 5px; transition: background .16s ease; }
         .plane-nav span { text-shadow: 0 1px 5px rgba(0,0,0,.6); opacity: .82; transition: opacity .16s ease; }
@@ -3549,6 +3550,21 @@
             return suffix && String(p.name || '').endsWith(suffix)
                 ? p.name.slice(0, p.name.length - suffix.length) : (p.name || '');
         }
+        // Card title with the OEM greyed in front of the model, e.g.
+        // "Vaeridion Microliner". Works whether the emitted Name already leads
+        // with the OEM (grey just that prefix) or not (prepend it). Returns HTML,
+        // so the caller must NOT re-escape it.
+        function _airframeNameHtml(p) {
+            const full = _airframeName(p);
+            const oem = String(p.oem || '').trim();
+            if (!oem) return escHtml(full);
+            let oemPart = oem, rest = full;
+            if (full.toLowerCase().startsWith(oem.toLowerCase())) {
+                oemPart = full.slice(0, oem.length);
+                rest = full.slice(oem.length).replace(/^\s+/, '');
+            }
+            return `<span class="plane-oem">${escHtml(oemPart)}</span>` + (rest ? ' ' + escHtml(rest) : '');
+        }
         function _selectPlane(id) {
             const sel = document.getElementById('plane');
             if (!sel || sel.value === id || !BUILTIN_PLANES_BY_ID[id]) return;
@@ -3599,7 +3615,7 @@
             const stHtml = st ? `<div class="plane-status s-${st.toLowerCase().replace(/[^a-z0-9]+/g, '-')}" title="${escHtml(stTxt)}"><span class="st-dot"></span><span class="st-txt">${escHtml(stTxt)}</span></div>` : '';
             host.innerHTML = `<div class="plane-card" title="${escHtml(p.name + ' — ' + specs)}">` +
                 (src ? `<img src="${src}" alt="" loading="lazy">` : '<div class="plane-glyph">✈</div>') +
-                `<div class="plane-overlay"><div class="plane-name">${escHtml(_airframeName(p))}</div><div class="plane-specs">${escHtml(specs)}</div></div></div>` +
+                `<div class="plane-overlay"><div class="plane-name">${_airframeNameHtml(p)}</div><div class="plane-specs">${escHtml(specs)}</div></div></div>` +
                 `<div class="plane-topbar">${stHtml}${g ? _renderPlaneKnobs(g, p) : ''}</div>`;
             // Knob clicks swap WITHIN the group: same airframe, different catalog row.
             host.querySelectorAll('.pk-btn:not(:disabled)').forEach(b => b.addEventListener('click', () => {
