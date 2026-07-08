@@ -1471,7 +1471,7 @@
            zero aircraft (given the other filter) are disabled, so no dead ends. */
         .plane-filters { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 6px; }
         .pf-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-        .pf-label { font-size: .58rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+        .pf-group + .pf-group { padding-left: 12px; border-left: 1px solid var(--panel-border); }
         .pf-chip { border: 1px solid var(--panel-border); border-radius: 999px; background: transparent; padding: 1px 8px; font-size: .62rem; font-weight: 600; color: var(--ink); cursor: pointer; text-transform: capitalize; transition: background .14s ease, color .14s ease, border-color .14s ease; }
         .pf-chip:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--brand-ink, #2b2f5a); }
         .pf-chip[aria-pressed="true"] { background: var(--brand-ink, #2b2f5a); border-color: var(--brand-ink, #2b2f5a); color: #fff; }
@@ -3654,23 +3654,28 @@
         function renderPlaneFilters() {
             const host = document.getElementById('planeFilters');
             if (!host) return;
+            // Bare toggle knobs — no "All" chip, no dimension labels; the values
+            // speak for themselves. Click a value to filter to it, click it again
+            // to clear. A dimension only renders once the catalog actually varies
+            // on it (a lone label-less chip that filters nothing is noise).
             const dims = _FILTER_DIMS.map(d => {
                 const values = [];
                 AIRCRAFT_GROUPS.forEach(g => { const v = _acField(g, d.key); if (v && !values.includes(v)) values.push(v); });
                 return { ...d, values };
-            }).filter(d => d.values.length);
+            }).filter(d => d.values.length >= 2);
             host.innerHTML = dims.map(d => {
-                const chips = [null, ...d.values].map(v => {
-                    const on = v === null ? !_planeFilters[d.key] : _planeFilters[d.key] === v;
+                const chips = d.values.map(v => {
+                    const on = _planeFilters[d.key] === v;
                     // Would picking this value (other filter as-is) leave any aircraft?
-                    const ok = v === null || AIRCRAFT_GROUPS.some(g => _acField(g, d.key) === v &&
+                    const ok = on || AIRCRAFT_GROUPS.some(g => _acField(g, d.key) === v &&
                         _FILTER_DIMS.every(o => o.key === d.key || !_planeFilters[o.key] || _acField(g, o.key) === _planeFilters[o.key]));
-                    return `<button type="button" class="pf-chip" data-dim="${escHtml(d.key)}" data-val="${escHtml(v ?? '')}" aria-pressed="${String(on)}" ${ok ? '' : 'disabled'}>${escHtml(v === null ? 'All' : v)}</button>`;
+                    return `<button type="button" class="pf-chip" data-dim="${escHtml(d.key)}" data-val="${escHtml(v)}" aria-pressed="${String(on)}" ${ok ? '' : 'disabled'} title="${escHtml(d.label + ': ' + v)}">${escHtml(v)}</button>`;
                 }).join('');
-                return `<span class="pf-group"><span class="pf-label">${escHtml(d.label)}</span>${chips}</span>`;
+                return `<span class="pf-group">${chips}</span>`;
             }).join('');
             host.querySelectorAll('.pf-chip:not(:disabled)').forEach(c => c.addEventListener('click', () => {
-                _planeFilters[c.dataset.dim] = c.dataset.val || null;
+                // Toggle: clicking the active value clears that dimension (= all).
+                _planeFilters[c.dataset.dim] = _planeFilters[c.dataset.dim] === c.dataset.val ? null : c.dataset.val;
                 renderPlaneFilters();
                 renderPlaneStrip();
                 const vis = _visibleGroups();
