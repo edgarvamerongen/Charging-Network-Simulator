@@ -32,7 +32,7 @@
       "variants": {
         "off": {
           "energyUsedKwh": 13.8328,
-          "flightMin": 22.0067,
+          "flightMin": 22.3041,
           "chargeMin": 3.3199,
           "enRouteMin": 0,
           "terminalMin": 3.3199,
@@ -44,7 +44,7 @@
               "kind": "fly",
               "leg": "out",
               "at": null,
-              "dur": 22.0067,
+              "dur": 22.3041,
               "energy": null
             },
             {
@@ -58,7 +58,7 @@
         },
         "default": {
           "energyUsedKwh": 13.8328,
-          "flightMin": 22.0067,
+          "flightMin": 22.3041,
           "chargeMin": 10.3592,
           "enRouteMin": 0,
           "terminalMin": 10.3592,
@@ -70,7 +70,7 @@
               "kind": "fly",
               "leg": "out",
               "at": null,
-              "dur": 22.0067,
+              "dur": 22.3041,
               "energy": null
             },
             {
@@ -84,7 +84,7 @@
         },
         "target100": {
           "energyUsedKwh": 13.8328,
-          "flightMin": 22.0067,
+          "flightMin": 22.3041,
           "chargeMin": 10.3592,
           "enRouteMin": 0,
           "terminalMin": 10.3592,
@@ -96,7 +96,7 @@
               "kind": "fly",
               "leg": "out",
               "at": null,
-              "dur": 22.0067,
+              "dur": 22.3041,
               "energy": null
             },
             {
@@ -110,7 +110,7 @@
         },
         "target50": {
           "energyUsedKwh": 13.8328,
-          "flightMin": 22.0067,
+          "flightMin": 22.3041,
           "chargeMin": 10.3592,
           "enRouteMin": 0,
           "terminalMin": 10.3592,
@@ -122,7 +122,7 @@
               "kind": "fly",
               "leg": "out",
               "at": null,
-              "dur": 22.0067,
+              "dur": 22.3041,
               "energy": null
             },
             {
@@ -981,7 +981,7 @@
           "charges": null,
           "leg_distance_km": 87.5,
           "leg_energy_kwh": 22,
-          "flight_time_h": 0.58,
+          "flight_time_h": 0.59,
           "total_distance_km": 87.5,
           "multi_leg": false
         }
@@ -989,7 +989,7 @@
       "variants": {
         "off": {
           "energyUsedKwh": 22,
-          "flightMin": 35,
+          "flightMin": 35.473,
           "chargeMin": 5.28,
           "enRouteMin": 0,
           "terminalMin": 5.28,
@@ -1001,7 +1001,7 @@
               "kind": "fly",
               "leg": "out",
               "at": null,
-              "dur": 35,
+              "dur": 35.473,
               "energy": null
             },
             {
@@ -1015,7 +1015,7 @@
         },
         "default": {
           "energyUsedKwh": 17.6,
-          "flightMin": 35,
+          "flightMin": 35.473,
           "chargeMin": 12.4141,
           "enRouteMin": 0,
           "terminalMin": 12.4141,
@@ -1027,7 +1027,7 @@
               "kind": "fly",
               "leg": "out",
               "at": null,
-              "dur": 35,
+              "dur": 35.473,
               "energy": null
             },
             {
@@ -1041,7 +1041,7 @@
         },
         "target100": {
           "energyUsedKwh": 17.6,
-          "flightMin": 35,
+          "flightMin": 35.473,
           "chargeMin": 12.4141,
           "enRouteMin": 0,
           "terminalMin": 12.4141,
@@ -1053,7 +1053,7 @@
               "kind": "fly",
               "leg": "out",
               "at": null,
-              "dur": 35,
+              "dur": 35.473,
               "energy": null
             },
             {
@@ -1067,7 +1067,7 @@
         },
         "target50": {
           "energyUsedKwh": 17.6,
-          "flightMin": 35,
+          "flightMin": 35.473,
           "chargeMin": 12.4141,
           "enRouteMin": 0,
           "terminalMin": 12.4141,
@@ -1079,7 +1079,7 @@
               "kind": "fly",
               "leg": "out",
               "at": null,
-              "dur": 35,
+              "dur": 35.473,
               "energy": null
             },
             {

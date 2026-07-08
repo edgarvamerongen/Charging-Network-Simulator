@@ -108,6 +108,16 @@ def _extract(prop):
         if isinstance(f, dict) and f.get("type") in ("string", "number", "boolean"):
             return f.get(f["type"])
         return None
+    if t == "files":
+        # Notion-uploaded files carry a signed S3 url that EXPIRES (~1h), so the
+        # sync must download at sync time — never emit these urls directly.
+        out = []
+        for f in prop.get("files") or []:
+            url = (f.get("file") or {}).get("url") if f.get("type") == "file" \
+                else (f.get("external") or {}).get("url")
+            if url:
+                out.append({"name": f.get("name") or "", "url": url})
+        return out
     return None  # date/rollup/people/… — not part of our schema
 
 
@@ -170,6 +180,10 @@ def parse_aircraft(page):
         "chargers": [_norm_text(c) for c in (p.get("Chargers") or []) if c],
         "image": _norm_text(p.get("Image")),
         "svg": _norm_text(p.get("SVG")),
+        # Optional "Photo" Files&media property: colleagues upload a picture in
+        # Notion instead of committing to pics/. First file wins. Absent
+        # property → None (the column is opt-in, older DBs simply lack it).
+        "photo": (p.get("Photo") or [None])[0],
     }
 
 
@@ -405,6 +419,8 @@ def transform(aircraft_pages, profile_pages, known_charger_ids, last_good_by_id=
         "skipped": skipped,
         "carried_forward": carried,
         "notion_pages_read": len(aircraft_pages) + len(profile_pages),
+        "images": {"linked": 0, "downloaded": 0, "cached": 0, "failed": 0},
+        "image_warnings": [],
         "abort": abort,
     }
     return entries, report
@@ -502,8 +518,87 @@ def _empty_report(abort=None):
     return {
         "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "emitted": 0, "ok": [], "hidden": [], "skipped": [],
-        "carried_forward": [], "notion_pages_read": 0, "abort": abort,
+        "carried_forward": [], "notion_pages_read": 0,
+        "images": {"linked": 0, "downloaded": 0, "cached": 0, "failed": 0},
+        "image_warnings": [], "abort": abort,
     }
+
+
+# ---------------------------------------------------------------------------
+# Notion "Photo" download (§ pictures-via-Notion). Warnings only — a broken
+# photo must never block the catalog sync.
+# ---------------------------------------------------------------------------
+PHOTO_DIR = "plane_images"          # under data/ (gitignored); served at /plane-images/
+_PHOTO_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+_PHOTO_EXT_OK = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
+
+
+def _photo_filename(slug, original_name):
+    """Deterministic local name: <slug>__<sanitized-original>. A NEW upload in
+    Notion (nearly always a new filename) yields a new local name, which both
+    busts the cache and lets stale siblings be pruned by prefix."""
+    base = _PHOTO_NAME_RE.sub("_", os.path.basename(original_name or "")).strip("._") or "photo"
+    root, ext = os.path.splitext(base)
+    if ext.lower() not in _PHOTO_EXT_OK:
+        root, ext = base, ".jpg"     # Notion strips/never had an extension → assume jpeg
+    root = root.strip("._") or "photo"
+    return f"{slug}__{root[:80]}{ext.lower()}"
+
+
+def _default_fetch(url):
+    r = requests.get(url, timeout=30)
+    r.raise_for_status()
+    return r.content
+
+
+def apply_photos(entries, aircraft_pages, base_dir, report, fetch=_default_fetch):
+    """Download each emitted aircraft's Notion Photo into data/plane_images/ and
+    stamp its entries with image_url (served by app.py at /plane-images/).
+    Cached by filename; stale <slug>__* siblings are pruned on replacement.
+    Failures append to report['image_warnings'] and leave the entries on their
+    pics/-based `image` fallback."""
+    photos = {}                      # slug -> photo dict, for aircraft that made it into entries
+    for pg in aircraft_pages:
+        ac = parse_aircraft(pg)
+        if ac["slug"] and ac["photo"]:
+            photos[ac["slug"]] = ac["photo"]
+    emitted_slugs = {e.get("aircraft_id") for e in entries}
+    todo = {s: ph for s, ph in photos.items() if s in emitted_slugs}
+    stats = {"linked": len(todo), "downloaded": 0, "cached": 0, "failed": 0}
+    warnings = []
+    photo_dir = os.path.join(base_dir, "data", PHOTO_DIR)
+    by_slug_fname = {}
+    for slug, ph in sorted(todo.items()):
+        fname = _photo_filename(slug, ph.get("name"))
+        target = os.path.join(photo_dir, fname)
+        if os.path.exists(target):
+            stats["cached"] += 1
+        else:
+            try:
+                blob = fetch(ph["url"])
+                os.makedirs(photo_dir, exist_ok=True)
+                tmp = target + ".tmp"
+                with open(tmp, "wb") as f:
+                    f.write(blob)
+                os.replace(tmp, target)
+                stats["downloaded"] += 1
+                for old in glob.glob(os.path.join(photo_dir, f"{slug}__*")):
+                    if os.path.basename(old) != fname:
+                        try:
+                            os.remove(old)
+                        except OSError:
+                            pass
+            except Exception as exc:  # noqa: BLE001 — any failure is a warning, never fatal
+                stats["failed"] += 1
+                warnings.append(f"{slug}: photo download failed ({exc})")
+                continue
+        by_slug_fname[slug] = fname
+    for e in entries:
+        fname = by_slug_fname.get(e.get("aircraft_id"))
+        if fname:
+            e["image_url"] = f"/plane-images/{fname}"
+    report["images"] = stats
+    report["image_warnings"] = warnings
 
 
 def sync(dry_run=False, base_dir=BASE_DIR):
@@ -543,6 +638,11 @@ def sync(dry_run=False, base_dir=BASE_DIR):
     if dry_run:
         report["dry_run"] = True
         return 0, report
+
+    # Notion "Photo" uploads → data/plane_images/ + image_url on the entries.
+    # Runs between transform and write so the emitted file already carries the
+    # final urls; failures are warnings and the pics/-based fallback survives.
+    apply_photos(entries, aircraft_pages, base_dir, report)
 
     _atomic_write_json(generated, entries)
     _snapshot(entries, base_dir)
