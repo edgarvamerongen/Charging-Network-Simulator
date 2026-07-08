@@ -60,7 +60,14 @@ class Simulator:
                 data = json.load(f)
         except (OSError, ValueError):
             return None
-        return data if self._valid_planes(data) else None
+        if not self._valid_planes(data):
+            return None
+        # Fleet display order = battery capacity, smallest first. This is the
+        # single source of truth for plane order across desktop, mobile and the
+        # API (the picker carousel/strip and #plane select all follow this list).
+        # Stable sort, so equal-capacity aircraft keep their Notion creation order.
+        data.sort(key=lambda p: float(p.get("battery_kwh") or 0))
+        return data
 
     def _load_planes(self):
         gen = self._read_generated()
