@@ -1807,7 +1807,7 @@
                     <label>Choose your aircraft</label>
                     <select id="plane" class="form-select d-none" tabindex="-1" aria-hidden="true">
                         {% for p in planes %}
-                        <option value="{{ p.id }}" data-image="{{ p.image }}">{{ p.name }} — {% if p.battery_kwh >= 1000 %}{{ '%.2f'|format(p.battery_kwh / 1000) }} MWh{% else %}{{ p.battery_kwh }} kWh{% endif %}</option>
+                        <option value="{{ p.id }}" data-image="{{ p.image }}">{{ p.name }} — {% if not p.battery_kwh %}no charge{% elif p.battery_kwh >= 1000 %}{{ '%.2f'|format(p.battery_kwh / 1000) }} MWh{% else %}{{ p.battery_kwh }} kWh{% endif %}</option>
                         {% endfor %}
                     </select>
                     <!-- Carousel picker (same pattern as the charger picker below) drives
@@ -3504,6 +3504,7 @@
             const bits = [];
             if (p.seats != null) bits.push(p.seats + ' seats');
             if (p.battery_kwh != null) bits.push(fmtEnergy(+p.battery_kwh));
+            else bits.push('no charge');                      // non-charging hybrid — the headline fact for a charging tool
             if (p.range_km != null) bits.push(fmtDist(+p.range_km));
             if (p.speed_kmh != null) bits.push(fmtSpeed(+p.speed_kmh));
             return bits.join(' · ');
@@ -3851,7 +3852,7 @@
         function _refreshSpecStats(spec) {
             _renderReachBar(spec);   // the bar IS the visible 'available range' — every stat refresh updates it
             document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
-            document.getElementById('psBattery').textContent = fmtEnergy(spec.battery_kwh || 0);
+            document.getElementById('psBattery').textContent = spec.battery_kwh ? fmtEnergy(spec.battery_kwh) : '—';   // absent = non-charging hybrid
             document.getElementById('psSpeed').textContent = (typeof fmtSpeed === 'function') ? fmtSpeed(spec.speed_kmh) : (spec.speed_kmh + ' km/h');
             document.getElementById('psSeats').textContent = spec.seats != null ? spec.seats : '—';
             // Catalog has no avg_usage field — derive it from battery / range.
@@ -4899,9 +4900,14 @@
             document.getElementById('hlRevenueSub').textContent =
                 `${num(_kwhShown)} kWh · €${_rate.toFixed(2)}/kWh` + (_fN > 1 ? ` · ${_fN}×` : '');
 
-            const common = [
+            // Non-charging hybrid (no battery in the catalog): the network supplies
+            // nothing, so the audit states that instead of printing undefined math.
+            const _hasBatt = p.battery_kwh != null && +p.battery_kwh > 0;
+            const common = _hasBatt ? [
                 `avg usage      = battery / range × 100`,
                 `               = ${p.battery_kwh} kWh / ${p.range_km} km × 100 = ${p.avg_usage_kwh_per_100km} kWh/100km`, ``,
+            ] : [
+                `no battery     = non-charging aircraft — grid supplies 0 kWh`, ``,
             ];
             let lines;
             if (isMulti) {
@@ -4925,11 +4931,17 @@
                 document.getElementById('error').classList.add('d-none');
                 return;
             }
-            common.push(
+            if (_hasBatt) common.push(
                 `energy / leg   = avg usage × leg distance / 100`,
                 `               = ${p.avg_usage_kwh_per_100km} × ${data.leg_distance_km} / 100 = ${data.leg_energy_kwh} kWh`, ``
             );
-            if (data.trip_type === 'retour') {
+            if (!_hasBatt) {
+                lines = [
+                    `# Non-charging aircraft: no battery in the catalog, so the flight`,
+                    `# draws nothing from the charging network.`, ``, ...common,
+                    `charge time    = 0 min`,
+                ];
+            } else if (data.trip_type === 'retour') {
                 const roundTrip = (data.leg_energy_kwh * 2).toFixed(2);
                 const relieved = data.recharge_energy_kwh === 0;
                 lines = [
@@ -5737,7 +5749,7 @@
             if (nameEl) nameEl.textContent = spec ? spec.name : '';
             if (spec) {
                 const range = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
-                specEl.textContent = `${spec.battery_kwh || 0} kWh · ${range}${spec.seats ? ' · ' + spec.seats + ' seats' : ''}`;
+                specEl.textContent = `${spec.battery_kwh ? spec.battery_kwh + ' kWh' : 'no charge'} · ${range}${spec.seats ? ' · ' + spec.seats + ' seats' : ''}`;
             } else specEl.textContent = '';
         }
         function _updateEditFleetVisibility() {
@@ -5765,7 +5777,7 @@
             }
             const planeSel = document.getElementById('efPlane');
             planeSel.innerHTML = planes.map(p =>
-                `<option value="${escHtml(p.id)}">${escHtml(p.name)} — ${p.battery_kwh || '?'} kWh</option>`).join('');
+                `<option value="${escHtml(p.id)}">${escHtml(p.name)} — ${p.battery_kwh ? p.battery_kwh + ' kWh' : 'no charge'}</option>`).join('');
             planeSel.value = t.planeId;
             _refreshEditThumb();
 

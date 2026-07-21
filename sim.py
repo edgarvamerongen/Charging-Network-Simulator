@@ -43,7 +43,9 @@ class Simulator:
         self.airports_df = pd.read_csv(airports_file).fillna("")
 
     # -- aircraft catalog loading -------------------------------------------
-    _REQUIRED_PLANE_KEYS = ("id", "name", "battery_kwh", "range_km", "speed_kmh")
+    # battery_kwh is deliberately NOT required: hybrids may omit it entirely,
+    # which every consumer reads as "non-charging aircraft" (0 kWh demand).
+    _REQUIRED_PLANE_KEYS = ("id", "name", "range_km", "speed_kmh")
 
     @classmethod
     def _valid_planes(cls, data):
@@ -66,7 +68,10 @@ class Simulator:
         # single source of truth for plane order across desktop, mobile and the
         # API (the picker carousel/strip and #plane select all follow this list).
         # Stable sort, so equal-capacity aircraft keep their Notion creation order.
-        data.sort(key=lambda p: float(p.get("battery_kwh") or 0))
+        # No-battery hybrids (non-charging) sort LAST — least relevant to a
+        # charging-demand tool, and 0 would wrongly rank them before the Velis.
+        data.sort(key=lambda p: (p.get("battery_kwh") is None,
+                                 float(p.get("battery_kwh") or 0)))
         return data
 
     def _load_planes(self):
@@ -190,11 +195,17 @@ class Simulator:
             if not training_range or float(training_range) <= 0:
                 return {"error": f"{plane.get('name', 'This aircraft')} doesn't have a published training_range_km — training mode unavailable for it."}
             training_range = float(training_range)
-            avg_usage = plane['battery_kwh'] / plane['range_km'] * 100
-            raw_energy = avg_usage * training_range / 100               # what the pattern would cost at cruise
-            min_landing_soc = float(plane.get('min_landing_soc') or 0)
-            usable = plane['battery_kwh'] * (1.0 - min_landing_soc)     # the most the plane can use in one session
-            recharge_energy = min(raw_energy, usable)
+            batt = float(plane.get('battery_kwh') or 0)   # absent battery => non-charging hybrid
+            if batt > 0:
+                avg_usage = batt / plane['range_km'] * 100
+                raw_energy = avg_usage * training_range / 100           # what the pattern would cost at cruise
+                min_landing_soc = float(plane.get('min_landing_soc') or 0)
+                usable = batt * (1.0 - min_landing_soc)                 # the most the plane can use in one session
+                recharge_energy = min(raw_energy, usable)
+            else:
+                avg_usage = None                                        # electric consumption undefined — fuel does the work
+                raw_energy = 0.0
+                recharge_energy = 0.0
             flight_time_h = training_range / plane['speed_kmh']
             charge_time_h = recharge_energy / charger['power_kw']
             return {
@@ -204,7 +215,7 @@ class Simulator:
                 "leg_distance_km": round(training_range, 2),
                 "total_distance_km": round(training_range, 2),
                 "training_range_km": round(training_range, 2),
-                "avg_usage_kwh_per_100km": round(avg_usage, 2),
+                "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
                 "leg_energy_kwh": round(recharge_energy, 2),
                 "recharge_energy_kwh": round(recharge_energy, 2),
                 "raw_pattern_energy_kwh": round(raw_energy, 2),         # uncapped, for transparency
@@ -214,8 +225,8 @@ class Simulator:
                 "plane": {
                     "id": plane.get('id'), "name": plane.get('name'),
                     "seats": plane.get('seats'), "load_kg": plane.get('load_kg'),
-                    "battery_kwh": plane['battery_kwh'], "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
-                    "avg_usage_kwh_per_100km": round(avg_usage, 2),
+                    "battery_kwh": plane.get('battery_kwh'), "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
+                    "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
                     "min_landing_soc": plane.get('min_landing_soc'),
                     "c_rate": plane.get('c_rate'),                       # battery charge C-rate (charging-curve model factor)
                     "training_range_km": training_range,
@@ -237,19 +248,26 @@ class Simulator:
 
         legs = 2 if trip_type == "retour" else 1
 
-        # Average consumption expressed per 100 km of flight.
-        avg_usage = plane['battery_kwh'] / plane['range_km'] * 100  # kWh / 100km
-        leg_energy = avg_usage * distance_km / 100                  # energy used on one leg
-
-        # Energy the destination charger must deliver per flight:
-        #  - one-way:    plane ends its journey here, so recharge the leg it just flew (back to full).
-        #  - round-trip: plane departs home at 100%. If the battery covers both legs it returns on
-        #                its remaining charge and recharges at home, so the destination supplies
-        #                nothing. Otherwise the destination supplies only the deficit to get back.
-        if trip_type == "retour":
-            recharge_energy = max(0.0, 2 * leg_energy - plane['battery_kwh'])
+        # Average ELECTRIC consumption per 100 km. A plane without a battery
+        # (non-charging hybrid) draws nothing from the network: energy figures
+        # are 0 and avg_usage is null — range/speed still drive the flight.
+        batt = float(plane.get('battery_kwh') or 0)
+        if batt > 0:
+            avg_usage = batt / plane['range_km'] * 100              # kWh / 100km
+            leg_energy = avg_usage * distance_km / 100              # energy used on one leg
+            # Energy the destination charger must deliver per flight:
+            #  - one-way:    plane ends its journey here, so recharge the leg it just flew (back to full).
+            #  - round-trip: plane departs home at 100%. If the battery covers both legs it returns on
+            #                its remaining charge and recharges at home, so the destination supplies
+            #                nothing. Otherwise the destination supplies only the deficit to get back.
+            if trip_type == "retour":
+                recharge_energy = max(0.0, 2 * leg_energy - batt)
+            else:
+                recharge_energy = leg_energy
         else:
-            recharge_energy = leg_energy
+            avg_usage = None
+            leg_energy = 0.0
+            recharge_energy = 0.0
 
         total_distance = distance_km * legs
         flight_time_h = total_distance / plane['speed_kmh']
@@ -261,7 +279,7 @@ class Simulator:
             "legs": legs,
             "leg_distance_km": round(distance_km, 2),
             "total_distance_km": round(total_distance, 2),
-            "avg_usage_kwh_per_100km": round(avg_usage, 2),
+            "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
             "leg_energy_kwh": round(leg_energy, 2),
             "recharge_energy_kwh": round(recharge_energy, 2),
             "flight_time_h": round(flight_time_h, 2),
@@ -272,10 +290,10 @@ class Simulator:
                 "name": plane.get('name'),
                 "seats": plane.get('seats'),
                 "load_kg": plane.get('load_kg'),
-                "battery_kwh": plane['battery_kwh'],
+                "battery_kwh": plane.get('battery_kwh'),
                 "range_km": plane['range_km'],
                 "speed_kmh": plane['speed_kmh'],
-                "avg_usage_kwh_per_100km": round(avg_usage, 2),
+                "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
                 "min_landing_soc": plane.get('min_landing_soc'),     # used by CNSSettings.usableFraction (per-aircraft override)
                 "c_rate": plane.get('c_rate'),                       # battery charge C-rate (charging-curve model factor)
                 "image": plane.get('image'),
@@ -326,13 +344,15 @@ class Simulator:
         if not charger: return {"error": f"Charger {charger_id} not found"}
 
         try:
-            batt  = float(plane['battery_kwh'])
+            # Absent battery = non-charging hybrid: legs fly on range/speed, every
+            # charge event computes to 0 (the propagation math below is 0-safe).
+            batt  = float(plane.get('battery_kwh') or 0)
             rng   = float(plane['range_km'])
             spd   = float(plane['speed_kmh'])
             power = float(charger['power_kw'])
         except (KeyError, TypeError, ValueError):
             return {"error": "Plane/charger needs numeric battery, range, speed and power."}
-        if not (batt > 0 and rng > 0 and spd > 0 and power > 0):
+        if not (batt >= 0 and rng > 0 and spd > 0 and power > 0):
             return {"error": "Plane/charger values must be positive."}
         # Same defense-in-depth as calculate_flight_by_distance: stop inf/NaN
         # before it reaches the leg-accumulation math below.
@@ -408,7 +428,7 @@ class Simulator:
         total_flight_h  = sum(l['flight_time_h']  for l in legs)
         total_charge_e  = sum(c['energy_kwh']     for c in charges)
         total_charge_m  = sum(c['charge_time_min'] for c in charges)
-        avg_usage       = batt / rng * 100
+        avg_usage       = (batt / rng * 100) if batt > 0 else None      # null for non-charging hybrids
         leg_out_energy  = legs[0]['energy_kwh']                          # the original A→B leg, before stops collapse it
 
         return {
@@ -422,7 +442,7 @@ class Simulator:
             "total_flight_time_h": round(total_flight_h, 2),
             "total_charge_time_min": round(total_charge_m, 1),
             "total_recharge_energy_kwh": round(total_charge_e, 2),
-            "avg_usage_kwh_per_100km": round(avg_usage, 2),
+            "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
             "leg_energy_kwh": round(leg_out_energy, 2),
             "legs_count": len(legs),
             "origin": {"name": origin['name'], "lat": origin['lat'], "lon": origin['lon']},
@@ -430,8 +450,8 @@ class Simulator:
             "plane": {
                 "id": plane.get('id'), "name": plane.get('name'),
                 "seats": plane.get('seats'), "load_kg": plane.get('load_kg'),
-                "battery_kwh": plane['battery_kwh'], "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
-                "avg_usage_kwh_per_100km": round(avg_usage, 2),
+                "battery_kwh": plane.get('battery_kwh'), "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
+                "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
                 "min_landing_soc": plane.get('min_landing_soc'),     # for CNSSettings per-aircraft override
                 "c_rate": plane.get('c_rate'),                       # battery charge C-rate (charging-curve model factor)
                 "image": plane.get('image'), "svg": plane.get('svg')

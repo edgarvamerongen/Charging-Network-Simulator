@@ -190,5 +190,35 @@ for (const c of golden.cases) {
     } else { pass++; console.log(`  ok    ${c.name} [${v}]`); }
   }
 }
+// ---- non-charging hybrid: absent battery_kwh = zero charging demand ----------
+// The sync emits hybrids WITHOUT the battery_kwh key; the engine must fly them
+// on range/speed with no charge energy, no charge time, no charge phases, and
+// finite (batt>0-guarded) SoC fractions.
+(function hybridNoBattery() {
+  const S = loadStack();
+  const hybrid = { id: 'hyb', name: 'HyBird 9', seats: 9, range_km: 800, speed_kmh: 500 };   // battery_kwh deliberately absent
+  const prof = S.CNSFlight.simulateTrip(hybrid, [wp('EHAM'), wp('EHRD'), wp('EGLL')], { tripType: 'one-way', getChargerKw: () => 250 });
+  const viaTrip = S.CNSFlight.profileForTrip({
+    planeId: 'not_in_catalog', range_km: 800, speed_kmh: 500, tripType: 'one-way',
+    originIdent: 'EHAM', originName: AP.EHAM.name, originLat: AP.EHAM.lat, originLon: AP.EHAM.lon,
+    destIdent: 'EHRD', destName: AP.EHRD.name, destLat: AP.EHRD.lat, destLon: AP.EHRD.lon,
+  }, { getChargerKw: () => 250 });
+  const checks = [
+    [prof != null, `simulateTrip returns a profile without a battery`],
+    [prof && prof.totals.energyUsedKwh === 0, `zero charge energy (got ${prof && prof.totals.energyUsedKwh})`],
+    [prof && prof.totals.chargeMin === 0, `zero charge time (got ${prof && prof.totals.chargeMin})`],
+    [prof && prof.phases.every(ph => ph.kind !== 'charge'), `no charge phases emitted`],
+    [prof && prof.totals.flightMin > 0, `the flight itself is real (got ${prof && prof.totals.flightMin} min)`],
+    [prof && prof.legs.every(l => !l.overRange), `in-range legs not flagged over-range`],
+    [prof && prof.legs.every(l => isFinite(l.socStartFrac) && isFinite(l.socEndFrac)), `SoC fractions stay finite (batt=0 guards)`],
+    [viaTrip != null, `profileForTrip no longer requires a battery`],
+    [viaTrip != null && viaTrip.totals.energyUsedKwh === 0, `saved-trip path also draws nothing`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    hybrid — ${msg}`); }
+    else { fail++; console.log(`  FAIL  hybrid — ${msg}`); }
+  }
+})();
+
 console.log(`\n${pass} pass, ${deltas} intended delta(s), ${fail} fail (of ${golden.cases.length * golden._meta.settings.length})`);
 process.exit(fail ? 1 : 0);

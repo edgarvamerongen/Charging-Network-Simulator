@@ -224,7 +224,10 @@ window.CNSFlight = (function () {
                 c_rate: trip.c_rate,
                 training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : cat.training_range_km,
             };
-            if (!plane.range_km || !plane.battery_kwh) return null;
+            // Battery deliberately NOT required: an absent battery_kwh is a
+            // non-charging hybrid — batt=0 flows through simulateTrip as zero
+            // charge energy/time (SoC fractions are batt>0-guarded throughout).
+            if (!plane.range_km) return null;
             const wp = (x) => ({ ident: x.ident, name: x.name, lat: x.lat, lon: x.lon });
             const o = { ident: trip.originIdent, name: trip.originName, lat: trip.originLat, lon: trip.originLon };
             const d = { ident: trip.destIdent, name: trip.destName, lat: trip.destLat, lon: trip.destLon };
