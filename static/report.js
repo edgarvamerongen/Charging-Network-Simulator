@@ -215,7 +215,7 @@ window.CNSReport = (function () {
                 svg: t.planeSvg || (cat && cat.svg) || '',
                 image: (cat && cat.image) || '',
                 image_url: (cat && cat.image_url) || '',
-                battery_kwh: (cat && cat.battery_kwh) ?? t.battery ?? 0,
+                battery_kwh: (cat && cat.battery_kwh) ?? t.battery ?? null,   // null (not 0) so the PDF's '—' fallback fires for non-charging hybrids
                 range_km: (cat && cat.range_km) ?? 0,
                 speed_kmh: (cat && cat.speed_kmh) ?? 0,
                 seats: cat && cat.seats,

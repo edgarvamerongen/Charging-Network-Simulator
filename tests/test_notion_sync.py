@@ -172,6 +172,42 @@ class TransformTest(unittest.TestCase):
         self.assertEqual(len(report["skipped"]), 1)
         self.assertEqual(report["skipped"][0]["slug"], "velis")
 
+    # ---- hybrids: battery optional (absent = non-charging aircraft) ----------
+    def test_hybrid_without_battery_emits_as_non_charging(self):
+        ac = [aircraft("A", name="HyBird", slug="hybird", battery=None,
+                       props={"Propulsion": _sel("Hybrid electric")})]
+        pr = [profile("P1", "A", emit="hybird", rng=800)]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertEqual(report["ok"], ["hybird"])
+        e = next(x for x in entries if x["id"] == "hybird")
+        self.assertNotIn("battery_kwh", e)          # key absent, never null
+        self.assertEqual(e["propulsion"], "Hybrid electric")
+
+    def test_electric_without_battery_still_skipped(self):
+        ac = [aircraft("A", name="NoBatt", slug="nobatt", battery=None,
+                       props={"Propulsion": _sel("Fully electric")})]
+        pr = [profile("P1", "A", emit="nobatt", rng=100)]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertEqual([x["id"] for x in entries], [])
+        self.assertEqual(report["skipped"][0]["slug"], "nobatt")
+
+    def test_hybrid_with_zero_battery_rejected(self):
+        # 0 is a data-entry mistake, not "no battery" — the field must be
+        # omitted entirely for a non-charging hybrid.
+        ac = [aircraft("A", name="HyBird", slug="hybird", battery=0,
+                       props={"Propulsion": _sel("Hybrid")})]
+        pr = [profile("P1", "A", emit="hybird", rng=800)]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertEqual(report["skipped"][0]["slug"], "hybird")
+
+    def test_hybrid_with_battery_is_a_plugin_and_keeps_bounds(self):
+        ac = [aircraft("A", name="PlugIn", slug="plugin", battery=250,
+                       props={"Propulsion": _sel("Hybrid electric")})]
+        pr = [profile("P1", "A", emit="plugin", rng=800)]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertEqual(report["ok"], ["plugin"])
+        self.assertEqual(next(x for x in entries if x["id"] == "plugin")["battery_kwh"], 250)
+
     def test_hidden_aircraft_is_not_carried_forward(self):
         # Hiding is a valid edit, not an error — it must remove the plane even
         # if a last-good entry exists.

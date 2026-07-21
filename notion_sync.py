@@ -219,9 +219,16 @@ def validate_aircraft(ac, profs, known_charger_ids, duplicated_emit_ids):
     if not ac["slug"] or not SLUG_RE.match(ac["slug"]):
         errors.append("missing or invalid Slug (need [a-z0-9_]+)")
 
+    # Battery is required for fully-electric aircraft only. Hybrids often have no
+    # published pack size — and some never charge at all — so an absent battery is
+    # legal for them and emits as a no-battery (non-charging) aircraft. A battery
+    # that IS given (plug-in hybrid) still has to pass the same bounds.
     battery = ac["battery_kwh"]
+    is_hybrid = "hybrid" in (ac["propulsion"] or "").lower()
     if battery is None or battery <= 0:
-        errors.append("Battery (kWh) missing or <= 0")
+        if not is_hybrid or battery is not None:   # electric: required; hybrid: absent ok, 0/negative not
+            errors.append("Battery (kWh) missing or <= 0"
+                          if not is_hybrid else f"Battery {battery} kWh invalid (omit it entirely for non-charging hybrids)")
     elif not (1 <= battery <= BATTERY_MAX_KWH):
         errors.append(f"Battery {battery} kWh out of bounds [1, {BATTERY_MAX_KWH}]")
 
@@ -298,10 +305,13 @@ def build_entries(ac, profs):
             "id": p["emit_id"],
             "name": _emit_name(ac, p, single),
             "seats": int(p["seats"]),
-            "battery_kwh": _clean_int(ac["battery_kwh"]),
             "range_km": _clean_int(p["range_km"]),
             "speed_kmh": speed_kmh,
         }
+        # No-battery hybrids emit WITHOUT the key (never null): every consumer
+        # treats an absent battery_kwh as "non-charging aircraft".
+        if ac["battery_kwh"] is not None:
+            entry["battery_kwh"] = _clean_int(ac["battery_kwh"])
         if p["payload_kg"] is not None:
             entry["load_kg"] = _clean_int(p["payload_kg"])
         if ac["training_range_km"] is not None:
