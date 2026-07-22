@@ -84,5 +84,11 @@ test('suitability: any-style requirement (all categories) fits whatever exists',
   assert.equal(R.suitability({ runway_req: req }, GRASSY).state, 'ok');
 });
 
+test('suitability: 0 minimum (eVTOL, no runway needed) fits any present runway', () => {
+  const req = { paved: 0, grass: 0, gravel: 0, dirt: 0, water: 0, unknown: 0 };
+  assert.equal(R.suitability({ runway_req: req }, GRASSY).state, 'ok');   // 0 is a real minimum, not a falsy gap
+  assert.equal(R.suitability({ runway_req: req }, NODATA).state, 'unknown');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
