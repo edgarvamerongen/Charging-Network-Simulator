@@ -6326,7 +6326,7 @@
             await loadAirports();
             if (window.CNSScheduler) CNSScheduler.init({ chargers: chargerById, onChange: renderFolder });
             if (window.CNSAnimation) CNSAnimation.init();
-            if (window.CNSRangeGraph) CNSRangeGraph.init({ map, getReachKm: () => { try { const p = _selectedPlane(); return p ? (_availableRangeKm(p) || 0) : 0; } catch (e) { return 0; } }, airports: () => allAirports, allowedFor: () => { const types = new Set(_allowedTypes()); const idents = _plannerAllowedIdents(); return (ap) => types.has(ap.type) || idents.has(ap.ident); } });
+            if (window.CNSRangeGraph) CNSRangeGraph.init({ map, getReachKm: () => { try { const p = _selectedPlane(); return p ? (_availableRangeKm(p) || 0) : 0; } catch (e) { return 0; } }, airports: () => allAirports, allowedFor: () => { const types = new Set(_allowedTypes()); const idents = _plannerAllowedIdents(); return (ap) => (window.CNSRunway ? CNSRunway.hasData(ap) : true) && (types.has(ap.type) || idents.has(ap.ident)); } });   // WYSIWYG: no runway data -> router won't stop there -> no spoke
             renderFolder();
             updateDrawerSub();
             renderPlanePicker();

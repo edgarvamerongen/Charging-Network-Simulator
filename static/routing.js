@@ -22,6 +22,8 @@
  * line (detour ≤ detourCap × direct) which keeps the graph tiny; the corridor
  * widens automatically when no route fits, and the search stops widening once
  * the result is provably as short as any wider corridor could contain.
+ * Candidates also require runway data (rwy_<cat>_m fields): an airport whose
+ * runways are unverifiable is never planned as a charging stop.
  *
  * No DOM, no localStorage — pure logic so any UI (current vanilla, future
  * React) can drive it.
@@ -56,6 +58,17 @@ window.CNSRouting = (function () {
     const WIDEN = [1.0, 1.3, 1.8, 3.0];  // corridor multipliers (× detourCap), tried in order until optimal
 
     function _ap(a) { return { lat: a.latitude_deg, lon: a.longitude_deg }; }
+
+    // Airports without runway data are un-plannable: never picked as auto stops,
+    // whichever pool arm (size class or NRG ident) admits them. Waypoints the user
+    // fixed — origin, destination, manual stops — are chain endpoints, not
+    // candidates, so explicit picks are unaffected. Dependency-free twin of
+    // CNSRunway.hasData (this file loads standalone in node tests — keep in sync).
+    const RWY_COLS = ['rwy_paved_m', 'rwy_grass_m', 'rwy_gravel_m', 'rwy_dirt_m', 'rwy_water_m', 'rwy_unknown_m'];
+    function hasRunwayData(a) {
+        for (const k of RWY_COLS) { const v = +a[k]; if (isFinite(v) && v > 0) return true; }
+        return false;
+    }
 
     function planRoute(opts) {
         const { origin, destination, plane, allAirports } = opts;
@@ -117,6 +130,7 @@ window.CNSRouting = (function () {
             const C = [];
             for (const a of allAirports) {
                 if (!allowedSet.has(a.type) && !allowedIdents.has(a.ident)) continue;
+                if (!hasRunwayData(a)) continue;
                 if (a.ident && skip.has(a.ident)) continue;
                 if (a.latitude_deg == null || a.longitude_deg == null) continue;
                 const ap = _ap(a);

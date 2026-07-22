@@ -90,5 +90,15 @@ test('suitability: 0 minimum (eVTOL, no runway needed) fits any present runway',
   assert.equal(R.suitability({ runway_req: req }, NODATA).state, 'unknown');
 });
 
+test('hasData: positive length in any category -> true', () => {
+  assert.equal(R.hasData(GRASSY), true);
+});
+
+test('hasData: blanks, missing fields, or no airport -> false', () => {
+  assert.equal(R.hasData(NODATA), false);
+  assert.equal(R.hasData({ ident: 'X4' }), false);
+  assert.equal(R.hasData(null), false);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

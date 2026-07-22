@@ -35,9 +35,11 @@ function loadRouting(flags) {
 }
 
 // Equator airport at a given longitude; alt = its alternate_km.
+// rwy_paved_m: candidates need runway data or the planner refuses to stop there.
 const ap = (ident, lon, alt) => ({
   ident, name: ident, type: 'medium_airport',
   latitude_deg: 0, longitude_deg: lon, iata_code: '', alternate_km: alt,
+  rwy_paved_m: 2000,
 });
 const node = (ident, lon, alt) => ({ ident, lat: 0, lon, alternate_km: alt });
 const PLANE = (range_km) => ({ range_km });
@@ -312,7 +314,7 @@ test('the same excluded destination routes directly with the reserve OFF', () =>
 // Geography (equator, 1deg=111.19km): O@0 -> D@3 (333km, needs a stop at reach 200).
 //   small  S@1.5  bridges in ONE stop (166.8km legs)
 //   medium M1@1, M2@2 bridge in TWO stops (111km legs)
-const apT = (ident, lon, type) => ({ ident, name: ident, type, latitude_deg: 0, longitude_deg: lon, iata_code: '', alternate_km: 0 });
+const apT = (ident, lon, type) => ({ ident, name: ident, type, latitude_deg: 0, longitude_deg: lon, iata_code: '', alternate_km: 0, rwy_paved_m: 2000 });
 const PREF_MED = { small_airport: 150, medium_airport: 0 };
 const SCENE = ['small_airport', 'medium_airport'];
 const POOL = [apT('S', 1.5, 'small_airport'), apT('M1', 1, 'medium_airport'), apT('M2', 2, 'medium_airport')];
@@ -372,6 +374,36 @@ test('planChain forwards allowedIdents to each gap planRoute', () => {
   });
   assert.ok(!res.error, 'planChain must forward the ident pool: ' + res.error);
   assert.equal(res.stops.map(s => s.ident).join(','), 'S');
+});
+
+// Runway-data gate: airports whose runways are unverifiable are never planned
+// as stops — on either pool arm. Explicit waypoints are unaffected (they are
+// chain endpoints, not candidates).
+const bare = (ident, lon, type = 'medium_airport') => ({
+  ident, name: ident, type, latitude_deg: 0, longitude_deg: lon, iata_code: '',
+  alternate_km: 0, rwy_paved_m: '', rwy_grass_m: '',   // CSV blanks: no runway data
+});
+
+test('runway gate: the only geometric candidate has no runway data -> no route', () => {
+  const R = loadRouting({});
+  const res = R.planRoute({ origin: node('O', 0), destination: node('D', 3), plane: PLANE(200),
+    allowedTypes: ['medium_airport'], allAirports: [bare('A', 1.5)], options: {} });
+  assert.ok(res.error, 'expected no-route: A has no runway data');
+});
+
+test('runway gate: allowedIdents does not bypass it', () => {
+  const R = loadRouting({});
+  const res = R.planRoute({ origin: node('O', 0), destination: node('D', 3), plane: PLANE(200),
+    allowedTypes: [], allowedIdents: new Set(['A']), allAirports: [bare('A', 1.5)], options: {} });
+  assert.ok(res.error, 'expected no-route: NRG ident admission must not skip the runway gate');
+});
+
+test('runway gate: a with-data sibling is picked over the no-data airport', () => {
+  const R = loadRouting({});
+  const res = R.planRoute({ origin: node('O', 0), destination: node('D', 3), plane: PLANE(200),
+    allowedTypes: ['medium_airport'], allAirports: [bare('A', 1.5), ap('B', 1.6, 0)], options: {} });
+  assert.ok(!res.error, 'expected a route via B: ' + res.error);
+  assert.equal(idents(res).join(','), 'B');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
