@@ -384,6 +384,38 @@ const bare = (ident, lon, type = 'medium_airport') => ({
   alternate_km: 0, rwy_paved_m: '', rwy_grass_m: '',   // CSV blanks: no runway data
 });
 
+// Landability gate: a candidate whose KNOWN runway data does not satisfy the
+// plane's runway_req (surface + min length) is never planned as a stop.
+test('landability: the only candidate is too short for the plane -> no route', () => {
+  const R = loadRouting({});
+  const plane = { range_km: 200, runway_req: { grass: 1250, paved: 1000 } };
+  const A = { ...ap('A', 1.5, 0), rwy_paved_m: '', rwy_grass_m: 198 };   // Moorsele-style strip
+  const res = R.planRoute({ origin: node('O', 0), destination: node('D', 3), plane,
+    allowedTypes: ['medium_airport'], allAirports: [A], options: {} });
+  assert.ok(res.error, 'expected no-route: grass 198 m < 1,250 m and no paved');
+});
+
+test('landability: a fitting sibling is picked over the too-short strip', () => {
+  const R = loadRouting({});
+  const plane = { range_km: 200, runway_req: { grass: 1250, paved: 1000 } };
+  const A = { ...ap('A', 1.5, 0), rwy_paved_m: '', rwy_grass_m: 198 };
+  const B = { ...ap('B', 1.6, 0), rwy_paved_m: 2000 };
+  const res = R.planRoute({ origin: node('O', 0), destination: node('D', 3), plane,
+    allowedTypes: ['medium_airport'], allAirports: [A, B], options: {} });
+  assert.ok(!res.error, 'expected a route via B: ' + res.error);
+  assert.equal(idents(res).join(','), 'B');
+});
+
+test('landability: null minimum means surface presence suffices', () => {
+  const R = loadRouting({});
+  const plane = { range_km: 200, runway_req: { paved: null } };
+  const A = { ...ap('A', 1.5, 0), rwy_paved_m: 300 };
+  const res = R.planRoute({ origin: node('O', 0), destination: node('D', 3), plane,
+    allowedTypes: ['medium_airport'], allAirports: [A], options: {} });
+  assert.ok(!res.error, 'paved present, no min -> landable: ' + res.error);
+  assert.equal(idents(res).join(','), 'A');
+});
+
 test('runway gate: the only geometric candidate has no runway data -> no route', () => {
   const R = loadRouting({});
   const res = R.planRoute({ origin: node('O', 0), destination: node('D', 3), plane: PLANE(200),

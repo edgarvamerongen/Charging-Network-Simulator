@@ -100,5 +100,17 @@ test('hasData: blanks, missing fields, or no airport -> false', () => {
   assert.equal(R.hasData(null), false);
 });
 
+test('fits: landable or indeterminate -> true', () => {
+  assert.equal(R.fits({ runway_req: { grass: 550 } }, GRASSY), true);    // 600 m grass >= 550
+  assert.equal(R.fits({ runway_req: { paved: null } }, { rwy_paved_m: 300 }), true);  // null min = any length
+  assert.equal(R.fits({}, GRASSY), true);                                // no requirement
+  assert.equal(R.fits({ runway_req: { paved: 1000 } }, NODATA), true);   // no data -> hasData's problem, not fits'
+});
+
+test('fits: known data proves the plane cannot land -> false', () => {
+  assert.equal(R.fits({ runway_req: { grass: 1250 } }, GRASSY), false);  // short: 600 < 1250
+  assert.equal(R.fits({ runway_req: { paved: 550 } }, GRASSY), false);   // surface: no paved at all
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

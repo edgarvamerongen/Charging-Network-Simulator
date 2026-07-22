@@ -5274,7 +5274,8 @@
                 allAirports,
                 allowedTypes: ['small_airport', 'medium_airport', 'large_airport'],
                 allowedIdents: new Set(Object.keys(nrgChargerDb || {})),
-                planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate }),
+                planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate,
+                                    runway_req: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).runway_req }),   // landability gate — catalog-sourced, trips don't persist it
                 availableRangeKm: (plane) => _availableRangeKm(plane),
                 routingOptions: _routingOptions(),   // soft Prefer bias — stop choice, never feasibility
             };
@@ -6331,7 +6332,7 @@
             await loadAirports();
             if (window.CNSScheduler) CNSScheduler.init({ chargers: chargerById, onChange: renderFolder });
             if (window.CNSAnimation) CNSAnimation.init();
-            if (window.CNSRangeGraph) CNSRangeGraph.init({ map, getReachKm: () => { try { const p = _selectedPlane(); return p ? (_availableRangeKm(p) || 0) : 0; } catch (e) { return 0; } }, airports: () => allAirports, allowedFor: () => { const types = new Set(_allowedTypes()); const idents = _plannerAllowedIdents(); return (ap) => (window.CNSRunway ? CNSRunway.hasData(ap) : true) && (types.has(ap.type) || idents.has(ap.ident)); } });   // WYSIWYG: no runway data -> router won't stop there -> no spoke
+            if (window.CNSRangeGraph) CNSRangeGraph.init({ map, getReachKm: () => { try { const p = _selectedPlane(); return p ? (_availableRangeKm(p) || 0) : 0; } catch (e) { return 0; } }, airports: () => allAirports, allowedFor: () => { const types = new Set(_allowedTypes()); const idents = _plannerAllowedIdents(); const plane = _selectedPlane(); return (ap) => (window.CNSRunway ? CNSRunway.hasData(ap) && CNSRunway.fits(plane, ap) : true) && (types.has(ap.type) || idents.has(ap.ident)); } });   // WYSIWYG: no runway data OR plane can't land there -> router won't stop there -> no spoke
             renderFolder();
             updateDrawerSub();
             renderPlanePicker();
