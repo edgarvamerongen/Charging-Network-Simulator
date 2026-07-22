@@ -82,5 +82,15 @@ window.CNSRunway = (function () {
         return { state: 'surface', label: 'no ' + (firstMissing || 'suitable') + ' rwy' };
     }
 
-    return { summary: summary, suitability: suitability, hasData: hasData, CATS: CATS };
+    // Landability gate for planning surfaces (range graph; CNSRouting carries a
+    // dependency-free twin, fitsRunwayReq — keep in sync): false only when the
+    // airport's KNOWN runway data proves the plane cannot land ('short'/'surface').
+    // No requirement or no airport data stays permissive here — data absence is
+    // its own, separate gate (hasData).
+    function fits(plane, ap) {
+        var s = suitability(plane, ap).state;
+        return s !== 'short' && s !== 'surface';
+    }
+
+    return { summary: summary, suitability: suitability, hasData: hasData, fits: fits, CATS: CATS };
 })();

@@ -69,6 +69,23 @@ window.CNSRouting = (function () {
         for (const k of RWY_COLS) { const v = +a[k]; if (isFinite(v) && v > 0) return true; }
         return false;
     }
+    // Per-aircraft landability: reject a candidate when its KNOWN runway data
+    // proves the plane cannot land — required surface absent, or present but
+    // shorter than the minimum (null min = surface required, any length).
+    // A plane without runway_req stays permissive; data ABSENCE is handled by
+    // hasRunwayData above. Dependency-free twin of CNSRunway.fits — keep in sync.
+    function fitsRunwayReq(plane, a) {
+        const req = plane && plane.runway_req;
+        if (!req || typeof req !== 'object') return true;
+        if (!hasRunwayData(a)) return true;
+        for (const cat of Object.keys(req)) {
+            const v = +a['rwy_' + cat + '_m'];
+            const have = (isFinite(v) && v > 0) ? v : 0;
+            const need = req[cat];
+            if (have > 0 && (need == null || have >= need)) return true;
+        }
+        return false;
+    }
 
     function planRoute(opts) {
         const { origin, destination, plane, allAirports } = opts;
@@ -131,6 +148,7 @@ window.CNSRouting = (function () {
             for (const a of allAirports) {
                 if (!allowedSet.has(a.type) && !allowedIdents.has(a.ident)) continue;
                 if (!hasRunwayData(a)) continue;
+                if (!fitsRunwayReq(plane, a)) continue;
                 if (a.ident && skip.has(a.ident)) continue;
                 if (a.latitude_deg == null || a.longitude_deg == null) continue;
                 const ap = _ap(a);
