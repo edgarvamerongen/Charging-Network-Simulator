@@ -20,8 +20,16 @@
  *                             hierarchy already applied; null min = surface
  *                             required, length unspecified.
  *
- * Display only — routing / alternates / range graph are NOT gated here (that is
- * the perf-engine S5 step, which will consume the same fields).
+ *   hasData(ap)            -> true when any rwy_<cat>_m field is a positive
+ *                             number. Airports WITHOUT runway data are barred
+ *                             from planning: the range graph composes this into
+ *                             its allowedFor pool (index.html), and CNSRouting
+ *                             carries a dependency-free twin in candidates()
+ *                             (routing.js loads standalone in node tests —
+ *                             keep the two in sync).
+ *
+ * Per-aircraft suitability stays display only — plane-vs-runway fit does not
+ * gate routing yet (that is the perf-engine S5 step, same fields).
  */
 window.CNSRunway = (function () {
     'use strict';
@@ -46,12 +54,15 @@ window.CNSRunway = (function () {
         return chips.join(' · ');
     }
 
+    function hasData(ap) {
+        for (var i = 0; i < CATS.length; i++) if (_len(ap, CATS[i]) > 0) return true;
+        return false;
+    }
+
     function suitability(plane, ap) {
         var req = plane && plane.runway_req;
         if (!req || typeof req !== 'object') return { state: 'unknown', label: '' };
-        var hasData = false;
-        for (var i = 0; i < CATS.length; i++) if (_len(ap, CATS[i]) > 0) { hasData = true; break; }
-        if (!hasData) return { state: 'unknown', label: '' };
+        if (!hasData(ap)) return { state: 'unknown', label: '' };
 
         var shortest = null;      // smallest non-null requirement on a surface the airport HAS
         var firstMissing = null;  // first required category (display order) absent at the airport
@@ -71,5 +82,5 @@ window.CNSRunway = (function () {
         return { state: 'surface', label: 'no ' + (firstMissing || 'suitable') + ' rwy' };
     }
 
-    return { summary: summary, suitability: suitability, CATS: CATS };
+    return { summary: summary, suitability: suitability, hasData: hasData, CATS: CATS };
 })();

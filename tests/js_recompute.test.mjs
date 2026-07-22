@@ -9,7 +9,8 @@ import { loadStack, AP } from './golden_capture.mjs';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO, 'tests', 'fixtures', 'planes.fixture.json'), 'utf8')).map(p => [p.id, p]));
 // Minimal airport catalog for the planner's candidate pool, with the fields planRoute reads.
-const ap = (k, type = 'medium_airport', alt = 0) => ({ ident: k, name: AP[k].name, type, latitude_deg: AP[k].lat, longitude_deg: AP[k].lon, iata_code: '', alternate_km: alt });
+// rwy_paved_m: candidates need runway data or the planner refuses to stop there.
+const ap = (k, type = 'medium_airport', alt = 0) => ({ ident: k, name: AP[k].name, type, latitude_deg: AP[k].lat, longitude_deg: AP[k].lon, iata_code: '', alternate_km: alt, rwy_paved_m: 2000 });
 const node = (k, alt = 0) => ({ ident: k, name: AP[k].name, lat: AP[k].lat, lon: AP[k].lon, alternate_km: alt });
 
 let pass = 0, fail = 0;
