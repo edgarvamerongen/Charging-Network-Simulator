@@ -4116,10 +4116,10 @@
             // white stroke keeps them crisp on both street and satellite tiles.
             // Navy = the airport world; orange is reserved for NRG2FLY assets (the
             // charger discs), so brand color MEANS brand on this map.
-            const DOT_R = { large_airport: 8.5, medium_airport: 6.5, small_airport: 4 };
+            const DOT_R = { large_airport: 8.5, medium_airport: 5.5, small_airport: 4 };
             const DOT_C = { large_airport: '#2b2f5a', medium_airport: '#2b2f5a', small_airport: '#4a4f76' };
-            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { renderer: _dotRenderer, radius: (DOT_R[ap.type] || 6.5) * _dotScale(), fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.9 });
-            m._dotR = DOT_R[ap.type] || 6.5;   // base radius — rescaled on zoom by _rescaleDots()
+            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { renderer: _dotRenderer, radius: (DOT_R[ap.type] || 5.5) * _dotScale(), fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.9 });
+            m._dotR = DOT_R[ap.type] || 5.5;   // base radius — rescaled on zoom by _rescaleDots()
             // Click opens the card; hover only warms the photo so it is instant on open.
             m.bindPopup(() => _airportCardHtml(ap), { closeButton: true, className: 'ap-card', minWidth: 230, maxWidth: 230, autoPanPadding: [26, 26] });
             m.on('popupopen', (e) => { _openApCard = { popup: e.popup, ap }; _fillApCard(e.popup, ap.ident); });
