@@ -133,6 +133,8 @@
         .ap-card-name { font-weight: 700; font-size: .92rem; color: var(--ink); padding: 9px 12px 0; letter-spacing: -.01em; }
         .ap-card-meta { color: var(--muted); font-size: .72rem; padding: 2px 12px 0; }
         .ap-card-divert { color: var(--muted); font-size: .72rem; padding: 4px 12px 0; }
+        .ap-card-rwy { color: var(--muted); font-size: .72rem; padding: 2px 12px 0; }
+        .ap-card-rwy-warn { color: #b4550a; font-weight: 600; }   /* runway fit warning for the selected aircraft */
         .ap-card-actions { display: flex; gap: 6px; padding: 10px 12px 12px; }
         .ap-card-btn {
             flex: 1; padding: 5px 4px; font-size: .72rem; font-weight: 600; cursor: pointer; white-space: nowrap;
@@ -2441,6 +2443,7 @@
     <script src="/static/share.js?v={{ asset_version }}"></script>
     <script src="/static/buildshare.js?v={{ asset_version }}"></script>
     <script src="/static/range-graph.js?v={{ asset_version }}"></script>
+    <script src="/static/runway.js?v={{ asset_version }}"></script>
     {% if share_state %}<script>window.__CNS_SHARE__ = {{ share_state|tojson }};</script>{% endif %}
     <script>
         // HTML-escape for every data string interpolated into an innerHTML
@@ -3492,7 +3495,11 @@
         // (advReserve was removed when the global Model settings took over reserve handling)
         // Switching planes re-plans the route (range changes auto-stops) AND must
         // redraw the map — recomputeRoute only updates the stop chain + validation.
-        document.getElementById('plane').addEventListener('change', () => { _planeOverride = null; _availRangeOverride = null; renderPlaneSpecCard(); smartReplan(); drawLiveRoute(); });
+        document.getElementById('plane').addEventListener('change', () => {
+            _planeOverride = null; _availRangeOverride = null; renderPlaneSpecCard(); smartReplan(); drawLiveRoute();
+            // Refresh an open airport card so its runway-fit warning tracks the new aircraft.
+            if (_openApCard) { _openApCard.popup.setContent(_airportCardHtml(_openApCard.ap)); _fillApCard(_openApCard.popup, _openApCard.ap.ident); }
+        });
 
         // ---- Selected-aircraft spec card + per-flight override --------------
         // ---------- Aircraft photo-grid picker ----------
@@ -4074,16 +4081,30 @@
         // The airport CLICK card: a full-bleed photo banner (filled on open) + name +
         // ICAO·IATA·municipality + Divert + Origin/Destination/Add stop. Shared by the
         // dot click and the header search; buttons reuse setOrigin/setDest/setStop then close.
+        // The one airport card currently open on the map (popup + its airport),
+        // so a plane switch can refresh the runway-fit warning in place.
+        let _openApCard = null;
         function _airportCardHtml(ap) {
             const meta = [ap.ident, ap.iata_code, ap.municipality].filter(Boolean).map(escHtml).join(' · ');
             let divert = '';
             if (ap.alternate_ident && ap.alternate_km != null && isFinite(+ap.alternate_km)) {
                 divert = `<div class="ap-card-divert">Divert: ${escHtml(ap.alternate_ident)}, ${fmtDist(+ap.alternate_km)}</div>`;
             }
+            // Runway chips (longest open runway per surface) + a fit warning for
+            // the SELECTED aircraft. Display only — routing is not gated here.
+            let rwy = '';
+            if (window.CNSRunway) {
+                const chips = CNSRunway.summary(ap);
+                const fit = CNSRunway.suitability(_selectedPlane(), ap);
+                const warn = (fit.state === 'short' || fit.state === 'surface')
+                    ? `${chips ? ' · ' : ''}<span class="ap-card-rwy-warn">${escHtml(fit.label)}</span>` : '';
+                if (chips || warn) rwy = `<div class="ap-card-rwy">${escHtml(chips)}${warn}</div>`;
+            }
             const id = escHtml(ap.ident);
             return `<div class="ap-photo-wrap"><img class="ap-photo" alt=""><span class="ap-photo-credit"></span></div>`
                 + `<div class="ap-card-name">${escHtml(ap.name)}</div>`
                 + `<div class="ap-card-meta">${meta}</div>`
+                + rwy
                 + divert
                 + `<div class="ap-card-actions">`
                 + `<button type="button" class="ap-card-btn" onclick="setOrigin('${id}');closeAirportCard()">Origin</button>`
@@ -4108,7 +4129,8 @@
             const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: DOT_R[ap.type] || 6.5, fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.9 });
             // Click opens the card; hover only warms the photo so it is instant on open.
             m.bindPopup(() => _airportCardHtml(ap), { closeButton: true, className: 'ap-card', minWidth: 230, maxWidth: 230, autoPanPadding: [26, 26] });
-            m.on('popupopen', (e) => _fillApCard(e.popup, ap.ident));
+            m.on('popupopen', (e) => { _openApCard = { popup: e.popup, ap }; _fillApCard(e.popup, ap.ident); });
+            m.on('popupclose', () => { _openApCard = null; });
             m.on('mouseover', () => _loadApPhoto(ap.ident));
             return m;
         }

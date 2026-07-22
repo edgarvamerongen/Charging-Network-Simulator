@@ -2,7 +2,7 @@ import os
 import sys
 
 import pandas as pd
-from airport_alternates import compute_alternate_columns
+from airport_alternates import compute_alternate_columns, runway_length_columns
 
 # The raw OurAirports dumps are gitignored (only the generated
 # european_airports.csv is tracked) — fail with a pointer, not a stack trace.
@@ -64,6 +64,11 @@ eu_airports = eu_airports.copy()
 runways = pd.read_csv("runways.csv", dtype=str)
 eu_airports["alternate_km"], eu_airports["alternate_ident"] = \
     compute_alternate_columns(eu_airports, runways)
+
+# Longest OPEN runway per surface category (rwy_paved_m, rwy_grass_m, ...) for
+# the airport-card display — same source file, display-layer categories.
+eu_airports = eu_airports.merge(runway_length_columns(runways),
+                                how="left", left_on="ident", right_index=True)
 
 # -----------------------------------------
 # Save result

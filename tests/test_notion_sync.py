@@ -173,6 +173,71 @@ class TransformTest(unittest.TestCase):
         self.assertEqual(report["skipped"][0]["slug"], "velis")
 
     # ---- hybrids: battery optional (absent = non-charging aircraft) ----------
+    # ---- runway requirements (Surface + Min runway (m), paired positionally) ----
+    def _rwy(self, surface_tags=None, min_rwy=None, rng=800):
+        """One aircraft+profile with the runway columns set; returns (entries, report)."""
+        props = {}
+        if surface_tags is not None:
+            props["Surface"] = _ms(list(surface_tags))
+        if min_rwy is not None:
+            props["Min runway (m)"] = _rt(min_rwy) if isinstance(min_rwy, str) else _n(min_rwy)
+        ac = [aircraft("A", name="Rwy", slug="rwy", battery=100, cruise=120)]
+        pr = [profile("P1", "A", emit="rwy", rng=rng, props=props)]
+        return ns.transform(ac, pr, KNOWN_CHARGERS, {})
+
+    def test_runway_positional_pairs(self):
+        entries, report = self._rwy(["grass", "paved"], "1250, 1000")
+        self.assertEqual(report["ok"], ["rwy"])
+        self.assertEqual(entries[0]["runway_req"], {"grass": 1250, "paved": 1000})
+
+    def test_runway_grass_only_implies_paved_same_min(self):
+        entries, _ = self._rwy(["grass"], 1250)
+        self.assertEqual(entries[0]["runway_req"], {"grass": 1250, "paved": 1250})
+
+    def test_runway_explicit_paved_beats_implied(self):
+        # mirrored order relative to the pairs test — order carries the pairing
+        entries, _ = self._rwy(["paved", "grass"], "1000, 1250")
+        self.assertEqual(entries[0]["runway_req"], {"paved": 1000, "grass": 1250})
+
+    def test_runway_any_expands_to_all_categories(self):
+        entries, _ = self._rwy(["any"], 46)
+        rr = entries[0]["runway_req"]
+        self.assertEqual(set(rr), {"paved", "grass", "gravel", "dirt", "water", "unknown"})
+        self.assertTrue(all(v == 46 for v in rr.values()))
+
+    def test_runway_single_min_applies_to_all_listed(self):
+        entries, _ = self._rwy(["paved", "grass"], 800)
+        self.assertEqual(entries[0]["runway_req"], {"paved": 800, "grass": 800})
+
+    def test_runway_min_without_surface_means_any(self):
+        entries, _ = self._rwy(None, 800)
+        self.assertEqual(entries[0]["runway_req"]["gravel"], 800)
+
+    def test_runway_surface_without_min_is_surface_only(self):
+        entries, _ = self._rwy(["paved"], None)
+        self.assertEqual(entries[0]["runway_req"], {"paved": None})
+
+    def test_runway_no_columns_no_key_and_old_keys_gone(self):
+        entries, _ = self._rwy(None, None)
+        self.assertNotIn("runway_req", entries[0])
+        self.assertNotIn("surface", entries[0])          # old single-value keys retired
+        self.assertNotIn("min_runway_m", entries[0])
+
+    def test_runway_ambiguous_count_mismatch_skips(self):
+        _, report = self._rwy(["paved", "grass"], "1000, 1250, 46")
+        self.assertEqual(report["skipped"][0]["slug"], "rwy")
+        self.assertTrue(any("count mismatch" in e for e in report["skipped"][0]["errors"]))
+
+    def test_runway_bad_token_skips(self):
+        _, report = self._rwy(["paved"], "1000, twelve")
+        self.assertTrue(any("unparseable" in e for e in report["skipped"][0]["errors"]))
+
+    def test_runway_unknown_tag_and_mixed_any_skip(self):
+        _, report = self._rwy(["tarmac"], 800)
+        self.assertTrue(any("unknown Surface" in e for e in report["skipped"][0]["errors"]))
+        _, report = self._rwy(["any", "grass"], 800)
+        self.assertTrue(any("cannot combine" in e for e in report["skipped"][0]["errors"]))
+
     def test_hybrid_without_battery_emits_as_non_charging(self):
         ac = [aircraft("A", name="HyBird", slug="hybird", battery=None,
                        props={"Propulsion": _sel("Hybrid electric")})]
@@ -247,7 +312,10 @@ class TransformTest(unittest.TestCase):
                       props={"Surface": _sel("Grass ")})]
         entries, _ = ns.transform(ac, pr, KNOWN_CHARGERS, {})
         self.assertEqual(entries[0]["regime"], "VFR")     # trimmed + canonicalized
-        self.assertEqual(entries[0]["surface"], "grass")  # trimmed + lowered
+        # 'Grass ' (select-string form) trims/lowers into the normalized runway
+        # requirement; no minimum given -> surface-only (None), and the grass->
+        # paved hierarchy only fires when a LENGTH is known.
+        self.assertEqual(entries[0]["runway_req"], {"grass": None})
 
     def test_empty_pull_aborts(self):
         # No aircraft pages at all == broken pull → refuse to publish.

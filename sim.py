@@ -116,10 +116,15 @@ class Simulator:
                 self.planes_source = self._generated_planes_path
 
     def get_all_airports(self):
-        # We'll return just enough data for the map + autocomplete to reduce payload size
-        df = self.airports_df[['ident', 'name', 'municipality', 'iata_code', 'type',
-                               'latitude_deg', 'longitude_deg', 'iso_country',
-                               'alternate_km', 'alternate_ident']]
+        # We'll return just enough data for the map + autocomplete to reduce payload size.
+        # rwy_*_m = longest OPEN runway per surface category (airport-card display);
+        # selected defensively so an older CSV without them can't 500 the endpoint.
+        wanted = ['ident', 'name', 'municipality', 'iata_code', 'type',
+                  'latitude_deg', 'longitude_deg', 'iso_country',
+                  'alternate_km', 'alternate_ident',
+                  'rwy_paved_m', 'rwy_grass_m', 'rwy_gravel_m',
+                  'rwy_dirt_m', 'rwy_water_m', 'rwy_unknown_m']
+        df = self.airports_df[[c for c in wanted if c in self.airports_df.columns]]
         # Convert to list of dicts
         return df.to_dict('records')
 
