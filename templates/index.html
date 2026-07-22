@@ -28,8 +28,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css"/>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css"/>
     <!-- Driver.js: spotlight + popover overlay for the guided tour. ~10 KB. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     <style>
@@ -1403,18 +1401,10 @@
         .soc-panel .rs-help { margin-top: 6px; font-size: .76rem; }
 
         /* Map color system — one meaning per hue:
-           navy = the airport world (dots + clusters + saved network)
+           navy = the airport world (dots + saved network)
            blue = the ACTIVE route (solid out, dashed return)
            orange = NRG2FLY assets only (charger discs)
            green/amber/red = semantic states, never cartography. */
-        .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
-            background: rgba(43, 47, 90, .28) !important;
-        }
-        .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
-            background: var(--brand-ink) !important; color: #fff !important;
-            font-family: inherit !important; font-weight: 700;
-            font-variant-numeric: tabular-nums;
-        }
 
         /* Aircraft photo-grid picker (drives the hidden #plane select) */
         /* Aircraft carousel — mirrors the charger carousel below; drives the hidden #plane select. */
@@ -2418,7 +2408,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     <!-- shared data/logic modules (framework-agnostic; UI consumes them) -->
     <!-- ?v=<commit> cache-busts on deploy only: the token is the git SHA fixed
          at server start, so between deploys URLs are stable and browsers cache
@@ -2596,10 +2585,13 @@
         let _routeKey = '';                   // change-detection so the markers only rebuild when the route/toggle changes
         let _showFlightLabels = true;   // Map Options → Route → Leg labels
         let _hideAirportsOnRoute = false;   // Map Options → declutter ALL non-route layers (size clusters + network) while a route is drawn
+        // Airports draw as individual dots at every zoom — no clustering. One shared
+        // canvas renderer keeps thousands of circleMarkers cheap (SVG would crawl).
+        const _dotRenderer = L.canvas({ padding: 0.4 });
         const clusters = {
-            small_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
-            medium_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 }),
-            large_airport: L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50 })
+            small_airport: L.layerGroup(),
+            medium_airport: L.layerGroup(),
+            large_airport: L.layerGroup()
         };
         // A1 Step 2: reference layer of NRG2fly's real installed chargers (toggled
         // independently of the airport-size filters via #nrgChargerToggle).
@@ -4126,7 +4118,8 @@
             // charger discs), so brand color MEANS brand on this map.
             const DOT_R = { large_airport: 8.5, medium_airport: 6.5, small_airport: 4 };
             const DOT_C = { large_airport: '#2b2f5a', medium_airport: '#2b2f5a', small_airport: '#4a4f76' };
-            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { radius: DOT_R[ap.type] || 6.5, fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.9 });
+            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { renderer: _dotRenderer, radius: (DOT_R[ap.type] || 6.5) * _dotScale(), fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.9 });
+            m._dotR = DOT_R[ap.type] || 6.5;   // base radius — rescaled on zoom by _rescaleDots()
             // Click opens the card; hover only warms the photo so it is instant on open.
             m.bindPopup(() => _airportCardHtml(ap), { closeButton: true, className: 'ap-card', minWidth: 230, maxWidth: 230, autoPanPadding: [26, 26] });
             m.on('popupopen', (e) => { _openApCard = { popup: e.popup, ap }; _fillApCard(e.popup, ap.ident); });
@@ -4134,6 +4127,18 @@
             m.on('mouseover', () => _loadApPhoto(ap.ident));
             return m;
         }
+        // Continental zoom reads as a field of SMALL dots; the class-size hierarchy
+        // (large > medium > small) only spreads out once you zoom toward a region.
+        // Zoomed in (z >= 8) the dots keep their full, clickable size.
+        function _dotScale() {
+            const z = map.getZoom();
+            return z >= 8 ? 1 : z >= 6 ? 0.75 : 0.55;
+        }
+        function _rescaleDots() {
+            const s = _dotScale();
+            Object.values(clusters).forEach(g => g.eachLayer(m => { if (m._dotR) m.setRadius(m._dotR * s); }));
+        }
+        map.on('zoomend', _rescaleDots);
         async function loadAirports() {
             try {
                 const [airports, chargerDb] = await Promise.all([
@@ -4153,7 +4158,7 @@
                     if (!ap.latitude_deg || !ap.longitude_deg || !buckets[ap.type]) return;
                     buckets[ap.type].push(_airportDot(ap));
                 });
-                Object.keys(buckets).forEach(t => clusters[t].addLayers(buckets[t]));
+                Object.keys(buckets).forEach(t => buckets[t].forEach(m => clusters[t].addLayer(m)));
                 map.addLayer(nrgChargerLayer);      // always on the map; its contents are managed
                 refreshNrgChargerLayer();           // A1 Step 2 — coords are loaded now
                 _rebuildSavedTripCoords();          // backfill coords on pre-coords saved trips so the engine can always profile them
