@@ -223,6 +223,16 @@ class TransformTest(unittest.TestCase):
         self.assertNotIn("surface", entries[0])          # old single-value keys retired
         self.assertNotIn("min_runway_m", entries[0])
 
+    def test_runway_zero_min_is_evtol_no_runway_needed(self):
+        # eHang-style row: Surface 'any', Min runway 0 — an eVTOL that needs no
+        # runway. 0 must NOT quarantine the aircraft; it emits as a 0 minimum
+        # (any present runway, whatever its length, satisfies it).
+        entries, report = self._rwy(["any"], 0)
+        self.assertEqual(report["ok"], ["rwy"])
+        rr = entries[0]["runway_req"]
+        self.assertEqual(set(rr), {"paved", "grass", "gravel", "dirt", "water", "unknown"})
+        self.assertTrue(all(v == 0 for v in rr.values()))
+
     def test_runway_ambiguous_count_mismatch_skips(self):
         _, report = self._rwy(["paved", "grass"], "1000, 1250, 46")
         self.assertEqual(report["skipped"][0]["slug"], "rwy")

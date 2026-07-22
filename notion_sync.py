@@ -328,8 +328,9 @@ def validate_aircraft(ac, profs, known_charger_ids, duplicated_emit_ids):
             if "any" in surfaces and len(surfaces) > 1:
                 errors.append(f"{tag}: Surface 'any' cannot combine with other tags")
             for m in mins:
-                if not (1 <= m <= RUNWAY_MAX_M):
-                    errors.append(f"{tag}: Min runway {m} m out of bounds [1, {RUNWAY_MAX_M}]")
+                # 0 is legitimate: an eVTOL that needs NO runway ('any', 0 m).
+                if not (0 <= m <= RUNWAY_MAX_M):
+                    errors.append(f"{tag}: Min runway {m} m out of bounds [0, {RUNWAY_MAX_M}]")
             # Positional pairing: counts must match — EXCEPT the unambiguous
             # partials (one min for all listed surfaces; min(s) with no surface
             # tag = 'any'; surface tag(s) with no min = surface-only, no length).
