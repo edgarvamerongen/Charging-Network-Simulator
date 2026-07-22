@@ -65,6 +65,7 @@ SLUG_RE = re.compile(r"^[a-z0-9_]+$")
 BATTERY_MAX_KWH = 100_000
 RANGE_MAX_KM = 20_000
 SEATS_MAX = 1_000
+RUNWAY_MAX_M = 6_000     # longest civil runways ~5.5 km; anything above is a typo
 SPEED_MIN_KMH, SPEED_MAX_KMH = 40, 1_000
 
 KT_TO_KMH = 1.852
@@ -145,6 +146,51 @@ def _num(v):
     return v if math.isfinite(v) else None
 
 
+def _num_list(v):
+    """Number-or-comma-list property ("1250, 1000" / 1250) → list of floats.
+    [] when empty/absent; None when a token is unparseable (validation error).
+    Runway minimums pair POSITIONALLY with the Surface tags, so order matters."""
+    if v is None or v == "":
+        return []
+    n = _num(v)
+    if n is not None:
+        return [float(n)]
+    if not isinstance(v, str):
+        return None
+    out = []
+    for tok in v.split(","):
+        tok = tok.strip()
+        if not tok:
+            return None
+        try:
+            f = float(tok)
+        except ValueError:
+            return None
+        if not math.isfinite(f):
+            return None
+        out.append(f)
+    return out
+
+
+# Notion Surface vocabulary. 'any' = no surface constraint (one minimum applies
+# to every surface). Hierarchy rule (user-ruled): a profile listing only grass
+# implicitly allows PAVED at the same minimum (a grass-capable plane can always
+# use tarmac; in practice the paved minimum might even be shorter).
+_RUNWAY_SURFACES = ("paved", "grass", "any")
+# Display categories the airport CSV aggregates to (runway_req may target any).
+_RUNWAY_CATEGORIES = ("paved", "grass", "gravel", "dirt", "water", "unknown")
+
+
+def _surface_list(v):
+    """Surface property (multi_select list, or select/rich_text string) →
+    normalized lowercase tag list, preserving order (pairs with Min runway)."""
+    if v is None or v == "":
+        return []
+    if isinstance(v, list):
+        return [_norm_text(s).lower() for s in v if s]
+    return [_norm_text(v).lower()]
+
+
 def _canon_regime(v):
     t = _norm_text(v)
     return _REGIME_CANON.get(t.lower(), t)
@@ -199,8 +245,8 @@ def parse_profile(page):
         "payload_kg": _num(p.get("Payload (kg)")),
         "regime": _canon_regime(p.get("Regime")),
         "range_km": _num(p.get("Range (km)")),
-        "surface": _norm_text(p.get("Surface")).lower(),
-        "min_runway_m": _num(p.get("Min runway (m)")),
+        "surfaces": _surface_list(p.get("Surface")),
+        "min_runway_m_list": _num_list(p.get("Min runway (m)")),
         "max_duration_min": _num(p.get("Max flight duration (min)")),
         "display_name": _norm_text(p.get("Display name")),
         "source": _norm_text(p.get("Source")),
@@ -271,7 +317,61 @@ def validate_aircraft(ac, profs, known_charger_ids, duplicated_emit_ids):
         elif not (1 <= p["range_km"] <= RANGE_MAX_KM):
             errors.append(f"{tag}: Range {p['range_km']} km out of bounds [1, {RANGE_MAX_KM}]")
 
+        # Runway requirement (optional pair of columns; both may be blank).
+        surfaces, mins = p["surfaces"], p["min_runway_m_list"]
+        if mins is None:
+            errors.append(f"{tag}: Min runway (m) unparseable (use a number or a comma list)")
+        else:
+            for s in surfaces:
+                if s not in _RUNWAY_SURFACES:
+                    errors.append(f"{tag}: unknown Surface '{s}' (allowed: paved, grass, any)")
+            if "any" in surfaces and len(surfaces) > 1:
+                errors.append(f"{tag}: Surface 'any' cannot combine with other tags")
+            for m in mins:
+                if not (1 <= m <= RUNWAY_MAX_M):
+                    errors.append(f"{tag}: Min runway {m} m out of bounds [1, {RUNWAY_MAX_M}]")
+            # Positional pairing: counts must match — EXCEPT the unambiguous
+            # partials (one min for all listed surfaces; min(s) with no surface
+            # tag = 'any'; surface tag(s) with no min = surface-only, no length).
+            if len(mins) > 1 and len(surfaces) > 1 and len(mins) != len(surfaces):
+                errors.append(f"{tag}: Surface/Min runway count mismatch "
+                              f"({len(mins)} minimums vs {len(surfaces)} surfaces — "
+                              f"Nth min pairs with Nth surface)")
+            if len(mins) > 1 and not surfaces:
+                errors.append(f"{tag}: {len(mins)} runway minimums but no Surface tags to pair them with")
+
     return errors
+
+
+def runway_req(profile):
+    """Normalize a profile's Surface + Min runway columns into ONE dict mapping
+    display category → minimum meters (int) or None (surface required, length
+    unknown). Hierarchy applied here so consumers stay dumb:
+      - 'any'        → every category at the (single) minimum
+      - grass listed → paved implied at min(grass, explicit paved)
+      - min with no surface tag → treated as 'any'
+    Returns None when the profile carries no runway data. Assumes validation
+    passed (counts consistent)."""
+    surfaces = list(profile["surfaces"] or [])
+    mins = list(profile["min_runway_m_list"] or [])
+    if not surfaces and not mins:
+        return None
+    if not surfaces:
+        surfaces = ["any"]                       # bare minimum(s): no surface constraint
+    if len(mins) == 1 and len(surfaces) > 1:
+        mins = mins * len(surfaces)              # one figure applies to all listed
+    req = {}
+    for i, s in enumerate(surfaces):
+        m = _clean_int(mins[i]) if i < len(mins) else None
+        if s == "any":
+            for cat in _RUNWAY_CATEGORIES:
+                req[cat] = m
+        else:
+            req[s] = m
+    if req.get("grass") is not None:
+        cur = req.get("paved")
+        req["paved"] = req["grass"] if cur is None else min(cur, req["grass"])
+    return req
 
 
 # ---------------------------------------------------------------------------
@@ -338,8 +438,6 @@ def build_entries(ac, profs):
             "country": ac["country"],
             "mtow_kg": _clean_int(ac["mtow_kg"]) if ac["mtow_kg"] is not None else None,
             "regime": p["regime"],
-            "surface": p["surface"],
-            "min_runway_m": _clean_int(p["min_runway_m"]) if p["min_runway_m"] is not None else None,
             "max_flight_duration_min": _clean_int(p["max_duration_min"]) if p["max_duration_min"] is not None else None,
             "profile_label": p["label"],
             "source": p["source"],
@@ -348,6 +446,12 @@ def build_entries(ac, profs):
         for k, v in meta.items():
             if v is not None and v != "":
                 entry[k] = v
+        # Runway requirement: one normalized dict (category -> min meters or
+        # null), hierarchy pre-applied — see runway_req(). Absent when the
+        # profile carries no runway columns.
+        rr = runway_req(p)
+        if rr:
+            entry["runway_req"] = rr
         out.append(entry)
     return out
 

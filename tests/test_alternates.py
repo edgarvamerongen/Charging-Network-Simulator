@@ -86,5 +86,39 @@ class TestApiPassthrough(unittest.TestCase):
         self.assertIsInstance(rows[0]["alternate_km"], (int, float))
 
 
+class TestRunwayColumns(unittest.TestCase):
+    """runway_length_columns: longest OPEN runway per surface category, meters."""
+
+    def _df(self):
+        import pandas as pd
+        return pd.DataFrame({
+            "airport_ident": ["X1", "X1", "X1", "X1", "X2", "X3"],
+            "length_ft":     ["6562", "9843", "2625", "3281", "1509", "abc"],
+            "surface":       ["ASPH", "CON",  "TURF", "grass", "GVL", "ASP"],
+            "closed":        ["0",    "",     "0",    "1",     "0",   "0"],
+        })
+
+    def test_longest_open_per_category(self):
+        from airport_alternates import runway_length_columns
+        out = runway_length_columns(self._df())
+        x1 = out.loc["X1"]
+        self.assertEqual(int(x1["rwy_paved_m"]), 3000)   # 9843 ft CON beats 6562 ft ASPH
+        self.assertEqual(int(x1["rwy_grass_m"]), 800)    # 2625 ft TURF; the 3281 ft grass row is CLOSED
+        self.assertEqual(int(out.loc["X2", "rwy_gravel_m"]), 460)
+        self.assertNotIn("X3", out.index)                # unparseable length -> no open runway rows at all
+
+    def test_normalize_surface_tokens(self):
+        from airport_alternates import normalize_surface
+        for raw, want in (("ASPH", "paved"), ("Concrete", "paved"), ("TURF", "grass"),
+                          ("Grass ", "grass"), ("GVL", "gravel"), ("SAND", "dirt"),
+                          ("WATER", "water"), ("UNK", "unknown"), ("", "unknown"), (None, "unknown")):
+            self.assertEqual(normalize_surface(raw), want, raw)
+
+    def test_suitable_alternates_unchanged_by_new_code(self):
+        # Regression: the baked-alternates filter must stay byte-stable — the new
+        # display-layer categories live NEXT TO _is_paved, never inside it.
+        self.assertEqual(suitable_alternate_idents(self._df()), {"X1"})
+
+
 if __name__ == "__main__":
     unittest.main()

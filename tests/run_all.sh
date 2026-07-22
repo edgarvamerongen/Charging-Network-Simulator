@@ -12,7 +12,7 @@
 set -u
 cd "$(dirname "$0")/.."
 
-PY=./venv/bin/python
+PY=${PY:-./venv/bin/python}   # override for worktrees (no venv): PY=/abs/main-checkout/venv/bin/python bash tests/run_all.sh
 rc=0
 
 echo "=================================================================="
@@ -24,7 +24,7 @@ echo
 echo "=================================================================="
 echo "NODE  (browser-global calc modules):"
 echo "=================================================================="
-for f in tests/js_settings.test.mjs tests/js_units.test.mjs tests/js_charging.test.mjs tests/js_demand.test.mjs tests/js_flight_model.test.mjs tests/js_flight_padding.test.mjs tests/js_flight_adapter.test.mjs tests/js_interim_charging.test.mjs tests/js_routing.test.mjs tests/js_recompute.test.mjs tests/js_share.test.mjs tests/js_flight_entry.test.mjs tests/js_buildshare.test.mjs tests/js_range_graph.test.mjs; do
+for f in tests/js_settings.test.mjs tests/js_units.test.mjs tests/js_charging.test.mjs tests/js_demand.test.mjs tests/js_flight_model.test.mjs tests/js_flight_padding.test.mjs tests/js_flight_adapter.test.mjs tests/js_interim_charging.test.mjs tests/js_routing.test.mjs tests/js_recompute.test.mjs tests/js_share.test.mjs tests/js_flight_entry.test.mjs tests/js_buildshare.test.mjs tests/js_range_graph.test.mjs tests/js_circular.test.mjs tests/js_runway.test.mjs; do
   echo "--- node $f ---"
   node "$f" || rc=1
   echo

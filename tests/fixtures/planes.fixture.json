@@ -42,11 +42,15 @@
     "country": "SI",
     "regime": "VFR",
     "max_flight_duration_min": 40,
-    "profile_label": "Standard"
+    "profile_label": "Standard",
+    "runway_req": {
+      "paved": 550,
+      "grass": 550
+    }
   },
   {
     "id": "vaeridion",
-    "name": "Vaeridion Microliner — Max (9 seats)",
+    "name": "Vaeridion Microliner \u2014 Max (9 seats)",
     "seats": 9,
     "battery_kwh": 600,
     "range_km": 500,
@@ -68,7 +72,7 @@
   },
   {
     "id": "vaeridion_light",
-    "name": "Vaeridion Microliner — Light (4 seats)",
+    "name": "Vaeridion Microliner \u2014 Light (4 seats)",
     "seats": 4,
     "battery_kwh": 600,
     "range_km": 687.5,

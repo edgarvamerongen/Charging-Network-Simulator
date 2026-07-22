@@ -39,6 +39,72 @@ def _is_paved(surface):
     return any(tok in s for tok in _PAVED_TOKENS)
 
 
+# --- surface categories (display layer) ----------------------------------------
+# Full normalization of OurAirports' free-text `surface` into display categories
+# for the airport card (paved / grass / gravel / dirt / water / unknown). Copied
+# from the perf-engine branch's field_performance.py; when PR #30 merges, that
+# module supersedes this copy and _PAVED_TOKENS above unifies with it. Kept
+# SEPARATE from _is_paved so the baked alternate columns can never drift.
+_SURFACE_KEYS = {
+    "paved":  ("ASP", "ASPH", "CON", "CONC", "PEM", "PAVED", "BIT", "TAR", "MAC", "SEAL", "COP", "COM"),
+    "grass":  ("TURF", "GRS", "GRE", "GRASS", "SOD", "LAWN"),
+    "gravel": ("GVL", "GRVL", "GRAVEL", "PER", "LATERITE", "CORAL", "SHELL", "STONE"),
+    "dirt":   ("DIRT", "EARTH", "CLAY", "SAND", "SAN", "GROUND", "SOIL", "NAT"),
+    "water":  ("WATER", "WAT"),
+}
+RWY_CATEGORIES = ("paved", "grass", "gravel", "dirt", "water", "unknown")
+
+
+def normalize_surface(raw):
+    """Map a messy OurAirports surface string to one display category."""
+    if raw is None:
+        return "unknown"
+    s = str(raw).strip().upper()
+    if not s or s in ("UNK", "U", "X", "N", "NIL", "NONE", "?"):
+        return "unknown"
+    for cat, keys in _SURFACE_KEYS.items():
+        if any(s.startswith(k) or k in s for k in keys):
+            return cat
+    return "unknown"
+
+
+def runway_length_columns(runways_df):
+    """Per-airport longest OPEN runway per surface category, in whole meters.
+
+    Returns a DataFrame indexed by `airport_ident` with one nullable-int column
+    per category: rwy_paved_m, rwy_grass_m, rwy_gravel_m, rwy_dirt_m,
+    rwy_water_m, rwy_unknown_m. Airports absent from runways.csv simply don't
+    appear (a later left-join leaves their cells blank). Pure — no file IO."""
+    rw = runways_df
+    length_ft = pd.to_numeric(rw["length_ft"], errors="coerce")
+    closed = rw["closed"].fillna("0").astype(str).str.strip()
+    open_ok = closed.isin(["0", ""]) & length_ft.notna() & (length_ft > 0)
+    cat = rw["surface"].map(normalize_surface)
+    frame = pd.DataFrame({
+        "airport_ident": rw["airport_ident"],
+        "cat": cat,
+        "length_m": length_ft * 0.3048,
+    })[open_ok]
+    longest = (frame.groupby(["airport_ident", "cat"])["length_m"].max()
+                    .round().astype("Int64").unstack("cat"))
+    longest = longest.reindex(columns=list(RWY_CATEGORIES))
+    longest.columns = [f"rwy_{c}_m" for c in longest.columns]
+    return longest
+
+
+def augment_runway_columns(path="european_airports.csv", runways_path="runways.csv"):
+    """Append/refresh ONLY the rwy_*_m columns on the airport CSV, leaving the
+    baked alternate columns byte-identical (a newer local runways.csv must not
+    shift alternate_ident). Idempotent: pre-existing rwy_* columns are replaced."""
+    df = pd.read_csv(path)
+    runways = pd.read_csv(runways_path, dtype=str)
+    df = df.drop(columns=[c for c in df.columns if c.startswith("rwy_")])
+    longest = runway_length_columns(runways)
+    df = df.merge(longest, how="left", left_on="ident", right_index=True)
+    df.to_csv(path, index=False)
+    return df
+
+
 def suitable_alternate_idents(runways_df):
     """Set of airport idents usable as a divert alternate: at least one OPEN,
     PAVED runway of length >= MIN_RUNWAY_M. Airports with no runway data, or
@@ -140,10 +206,18 @@ def augment_csv(path="european_airports.csv", runways_path="runways.csv"):
 
 
 if __name__ == "__main__":
-    out = augment_csv()
-    col = out["alternate_km"]
-    n_used = out["alternate_ident"].nunique()
-    print(f"Wrote alternate_km/alternate_ident for {len(out)} airports "
-          f"-> {n_used} distinct paved alternates used "
-          f"(min {col.min():.1f} km, median {col.median():.1f} km, "
-          f"max {col.max():.1f} km).")
+    import sys
+    if "--runways-only" in sys.argv:
+        out = augment_runway_columns()
+        have = out[[c for c in out.columns if c.startswith("rwy_")]].notna().any(axis=1)
+        print(f"Wrote rwy_*_m columns for {len(out)} airports "
+              f"({int(have.sum())} with at least one runway category; "
+              f"alternate columns untouched).")
+    else:
+        out = augment_csv()
+        col = out["alternate_km"]
+        n_used = out["alternate_ident"].nunique()
+        print(f"Wrote alternate_km/alternate_ident for {len(out)} airports "
+              f"-> {n_used} distinct paved alternates used "
+              f"(min {col.min():.1f} km, median {col.median():.1f} km, "
+              f"max {col.max():.1f} km).")
