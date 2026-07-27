@@ -60,6 +60,7 @@ window.CNSSettings = (function () {
         chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
         routingPadding:    { enabled: false, factor: 1.05 },          // ≥1; OFF by default — SID/STAR (additive km) is the preferred padding now
         sidStarPadding:    { enabled: true,  km: 10 },                // fixed km added to EACH leg (SID+STAR terminal track miles); additive on top of routingPadding
+        climbModel:        { enabled: true,  overheadPct: 0.10, satFrac: 0.15 },  // CLIMB_ENERGY_MODEL.md: NET climb overhead (% of battery) per leg, ramping to full by satFrac×range_km; wing-borne only (the engine gates VTOL + training); calibrated so a full-range mission still uses exactly one battery
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
     });
@@ -153,6 +154,27 @@ window.CNSSettings = (function () {
         return Math.max(5, Math.min(50, +s.km || 10));
     }
 
+    /** NET climb-minus-descent overhead as a fraction of battery
+     *  (CLIMB_ENERGY_MODEL.md). 0 when off — the engine then reduces to the
+     *  linear ePerKm model exactly. Clamped to the slider's [0, 0.20]. The
+     *  engine itself gates powered-lift (type ~ VTOL) and training flights,
+     *  which never pay the overhead. */
+    function climbOverheadPct() {
+        const s = loadAll().climbModel;
+        if (!s || !s.enabled) return 0;
+        return Math.max(0, Math.min(0.20, +s.overheadPct || 0.10));
+    }
+
+    /** Climb saturation distance as a fraction of catalog range:
+     *  d_sat = satFrac × range_km — the sector length at which a leg pays one
+     *  full climb; shorter legs ramp pro-rata (they cruise lower). Per-aircraft
+     *  by construction: range proxies mass + cruise altitude (memo §3.1).
+     *  Clamped to [0.05, 0.30]. */
+    function climbSatFrac() {
+        const s = loadAll().climbModel;
+        return Math.max(0.05, Math.min(0.30, +((s && s.satFrac) || 0.15)));
+    }
+
     /** Default state-of-charge every aircraft charges to at a terminus, unless a
      *  per-airport target overrides it (LOCAL > GLOBAL). Returns a fraction in
      *  (0,1] when the factor is on, or null when off — null means pure deficit
@@ -242,11 +264,13 @@ window.CNSSettings = (function () {
             sidStarPadding:    !!(s.sidStarPadding && s.sidStarPadding.enabled),
             chargeTarget:      !!(s.chargeTarget && s.chargeTarget.enabled),
             alternateReserve:  !!(s.alternateReserve && s.alternateReserve.enabled),
+            climbModel:        !!(s.climbModel && s.climbModel.enabled),
             anyOn: !!(s.landingReserve.enabled || s.chargerEfficiency.enabled ||
                       s.chargeTaper.enabled || s.routingPadding.enabled ||
                       (s.sidStarPadding && s.sidStarPadding.enabled) ||
                       (s.chargeTarget && s.chargeTarget.enabled) ||
-                      (s.alternateReserve && s.alternateReserve.enabled)),
+                      (s.alternateReserve && s.alternateReserve.enabled) ||
+                      (s.climbModel && s.climbModel.enabled)),
         };
     }
 
@@ -255,6 +279,6 @@ window.CNSSettings = (function () {
         loadAll, save, reset, subscribe,
         usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
-        alternateReserveEnabled,
+        alternateReserveEnabled, climbOverheadPct, climbSatFrac,
     };
 })();

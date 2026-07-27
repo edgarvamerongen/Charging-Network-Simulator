@@ -2164,6 +2164,20 @@
                                 <span class="rs-val" id="rsSidStarVal">+10 km</span>
                             </div>
                         </div>
+                        <div class="rs-cell">
+                            <div class="rs-cell-head">
+                                <label class="rs-toggle"><input type="checkbox" id="rsClimb"><span>Climb overhead</span></label>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Climb draws roughly twice cruise power. Each leg pays a net climb surcharge — a % of battery — ramping to full by the saturation distance (a % of the aircraft's range). Wing-borne aircraft only; a full-range flight still uses exactly one battery.">?</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <input type="range" id="rsClimbPctSl" min="0" max="20" step="1" value="10" class="form-range">
+                                <span class="rs-val" id="rsClimbPctVal">10%</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <input type="range" id="rsClimbSatSl" min="5" max="30" step="1" value="15" class="form-range">
+                                <span class="rs-val" id="rsClimbSatVal">full by 15% of range</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="rs-cat">Charging</div>
@@ -2835,7 +2849,8 @@
             if (!p || !p.range_km) return null;
             const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
             const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
-            const base = _availRangeOverride != null ? _availRangeOverride : p.range_km * _usableFrac(p) / route;
+            const flownMax = (window.CNSFlight && CNSFlight.maxFlownLegKm) ? CNSFlight.maxFlownLegKm(p) : p.range_km * _usableFrac(p);   // usable reach in flown km — climb-aware (engine owns the solve)
+            const base = _availRangeOverride != null ? _availRangeOverride : flownMax / route;
             return Math.max(0, base - sid / route);   // carve out the SID/STAR pad (great-circle equivalent)
         }
         // The available range to DISPLAY/EDIT: the FULL usable range — undo the /route AND add
@@ -3854,11 +3869,16 @@
             document.getElementById('psBattery').textContent = spec.battery_kwh ? fmtEnergy(spec.battery_kwh) : '—';   // absent = non-charging hybrid
             document.getElementById('psSpeed').textContent = (typeof fmtSpeed === 'function') ? fmtSpeed(spec.speed_kmh) : (spec.speed_kmh + ' km/h');
             document.getElementById('psSeats').textContent = spec.seats != null ? spec.seats : '—';
-            // Catalog has no avg_usage field — derive it from battery / range.
+            // Catalog has no avg_usage field — derive it from battery / range. With the
+            // climb model on, the headline is the CRUISE rate; the climb surcharge is
+            // shown alongside (per-trip usage varies with leg length by design).
+            const _ccp = (window.CNSFlight && CNSFlight.climbParams) ? CNSFlight.climbParams(spec) : null;
             const usage = spec.avg_usage_kwh_per_100km != null ? spec.avg_usage_kwh_per_100km
-                        : (spec.battery_kwh && spec.range_km ? spec.battery_kwh / spec.range_km * 100 : null);
+                        : (_ccp && _ccp.applies ? _ccp.cruisePerKm * 100
+                        : (spec.battery_kwh && spec.range_km ? spec.battery_kwh / spec.range_km * 100 : null));
             document.getElementById('psUsage').textContent =
-                usage == null ? '—' : ((typeof fmtUsage === 'function') ? fmtUsage(usage) : (Math.round(usage) + ' kWh/100km'));
+                (usage == null ? '—' : ((typeof fmtUsage === 'function') ? fmtUsage(usage) : (Math.round(usage) + ' kWh/100km')))
+                + (_ccp && _ccp.applies && spec.avg_usage_kwh_per_100km == null ? ' +' + Math.round(_ccp.eMaxKwh) + '/climb' : '');
             const avail = _availRangeShownKm(spec);
             const av = document.getElementById('psAvail');
             if (av) av.textContent = avail == null ? '—' : ((typeof fmtDist === 'function') ? fmtDist(avail) : (Math.round(avail) + ' km'));
@@ -4377,7 +4397,7 @@
             return {
                 dist:   rawKm,                                                            // geographic (matches the map line + the reach check)
                 timeH:  plane && plane.speed_kmh ? flownKm / plane.speed_kmh : null,      // flown (routing padding lives here)
-                energy: plane && plane.battery_kwh && plane.range_km ? flownKm * plane.battery_kwh / plane.range_km : null,  // flown
+                energy: plane && plane.battery_kwh && plane.range_km ? ((window.CNSFlight && CNSFlight.legEnergyKwh) ? CNSFlight.legEnergyKwh(plane, flownKm) : flownKm * plane.battery_kwh / plane.range_km) : null,  // flown — climb-aware via the engine's shared formula
             };
         }
         // ---- Flight engine (static/flight-model.js) bridge ------------------------
@@ -5058,7 +5078,7 @@
                 // to a NON-routing factor (charge target, taper, …) just re-renders — no replan.
                 try {
                     const rs = CNSSettings.loadAll();
-                    const sig = `${rs.landingReserve.enabled ? rs.landingReserve.minLandingSoc : '-'}|${rs.routingPadding.enabled ? rs.routingPadding.factor : '-'}|${(rs.sidStarPadding && rs.sidStarPadding.enabled) ? rs.sidStarPadding.km : '-'}|${(rs.alternateReserve && rs.alternateReserve.enabled) ? 1 : 0}`;
+                    const sig = `${rs.landingReserve.enabled ? rs.landingReserve.minLandingSoc : '-'}|${rs.routingPadding.enabled ? rs.routingPadding.factor : '-'}|${(rs.sidStarPadding && rs.sidStarPadding.enabled) ? rs.sidStarPadding.km : '-'}|${(rs.alternateReserve && rs.alternateReserve.enabled) ? 1 : 0}|${(rs.climbModel && rs.climbModel.enabled) ? rs.climbModel.overheadPct + ':' + rs.climbModel.satFrac : '-'}`;   // climb model shrinks the usable reach -> routing factor
                     const fn = (sig !== _lastRoutingSig && typeof recomputeRoute === 'function') ? recomputeRoute : renderStops;
                     _lastRoutingSig = sig;
                     if (typeof fn === 'function') fn();
@@ -5275,7 +5295,8 @@
                 allowedTypes: ['small_airport', 'medium_airport', 'large_airport'],
                 allowedIdents: new Set(Object.keys(nrgChargerDb || {})),
                 planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate,
-                                    runway_req: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).runway_req }),   // landability gate — catalog-sourced, trips don't persist it
+                                    runway_req: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).runway_req,      // landability gate — catalog-sourced, trips don't persist it
+                                    type: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).type }),               // climb-model gate (wing-borne vs powered-lift) — same sourcing
                 availableRangeKm: (plane) => _availableRangeKm(plane),
                 routingOptions: _routingOptions(),   // soft Prefer bias — stop choice, never feasibility
             };
@@ -5960,6 +5981,10 @@
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 alternateReserve:  { check: 'rsAlternate',     extras: {} },
                 sidStarPadding:    { check: 'rsSidStar',       extras: { km:            { input: 'rsSidStarSl',    valEl: 'rsSidStarVal',    fmt: (v) => `+${v} km`,                          to: (v) => v,       from: (v) => v } } },
+                climbModel:        { check: 'rsClimb',         extras: {
+                    overheadPct: { input: 'rsClimbPctSl', valEl: 'rsClimbPctVal', fmt: (v) => `${v}%`,                    to: (v) => v / 100, from: (v) => Math.round(v * 100) },
+                    satFrac:     { input: 'rsClimbSatSl', valEl: 'rsClimbSatVal', fmt: (v) => `full by ${v}% of range`,   to: (v) => v / 100, from: (v) => Math.round(v * 100) },
+                } },
                 chargeTarget:      { check: 'rsChargeTarget',  extras: { value:         { input: 'rsChargeTargetSl', valEl: 'rsChargeTargetVal', fmt: (v) => `${v}%`,                              to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
 

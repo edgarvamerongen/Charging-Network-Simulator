@@ -37,7 +37,9 @@ function run(padding = true) {
   S.CNSSettings.reset();
   // SID/STAR is ON by default (v5) — pin it OFF here so these tests isolate the
   // multiplicative routing factor (sidstar's additive km has its own suite).
-  S.CNSSettings.save({ routingPadding: padding ? { enabled: true, factor: 1.05 } : { enabled: false }, sidStarPadding: { enabled: false } });
+  // Climb model pinned OFF too: this suite isolates the padding factor against the
+  // LINEAR baseline (the climb ramp has its own suite, js_climb.test.mjs).
+  S.CNSSettings.save({ routingPadding: padding ? { enabled: true, factor: 1.05 } : { enabled: false }, sidStarPadding: { enabled: false }, climbModel: { enabled: false } });
   const prof = S.CNSFlight.simulateTrip(PLANES.beta_plane, [wp('EHAM'), wp('EHRD'), wp('EGLL')],
     { tripType: 'one-way', getTargetSoc: () => S.CNSSettings.chargeTargetDefault(), getChargerKw: () => 250 });
   return { prof, route: S.CNSSettings.routingFactor() };
