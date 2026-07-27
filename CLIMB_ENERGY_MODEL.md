@@ -22,7 +22,7 @@ the energy of a leg has a distance-independent component the linear model
 smears across the aircraft's whole catalog range. Consequences today:
 
 - **Short flights are over-credited.** A 50 km Beta Alia hop is charged 22.5 kWh;
-  a phase-aware estimate is ~39 kWh (+73%, §4). Charging demand at short-haul
+  a phase-aware estimate is ~35 kWh (+57%, §4). Charging demand at short-haul
   airports — CNS's core sizing question — is understated by the same margin.
 - **Charging stops look free.** Every extra stop in a multi-leg route restarts
   a climb, but the router only discourages stops with a soft 25 km penalty. The
