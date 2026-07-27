@@ -2167,16 +2167,13 @@
                         <div class="rs-cell">
                             <div class="rs-cell-head">
                                 <label class="rs-toggle"><input type="checkbox" id="rsClimb"><span>Climb overhead</span></label>
-                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Climb draws roughly twice cruise power. Each leg pays a net climb surcharge — a % of battery — ramping to full by the saturation distance (a % of the aircraft's range). Wing-borne aircraft only; a full-range flight still uses exactly one battery.">?</span>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Climb draws roughly twice cruise power, so each leg pays a climb surcharge — a % of battery, net of the descent give-back. Short hops pay pro-rata; the full-climb distance is automatic per aircraft (15% of its range). Wing-borne aircraft only; a full-range flight still uses exactly one battery.">?</span>
                             </div>
                             <div class="rs-cell-ctrl">
                                 <input type="range" id="rsClimbPctSl" min="0" max="20" step="1" value="10" class="form-range">
-                                <span class="rs-val" id="rsClimbPctVal">10%</span>
+                                <span class="rs-val" id="rsClimbPctVal">10% of battery / climb</span>
                             </div>
-                            <div class="rs-cell-ctrl">
-                                <input type="range" id="rsClimbSatSl" min="5" max="30" step="1" value="15" class="form-range">
-                                <span class="rs-val" id="rsClimbSatVal">full by 15% of range</span>
-                            </div>
+                            <p class="rs-help" id="rsClimbEg"></p>
                         </div>
                     </div>
 
@@ -5981,9 +5978,11 @@
                 routingPadding:    { check: 'rsRouting',       extras: { factor:        { input: 'rsRoutingSl',    valEl: 'rsRoutingVal',    fmt: (v) => `×${(v / 100).toFixed(2)}`,           to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 alternateReserve:  { check: 'rsAlternate',     extras: {} },
                 sidStarPadding:    { check: 'rsSidStar',       extras: { km:            { input: 'rsSidStarSl',    valEl: 'rsSidStarVal',    fmt: (v) => `+${v} km`,                          to: (v) => v,       from: (v) => v } } },
+                // satFrac deliberately has NO control: the full-climb distance is automatic
+                // per aircraft (climbSatFrac × range_km, memo §3.1) — a calibration, not a
+                // user decision. It stays editable in the stored blob for tests/power users.
                 climbModel:        { check: 'rsClimb',         extras: {
-                    overheadPct: { input: 'rsClimbPctSl', valEl: 'rsClimbPctVal', fmt: (v) => `${v}%`,                    to: (v) => v / 100, from: (v) => Math.round(v * 100) },
-                    satFrac:     { input: 'rsClimbSatSl', valEl: 'rsClimbSatVal', fmt: (v) => `full by ${v}% of range`,   to: (v) => v / 100, from: (v) => Math.round(v * 100) },
+                    overheadPct: { input: 'rsClimbPctSl', valEl: 'rsClimbPctVal', fmt: (v) => `${v}% of battery / climb`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
                 } },
                 chargeTarget:      { check: 'rsChargeTarget',  extras: { value:         { input: 'rsChargeTargetSl', valEl: 'rsChargeTargetVal', fmt: (v) => `${v}%`,                              to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
             };
@@ -6005,10 +6004,28 @@
                 updateBadge();
                 syncRate();
                 drawTaperCurve();
+                updateClimbEg();
             }
             function commit(key, patch) {
                 CNSSettings.save({ [key]: patch });
                 syncFromState();
+            }
+            // Live example under the Climb overhead slider: the knob in concrete kWh for
+            // the SELECTED aircraft (same source as the spec card — CNSFlight.climbParams).
+            // Reads the slider's CURRENT value so the line tracks a drag before commit.
+            function updateClimbEg() {
+                const el = document.getElementById('rsClimbEg');
+                if (!el) return;
+                const p = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
+                const s = CNSSettings.loadAll().climbModel || {};
+                const sl = document.getElementById('rsClimbPctSl');
+                const pct = sl ? +sl.value / 100 : (+s.overheadPct || 0);
+                if (!p || !s.enabled || pct <= 0) { el.textContent = ''; return; }
+                if (/vtol/i.test(String(p.type || ''))) { el.textContent = `${p.name}: powered-lift — model not applied`; return; }
+                if (!(+p.battery_kwh > 0) || !(+p.range_km > 0)) { el.textContent = ''; return; }
+                const eMax = pct * p.battery_kwh;
+                const dSat = CNSSettings.climbSatFrac() * p.range_km;
+                el.textContent = `${p.name}: +${Math.round(eMax)} kWh / climb · full above ${Math.round(dSat)} km · short hops pro-rata`;
             }
             function updateBadge() {
                 // Count only the per-factor flags (exclude the `anyOn` summary).
@@ -6036,6 +6053,12 @@
                     }
                 });
             });
+
+            // Climb example tracks the slider live and the aircraft on modal open.
+            const climbSl = document.getElementById('rsClimbPctSl');
+            if (climbSl) climbSl.addEventListener('input', updateClimbEg);
+            const msModal = document.getElementById('modelSettingsModal');
+            if (msModal) msModal.addEventListener('shown.bs.modal', updateClimbEg);
 
             // C1a: charging price — no enable toggle, it always applies to revenue.
             const rateSl = document.getElementById('rsChargeRateSl');
