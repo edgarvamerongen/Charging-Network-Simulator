@@ -4,8 +4,11 @@ Research memo, 2026-07-27. Status: **parameters ruled — build not yet approved
 Rulings (Edgar, 2026-07-27): `climb_overhead_pct` = **10%**, interpreted as the
 NET climb-minus-descent overhead (§2.1); saturation distance is **inferred per
 aircraft as 15% of catalog range** (`climb_sat_frac`), not a fixed km value and
-not a data column (§3.1). Open: training-block treatment (§5). Build is a
-separate, later approval.
+not a data column (§3.1); **training flights are excluded** — they keep today's
+treatment (§5); **powered-lift/eVTOL aircraft are excluded** — they stay linear
+until a per-aircraft override exists (§5). Open: whether STOL rides with CTOL
+(memo recommends yes) or is excluded with the eVTOLs (§5). Build is a separate,
+later approval.
 
 ## 1. Problem
 
@@ -257,13 +260,28 @@ physics, small enough not to upend existing routes.
 
 ## 5. Edge cases & doctrine
 
-- **Training flights**: apply the same formula to the block distance
-  (`E = c·trainKm + E_max·min(1, trainKm/d_sat)`) — circuits climb
-  continuously but low, so one ramped climb per block is a fair Rung-1
-  treatment. Alternative (one full climb per block) over-charges pattern work.
-  **To settle in review.**
+- **Training flights — RULED: excluded, keep today's treatment.** Training
+  blocks are A→A, their "ranges" are endurance figures (duration-expressed,
+  not distances flown point-to-point), the engine already caps their energy at
+  usable battery, and no routing decision hangs on them. The climb model
+  applies to route legs only.
+- **Aircraft-class gate — RULED: powered-lift/eVTOL excluded.** Hover takeoff
+  and landing are peak-power phases, descent is not cheap, and the overhead is
+  per-flight rather than distance-ramped — every §2 assumption breaks. They
+  stay on the linear model until they get the per-aircraft override reserved
+  in §7 (gate off the catalog `type` field).
+  **Open: does STOL ride with CTOL or with the eVTOLs?** The memo recommends
+  WITH CTOL: a blown-lift STOL still climbs to cruise altitude wing-borne —
+  the takeoff RUN is short, not the climb, and potential energy is
+  path-independent (a steeper climb to the same altitude costs the same
+  m·g·h; blowing adds a little climb-out power, it removes none). Excluding
+  STOL would under-charge exactly the short-hop specialists in the 50–150 km
+  regime where §4 shows the linear model is most wrong. Softener either way:
+  several STOL rows are hybrids, where the knob self-neutralizes.
 - **Battery-less hybrids**: not applicable — the engine already short-circuits
-  them to zero charge energy; `E_max = pct × battery` is naturally 0.
+  them to zero charge energy; `E_max = pct × battery` is naturally 0. Hybrids
+  that DO carry a battery get the ramp on that battery like anyone else; with
+  small packs the absolute overhead is correspondingly small.
 - **sim.py stays linear.** The backend is the intentionally-raw physics
   baseline (sim.py:245–250 doctrine); this model lives in the JS engine like
   reserves and padding do. The JS/Python divergence widens and is documented,
