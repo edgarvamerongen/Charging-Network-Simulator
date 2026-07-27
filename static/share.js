@@ -103,9 +103,9 @@ window.CNSShare = (function () {
         if (fn && st.f && st.f.n) fn.value = st.f.n;
         if (st.f && st.f.u) fire('freqUnit', st.f.u);
 
-        // 5. Charging-stops toggle (manual stops below will force it on if needed).
-        const ws = document.getElementById('withStops');
-        if (ws && st.w !== undefined && ws.checked !== !!st.w) { ws.checked = !!st.w; ws.dispatchEvent(new Event('change')); }
+        // 5. Charging stops are always planned now — the old `w` flag in links is
+        //    read no further (restoring w:0 from an old link would silently plan
+        //    the route direct with no visible control to turn stops back on).
 
         // 6. Route: origin -> manual stops -> destination (resolved from the catalog).
         //    A circular trip has no separate destination — its far point is just the
