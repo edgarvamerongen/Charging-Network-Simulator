@@ -39,6 +39,52 @@ window.CNSFlight = (function () {
     function _chargeTargetDefault() { const s = _settings(); return s && s.chargeTargetDefault ? s.chargeTargetDefault() : null; }
     function _effectiveChargePower(kw, batt, cr) { const s = _settings(); return (s && s.effectiveChargePower) ? s.effectiveChargePower(kw, batt, cr) : (kw || 0); }
     function _chargeTimeMin(e, kw, batt, soc) { const s = _settings(); return (s && s.chargeTimeMin) ? s.chargeTimeMin(e, kw, batt, soc) : (kw ? 60 * e / kw : 0); }
+    function _climbOverheadPct() { const s = _settings(); return (s && s.climbOverheadPct) ? s.climbOverheadPct() : 0; }
+    function _climbSatFrac() { const s = _settings(); return (s && s.climbSatFrac) ? s.climbSatFrac() : 0.15; }
+
+    // ---- Climb-energy model (CLIMB_ENERGY_MODEL.md) -------------------------------
+    // Wing-borne aircraft pay a NET climb-minus-descent overhead per leg:
+    //     E(leg) = cruisePerKm·distKm + eMaxKwh·min(1, distKm / dSatKm)
+    // with eMaxKwh = overheadPct × battery and dSatKm = satFrac × range_km
+    // (range proxies mass + cruise altitude, so both scale per aircraft with no
+    // new catalog data). Calibrated so E(range_km) = battery exactly — full-range
+    // missions are unchanged; short legs pay proportionally more; every charging
+    // stop restarts a climb. Powered-lift (type ~ VTOL) is excluded — hover
+    // economics break the fixed-wing symmetry — as are training flights (ruled).
+    // overheadPct = 0 reduces every consumer to the linear ePerKm model exactly.
+    function climbParams(plane) {
+        const batt = Math.max(0, +plane.battery_kwh || 0);
+        const range = Math.max(0, +plane.range_km || 0);
+        const wingBorne = !/vtol/i.test(String(plane.type || ''));
+        const eMaxKwh = (wingBorne && batt > 0 && range > 0) ? _climbOverheadPct() * batt : 0;
+        const dSatKm = _climbSatFrac() * range;
+        return {
+            applies: eMaxKwh > 0 && dSatKm > 0,
+            eMaxKwh, dSatKm,
+            cruisePerKm: range > 0 ? (batt - eMaxKwh) / range : 0,
+        };
+    }
+    // Leg energy (kWh) for a FLOWN distance — the one formula every estimator shares.
+    function legEnergyKwh(plane, flownKm) {
+        const cp = climbParams(plane);
+        if (!cp.applies) {
+            const batt = Math.max(0, +plane.battery_kwh || 0), range = Math.max(0, +plane.range_km || 0);
+            return range > 0 ? batt / range * flownKm : 0;
+        }
+        return cp.cruisePerKm * flownKm + cp.eMaxKwh * Math.min(1, flownKm / cp.dSatKm);
+    }
+    // Max FLOWN leg (km) on usable battery: the closed-form piecewise inverse of
+    // E(d) = usable. Falls back to the distance form range×usableFrac when the
+    // climb model doesn't apply (also correct for battery-less hybrids).
+    function maxFlownLegKm(plane) {
+        const range = Math.max(0, +plane.range_km || 0);
+        const usableFrac = _usableFraction(plane);
+        const cp = climbParams(plane);
+        if (!cp.applies || cp.cruisePerKm <= 0) return range * usableFrac;
+        const usable = Math.max(0, +plane.battery_kwh || 0) * usableFrac;
+        const dAff = (usable - cp.eMaxKwh) / cp.cruisePerKm;          // affine branch (past d_sat)
+        return dAff >= cp.dSatKm ? dAff : Math.max(0, usable) / (cp.cruisePerKm + cp.eMaxKwh / cp.dSatKm);
+    }
     function _haversineKm(a, b) {
         if (window.CNSRouting && CNSRouting.haversineKm) return CNSRouting.haversineKm(a, b);
         const R = 6371, toRad = d => d * Math.PI / 180;
@@ -76,7 +122,16 @@ window.CNSFlight = (function () {
         const reserve = batt - usable;
         const ePerKm = range > 0 ? batt / range : 0;
         const cRate = plane.c_rate;                                   // vestigial; effectiveChargePower handles null
-        const availRangeKm = (range > 0 && route > 0) ? Math.max(0, range * usableFrac - sidStar) / route : 0;   // great-circle reach the planner enforces: the fixed SID/STAR pad is carved out so a padded leg (rawKm·route + sidStar) still respects the plane's max range. The DISPLAYED available range stays the full range·usableFrac (pad shown in the LEG, not the headline reach).
+        // Climb model: training is excluded (ruled), so its legs keep the linear rate.
+        const _cp = climbParams(plane);
+        const eMaxClimb = (!training && _cp.applies) ? _cp.eMaxKwh : 0;
+        const dSatKm = _cp.dSatKm;
+        const ePerKmCruise = range > 0 ? (batt - eMaxClimb) / range : 0;   // == ePerKm when the model is off/gated
+        const legEnergy = (d) => (eMaxClimb > 0 && dSatKm > 0)
+            ? ePerKmCruise * d + eMaxClimb * Math.min(1, d / dSatKm)
+            : ePerKm * d;
+        const maxFlownKm = (eMaxClimb > 0) ? maxFlownLegKm(plane) : range * usableFrac;   // usable-energy max leg, flown km
+        const availRangeKm = (range > 0 && route > 0) ? Math.max(0, maxFlownKm - sidStar) / route : 0;   // great-circle reach the planner enforces: the fixed SID/STAR pad is carved out so a padded leg (rawKm·route + sidStar) still respects the plane's max range. The DISPLAYED available range stays the full usable reach (pad shown in the LEG, not the headline reach). With the climb model on, the usable reach solves E(d)=usable in closed form (maxFlownLegKm).
         const getTarget = (typeof opts.getTargetSoc === 'function') ? opts.getTargetSoc : (() => _chargeTargetDefault());
         const getChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => +opts.chargerKw || 0);
         // Interim-deficit charging (per-rotation opts supplied by the scheduler): a shared aircraft
@@ -138,7 +193,7 @@ window.CNSFlight = (function () {
             const a = chain[i], b = chain[i + 1];
             const rawKm = _haversineKm(_pt(a), _pt(b));          // great-circle (geographic)
             const distKm = rawKm * route + sidStar;              // ROUTED length: airways multiplier, then fixed SID/STAR terminal km
-            const energyKwh = ePerKm * distKm;                   // flown — derives from the routed length
+            const energyKwh = legEnergy(distKm);                 // flown — derives from the routed length (climb ramp + cruise; linear when the model is off/gated)
             const flightMin = speed > 0 ? distKm / speed * 60 : 0;   // flown — derives from the routed length
             const overRange = energyKwh > usable + 1e-9;          // [R5] padded energy > usable
             if (overRange) errors.push({ kind: 'over-range', legIndex: i, energyKwh, usable });
@@ -223,6 +278,7 @@ window.CNSFlight = (function () {
                 speed_kmh: trip.speed_kmh != null ? trip.speed_kmh : cat.speed_kmh,
                 c_rate: trip.c_rate,
                 training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : cat.training_range_km,
+                type: cat.type,                       // climb-model gate (wing-borne vs powered-lift) — catalog-sourced, trips don't persist it
             };
             // Battery deliberately NOT required: an absent battery_kwh is a
             // non-charging hybrid — batt=0 flows through simulateTrip as zero
@@ -255,5 +311,5 @@ window.CNSFlight = (function () {
         return ch ? ch.energyKwh : null;
     }
 
-    return { simulateTrip, _expandChain, profileForTrip, chargeEnergyAt };
+    return { simulateTrip, _expandChain, profileForTrip, chargeEnergyAt, climbParams, legEnergyKwh, maxFlownLegKm };
 })();

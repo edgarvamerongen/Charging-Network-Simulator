@@ -6,7 +6,7 @@
       "rotations": [
         {
           "takeoff": 420,
-          "end": 572.19,
+          "end": 573.17,
           "phases": [
             {
               "kind": "fly",
@@ -19,8 +19,8 @@
               "kind": "charge",
               "ident": "LFPG",
               "start": 515.4,
-              "dur": 56.79,
-              "energy": 183.85
+              "dur": 57.77,
+              "energy": 187.96
             }
           ]
         }
@@ -31,7 +31,7 @@
       "rotations": [
         {
           "takeoff": 420,
-          "end": 540.57,
+          "end": 547.87,
           "phases": [
             {
               "kind": "fly",
@@ -44,22 +44,22 @@
               "kind": "charge",
               "ident": "EHGG",
               "start": 456.3,
-              "dur": 7.03,
-              "energy": 27.82
+              "dur": 10.68,
+              "energy": 43.03
             },
             {
               "kind": "fly",
               "ident": null,
-              "start": 463.33,
+              "start": 466.98,
               "dur": 36.3,
               "energy": 0
             },
             {
               "kind": "charge",
               "ident": "EHAM",
-              "start": 499.63,
-              "dur": 40.94,
-              "energy": 117.82
+              "start": 503.28,
+              "dur": 44.59,
+              "energy": 133.03
             }
           ]
         }
@@ -70,7 +70,7 @@
       "rotations": [
         {
           "takeoff": 420,
-          "end": 570.08,
+          "end": 579.39,
           "phases": [
             {
               "kind": "fly",
@@ -83,20 +83,20 @@
               "kind": "charge",
               "ident": "EHRD",
               "start": 430.8,
-              "dur": 1.45,
-              "energy": 2.99
+              "dur": 10.76,
+              "energy": 23.69
             },
             {
               "kind": "fly",
               "ident": null,
-              "start": 432.25,
+              "start": 441.56,
               "dur": 81.96,
               "energy": 0
             },
             {
               "kind": "charge",
               "ident": "EGLL",
-              "start": 514.21,
+              "start": 523.52,
               "dur": 55.86,
               "energy": 180
             }
@@ -133,23 +133,23 @@
   "airports": {
     "EHAM": {
       "peakKw": 250,
-      "latestEnd": 540.57
+      "latestEnd": 547.87
     },
     "LFPG": {
       "peakKw": 250,
-      "latestEnd": 572.19
+      "latestEnd": 573.17
     },
     "EHGG": {
       "peakKw": 250,
-      "latestEnd": 540.57
+      "latestEnd": 547.87
     },
     "EGLL": {
       "peakKw": 250,
-      "latestEnd": 570.08
+      "latestEnd": 579.39
     },
     "EHRD": {
       "peakKw": 250,
-      "latestEnd": 570.08
+      "latestEnd": 579.39
     }
   }
 }

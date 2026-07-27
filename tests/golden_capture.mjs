@@ -54,7 +54,7 @@ export function loadStack() {
 
 // settings variants exercised per case (shipped DEFAULTS + extremes)
 export const SETTINGS = {
-  off:       (S) => S.save({ landingReserve: { enabled: false }, routingPadding: { enabled: false }, chargeTarget: { enabled: false }, chargeTaper: { enabled: false }, chargerEfficiency: { enabled: false } }),
+  off:       (S) => S.save({ landingReserve: { enabled: false }, routingPadding: { enabled: false }, chargeTarget: { enabled: false }, chargeTaper: { enabled: false }, chargerEfficiency: { enabled: false }, climbModel: { enabled: false } }),
   default:   (S) => S.reset(),  // landingReserve 0.30, routing 1.05, chargeTarget 0.80, taper on
   target100: (S) => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 1.0 } }); },
   target50:  (S) => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 0.5 } }); },

@@ -19,7 +19,7 @@ if (!fs.existsSync(GP)) { console.log('SKIP: no golden yet (run node tests/golde
 const golden = JSON.parse(fs.readFileSync(GP, 'utf8'));
 
 const SET = {
-  off:       S => S.save({ landingReserve: { enabled: false }, routingPadding: { enabled: false }, chargeTarget: { enabled: false }, chargeTaper: { enabled: false }, chargerEfficiency: { enabled: false } }),
+  off:       S => S.save({ landingReserve: { enabled: false }, routingPadding: { enabled: false }, chargeTarget: { enabled: false }, chargeTaper: { enabled: false }, chargerEfficiency: { enabled: false }, climbModel: { enabled: false } }),
   default:   S => S.reset(),
   target100: S => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 1.0 } }); },
   target50:  S => { S.reset(); S.save({ chargeTarget: { enabled: true, value: 0.5 } }); },
@@ -70,8 +70,10 @@ let pass = 0, fail = 0, deltas = 0;
   const ePerKm = plane.battery_kwh / plane.range_km;
   const waypoints = [wp('EHAM'), wp('LFPG')];
   const run = () => S.CNSFlight.simulateTrip(plane, waypoints, { tripType: 'one-way', getChargerKw: () => 250 });
-  // baseline: distance factors off -> route = 1, no pad, full usable range
-  S.CNSSettings.save({ routingPadding: { enabled: false }, landingReserve: { enabled: false }, sidStarPadding: { enabled: false } });
+  // baseline: distance factors off -> route = 1, no pad, full usable range.
+  // Climb model off too: this suite isolates the SID/STAR pad against the linear
+  // baseline (the climb ramp has its own suite, js_climb.test.mjs).
+  S.CNSSettings.save({ routingPadding: { enabled: false }, landingReserve: { enabled: false }, sidStarPadding: { enabled: false }, climbModel: { enabled: false } });
   const base = run();
   const rawKm = base.legs[0].rawKm, d0 = base.legs[0].distKm, e0 = base.legs[0].energyKwh, avail0 = base.availRangeKm;
   // SID/STAR on at 30 km
