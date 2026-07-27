@@ -56,6 +56,19 @@ Two global knobs (Model settings; per-aircraft refinement is a later step):
 - Below `d_sat`, climb cost scales with distance: a 20 km hop cruises low and
   pays only a fraction of a full climb (short flights climb less — the ruled
   requirement). Above `d_sat`, each leg pays exactly one full climb.
+- **The ramp IS the ideal-altitude optimisation, in reduced form.** A short leg
+  is not modeled as a sawtooth (climb, immediately descend): the ramp assumes
+  the aircraft climbs to a LOWER cruise plateau proportional to sector length —
+  which is what real dispatch does (pick the altitude the sector supports) and
+  what an explicit optimiser would conclude under this cost function anyway:
+  Rung 1 has a single cruise rate with no altitude dependence, so there is
+  nothing to trade against and the optimum degenerates to "climb only as much
+  as the leg warrants". An altitude-dependent cruise curve is Rung-3 territory.
+  The true height-vs-distance relation is concave rather than linear and
+  `min()` has a kink at `d_sat` — the piecewise-linear ramp is kept anyway
+  because it is what keeps the router's max-leg inversion closed-form (a
+  smooth saturating curve makes `maxLegKm` transcendental); the shape error is
+  absorbed by the knob calibration.
 - `d_sat` scales with the aircraft (a Velis saturates at ~13 km, an E9X at
   ~150 km) with zero new data, because catalog range proxies aircraft scale —
   see §3.1 for why this beats both a fixed km value and a data column.
@@ -173,6 +186,29 @@ exists to fill it, so today it would be invented row by row — the scaling law
 invents more consistently. The standard refinement path stays open: inferred
 default now, optional `climb_sat_km` override column later where a real figure
 is learned (the eHang will need one anyway, §2.1).
+
+### 3.2 Why the model needs no per-aircraft cruise altitude
+
+The potential-energy calculations in §3 are VALIDATION, not inputs — altitude
+never enters the model. Its only per-aircraft inputs are `battery_kwh` and
+`range_km`, fields every catalog aircraft already has. The three reference
+aircraft were chosen to SPAN the fleet (600 kg trainer → 76 t airliner-class),
+and the climb overhead as a fraction of battery stayed inside 8–11% across
+three orders of magnitude in absolute energy. That is design coupling, not
+luck: `E_climb/battery ≈ g·h / (η × battery-mass-fraction × specific-energy)`
+— airframe mass cancels, and the aircraft that cruise high are exactly the
+ones designed with large battery fractions (E9X ~184 Wh per kg of MTOW vs
+Velis ~37), which compensates their altitude almost exactly. So every new
+aircraft lands in the right regime automatically: its own battery and range
+act as the proxies for its mass and cruise altitude.
+
+Consequences: no new Notion column is required for the whole DB; the §3
+formula (`m·g·h/η`) prices a per-aircraft override in a minute if MTOW and a
+typical cruise altitude are known; and the validation table should be re-run
+if the fleet ever changes character (an influx of designs with extreme
+battery fractions would stretch the 8–11% band). The structural outlier
+remains the eVTOL class (§2.1), whose hover phases break the fixed-wing
+scaling entirely.
 
 ## 4. Worked examples (ruled: pct = 10%, d_sat = 15% of range)
 
