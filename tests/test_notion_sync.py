@@ -87,6 +87,25 @@ def created_stamp(pid):
 
 
 class TransformTest(unittest.TestCase):
+    def test_range_incl_reserves_checkbox_emits_flag(self):
+        # 'Range inc. reserves' checked: the profile's range is already USABLE
+        # (reserves flown off) -> emit the flag so the engine's usableFraction
+        # returns 1 and the landing-reserve build-down isn't applied twice.
+        ac = [aircraft("A", slug="e9x", battery=14000, cruise=389)]
+        pr = [profile("P", "A", emit="e9x", regime="IFR", rng=800,
+                      props={"Range inc. reserves": _chk(True)})]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertIsNone(report["abort"])
+        self.assertIs(entries[0]["range_incl_reserves"], True)
+
+    def test_range_incl_reserves_unchecked_emits_no_key(self):
+        ac = [aircraft("A", slug="velis", battery=22, cruise=80)]
+        pr = [profile("P", "A", emit="velis", rng=87.5,
+                      props={"Range inc. reserves": _chk(False)})]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertIsNone(report["abort"])
+        self.assertNotIn("range_incl_reserves", entries[0])
+
     def test_basic_emit_shape_and_speed_conversion(self):
         ac = [aircraft("A", name="Velis Electro", slug="pipistrel_velis",
                        battery=22, cruise=80, chargers=("dc_22",),

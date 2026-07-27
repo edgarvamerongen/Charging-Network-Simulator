@@ -245,6 +245,10 @@ def parse_profile(page):
         "payload_kg": _num(p.get("Payload (kg)")),
         "regime": _canon_regime(p.get("Regime")),
         "range_km": _num(p.get("Range (km)")),
+        # 'Range inc. reserves' checkbox: the profile's Range (km) is already the
+        # USABLE range (reserves flown off) — the landing-reserve build-down must
+        # not be applied again on top (the engine's usableFraction returns 1).
+        "range_incl_reserves": bool(p.get("Range inc. reserves")),
         "surfaces": _surface_list(p.get("Surface")),
         "min_runway_m_list": _num_list(p.get("Min runway (m)")),
         "max_duration_min": _num(p.get("Max flight duration (min)")),
@@ -415,6 +419,8 @@ def build_entries(ac, profs):
             entry["battery_kwh"] = _clean_int(ac["battery_kwh"])
         if p["payload_kg"] is not None:
             entry["load_kg"] = _clean_int(p["payload_kg"])
+        if p.get("range_incl_reserves"):
+            entry["range_incl_reserves"] = True
         if ac["training_range_km"] is not None:
             entry["training_range_km"] = _clean_int(ac["training_range_km"])
         if ac["image"]:

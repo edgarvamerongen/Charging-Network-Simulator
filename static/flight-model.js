@@ -279,6 +279,7 @@ window.CNSFlight = (function () {
                 c_rate: trip.c_rate,
                 training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : cat.training_range_km,
                 type: cat.type,                       // climb-model gate (wing-borne vs powered-lift) — catalog-sourced, trips don't persist it
+                range_incl_reserves: cat.range_incl_reserves,   // reserves already flown off the catalog range — usableFraction returns 1
             };
             // Battery deliberately NOT required: an absent battery_kwh is a
             // non-charging hybrid — batt=0 flows through simulateTrip as zero

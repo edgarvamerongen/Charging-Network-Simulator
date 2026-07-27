@@ -4076,11 +4076,16 @@
             // the SELECTED aircraft. Display only — routing is not gated here.
             let rwy = '';
             if (window.CNSRunway) {
-                const chips = CNSRunway.summary(ap);
-                const fit = CNSRunway.suitability(_selectedPlane(), ap);
-                const warn = (fit.state === 'short' || fit.state === 'surface')
-                    ? `${chips ? ' · ' : ''}<span class="ap-card-rwy-warn">${escHtml(fit.label)}</span>` : '';
-                if (chips || warn) rwy = `<div class="ap-card-rwy">${escHtml(chips)}${warn}</div>`;
+                if (!CNSRunway.hasData(ap)) {
+                    // Un-plannable (#39): no auto stops, no reach spokes — say so on the card.
+                    rwy = `<div class="ap-card-rwy"><span class="ap-card-rwy-warn">no rwy data — excluded from planning</span></div>`;
+                } else {
+                    const chips = CNSRunway.summary(ap);
+                    const fit = CNSRunway.suitability(_selectedPlane(), ap);
+                    const warn = (fit.state === 'short' || fit.state === 'surface')
+                        ? `${chips ? ' · ' : ''}<span class="ap-card-rwy-warn">${escHtml(fit.label)}</span>` : '';
+                    if (chips || warn) rwy = `<div class="ap-card-rwy">${escHtml(chips)}${warn}</div>`;
+                }
             }
             const id = escHtml(ap.ident);
             return `<div class="ap-photo-wrap"><img class="ap-photo" alt=""><span class="ap-photo-credit"></span></div>`
@@ -4101,6 +4106,16 @@
             if (w) _fillApPhoto(w, ident);
         }
 
+        // Shared airport-card wiring: click opens the card; hover only warms the
+        // photo so it is instant on open. Used by the catalog dots AND the active
+        // route's blue markers — those sit in higher panes (route 650 / teardrop 660)
+        // and would otherwise swallow the click with no card behind it.
+        function _bindApCard(m, ap) {
+            m.bindPopup(() => _airportCardHtml(ap), { closeButton: true, className: 'ap-card', minWidth: 230, maxWidth: 230, autoPanPadding: [26, 26] });
+            m.on('popupopen', (e) => { _openApCard = { popup: e.popup, ap }; _fillApCard(e.popup, ap.ident); });
+            m.on('popupclose', () => { _openApCard = null; });
+            m.on('mouseover', () => _loadApPhoto(ap.ident));
+        }
         function _airportDot(ap) {
             // Dot size encodes the airport class at a glance (large > medium > small);
             // white stroke keeps them crisp on both street and satellite tiles.
@@ -4108,13 +4123,10 @@
             // charger discs), so brand color MEANS brand on this map.
             const DOT_R = { large_airport: 8.5, medium_airport: 5.5, small_airport: 4 };
             const DOT_C = { large_airport: '#2b2f5a', medium_airport: '#2b2f5a', small_airport: '#4a4f76' };
-            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { renderer: _dotRenderer, radius: (DOT_R[ap.type] || 5.5) * _dotScale(), fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: 1.25, opacity: 1, fillOpacity: 0.9 });
+            const noRwy = !!(window.CNSRunway && !CNSRunway.hasData(ap));   // no runway data -> un-plannable (#39): draw dimmed
+            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { renderer: _dotRenderer, radius: (DOT_R[ap.type] || 5.5) * _dotScale(), fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: noRwy ? 1 : 1.25, opacity: noRwy ? 0.55 : 1, fillOpacity: noRwy ? 0.35 : 0.9 });
             m._dotR = DOT_R[ap.type] || 5.5;   // base radius — rescaled on zoom by _rescaleDots()
-            // Click opens the card; hover only warms the photo so it is instant on open.
-            m.bindPopup(() => _airportCardHtml(ap), { closeButton: true, className: 'ap-card', minWidth: 230, maxWidth: 230, autoPanPadding: [26, 26] });
-            m.on('popupopen', (e) => { _openApCard = { popup: e.popup, ap }; _fillApCard(e.popup, ap.ident); });
-            m.on('popupclose', () => { _openApCard = null; });
-            m.on('mouseover', () => _loadApPhoto(ap.ident));
+            _bindApCard(m, ap);
             return m;
         }
         // Continental zoom reads as a field of SMALL dots; the class-size hierarchy
@@ -4475,6 +4487,15 @@
             }
             return null;
         }
+        // Resolve a route endpoint back to its catalog airport (endpoints carry only
+        // lat/lon/label) so the blue route markers can open the same airport card.
+        function _airportAt(lat, lon) {
+            for (const k in airportByIdent) {
+                const ap = airportByIdent[k];
+                if (Math.abs(ap.latitude_deg - lat) < 1e-4 && Math.abs(ap.longitude_deg - lon) < 1e-4) return ap;
+            }
+            return null;
+        }
         // Marker for one airport on the active route. Per spec:
         //   on the NRG2fly network AND the charger layer is on → the blue HALO teardrop
         //   else (off-network, or charger sites toggled off)    → a standard blue pin
@@ -4486,6 +4507,8 @@
                 radius: 9, fillColor: '#2563eb', color: '#fff', weight: 2.5, fillOpacity: 1, pane: 'routePane',
             });
             if (withTip) m.bindTooltip(e.label, { direction: 'top' });
+            const ap = _airportAt(e.lat, e.lon);
+            if (ap) _bindApCard(m, ap);   // route markers cover the catalog dot — the card must still open
             return m;
         }
         // The departure/destination teardrop. Blue HALO when it's an active NRG2fly
@@ -4509,10 +4532,14 @@
                 const plugTxt = `${plugs.length} plug${plugs.length !== 1 ? 's' : ''} — ${_nrgPlugSummary(plugs)}`;
                 m.bindTooltip(`${e.label}<br><span class="nrg-tip-sub">NRG2fly · ${isConstruction ? 'Under construction — ' : ''}${plugTxt}</span>`,
                     { direction: 'top', offset: [0, -44], className: 'nrg-tip' });
+                const tap = _airportAt(e.lat, e.lon);
+                if (tap) _bindApCard(m, tap);   // teardrop covers the dot — the card must still open
                 return m;
             }
             const m = L.marker([e.lat, e.lon], { pane: 'teardropPane' });   // standard blue pin
             m.bindTooltip(e.label, { direction: 'top' });
+            const ap = _airportAt(e.lat, e.lon);
+            if (ap) _bindApCard(m, ap);
             return m;
         }
         // Redraw the route markers from _routeEndpoints + the toggle. Per the model:
@@ -5263,7 +5290,8 @@
                 allowedIdents: new Set(Object.keys(nrgChargerDb || {})),
                 planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate,
                                     runway_req: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).runway_req,      // landability gate — catalog-sourced, trips don't persist it
-                                    type: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).type }),               // climb-model gate (wing-borne vs powered-lift) — same sourcing
+                                    type: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).type,                  // climb-model gate (wing-borne vs powered-lift) — same sourcing
+                                    range_incl_reserves: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).range_incl_reserves }),   // reserves already in the range — no landing-reserve build-down
                 availableRangeKm: (plane) => _availableRangeKm(plane),
                 routingOptions: _routingOptions(),   // soft Prefer bias — stop choice, never feasibility
             };

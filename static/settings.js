@@ -108,9 +108,13 @@ window.CNSSettings = (function () {
      *  values in the catalog. Use this for fleet-wide what-if analysis. The
      *  catalog values stay in the JSON as documentation of published per-
      *  aircraft POH limits but no longer change the math.
-     *  (Plane argument retained for forward-compat if we re-introduce a
-     *  per-aircraft override path later.) */
-    function usableFraction(_plane) {
+     *
+     *  EXCEPTION (Notion 'Range inc. reserves' checkbox → range_incl_reserves):
+     *  the profile's catalog range is already the USABLE range — the reserves
+     *  are flown off in the published figure, so applying the landing-reserve
+     *  build-down again would double-count. Those aircraft always get 1.0. */
+    function usableFraction(plane) {
+        if (plane && plane.range_incl_reserves) return 1.0;
         const s = loadAll().landingReserve;
         if (!s.enabled) return 1.0;
         return Math.max(0.05, Math.min(1.0, 1.0 - s.minLandingSoc));

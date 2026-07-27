@@ -205,5 +205,13 @@ test('activeFlags reports alternateReserve + anyOn', () => {
   assert.equal(f.anyOn, true);
 });
 
+test('usableFraction: range_incl_reserves plane always gets 1.0 (no double reserve)', () => {
+  const { S } = loadSettings();
+  S.save({ landingReserve: { enabled: true, minLandingSoc: 0.20 } });
+  assert.equal(S.usableFraction({ range_incl_reserves: true }), 1.0);   // reserves already flown off the catalog range
+  assert.equal(S.usableFraction({}), 0.8);                              // everyone else keeps the build-down
+  assert.equal(S.usableFraction(null), 0.8);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
