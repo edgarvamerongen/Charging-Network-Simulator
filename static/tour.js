@@ -51,19 +51,8 @@ window.CNSTour = (function () {
         document.getElementById('charger').value = 'dc_250';
         document.getElementById('charger').dispatchEvent(new Event('change'));
         document.getElementById('freqN').value = 1;
-        // "Plan with charging stops" must START OFF so the tour can reveal it at
-        // its dedicated step — the operator then sees the natural progression:
-        // first the over-range warning (the Beta can't reach Munich direct
-        // under the applied 20% reserve + SID/STAR padding), then the toggle flips on and
-        // the planner adds the stop. The page's own _applyDefaultFlight() enables
-        // the toggle on load and planReset does NOT clear it, so we explicitly
-        // switch it back off here — otherwise the route is already split before
-        // the user reaches the toggle, and steps 6 + 10 read as stale.
-        const stopsToggle = document.getElementById('withStops');
-        if (stopsToggle && stopsToggle.checked) {
-            stopsToggle.checked = false;
-            stopsToggle.dispatchEvent(new Event('change'));
-        }
+        // Charging stops are always planned now (the on/off toggle is retired), so
+        // the demo route arrives pre-split — the Suggested-route step narrates it.
         if (typeof pickAirport === 'function') {
             pickAirport('origin', lelystad);
             pickAirport('destination', munich);
@@ -320,7 +309,7 @@ window.CNSTour = (function () {
             // 6. Trajectory pill
             {
                 element: '#trajInfo',
-                popover: { title: 'Trajectory', description: 'The straight-line distance between Departure and Destination. If it\'s further than the chosen aircraft can fly on one charge, this turns into an over-range warning, your cue to plan charging stops.', side: 'right' },
+                popover: { title: 'Trajectory', description: 'The straight-line distance between Departure and Destination. If it\'s further than the chosen aircraft can fly on one charge, the planner splits the trip into legs through charging stops — you\'ll see the suggested route in a moment.', side: 'right' },
             },
             // 7. Trip type
             {
@@ -354,17 +343,11 @@ window.CNSTour = (function () {
                 onHighlightStarted: async () => { await _openModelSettings(); },
                 onDeselected: async () => { await _closeModelSettings(); },
             },
-            // 10. Plan with charging stops — toggle it ON here so the user watches
-            // the suggested route appear in the next step.
-            {
-                element: '.stops-toggle-row',
-                popover: { title: 'Charging stops', description: 'Switching this on lets the planner split an over-range trip into legs through intermediate airports. We are turning it on now, and a charging stop appears for the Beta Alia\'s Lelystad → Munich run. On routes the aircraft can fly direct, the toggle switches itself back off — no stops needed.', side: 'right' },
-                onHighlightStarted: async () => { await _ensureStopsOn(); },
-            },
-            // 11. Suggested route — the stop the applied factors forced.
+            // 10. Suggested route — charging stops are always planned (the old on/off
+            // toggle is retired), so this step carries the whole splitting story.
             {
                 element: '#stopsSection',
-                popover: { title: 'Suggested route', description: 'The planner split the trajectory into legs through an intermediate airport (shortest-path A*). The <strong>Prefer</strong> dropdown biases which airport sizes it favours when picking stops. Each row shows the leg distance; over-range legs would flag red. Drag the ≡ handle to reorder a manual stop; × removes one. More airport types are under Options, top-right.', side: 'right' },
+                popover: { title: 'Suggested route', description: 'Over-range trips split automatically into legs through intermediate airports (shortest-path A*) — here a charging stop appears for the Beta Alia\'s Lelystad → Munich run; routes the aircraft can fly direct show no stops. The <strong>Prefer</strong> dropdown biases which airport sizes the planner favours. Each row shows the leg distance; over-range legs would flag red. Drag the ≡ handle to reorder a manual stop; × removes one. More airport types are under Options, top-right.', side: 'right' },
                 onHighlightStarted: async () => { await _ensureStopsOn(); },
             },
             // 12. Expected frequency

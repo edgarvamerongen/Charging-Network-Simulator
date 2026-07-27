@@ -1517,15 +1517,8 @@
         .trip-seg-btn:hover { color: var(--ink); }
         .trip-seg-btn.active { background: var(--brand-ink); color: #fff; }
 
-        /* Charging-stops toggle + advanced section + suggested route list */
-        .stops-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 8px; flex-wrap: wrap; }   /* narrow rail: the settings pill drops below the toggle instead of cramming */
-        /* `.field > label` (block + uppercase, for field captions) would override the
-           switch's flex layout and shout the label — restore the switch pattern here. */
-        .field > .stops-switch {
-            display: inline-flex; align-items: center; margin-bottom: 0;
-            font-size: .85rem; font-weight: 600; color: var(--ink);
-            text-transform: none; letter-spacing: normal;
-        }
+        /* Advanced section + suggested route list (the charging-stops toggle is
+           retired — stops are always planned; #withStops is a hidden checkbox). */
         /* "+ Add stop" link between Departure and Destination inputs. Small,
            ghost-style affordance — doesn't compete with the primary form. */
         /* Right-aligned so Departure / Destination read as a single unit
@@ -1610,6 +1603,8 @@
             transition: background .15s, color .15s;
         }
         .modelset-btn:hover { background: rgba(43,47,90,.08); color: var(--ink); }
+        .panel-head-tools { display: inline-flex; align-items: center; gap: 4px; }
+        .panel-head-tools .modelset-btn { padding: 3px 7px; }   /* icon-only in the header — the gear + badge carry it */
         .modelset-btn .gear { font-size: 1.15rem; line-height: 1; opacity: .85; position: relative; top: 1px; }  /* optical-centre the ⚙ glyph (sits high in its box) against the label */
         .modelset-btn .model-badge {
             position: absolute; top: -4px; right: -2px; margin: 0;
@@ -1791,7 +1786,16 @@
         <section class="panel">
             <div class="panel-head">
                 <h2 class="panel-title">Create a route</h2>
-                <span class="est-pill" title="All calculated figures are rough estimates, rounded up for planning headroom.">Estimates</span>
+                <span class="panel-head-tools">
+                    <span class="est-pill" title="All calculated figures are rough estimates, rounded up for planning headroom.">Estimates</span>
+                    <!-- Model settings trigger (gear + active-factor count): same modal as
+                         the Demand Calculator — model factors are global, so the control
+                         lives in the panel header, not among per-route fields. -->
+                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Model settings — model factors cascade through the planner, result panel and demand calculator" aria-label="Model settings">
+                        <span class="gear" aria-hidden="true">⚙</span>
+                        <span id="planModelBadge" class="model-badge d-none">0</span>
+                    </button>
+                </span>
             </div>
             <form id="simForm">
                 <div class="form-scroll">
@@ -1887,21 +1891,12 @@
                     <p id="circularHelp" class="est-note mb-0 mt-1 d-none">Aircraft flies a closed loop: Departure → stop(s) → back to Departure. Add at least one stop — the last stop is the loop's far point. For a simple there-and-back, pick Return.</p>
                 </div>
 
-                <!-- Charging stops: when on, an over-range route is auto-split into legs
-                     through intermediate airports (A* shortest-path with preference bias). -->
-                <div class="field stops-toggle-row">
-                    <label class="switch stops-switch">
-                        <input type="checkbox" id="withStops">
-                        <span>Charging stops</span>
-                    </label>
-                    <!-- Icon-only Model settings trigger (gear + active-factor count):
-                         same modal as the Demand Calculator — operators can tweak
-                         model factors while planning. -->
-                    <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Open Model settings — model factors cascade through the planner and result panel">
-                        <span class="gear" aria-hidden="true">⚙</span> Model settings
-                        <span id="planModelBadge" class="model-badge d-none">0</span>
-                    </button>
-                </div>
+                <!-- Charging stops are ALWAYS planned: an over-range route is auto-split
+                     into legs through intermediate airports (A* shortest-path with
+                     preference bias). The on/off switch is retired — the checkbox stays
+                     in the DOM, hidden and permanently checked, because the planner,
+                     share-links and the tour key off it; no code path unchecks it. -->
+                <input type="checkbox" id="withStops" checked class="d-none">
                 <div id="stopsSection" class="stops-section d-none">
                     <button type="button" id="stopsHeadBtn" class="stops-head" aria-expanded="true" title="Collapse / expand the route">
                         <span class="stops-title">Suggested route</span>
@@ -2907,11 +2902,8 @@
         // Run the planner end-to-end. Reads manual stops from the form
         // fields and fills any over-range gap between them with auto-stops
         // (runs CNSRouting.planRoute once per segment, n−1 times for n
-        // waypoints). When the toggle is off it's a direct flight; we still
-        // validate so plannedLegIssues reflects current Model settings.
-        // True only while the recompute triggered by the user's own toggle-on click runs
-        // (set/cleared in the withStops change handler) — gates the no-stops auto-off.
-        let _stopsUserToggle = false;
+        // waypoints). Charging stops are always planned — the old toggle is a
+        // hidden, permanently-checked checkbox (see the markup note).
         function recomputeRoute() {
             plannedStops = []; closingStops = []; plannedError = null; plannedLegIssues = [];
             plannedSource = 'auto';
@@ -2968,16 +2960,8 @@
                 if (seg.error) { if (!plannedError) plannedError = seg.error; }
                 else closingStops = (seg.stops || []).map(s => ({ ...s, _auto: true }));
             }
-            // Direct leg fits the range and the user pinned no stops → charging stops are
-            // moot, so the toggle switches itself off and reads as the answer ("no charging
-            // stops on this route"). NOT when the user just flipped it on themselves
-            // (_stopsUserToggle) — snapping back inside their own click reads as broken.
-            // Forcing a stop anyway still works via the map's "Add as stop". Circular
-            // keeps the toggle on regardless: the closing leg always needs planning.
-            if (!_stopsUserToggle && manual.length === 0 && plannedStops.length === 0 && !_isCircularTrip()) {
-                const tg = document.getElementById('withStops');
-                if (tg.checked) { tg.checked = false; }
-            }
+            // (The old no-stops auto-off is gone with the visible toggle: a route that
+            // fits the range simply shows "Direct flight — no stops needed".)
             validateRoute();
             renderStops();
         }
@@ -3292,23 +3276,12 @@
         // none yet, planner auto-suggests). OFF ⇒ clear plannedStops, render
         // the chain as a direct flight. Form fields persist either way so
         // the user can flip back without losing what they typed.
-        document.getElementById('withStops').addEventListener('change', (e) => {
-            if (e.target.checked) {
-                // Suppress the no-stops auto-off for THIS recompute: it runs synchronously
-                // inside the user's own click, and snapping the switch straight back off
-                // reads as a dead control. They get the "Direct flight — no stops needed"
-                // panel instead; the auto-off applies again on route/settings changes.
-                _stopsUserToggle = true;
-                _syncManualStops();
-                if (plannedStops.length) refreshAfterEdit();
-                else                     recomputeRoute();
-                _stopsUserToggle = false;
-            } else {
-                plannedStops = []; plannedSource = 'auto'; plannedError = null; plannedLegIssues = [];
-                renderStops();
-            }
-            // Refresh the trajectory pill — its over-range warning depends
-            // on stops mode being off, so toggling either way needs a re-render.
+        document.getElementById('withStops').addEventListener('change', () => {
+            // The box is permanently checked; this handler only serves legacy
+            // synthetic dispatches (setStop / addStopLink / circular forcing).
+            _syncManualStops();
+            if (plannedStops.length) refreshAfterEdit();
+            else                     recomputeRoute();
             if (typeof updateTrajectory === 'function') updateTrajectory();
             drawLiveRoute();
         });
@@ -5177,17 +5150,14 @@
             const isTraining = e.target.value === 'training';
             const isCircular = e.target.value === 'circular';
             const destField = document.getElementById('destinationField');
-            const stopsRow  = document.getElementById('withStops')?.closest('.field');
             const help      = document.getElementById('trainingHelp');
             const destInput = document.getElementById('destination');
             // Hide ALL stops-related affordances in training mode — a training
             // flight loops around a single airport, so the destination, the
-            // + Add stop link, the stops container, the suggested route panel
-            // and the model-settings toggle row are all irrelevant. Stop
-            // FIELDS aren't destroyed (just hidden) so switching back to
-            // one-way/retour restores the user's draft.
+            // + Add stop link, the stops container and the suggested route
+            // panel are all irrelevant. Stop FIELDS aren't destroyed (just
+            // hidden) so switching back to one-way/retour restores the draft.
             destField.classList.toggle('d-none', isTraining || isCircular);
-            if (stopsRow) stopsRow.classList.toggle('d-none', isTraining);
             document.querySelector('.addstop-link-row')?.classList.toggle('d-none', isTraining);
             document.getElementById('stopsContainer')?.classList.toggle('d-none', isTraining);
             document.getElementById('stopsSection')?.classList.toggle('d-none', isTraining);
