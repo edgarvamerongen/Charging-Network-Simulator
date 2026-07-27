@@ -6,9 +6,9 @@ NET climb-minus-descent overhead (§2.1); saturation distance is **inferred per
 aircraft as 15% of catalog range** (`climb_sat_frac`), not a fixed km value and
 not a data column (§3.1); **training flights are excluded** — they keep today's
 treatment (§5); **powered-lift/eVTOL aircraft are excluded** — they stay linear
-until a per-aircraft override exists (§5). Open: whether STOL rides with CTOL
-(memo recommends yes) or is excluded with the eVTOLs (§5). Build is a separate,
-later approval.
+until a per-aircraft override exists (§5); **STOL rides with CTOL** — the gate
+is wing-borne vs powered-lift, not takeoff distance (§5). **Build approved
+2026-07-27** — knobs live at 10% / 15%.
 
 ## 1. Problem
 
@@ -270,14 +270,11 @@ physics, small enough not to upend existing routes.
   per-flight rather than distance-ramped — every §2 assumption breaks. They
   stay on the linear model until they get the per-aircraft override reserved
   in §7 (gate off the catalog `type` field).
-  **Open: does STOL ride with CTOL or with the eVTOLs?** The memo recommends
-  WITH CTOL: a blown-lift STOL still climbs to cruise altitude wing-borne —
-  the takeoff RUN is short, not the climb, and potential energy is
-  path-independent (a steeper climb to the same altitude costs the same
-  m·g·h; blowing adds a little climb-out power, it removes none). Excluding
-  STOL would under-charge exactly the short-hop specialists in the 50–150 km
-  regime where §4 shows the linear model is most wrong. Softener either way:
-  several STOL rows are hybrids, where the knob self-neutralizes.
+  **RULED: STOL rides with CTOL.** A blown-lift STOL still climbs to cruise
+  altitude wing-borne — the takeoff RUN is short, not the climb, and potential
+  energy is path-independent (a steeper climb to the same altitude costs the
+  same m·g·h; blowing adds a little climb-out power, it removes none). The
+  gate is wing-borne vs powered-lift, not takeoff distance.
 - **Battery-less hybrids**: not applicable — the engine already short-circuits
   them to zero charge energy; `E_max = pct × battery` is naturally 0. Hybrids
   that DO carry a battery get the ramp on that battery like anyone else; with
