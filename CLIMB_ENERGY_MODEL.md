@@ -1,7 +1,11 @@
 # Climb-energy model — from linear ePerKm to a phase-aware Rung 1
 
-Research memo, 2026-07-27. Status: **proposal for review — no code changed yet.**
-Decision owner: Edgar. Build is a separate, later approval.
+Research memo, 2026-07-27. Status: **parameters ruled — build not yet approved.**
+Rulings (Edgar, 2026-07-27): `climb_overhead_pct` = **10%**, interpreted as the
+NET climb-minus-descent overhead (§2.1); saturation distance is **inferred per
+aircraft as 15% of catalog range** (`climb_sat_frac`), not a fixed km value and
+not a data column (§3.1). Open: training-block treatment (§5). Build is a
+separate, later approval.
 
 ## 1. Problem
 
@@ -38,26 +42,56 @@ missing **Rung 1**.
 
 ```
 E(leg) = ePerKm_cruise × d  +  E_max × min(1, d / d_sat)
+d_sat  = climb_sat_frac × range_km          (per aircraft, inferred)
 ```
 
 Two global knobs (Model settings; per-aircraft refinement is a later step):
 
-| knob | meaning | recommended default | slider range |
+| knob | meaning | **ruled value** | slider range |
 |---|---|---|---|
-| `climb_overhead_pct` | full climb-to-cruise-altitude overhead, as % of battery: `E_max = pct × battery_kwh` | **10%** (§3) | 0–20% (0% = today's linear model, exact) |
-| `climb_sat_km` | sector length at which the aircraft reaches its optimal cruise altitude | **60 km** | 20–120 km |
+| `climb_overhead_pct` | NET climb-minus-descent overhead, as % of battery: `E_max = pct × battery_kwh` (§2.1) | **10%** | 0–20% (0% = today's linear model, exact) |
+| `climb_sat_frac` | saturation distance as a fraction of catalog range: `d_sat = frac × range_km` (§3.1) | **15%** | 5–30% |
 
 **Why this shape.**
 - Below `d_sat`, climb cost scales with distance: a 20 km hop cruises low and
   pays only a fraction of a full climb (short flights climb less — the ruled
   requirement). Above `d_sat`, each leg pays exactly one full climb.
-- **Calibration anchor:** `ePerKm_cruise = (battery − E_max·min(1, range/d_sat)) / range`,
-  so a full-catalog-range mission consumes exactly one battery. Catalog ranges
-  and the CE Delft-derived anchors (Elysian 800 km IFR-effective, etc.) stay
-  true by construction — nothing silently loses headline range.
-- Descent give-back (idle/steep descent) and the climb drag surplus roughly
-  offset at this fidelity; both are absorbed into the calibration rather than
-  modeled separately.
+- `d_sat` scales with the aircraft (a Velis saturates at ~13 km, an E9X at
+  ~150 km) with zero new data, because catalog range proxies aircraft scale —
+  see §3.1 for why this beats both a fixed km value and a data column.
+- **Calibration anchor:** since `d_sat < range` always,
+  `ePerKm_cruise = (battery − E_max) / range` exactly — a full-catalog-range
+  mission consumes exactly one battery. Catalog ranges and the CE Delft-derived
+  anchors (Elysian 800 km IFR-effective, etc.) stay true by construction —
+  nothing silently loses headline range.
+
+### 2.1 Descent & landing (why there is no third term)
+
+Descent is close to free for fixed wings: the aircraft spends the potential
+energy banked in climb, at near-idle power (systems only). A Velis gliding from
+3,000 ft at ~15:1 covers ~13 km for ~0.3 kWh where cruise would charge ~2.3 kWh.
+Structurally this needs **no extra term**: a descent credit would enter as
+`− E_desc × min(1, d/d_sat)` — the altitude you descend from is the altitude
+you climbed to — which is algebraically identical to lowering `E_max`. Hence
+the ruling: **`E_max` is the NET climb-minus-descent overhead.**
+
+The refund is never full, which is why `E_max` stays well above zero: climb is
+flown at Vy off the best-range speed at high power; real descents are
+constrained (ATC steps, pattern work, speed limits, spoilers/flaps burn energy
+as drag); and the final approach is flown *with* power in a draggy
+configuration. Gross climb estimates of 8–11% of battery (§3) net out to
+roughly 5–8% with realistic recovery — keeping the knob at 10% is a deliberate
+conservative bias, appropriate for an infrastructure-sizing tool where
+undersizing chargers is the expensive error (and the anchor guarantees the
+conservatism never inflates full-range missions).
+
+Two boundaries:
+- **Approach/landing maneuvering is already modeled elsewhere** — the engine
+  charges `sidStarPaddingKm` (default 10 km) per leg for terminal work. The
+  climb knob must not include it (single-count doctrine, performance-engine.md).
+- **eVTOL exception:** rotorcraft descent/hover-landing is NOT cheap (hover is
+  a peak-power phase). eHang-style aircraft need a per-aircraft `E_max`
+  override in the later refinement; the global net knob is a fixed-wing story.
 
 **Rejected forms.**
 - *"X% of battery in the first Y% of the flight"* (the original strawman):
@@ -80,10 +114,12 @@ Two global knobs (Model settings; per-aircraft refinement is a later step):
 - At `pct = 0` the model reduces exactly to today's engine — a clean default-off
   toggle and golden-neutrality gate for the build.
 
-## 3. Grounding — where 10% and 60 km come from
+## 3. Grounding — where 10% and the 15%-of-range inference come from
 
 Three independent estimates of the full-climb overhead converge on ~8–11% of
-battery (computed by the scratch script, §6):
+battery (computed by the scratch script, §6). These are GROSS climb figures;
+netted against descent give-back they land at ~5–8%, so the ruled 10% carries
+a deliberate sizing-side margin (§2.1):
 
 | method | aircraft class | overhead | % of battery | confidence |
 |---|---|---|---|---|
@@ -112,31 +148,52 @@ Sources:
   IFR-effective range (cns-perf planes.json); [Elysian public specs](https://newatlas.com/aircraft/elysian-electric-airliner/)
   (800–1,000 km design missions, batteries-in-wing, turbine reserve system).
 
-`d_sat = 60 km` is a class compromise, estimated: a Velis reaches pattern/cruise
-altitude within ~10 km; an E9X-class airliner needs ~80 km of track to reach
-FL200. 60 km means a 20 km hop pays one third of a climb and anything beyond
-60 km pays exactly one — refined per aircraft later (Notion columns) if wanted.
+### 3.1 Why `d_sat` is inferred from range (ruled), not a fixed km or a column
 
-## 4. Worked examples (pct = 10%, d_sat = 60 km)
+Saturation distance is strongly aircraft-dependent — climb distance to optimal
+altitude plus the descent back down:
+
+| aircraft class | optimal altitude | true d_sat ≈ | fixed 60 km error | `0.15 × range` gives |
+|---|---|---|---|---|
+| Velis Electro (87.5 km) | ~3,000 ft | ~23 km | 2.6× too long | 13 km |
+| Beta Alia-class (500 km) | ~8,000 ft | ~65 km | about right | 75 km |
+| E9X-class (1,000 km) | ~FL200 | ~200 km | 3.3× too short | 150 km |
+
+A fixed distance fits only the middle class: it under-charges Velis circuit
+hops (which genuinely pay a near-full climb by 20 km) and over-charges E9X
+mid-sectors (billed a full FL200 climb they never make). The inference
+`d_sat = 15% × range_km` works physically, not just conveniently: bigger,
+faster, longer-range aircraft cruise higher, and climb+descent track distance
+scales with that altitude times speed-over-climb-rate — all of which grow with
+aircraft scale, which catalog range proxies. Every class lands within ~1.5× of
+its true value, with zero new data entry.
+
+A per-aircraft Notion column was considered and deferred: no published source
+exists to fill it, so today it would be invented row by row — the scaling law
+invents more consistently. The standard refinement path stays open: inferred
+default now, optional `climb_sat_km` override column later where a real figure
+is learned (the eHang will need one anyway, §2.1).
+
+## 4. Worked examples (ruled: pct = 10%, d_sat = 15% of range)
 
 Scratch script output — anchor `E(range) = battery` holds exactly in each case.
 
-**Velis Electro** (22 kWh, 87.5 km): linear 0.2514 kWh/km → cruise 0.2263 + 2.2 kWh climb cap
+**Velis Electro** (22 kWh, 87.5 km): linear 0.2514 kWh/km → cruise 0.2263 + 2.2 kWh climb cap, d_sat 13.1 km
 
 | leg | linear | new | Δ |
 |---|---|---|---|
-| 20 km | 5.03 kWh | 5.26 kWh | **+4.6%** |
-| 40 km | 10.06 kWh | 10.52 kWh | **+4.6%** |
+| 20 km | 5.03 kWh | 6.73 kWh | **+33.8%** |
+| 40 km | 10.06 kWh | 11.25 kWh | **+11.9%** |
 | 87.5 km (full range) | 22.00 kWh | 22.00 kWh | 0% |
 
-The Velis barely moves: its catalog range (87.5 km) is close to `d_sat`, so
-the linear model was already averaging in nearly a full climb.
+A 20 km circuit hop now pays a full (netted) climb — consistent with what
+flight schools actually see, and with the POH endurance spread.
 
-**Beta Alia** (225 kWh, 500 km): linear 0.4500 kWh/km → cruise 0.4050 + 22.5 kWh climb cap
+**Beta Alia** (225 kWh, 500 km): linear 0.4500 kWh/km → cruise 0.4050 + 22.5 kWh climb cap, d_sat 75 km
 
 | leg | linear | new | Δ |
 |---|---|---|---|
-| 50 km | 22.5 kWh | 39.0 kWh | **+73%** |
+| 50 km | 22.5 kWh | 35.3 kWh | **+57%** |
 | 150 km | 67.5 kWh | 83.3 kWh | **+23%** |
 | 400 km | 180.0 kWh | 184.5 kWh | +2.5% |
 | 500 km (full range) | 225.0 kWh | 225.0 kWh | 0% |
@@ -150,14 +207,14 @@ exactly the regional-feeder missions CNS models most.
 | route | linear | new | climbs paid |
 |---|---|---|---|
 | direct | 154 kWh | 161 kWh | 1.00 |
-| 5-stop chain | 181 kWh | **283 kWh** | 5.37 |
+| 5-stop chain | 181 kWh | **272 kWh** | 4.86 |
 
 Under the linear model the chain costs +17% over direct; phase-aware it costs
-+75% — each stop's climb finally lands on the energy books, which feeds
++69% — each stop's climb finally lands on the energy books, which feeds
 straight into charging demand and dwell times at the stop airports.
 
 **Reach impact** (usable = 70% of battery, i.e. min-SoC 30): max leg shrinks
-modestly — Velis 61.2 → 58.6 km (−4.4%), Beta 350.0 → 333.3 km (−4.8%).
+modestly — Velis 61.2 → 58.3 km (−4.8%), Beta 350.0 → 333.3 km (−4.8%).
 Full-battery range is unchanged by the anchor; only reserve-limited legs
 shorten, because the climb overhead can't be diluted below `d_sat`… honest
 physics, small enough not to upend existing routes.
@@ -193,9 +250,10 @@ sensitivity; the model is two lines of arithmetic.
 ## 7. Implementation appendix (for the later build — NOT this effort)
 
 1. **Engine seam** — replace flight-model.js:141 with the two-term formula
-   behind `CNSSettings.climbOverheadPct()` / `climbSatKm()` (new knobs,
+   behind `CNSSettings.climbOverheadPct()` / `climbSatFrac()` (new knobs,
    settings-key bump; scheduler cache stamp `_settingsStamp` at
-   scheduler.js:110 must include them or DES goes stale).
+   scheduler.js:110 must include them or DES goes stale). `d_sat` computes
+   per plane inside the engine as `climbSatFrac() × plane.range_km`.
 2. **Duplicate formula sites** — `_legEst` (index.html ~:4380), spec-card
    usage tile (~:3858), calc-audit copy (~:4933–4963; user-facing formula text
    needs a rewrite, not a patch).
@@ -212,6 +270,8 @@ sensitivity; the model is two lines of arithmetic.
 6. **Mobile** — adopts automatically wherever it uses the shared engine;
    its sim.py-fed displays stay raw-linear until the mobile lane picks up the
    seam (same situation as PR #30).
-7. **Later refinement path** — per-aircraft `E_max`/`d_sat` via two Notion
-   columns with class defaults, or as `measurements[]` entries under PR #30's
-   schema (the `altitude_ft` condition key already exists for exactly this).
+7. **Later refinement path** — optional per-aircraft OVERRIDES of the inferred
+   defaults (`climb_overhead_kwh`, `climb_sat_km`) via Notion columns where a
+   real figure is learned — the eHang's hover-landing economics first (§2.1) —
+   or as `measurements[]` entries under PR #30's schema (the `altitude_ft`
+   condition key already exists for exactly this).
