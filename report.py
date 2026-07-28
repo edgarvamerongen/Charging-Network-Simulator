@@ -884,8 +884,13 @@ def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360, iso_c
     (webp_bytes, credit) or (None, '')."""
     ident = (ident or '').strip()
     safe = ident if _SAFE_IDENT_RE.match(ident) else ''
-    thumb = os.path.join(_PHOTO_CACHE_DIR, f'{safe}_thumb.webp') if safe else None
-    credf = os.path.join(_PHOTO_CACHE_DIR, f'{safe}_thumb.txt') if safe else None
+    # Cache per size: map hovers at the default 360 keep their historical
+    # '<ICAO>_thumb.*' names; other callers (the quickscan hero at 1100) get
+    # '<ICAO>_thumb<box>.*' — without this, whichever size was built first
+    # would be served to every caller regardless of the box they asked for.
+    suffix = '_thumb' if box == 360 else f'_thumb{int(box)}'
+    thumb = os.path.join(_PHOTO_CACHE_DIR, f'{safe}{suffix}.webp') if safe else None
+    credf = os.path.join(_PHOTO_CACHE_DIR, f'{safe}{suffix}.txt') if safe else None
 
     def _read(p):
         try:

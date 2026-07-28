@@ -107,7 +107,10 @@ app.config.update(
 # card + icons after being bounced to /login — it serves only brand/catalog
 # images, never user data.
 _PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics', 'plane_images',
-                     'embed', 'api_import', 'sync_catalog'}
+                     'embed', 'api_import', 'sync_catalog',
+                     # Quick Scan (static page on nrg2fly.com — can't log in).
+                     # Both are per-IP rate-limited; see their route comments.
+                     'public_airport_search', 'public_airport_photo'}
 
 # In-memory brute-force throttle for the login form. Per-worker (not shared
 # across gunicorn workers), which is fine for slowing guessing of a single
@@ -691,6 +694,127 @@ def airport_photo(ident):
     if credit:
         resp.headers['X-Photo-Credit'] = quote(credit)   # may carry non-ASCII (—, ©)
     return resp
+
+
+# ---- public quickscan endpoints ----------------------------------------------
+# The Quick Scan on nrg2fly.com is a static page: it cannot log in, so it gets
+# two deliberately narrow public endpoints instead of a session. Both are
+# per-IP rate-limited (the reason the authed photo route is gated is to bound
+# outbound Wikimedia/Esri fetches — the limiter plus the on-disk photo cache
+# keeps that bound for anonymous callers too) and answer with CORS only for
+# the nrg2fly.com origins that actually host the scan.
+
+_QS_ALLOWED_ORIGINS = ('https://nrg2fly.com', 'https://www.nrg2fly.com')
+_QS_RL_LOCK = threading.Lock()
+_qs_rl = {}                                   # (ip, bucket) -> (count, window_start)
+
+
+def _qs_rate_limited(bucket, limit, window_s=60):
+    """True when this client should be throttled. Same in-memory per-worker
+    model as the login throttle — coarse, but enough to stop a loop from
+    hammering the photo builder; the disk cache absorbs repeats anyway."""
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '?').split(',')[0].strip()
+    now = time.time()
+    with _QS_RL_LOCK:
+        count, start = _qs_rl.get((ip, bucket), (0, now))
+        if now - start > window_s:
+            count, start = 0, now
+        _qs_rl[(ip, bucket)] = (count + 1, start)
+        return count >= limit
+
+
+def _qs_cors(resp):
+    origin = request.headers.get('Origin', '')
+    if origin in _QS_ALLOWED_ORIGINS:
+        resp.headers['Access-Control-Allow-Origin'] = origin
+        resp.headers['Vary'] = 'Origin'
+    return resp
+
+
+_qs_search_rows = None                        # built once, on the first search
+
+
+def _qs_search_index():
+    """Compact lowercase search rows over the already-loaded airports list.
+    Built lazily once per worker; ~8k small dicts."""
+    global _qs_search_rows
+    if _qs_search_rows is None:
+        rows = []
+        for a in simulator.get_all_airports():
+            if not a.get('ident') or a.get('latitude_deg') in (None, ''):
+                continue
+            rows.append({
+                'ident': a['ident'],
+                'name': a.get('name') or '',
+                'muni': a.get('municipality') or '',
+                'type': a.get('type') or '',
+                'lat': a.get('latitude_deg'),
+                'lon': a.get('longitude_deg'),
+                '_name': (a.get('name') or '').lower(),
+                '_muni': (a.get('municipality') or '').lower(),
+                '_ident': (a.get('ident') or '').lower(),
+                '_iata': (a.get('iata_code') or '').lower(),
+            })
+        _qs_search_rows = rows
+    return _qs_search_rows
+
+
+@app.route('/api/public/airport-search', methods=['GET'])
+def public_airport_search():
+    q = (request.args.get('q') or '').strip().lower()
+    if len(q) < 2:
+        return _qs_cors(jsonify([]))
+    if _qs_rate_limited('search', limit=120):          # type-ahead fires per keystroke
+        resp = jsonify({'error': 'rate limited'})
+        resp.status_code = 429
+        return _qs_cors(resp)
+
+    scored = []
+    for r in _qs_search_index():
+        if q == r['_ident'] or q == r['_iata']:
+            rank = 0
+        elif r['_name'].startswith(q):
+            rank = 1
+        elif any(w.startswith(q) for w in r['_name'].split()):
+            rank = 2
+        elif q in r['_name'] or q in r['_muni']:
+            rank = 3
+        else:
+            continue
+        scored.append((rank, _TYPE_RANK.get(r['type'], 3), r['_name'], r))
+    scored.sort(key=lambda t: t[:3])
+
+    out = [{'ident': r['ident'], 'name': r['name'], 'municipality': r['muni'],
+            'type': r['type'], 'lat': r['lat'], 'lon': r['lon']}
+           for _, _, _, r in scored[:8]]
+    resp = _qs_cors(jsonify(out))
+    resp.headers['Cache-Control'] = 'public, max-age=3600'   # keyed per q, safe to share
+    return resp
+
+
+@app.route('/api/public/airport-photo/<ident>', methods=['GET'])
+def public_airport_photo(ident):
+    # Photo cold-builds do real work (Wikidata/Esri fetch + render): tighter cap.
+    if _qs_rate_limited('photo', limit=15):
+        return _qs_cors(Response(status=429))
+    ap = _airport_by_ident(ident)
+    if ap is None:
+        abort(404)
+    # Fixed hero size — no client-controlled dimensions, so the cache can't be
+    # ballooned by size-probing and every viewer shares one cached image.
+    data, credit = report.airport_photo_thumb(
+        ap['ident'], ap.get('name', ''),
+        ap.get('latitude_deg'), ap.get('longitude_deg'), ap.get('type'),
+        box=1100, iso_country=ap.get('iso_country', ''))
+    if not data:
+        if credit == '__busy__':
+            return _qs_cors(Response(status=503, headers={'Retry-After': '2'}))
+        abort(404)
+    resp = Response(data, mimetype='image/webp')
+    resp.headers['Cache-Control'] = 'public, max-age=604800'
+    if credit:
+        resp.headers['X-Photo-Credit'] = quote(credit)   # may carry non-ASCII (—, ©)
+    return _qs_cors(resp)
 
 
 # ---- airport-resident chargers (real-world NRG2FLY install data) -------------
