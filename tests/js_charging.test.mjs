@@ -194,5 +194,49 @@ test('pinning the strongest charger leaves a free bay for the auto flight', () =
   assert.equal(plan.peakPower, 500, 'both distinct bays in use → 400 + 100');
 });
 
+// ---- Rule 1b: multi-charger aircraft (nChargers) ---------------------------
+
+test('nChargers=2 books two distinct bays: combined power, halved time, both in peak', () => {
+  const plan = C.planCharging(
+    [{ id: 'a', power_kw: 400 }, { id: 'b', power_kw: 400 }],
+    [{ name: 'elysian', energy: 800, size: 14000, nChargers: 2 }]);
+  const a = plan.assignments[0];
+  assert.equal(a.power, 800, 'combined 400+400');
+  assert.equal(a.bays, 2);
+  assert.equal(Math.round(a.chargeTimeMin), 60, '800 kWh at 800 kW = 60 min');
+  assert.equal(plan.peakPower, 800, 'both bays count toward peak');
+});
+
+test('nChargers larger than the fleet degrades to the whole fleet, counted once', () => {
+  const plan = C.planCharging(
+    [{ id: 'a', power_kw: 400 }],
+    [{ name: 'elysian', energy: 400, size: 14000, nChargers: 3 }]);
+  const a = plan.assignments[0];
+  assert.equal(a.power, 400, 'one bay installed -> one bay used');
+  assert.equal(a.bays, 1);
+  assert.equal(plan.peakPower, 400);
+});
+
+test('nChargers coexists with a single-charger neighbour (no bay double-booking)', () => {
+  const plan = C.planCharging(
+    [{ id: 'a', power_kw: 400 }, { id: 'b', power_kw: 250 }, { id: 'c', power_kw: 100 }],
+    [{ name: 'elysian', energy: 800, size: 14000, nChargers: 2 },
+     { name: 'velis', energy: 20, size: 22 }]);
+  const ely = plan.assignments[0], vel = plan.assignments[1];
+  assert.equal(ely.power, 650, 'biggest first: 400 + 250 combined');
+  assert.equal(vel.power, 100, 'neighbour lands on the remaining 100 kW bay');
+  assert.equal(plan.peakPower, 750, 'all three bays in use');
+});
+
+test('pinned multi-charger flight claims duplicates of the pinned MODEL only', () => {
+  const plan = C.planCharging(
+    [{ id: 'x', power_kw: 300 }, { id: 'x', power_kw: 300 }, { id: 'y', power_kw: 500 }],
+    [{ name: 'elysian', energy: 600, size: 14000, nChargers: 2, forcedChargerId: 'x' }]);
+  const a = plan.assignments[0];
+  assert.equal(a.power, 600, 'two 300 kW units of the pinned model');
+  assert.equal(a.bays, 2);
+  assert.equal(plan.peakPower, 600, 'the 500 kW bay stays idle');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

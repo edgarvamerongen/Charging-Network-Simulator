@@ -70,6 +70,8 @@ window.CNSReport = (function () {
                 _i: i, name: c.t.planeName,
                 energy: prof ? (CNSFlight.chargeEnergyAt(prof, c) ?? 0) : 0,   // engine charge energy (0 if unresolvable)
                 size: c.t.battery ?? c.t.legEnergy * 2,
+                nChargers: (window.CNSFlight && CNSFlight.nChargers)          // multi-charger aircraft book N bays at once
+                    ? CNSFlight.nChargers((window.PLANES_BY_ID || {})[c.t.planeId] || c.t) : 1,
             };
         });
         const plan = CNSCharging.planCharging(fleet, aircraftList);
@@ -79,7 +81,7 @@ window.CNSReport = (function () {
             const t = c.t;
             const asg = plan.assignments[i];
             const energy = asg.aircraft.energy;
-            const nameplate = asg.charger ? asg.charger.power_kw : 0;
+            const nameplate = asg.power || (asg.charger ? asg.charger.power_kw : 0);   // combined nameplate when N bays are booked
             const battery = t.battery ?? t.legEnergy * 2;
             const cRate = ((window.PLANES_BY_ID || {})[t.planeId] || t).c_rate;
             const power = window.CNSSettings

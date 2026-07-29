@@ -5378,6 +5378,8 @@
                     // forcedChargerId pins this flight to a specific charger (manual-first);
                     // planCharging honours it before its priority heuristic.
                     forcedChargerId: c.t.chargerOverride,
+                    // Multi-charger aircraft (catalog simultaneous_charging) book N bays at once.
+                    nChargers: (window.CNSFlight && CNSFlight.nChargers) ? CNSFlight.nChargers((window.PLANES_BY_ID || {})[c.t.planeId] || c.t) : 1,
                 }));
                 const plan = CNSCharging.planCharging(fleet, aircraftList);
 
@@ -5394,7 +5396,7 @@
                     const energy = asg.aircraft.energy;
                     // Override charging.js's linear time with the optional taper
                     // model. Identity (linear) when the taper toggle is off.
-                    const nameplate = asg.charger ? asg.charger.power_kw : 0;
+                    const nameplate = asg.power || (asg.charger ? asg.charger.power_kw : 0);   // combined nameplate when N bays are booked
                     const battery = t.battery ?? t.legEnergy * 2;
                     const cRate = ((window.PLANES_BY_ID || {})[t.planeId] || t).c_rate;
                     const power = CNSSettings.effectiveChargePower(nameplate, battery, cRate);
