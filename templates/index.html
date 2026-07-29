@@ -1823,11 +1823,11 @@
                         <div class="ps-main">
                             <div class="ps-name ps-id-hidden" id="psName"></div>
                             <div class="reach-row">
-                                <div class="reach-label">Usable reach: <strong id="reachVal">—</strong> of <span id="reachCat">—</span> catalog range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></div>
+                                <div class="reach-label">Usable reach: <strong id="reachVal">—</strong> of <span id="reachCat">—</span> catalog range<span id="reachResv"></span> <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Aircraft whose published range already includes reserves (inc. reserves) skip the landing-reserve deduction — it is already flown off. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></div>
                                 <div class="reach-bar"><div class="reach-fill" id="reachFill"></div></div>
                             </div>
                             <div class="ps-stats">
-                                <span class="ps-stat ps-stat-hide"><strong id="psRange"></strong><span class="ps-stat-l">range</span></span>
+                                <span class="ps-stat ps-stat-hide"><strong id="psRange"></strong><span class="ps-stat-l" id="psRangeL">range</span></span>
                                 <span class="ps-stat ps-stat-hide"><strong id="psBattery"></strong><span class="ps-stat-l">battery</span></span>
                                 <span class="ps-stat ps-stat-hide"><strong id="psSpeed"></strong><span class="ps-stat-l">cruise</span></span>
                                 <span class="ps-stat ps-stat-hide"><strong id="psSeats"></strong><span class="ps-stat-l">seats</span></span>
@@ -3798,6 +3798,10 @@
             const cat = +spec.range_km || 0;
             document.getElementById('reachVal').textContent = (avail == null) ? '—' : fmtDist(avail);
             document.getElementById('reachCat').textContent = cat ? fmtDist(cat) : '—';
+            // Range provenance: with the Notion 'Range inc. reserves' flag the catalog
+            // figure is already USABLE (no landing-reserve build-down) — say which.
+            const resv = document.getElementById('reachResv');
+            if (resv) resv.textContent = cat ? (spec.range_incl_reserves ? ' (inc. reserves)' : ' (excl. reserves)') : '';
             fill.style.width = (cat > 0 && avail != null ? Math.max(0, Math.min(100, avail / cat * 100)) : 0) + '%';
         }
         // ---------- trip-type segmented control ----------
@@ -3845,6 +3849,8 @@
         function _refreshSpecStats(spec) {
             _renderReachBar(spec);   // the bar IS the visible 'available range' — every stat refresh updates it
             document.getElementById('psRange').textContent = (typeof fmtDist === 'function') ? fmtDist(spec.range_km) : (spec.range_km + ' km');
+            const _rl = document.getElementById('psRangeL');
+            if (_rl) _rl.textContent = spec.range_incl_reserves ? 'range · inc. reserves' : 'range · excl. reserves';
             document.getElementById('psBattery').textContent = spec.battery_kwh ? fmtEnergy(spec.battery_kwh) : '—';   // absent = non-charging hybrid
             document.getElementById('psSpeed').textContent = (typeof fmtSpeed === 'function') ? fmtSpeed(spec.speed_kmh) : (spec.speed_kmh + ' km/h');
             document.getElementById('psSeats').textContent = spec.seats != null ? spec.seats : '—';
