@@ -1667,7 +1667,9 @@
         .divert-marker-wrap { background: none; border: none; }
         .divert-marker { width: 14px; height: 14px; border-radius: 50%; background: #7c3aed; border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(124,58,237,.5); cursor: grab; }
         .divert-marker.manual { background: #5b21b6; box-shadow: 0 0 0 2px rgba(124,58,237,.6); }
+        .stops-list .alt-cell { display: inline-flex; gap: 3px; align-items: center; min-width: 0; }
         .stops-list .alt-hint.alt-pick { cursor: pointer; }
+        .stops-retry { display: inline-block; margin-top: 6px; font-size: .72rem; font-weight: 700; color: #fff; background: var(--primary, #e2612e); border: none; border-radius: 6px; padding: 3px 10px; cursor: pointer; }
         .stops-list .alt-hint.alt-reset { cursor: pointer; margin-left: 2px; }
         .stops-list .alt-hint { font-size: .56rem; font-weight: 700; color: #7c3aed; background: rgba(124,58,237,.12); padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; cursor: default; }
         .alt-tip { position: fixed; z-index: 4000; display: none; background: #1f2937; color: #fff; padding: 4px 9px; border-radius: 6px; font-size: .72rem; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.3); }
@@ -2598,7 +2600,9 @@
                           : (full.alternate_km != null ? ' · ' + fmtDist(full.alternate_km) : '');
             const title = `Divert → ${altId}${km}${ov ? ' · manual' : ''} — click, then pick an airport on the map`;
             const reset = ov ? `<span class="alt-hint alt-reset" title="Reset divert to auto" onclick="window._cnsAltReset('${wp.ident}')">↺</span>` : '';
-            return { open: '<strong>', badge: ` <span class="alt-hint alt-pick" data-tip="${title}" tabindex="0" aria-label="${title}" onclick="window._cnsAltPick('${wp.ident}')">alt${ov ? '·m' : ''}</span>${reset}` };
+            // ONE grid cell — the route list is a strict 5-cell grid (step · name ·
+            // alt · size · range); a second loose span shifts every later row.
+            return { open: '<strong>', badge: ` <span class="alt-cell"><span class="alt-hint alt-pick" data-tip="${title}" tabindex="0" aria-label="${title}" onclick="window._cnsAltPick('${wp.ident}')">alt${ov ? '·m' : ''}</span>${reset}</span>` };
         }
         // Lightweight tooltip for the [alt] badge: appended to <body> so the scrollable planner
         // sidebar (overflow-y:auto / x:hidden) can't clip it, and shown INSTANTLY (no native-title delay).
@@ -2840,6 +2844,12 @@
             const full = airportByIdent[ident];
             if (!full || !window.CNSDivertEdit) return;
             CNSDivertEdit.startAltPick({ ident, lat: +full.latitude_deg, lon: +full.longitude_deg });
+        };
+        window._cnsRetryPlan = () => {
+            // Manual escape hatch (ruled): force a fresh plan when the red
+            // no-route error looks wrong — same full path as any user edit.
+            smartReplan();
+            if (typeof drawLiveRoute === 'function') drawLiveRoute();
         };
         window._cnsAltReset = (ident) => {
             delete divertOverrides[ident];
@@ -3178,19 +3188,19 @@
                 const _remedy0 = _noRouteRemedy();
                 switch (_remedy0) {
                     case 'types':
-                        listEl.innerHTML = `<li class="stops-error">${plannedError}${_enableTypesBtnMarkup()}</li>`;
+                        listEl.innerHTML = `<li class="stops-error">${plannedError}${_enableTypesBtnMarkup()} <button type="button" class="stops-retry" onclick="window._cnsRetryPlan()">Retry route</button></li>`;
                         _wireEnableTypesBtn();
                         break;
                     case 'network':
-                        listEl.innerHTML = `<li class="stops-error">${plannedError} <button type="button" id="enableNetworkBtn">Show charger sites</button></li>`;
+                        listEl.innerHTML = `<li class="stops-error">${plannedError} <button type="button" id="enableNetworkBtn">Show charger sites</button> <button type="button" class="stops-retry" onclick="window._cnsRetryPlan()">Retry route</button></li>`;
                         (function() { const b = document.getElementById('enableNetworkBtn'); if (b) b.addEventListener('click', () => { const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
                         break;
                     case 'both':
-                        listEl.innerHTML = `<li class="stops-error">${plannedError} <button type="button" id="enableAllPoolsBtn">Enable all types + network</button></li>`;
+                        listEl.innerHTML = `<li class="stops-error">${plannedError} <button type="button" id="enableAllPoolsBtn">Enable all types + network</button> <button type="button" class="stops-retry" onclick="window._cnsRetryPlan()">Retry route</button></li>`;
                         (function() { const b = document.getElementById('enableAllPoolsBtn'); if (b) b.addEventListener('click', () => { document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } }); const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
                         break;
                     default:
-                        listEl.innerHTML = `<li class="stops-error">No route within range. This aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</li>`;
+                        listEl.innerHTML = `<li class="stops-error">No route within range. This aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve. <button type="button" class="stops-retry" onclick="window._cnsRetryPlan()">Retry route</button></li>`;
                 }
                 return;
             }
@@ -3259,19 +3269,19 @@
                 const _remedy = _noRouteRemedy();
                 switch (_remedy) {
                     case 'types':
-                        hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> ${_enableTypesBtnMarkup()}`;
+                        hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> ${_enableTypesBtnMarkup()} <button type="button" class="stops-retry" onclick="window._cnsRetryPlan()">Retry route</button>`;
                         _wireEnableTypesBtn();
                         break;
                     case 'network':
-                        hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> <button type="button" id="enableNetworkBtn">Show charger sites</button>`;
+                        hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> <button type="button" id="enableNetworkBtn">Show charger sites</button> <button type="button" class="stops-retry" onclick="window._cnsRetryPlan()">Retry route</button>`;
                         (function() { const b = document.getElementById('enableNetworkBtn'); if (b) b.addEventListener('click', () => { const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
                         break;
                     case 'both':
-                        hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> <button type="button" id="enableAllPoolsBtn">Enable all types + network</button>`;
+                        hintEl.innerHTML = `<span class="stops-error-inline">${plannedError}</span> <button type="button" id="enableAllPoolsBtn">Enable all types + network</button> <button type="button" class="stops-retry" onclick="window._cnsRetryPlan()">Retry route</button>`;
                         (function() { const b = document.getElementById('enableAllPoolsBtn'); if (b) b.addEventListener('click', () => { document.querySelectorAll('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); } }); const t = document.getElementById('nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change')); } }); })();
                         break;
                     default:
-                        hintEl.innerHTML = `<span class="stops-error-inline">No route within range. This aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</span>`;
+                        hintEl.innerHTML = `<span class="stops-error-inline">No route within range. This aircraft can't bridge a leg to the destination at the current reserves. Use a longer-range aircraft, or lower the landing reserve, SID/STAR or alternate reserve.</span> <button type="button" class="stops-retry" onclick="window._cnsRetryPlan()">Retry route</button>`;
                 }
             } else {
                 hintEl.textContent = plannedSource === 'auto'
@@ -4738,7 +4748,10 @@
             const endpoints = [{ lat: p1[0], lon: p1[1], label: 'Departure: ' + data.origin.name, role: 'dep' }];
             (data.multi_leg && Array.isArray(data.stops) ? data.stops : []).forEach(s =>
                 endpoints.push({ lat: s.lat, lon: s.lon, label: s.name, role: 'stop' }));
-            endpoints.push({ lat: p2[0], lon: p2[1], label: 'Arrival: ' + data.destination.name, role: 'dest' });
+            // Circular: the ring has no arrival — the far point is just a stop
+            // (display only; it still holds an arrival-node divert reserve).
+            const circ = data.trip_type === 'circular';
+            endpoints.push({ lat: p2[0], lon: p2[1], label: circ ? data.destination.name : 'Arrival: ' + data.destination.name, role: circ ? 'stop' : 'dest' });
             setRoute(endpoints);
 
             // Per-leg colouring: legs flagged in data.legIssues (live preview)
