@@ -19,7 +19,7 @@
     "status": "concept",
     "propulsion": "fully electric",
     "country": "NL",
-    "regime": "VFR",
+    "regime": "IFR",
     "profile_label": "Standard"
   },
   {
@@ -110,7 +110,7 @@
     "propulsion": "fully electric",
     "max_charge_kw": 400,
     "country": "USA",
-    "regime": "VFR",
+    "regime": "IFR",
     "profile_label": "Standard"
   }
 ]

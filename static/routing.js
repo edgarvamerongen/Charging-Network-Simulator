@@ -38,8 +38,8 @@ window.CNSRouting = (function () {
     // Routed (flown) distance = great-circle x routing padding. The pad scalar is applied
     // HERE so display callers don't each re-apply it; haversineKm itself stays pure
     // great-circle for the reach math (range/route) and the map arc.
-    function routedKm(a, b) {
-        const f = (window.CNSSettings && CNSSettings.routingFactor) ? CNSSettings.routingFactor() : 1.0;
+    function routedKm(a, b, plane) {
+        const f = (window.CNSSettings && CNSSettings.routingFactor) ? CNSSettings.routingFactor(plane) : 1.0;
         return haversineKm(a, b) * f;
     }
 
@@ -105,9 +105,11 @@ window.CNSRouting = (function () {
 
         // Realism factors: reserves cap usable range, routing padding shrinks reach.
         const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
-        const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+        const route  = (window.CNSSettings ? CNSSettings.routingFactor(plane) : 1.0);   // identity for VFR
+        // Alternates are still planned/shown for every aircraft; VFR and
+        // range-inc-reserves planes just skip the range DEDUCTION (settings gate).
         const requireAlt = (window.CNSSettings && CNSSettings.alternateReserveEnabled)
-                         ? CNSSettings.alternateReserveEnabled() : false;
+                         ? CNSSettings.alternateReserveEnabled(plane) : false;
         // Per-airport divert reserve. Every ARRIVAL node (each stop + the
         // destination) must arrive holding enough charge to reach its nearest
         // airport — that airport's pre-baked great-circle `alternate_km`. We

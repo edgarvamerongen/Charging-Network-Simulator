@@ -32,12 +32,12 @@
  */
 window.CNSFlight = (function () {
     function _settings() { return window.CNSSettings || null; }
-    function _routingFactor() { const s = _settings(); return s && s.routingFactor ? s.routingFactor() : 1; }
-    function _sidStarKm() { const s = _settings(); return s && s.sidStarPaddingKm ? s.sidStarPaddingKm() : 0; }
+    function _routingFactor(plane) { const s = _settings(); return s && s.routingFactor ? s.routingFactor(plane) : 1; }
+    function _sidStarKm(plane) { const s = _settings(); return s && s.sidStarPaddingKm ? s.sidStarPaddingKm(plane) : 0; }
     function _usableFraction(plane) { const s = _settings(); return s && s.usableFraction ? s.usableFraction(plane) : 1; }
     function _gridDemandFactor() { const s = _settings(); return s && s.gridDemandFactor ? s.gridDemandFactor() : 1; }
     function _chargeTargetDefault() { const s = _settings(); return s && s.chargeTargetDefault ? s.chargeTargetDefault() : null; }
-    function _effectiveChargePower(kw, batt, cr) { const s = _settings(); return (s && s.effectiveChargePower) ? s.effectiveChargePower(kw, batt, cr) : (kw || 0); }
+    function _effectiveChargePower(kw, batt, cr, maxKw) { const s = _settings(); return (s && s.effectiveChargePower) ? s.effectiveChargePower(kw, batt, cr, maxKw) : (kw || 0); }
     function _chargeTimeMin(e, kw, batt, soc) { const s = _settings(); return (s && s.chargeTimeMin) ? s.chargeTimeMin(e, kw, batt, soc) : (kw ? 60 * e / kw : 0); }
     function _climbOverheadPct() { const s = _settings(); return (s && s.climbOverheadPct) ? s.climbOverheadPct() : 0; }
     function _climbSatFrac() { const s = _settings(); return (s && s.climbSatFrac) ? s.climbSatFrac() : 0.15; }
@@ -121,8 +121,8 @@ window.CNSFlight = (function () {
         opts = opts || {};
         const tripType = opts.tripType || 'one-way';
         const training = tripType === 'training';
-        const route = _routingFactor();
-        const sidStar = _sidStarKm();                                 // fixed km added to EACH leg (SID/STAR); 0 when off
+        const route = _routingFactor(plane);   // identity for VFR (published regime — no airways padding)
+        const sidStar = _sidStarKm(plane);     // identity for VFR (no SID/STAR terminal procedures)                                 // fixed km added to EACH leg (SID/STAR); 0 when off
         const grid = _gridDemandFactor();
         const batt = Math.max(0, +plane.battery_kwh || 0);
         const range = Math.max(0, +plane.range_km || 0);
@@ -179,7 +179,7 @@ window.CNSFlight = (function () {
             const departTo = terminusToFull ? batt
                 : Math.min(batt, (tgt != null) ? Math.max(tgt * batt, consumed + reserve) : (consumed + reserve));
             const chargeE = Math.max(0, departTo - arrival);
-            const powerKw = _effectiveChargePower(getChargerKw(o.ident), batt, cRate);
+            const powerKw = _effectiveChargePower(getChargerKw(o.ident), batt, cRate, plane.max_charge_kw);
             const chargeMin = _chargeTimeMin(chargeE, powerKw, batt, batt > 0 ? arrival / batt : 0);   // [R7] SoC-aware
             const arrFrac = batt > 0 ? arrival / batt : 0;
             const depFrac = batt > 0 ? Math.min(1, departTo / batt) : 0;
@@ -246,7 +246,7 @@ window.CNSFlight = (function () {
             const isReturn = (turnIdx >= 0) && (i + 1 > turnIdx);
             const role = isTerminal ? ((tripType === 'retour' || tripType === 'circular') ? 'home' : 'dest')
                        : (i + 1 === turnIdx ? 'dest' : 'stop');
-            const powerKw = _effectiveChargePower(getChargerKw(node.ident), batt, cRate);
+            const powerKw = _effectiveChargePower(getChargerKw(node.ident), batt, cRate, plane.max_charge_kw);
             const chargeMin = _chargeTimeMin(chargeE, powerKw, batt, batt > 0 ? arrival / batt : 0);   // [R7] SoC-aware
             const targetFrac = (isTerminal && terminusToFull) ? 1 : (getTarget(node.ident) != null ? getTarget(node.ident) : (batt > 0 ? Math.min(1, departTo / batt) : 0));
             profile.charges.push({
@@ -296,6 +296,8 @@ window.CNSFlight = (function () {
                 type: cat.type,                       // climb-model gate (wing-borne vs powered-lift) — catalog-sourced, trips don't persist it
                 range_incl_reserves: cat.range_incl_reserves,   // reserves already flown off the catalog range — usableFraction returns 1
                 simultaneous_charging: cat.simultaneous_charging,   // multi-charger aircraft charge on N units at once
+                regime: cat.regime,                   // published regime gates airways/SID-STAR padding + alternate deduction
+                max_charge_kw: cat.max_charge_kw,     // published OEM acceptance cap on total charge power
             };
             // Battery deliberately NOT required: an absent battery_kwh is a
             // non-charging hybrid — batt=0 flows through simulateTrip as zero
