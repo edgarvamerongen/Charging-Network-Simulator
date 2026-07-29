@@ -11,7 +11,16 @@ window.CNSRecompute = (function () {
     // the _auto tag a fully-auto route looks "untagged" and gets frozen instead of re-planned.
     function mergeManualFlags(savedStops, plannedStops) {
         const manualIdents = new Set((plannedStops || []).filter(s => s && s._manual).map(s => s.ident));
-        return (savedStops || []).map(s => (s && manualIdents.has(s.ident)) ? { ...s, _manual: true } : { ...s, _auto: true });
+        // divertOverride (manual divert pick, CNSDivertEdit) is lost on the sim
+        // round-trip like _manual — carry it back by ident as well.
+        const divertByIdent = {};
+        (plannedStops || []).forEach(s => { if (s && s.divertOverride) divertByIdent[s.ident] = s.divertOverride; });
+        return (savedStops || []).map(s => {
+            if (!s) return s;
+            const out = manualIdents.has(s.ident) ? { ...s, _manual: true } : { ...s, _auto: true };
+            if (divertByIdent[s.ident]) out.divertOverride = divertByIdent[s.ident];
+            return out;
+        });
     }
 
     // Map an engine profile.charges[] entry to the stored shape computeAirports reads.
