@@ -143,12 +143,15 @@ window.CNSRouting = (function () {
         if (destination.ident) skip.add(destination.ident);
 
         // Candidate airports inside the origin/destination ellipse for a detour cap.
+        // Powered-lift (type ~ VTOL) needs no runway at all — both runway gates are
+        // wing-borne concerns, so an eVTOL may stop at ANY airport (ruled).
+        const poweredLift = /vtol/i.test(String(plane.type || ''));
         function candidates(cap) {
             const C = [];
             for (const a of allAirports) {
                 if (!allowedSet.has(a.type) && !allowedIdents.has(a.ident)) continue;
-                if (!hasRunwayData(a)) continue;
-                if (!fitsRunwayReq(plane, a)) continue;
+                if (!poweredLift && !hasRunwayData(a)) continue;
+                if (!poweredLift && !fitsRunwayReq(plane, a)) continue;
                 if (a.ident && skip.has(a.ident)) continue;
                 if (a.latitude_deg == null || a.longitude_deg == null) continue;
                 const ap = _ap(a);
