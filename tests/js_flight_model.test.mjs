@@ -235,7 +235,7 @@ for (const c of golden.cases) {
   const c1 = single.charges[0], c2 = dual.charges[0];
   const checks = [
     [S.CNSFlight.nChargers(base) === 1 && S.CNSFlight.nChargers(twin) === 2, `nChargers reads the catalog flag (1 vs 2)`],
-    [c2.powerKw === S.CNSSettings.effectiveChargePower(500, twin.battery_kwh, twin.c_rate), `charge power = effectiveChargePower(2 × 250) (got ${c2.powerKw})`],
+    [c2.powerKw === S.CNSSettings.effectiveChargePower(500, twin.battery_kwh, twin.c_rate, twin.max_charge_kw), `charge power = effectiveChargePower(2 × 250, capped at published max_charge_kw ${twin.max_charge_kw}) (got ${c2.powerKw})`],
     [c2.energyKwh === c1.energyKwh, `charge ENERGY is unchanged (${c2.energyKwh} vs ${c1.energyKwh})`],
     [c2.chargeMin < c1.chargeMin, `charge time drops with the second charger (${c2.chargeMin} < ${c1.chargeMin})`],
   ];

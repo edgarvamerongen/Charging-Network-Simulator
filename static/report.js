@@ -84,8 +84,9 @@ window.CNSReport = (function () {
             const nameplate = asg.power || (asg.charger ? asg.charger.power_kw : 0);   // combined nameplate when N bays are booked
             const battery = t.battery ?? t.legEnergy * 2;
             const cRate = ((window.PLANES_BY_ID || {})[t.planeId] || t).c_rate;
+            const maxKw = ((window.PLANES_BY_ID || {})[t.planeId] || t).max_charge_kw;   // published acceptance cap
             const power = window.CNSSettings
-                ? CNSSettings.effectiveChargePower(nameplate, battery, cRate)
+                ? CNSSettings.effectiveChargePower(nameplate, battery, cRate, maxKw)
                 : nameplate;
             const chargeMin = window.CNSSettings && power
                 ? CNSSettings.chargeTimeMin(energy, power, battery)

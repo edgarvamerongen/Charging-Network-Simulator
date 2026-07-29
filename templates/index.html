@@ -1243,6 +1243,9 @@
         .rs-slider-row label { font-size: .8rem; color: var(--ink-soft); display: flex; justify-content: space-between; align-items: center; }
         .rs-val { color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; }
         .rs-help { font-size: .78rem; color: var(--muted); margin: 4px 0 0 0; line-height: 1.4; }
+        .rs-na-note { display: none; font-style: italic; }
+        .rs-cell.rs-na .rs-cell-ctrl { opacity: .45; }
+        .rs-cell.rs-na .rs-na-note { display: block; }
         /* F8: 2-column grid + categories + hover [?] tooltips + full-width taper curve */
         .rs-cat { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--primary); margin: 16px 0 7px; }
         .rs-cat:first-of-type { margin-top: 4px; }
@@ -2130,6 +2133,7 @@
                                 <input type="range" id="rsMinSoc" min="5" max="50" step="5" value="20" class="form-range">
                                 <span class="rs-val" id="rsMinSocVal">20%</span>
                             </div>
+                            <p class="rs-help rs-na-note" id="rsNaLanding"></p>
                         </div>
                         <div class="rs-cell">
                             <div class="rs-cell-head">
@@ -2140,6 +2144,7 @@
                                 <input type="range" id="rsRoutingSl" min="100" max="125" step="1" value="105" class="form-range">
                                 <span class="rs-val" id="rsRoutingVal">×1.05</span>
                             </div>
+                            <p class="rs-help rs-na-note" id="rsNaRouting"></p>
                         </div>
                         <div class="rs-cell">
                             <div class="rs-cell-head">
@@ -2149,6 +2154,7 @@
                             <div class="rs-cell-ctrl">
                                 <span class="rs-val">auto · per-airport</span>
                             </div>
+                            <p class="rs-help rs-na-note" id="rsNaAlternate"></p>
                         </div>
                         <div class="rs-cell">
                             <div class="rs-cell-head">
@@ -2159,6 +2165,7 @@
                                 <input type="range" id="rsSidStarSl" min="5" max="50" step="5" value="10" class="form-range">
                                 <span class="rs-val" id="rsSidStarVal">+10 km</span>
                             </div>
+                            <p class="rs-help rs-na-note" id="rsNaSidStar"></p>
                         </div>
                         <div class="rs-cell">
                             <div class="rs-cell-head">
@@ -2848,8 +2855,8 @@
         function _availableRangeKm(plane) {
             const p = plane || selectedPlaneSpec();
             if (!p || !p.range_km) return null;
-            const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
+            const route = (window.CNSSettings ? CNSSettings.routingFactor(p) : 1.0);
+            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(p) : 0;
             const flownMax = (window.CNSFlight && CNSFlight.maxFlownLegKm) ? CNSFlight.maxFlownLegKm(p) : p.range_km * _usableFrac(p);   // usable reach in flown km — climb-aware (engine owns the solve)
             const base = _availRangeOverride != null ? _availRangeOverride : flownMax / route;
             return Math.max(0, base - sid / route);   // carve out the SID/STAR pad (great-circle equivalent)
@@ -2860,8 +2867,8 @@
         function _availRangeShownKm(plane) {
             const a = _availableRangeKm(plane);
             if (a == null) return null;
-            const route = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
-            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
+            const route = (window.CNSSettings ? CNSSettings.routingFactor(plane) : 1.0);
+            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(plane) : 0;
             return a * route + sid;   // = base·route = the full available range, pad-independent
         }
         function _terminus() {
@@ -4397,7 +4404,7 @@
         }
         function _legEst(a, b) {
             const rawKm = (window.CNSRouting ? CNSRouting.haversineKm({ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] }) : 0);
-            const flownKm = rawKm * (window.CNSSettings ? CNSSettings.routingFactor() : 1);
+            const flownKm = rawKm * (window.CNSSettings ? CNSSettings.routingFactor(plane) : 1);
             const plane = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
             return {
                 dist:   rawKm,                                                            // geographic (matches the map line + the reach check)
@@ -4413,8 +4420,9 @@
         // lands on each leg. The reach math itself stays great-circle and pad-free (see
         // maxLeg) — only the shown number carries the padding.
         function _dispKm(a, b) {
-            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm() : 0;
-            if (window.CNSRouting) return CNSRouting.routedKm(a, b) + sid;   // routed (great-circle × padding) + SID/STAR terminal km
+            const p = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;   // VFR: no padding, no SID/STAR
+            const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(p) : 0;
+            if (window.CNSRouting) return CNSRouting.routedKm(a, b, p) + sid;   // routed (great-circle × padding) + SID/STAR terminal km
             return haversineKm([a.lat, a.lon], [b.lat, b.lon]) + sid;   // pre-CNSRouting fallback (great-circle) + pad
         }
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
@@ -5314,7 +5322,9 @@
                 planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate,
                                     runway_req: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).runway_req,      // landability gate — catalog-sourced, trips don't persist it
                                     type: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).type,                  // climb-model gate (wing-borne vs powered-lift) — same sourcing
-                                    range_incl_reserves: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).range_incl_reserves }),   // reserves already in the range — no landing-reserve build-down
+                                    range_incl_reserves: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).range_incl_reserves,        // reserves already in the range — no landing-reserve build-down
+                                    regime: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).regime,                                  // VFR: no padding, no alternate deduction
+                                    max_charge_kw: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).max_charge_kw }),                 // published acceptance cap
                 availableRangeKm: (plane) => _availableRangeKm(plane),
                 routingOptions: _routingOptions(),   // soft Prefer bias — stop choice, never feasibility
             };
@@ -5405,7 +5415,8 @@
                     const nameplate = asg.power || (asg.charger ? asg.charger.power_kw : 0);   // combined nameplate when N bays are booked
                     const battery = t.battery ?? t.legEnergy * 2;
                     const cRate = ((window.PLANES_BY_ID || {})[t.planeId] || t).c_rate;
-                    const power = CNSSettings.effectiveChargePower(nameplate, battery, cRate);
+                    const maxKw = ((window.PLANES_BY_ID || {})[t.planeId] || t).max_charge_kw;   // published acceptance cap
+                    const power = CNSSettings.effectiveChargePower(nameplate, battery, cRate, maxKw);
                     const chargeMin = power ? CNSSettings.chargeTimeMin(energy, power, battery) : Infinity;
                     dailyEnergy += energy * flightsPerDay(t);
                     // Role labels use consistent aviation terminology:
@@ -6028,10 +6039,32 @@
                 syncRate();
                 drawTaperCurve();
                 updateClimbEg();
+                updateRegimeNotes();
             }
             function commit(key, patch) {
                 CNSSettings.save({ [key]: patch });
                 syncFromState();
+            }
+            // Published-data notes: grey a factor that does not apply to the SELECTED
+            // aircraft, and say why. Settings stay global (they still govern the rest
+            // of the fleet); this is the per-aircraft truth — no switches (ruled).
+            function updateRegimeNotes() {
+                const p = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
+                const vfr = !!(p && String(p.regime || '').toUpperCase() === 'VFR');
+                const incl = !!(p && p.range_incl_reserves);
+                const nm = p ? p.name : '';
+                const set = (noteId, active, text) => {
+                    const el = document.getElementById(noteId);
+                    if (!el) return;
+                    el.textContent = active ? text : '';
+                    const cell = el.closest('.rs-cell');
+                    if (cell) cell.classList.toggle('rs-na', active);
+                };
+                set('rsNaLanding', incl, `n/a for ${nm} — range includes reserves`);
+                set('rsNaRouting', vfr, `n/a for ${nm} — VFR flies near the great-circle`);
+                set('rsNaSidStar', vfr, `n/a for ${nm} — VFR: no SID/STAR procedures`);
+                set('rsNaAlternate', vfr || incl,
+                    `${nm}: alternates planned + shown, range NOT deducted — ${vfr ? 'VFR, no alternate requirement' : 'reserves included in range'}`);
             }
             // Live example under the Climb overhead slider: the knob in concrete kWh for
             // the SELECTED aircraft (same source as the spec card — CNSFlight.climbParams).
@@ -6081,7 +6114,7 @@
             const climbSl = document.getElementById('rsClimbPctSl');
             if (climbSl) climbSl.addEventListener('input', updateClimbEg);
             const msModal = document.getElementById('modelSettingsModal');
-            if (msModal) msModal.addEventListener('shown.bs.modal', updateClimbEg);
+            if (msModal) msModal.addEventListener('shown.bs.modal', () => { updateClimbEg(); updateRegimeNotes(); });
 
             // C1a: charging price — no enable toggle, it always applies to revenue.
             const rateSl = document.getElementById('rsChargeRateSl');

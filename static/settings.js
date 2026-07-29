@@ -100,6 +100,11 @@ window.CNSSettings = (function () {
 
     // ---------- accessors (identity when toggle is off) ----------------------
 
+    // Published-data gates (Notion catalog): a factor that doesn't apply to an
+    // aircraft's REGIME or published-range convention is identity for that plane.
+    // No switches — the profile's OEM data decides (ruled 2026-07-29).
+    const _isVfr = (p) => String((p && p.regime) || '').toUpperCase() === 'VFR';
+
     /** Fraction of nameplate battery available per leg. 1.0 when the reserve
      *  toggle is off. When on: (max takeoff SoC = 1.0) − (min landing SoC).
      *
@@ -114,7 +119,7 @@ window.CNSSettings = (function () {
      *  are flown off in the published figure, so applying the landing-reserve
      *  build-down again would double-count. Those aircraft always get 1.0. */
     function usableFraction(plane) {
-        if (plane && plane.range_incl_reserves) return 1.0;
+        if (plane && plane.range_incl_reserves) return 1.0;   // reserves already flown off the published range
         const s = loadAll().landingReserve;
         if (!s.enabled) return 1.0;
         return Math.max(0.05, Math.min(1.0, 1.0 - s.minLandingSoc));
@@ -132,7 +137,8 @@ window.CNSSettings = (function () {
     /** Multiplier on great-circle distance for airways routing / ATC route extension
      *  (SID/STAR terminal track miles are the separate sidStarPadding factor).
      *  Cascades into leg distance, energy, flight time, and routing reach. */
-    function routingFactor() {
+    function routingFactor(plane) {
+        if (_isVfr(plane)) return 1.0;   // VFR flies near the great-circle — airways padding is an IFR construct
         const s = loadAll().routingPadding;
         if (!s.enabled) return 1.0;
         return Math.max(1.0, Math.min(1.5, +s.factor || 1.05));
@@ -142,7 +148,12 @@ window.CNSSettings = (function () {
      *  divert to its nearest airport. Boolean toggle — the reserve magnitude is
      *  each airport's own `alternate_km` (read by the planner), so there is no
      *  slider here. Identity (false) by default so saved plans are unchanged. */
-    function alternateReserveEnabled() {
+    function alternateReserveEnabled(plane) {
+        // VFR files no destination alternate, and a published range that already
+        // includes reserves (range_incl_reserves) has the diversion energy inside
+        // it. Alternates are still PLANNED AND SHOWN for these aircraft — only
+        // the range deduction is waived (ruled 2026-07-29).
+        if (plane && (_isVfr(plane) || plane.range_incl_reserves)) return false;
         const s = loadAll().alternateReserve;
         return !!(s && s.enabled);
     }
@@ -152,7 +163,8 @@ window.CNSSettings = (function () {
      *  applied AFTER the routingPadding multiplier:
      *  distKm = rawKm·routingFactor + sidStarPaddingKm. Mirrors routingFactor()'s
      *  "identity when off, clamp to UI range when on" shape. */
-    function sidStarPaddingKm() {
+    function sidStarPaddingKm(plane) {
+        if (_isVfr(plane)) return 0;   // SID/STAR are IFR terminal procedures — VFR joins the pattern directly
         const s = loadAll().sidStarPadding;
         if (!s || !s.enabled) return 0;
         return Math.max(5, Math.min(50, +s.km || 10));
@@ -209,8 +221,12 @@ window.CNSSettings = (function () {
      *  over the global slider — small GA packs (~1C) and high-power eVTOLs
      *  differ a lot, and C-rate is already normalised to pack size so it scales
      *  correctly to each aircraft. */
-    function effectiveChargePower(powerKw, batteryKwh, planeCRate) {
-        const p = Math.max(0, +powerKw || 0);
+    function effectiveChargePower(powerKw, batteryKwh, planeCRate, maxChargeKw) {
+        let p = Math.max(0, +powerKw || 0);
+        // Published OEM acceptance cap (Notion max_charge_kw): a hard physical
+        // limit on the TOTAL power the aircraft can take — applies regardless of
+        // the taper toggle, and caps the combined draw of multi-charger aircraft.
+        if (maxChargeKw != null && isFinite(+maxChargeKw) && +maxChargeKw > 0) p = Math.min(p, +maxChargeKw);
         const s = loadAll().chargeTaper;
         if (!s.enabled) return p;
         const batt = Math.max(0, +batteryKwh || 0);

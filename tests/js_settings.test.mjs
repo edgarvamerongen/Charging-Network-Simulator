@@ -205,6 +205,37 @@ test('activeFlags reports alternateReserve + anyOn', () => {
   assert.equal(f.anyOn, true);
 });
 
+test('published-data gates: VFR plane gets identity padding + no alternate deduction', () => {
+  const { S } = loadSettings();
+  S.save({ routingPadding: { enabled: true, factor: 1.05 }, sidStarPadding: { enabled: true, km: 10 }, alternateReserve: { enabled: true } });
+  const vfr = { regime: 'VFR' }, ifr = { regime: 'IFR' };
+  assert.equal(S.routingFactor(vfr), 1.0, 'VFR flies near the great-circle');
+  assert.equal(S.sidStarPaddingKm(vfr), 0, 'no SID/STAR procedures under VFR');
+  assert.equal(S.alternateReserveEnabled(vfr), false, 'VFR files no destination alternate');
+  assert.equal(S.routingFactor(ifr), 1.05, 'IFR keeps the airways padding');
+  assert.equal(S.sidStarPaddingKm(ifr), 10);
+  assert.equal(S.alternateReserveEnabled(ifr), true);
+  assert.equal(S.routingFactor(), 1.05, 'no plane -> global behaviour (back-compat)');
+});
+
+test('published-data gates: range_incl_reserves waives the alternate deduction too', () => {
+  const { S } = loadSettings();
+  S.save({ alternateReserve: { enabled: true } });
+  assert.equal(S.alternateReserveEnabled({ regime: 'IFR', range_incl_reserves: true }), false,
+    'diversion energy already inside the published effective range');
+});
+
+test('effectiveChargePower: published max_charge_kw caps the TOTAL draw, taper on or off', () => {
+  const { S } = loadSettings();
+  S.save({ chargeTaper: { enabled: true, cRate: 5.0 } });
+  assert.equal(S.effectiveChargePower(250, 22, null, 40), 40, 'Velis: 40 kW acceptance beats charger + c-rate');
+  assert.equal(S.effectiveChargePower(500, 225, null, 400), 400, 'multi-charger combined 500 capped at 400');
+  assert.equal(S.effectiveChargePower(250, 225, null, 400), 250, 'non-binding cap is identity');
+  assert.equal(S.effectiveChargePower(250, 225, null, null), 250, 'no published cap -> unchanged');
+  S.save({ chargeTaper: { enabled: false } });
+  assert.equal(S.effectiveChargePower(250, 22, null, 40), 40, 'acceptance is physics — applies with taper off');
+});
+
 test('usableFraction: range_incl_reserves plane always gets 1.0 (no double reserve)', () => {
   const { S } = loadSettings();
   S.save({ landingReserve: { enabled: true, minLandingSoc: 0.20 } });
