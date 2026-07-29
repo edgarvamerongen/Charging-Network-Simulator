@@ -124,6 +124,9 @@ window.CNSRouting = (function () {
         }
         const altReserveKm = (n) => {
             if (!requireAlt || !n) return 0;
+            // Manual divert (CNSDivertEdit): the host stamps the chosen divert's raw
+            // km onto the node — a user's pick beats the baked catalog alternate.
+            if (n.divertOverrideKm != null && isFinite(+n.divertOverrideKm)) return (+n.divertOverrideKm) / route;
             const km = (n.ident != null && altByIdent.has(n.ident))
                      ? altByIdent.get(n.ident)
                      : (+n.alternate_km || 0);

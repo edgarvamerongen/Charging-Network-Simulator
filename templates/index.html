@@ -1664,6 +1664,11 @@
         .stops-list .stop-removable { cursor: pointer; }
         .stops-list .stop-removable:hover { text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 1.5px; }
         .stops-list .leg-dist.over-range { color: var(--danger); font-weight: 700; }
+        .divert-marker-wrap { background: none; border: none; }
+        .divert-marker { width: 14px; height: 14px; border-radius: 50%; background: #7c3aed; border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(124,58,237,.5); cursor: grab; }
+        .divert-marker.manual { background: #5b21b6; box-shadow: 0 0 0 2px rgba(124,58,237,.6); }
+        .stops-list .alt-hint.alt-pick { cursor: pointer; }
+        .stops-list .alt-hint.alt-reset { cursor: pointer; margin-left: 2px; }
         .stops-list .alt-hint { font-size: .56rem; font-weight: 700; color: #7c3aed; background: rgba(124,58,237,.12); padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; cursor: default; }
         .alt-tip { position: fixed; z-index: 4000; display: none; background: #1f2937; color: #fff; padding: 4px 9px; border-radius: 6px; font-size: .72rem; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.3); }
         .stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
@@ -2447,6 +2452,7 @@
     <script src="/static/buildshare.js?v={{ asset_version }}"></script>
     <script src="/static/range-graph.js?v={{ asset_version }}"></script>
     <script src="/static/runway.js?v={{ asset_version }}"></script>
+    <script src="/static/divert-edit.js?v={{ asset_version }}"></script>
     {% if share_state %}<script>window.__CNS_SHARE__ = {{ share_state|tojson }};</script>{% endif %}
     <script>
         // HTML-escape for every data string interpolated into an innerHTML
@@ -2520,6 +2526,7 @@
         function clearAlternates() {
             alternateLayers.forEach(l => map.removeLayer(l));
             alternateLayers = [];
+            if (window.CNSDivertEdit) CNSDivertEdit.clear();
         }
 
         // For every routed airport with a known nearest alternate, draw a purple
@@ -2528,6 +2535,13 @@
         // alternate is always a loaded airport).
         function drawAlternates(chain) {
             clearAlternates();
+            if (_divertEditReady) {
+                // Editing surface: draggable purple markers via CNSDivertEdit — the
+                // module resolves each arrival node (manual -> baked) and snaps drags
+                // to the nearest landable airport for the selected aircraft.
+                CNSDivertEdit.render(_stampDiverts((chain || []).map(n => n ? { ...n } : n)));
+                return;
+            }
             // Skip the origin (chain[0]): it departs full, so no arrival/divert reserve
             // applies there — matching routing.js, which reserves only at each stop + the
             // destination. Drawing a departure connector would imply a reserve that isn't there.
@@ -2575,10 +2589,16 @@
             const off = { open: '<strong>', badge: '' };
             if (!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled())) return off;
             const full = wp && wp.ident ? airportByIdent[wp.ident] : null;
-            if (!full || !full.alternate_ident) return off;
-            const km = (full.alternate_km != null) ? ' · ' + fmtDist(full.alternate_km) : '';
-            const title = `Divert → ${full.alternate_ident}${km}`;
-            return { open: '<strong>', badge: ` <span class="alt-hint" data-tip="${title}" tabindex="0" aria-label="${title}">alt</span>` };
+            if (!full) return off;
+            const ov = divertOverrides[wp.ident];
+            const altId = ov || full.alternate_ident;
+            if (!altId) return off;
+            const ovKm = ov ? _divertOverrideKm(wp) : null;
+            const km = ov ? (ovKm != null ? ' · ' + fmtDist(ovKm) : '')
+                          : (full.alternate_km != null ? ' · ' + fmtDist(full.alternate_km) : '');
+            const title = `Divert → ${altId}${km}${ov ? ' · manual' : ''} — click, then pick an airport on the map`;
+            const reset = ov ? `<span class="alt-hint alt-reset" title="Reset divert to auto" onclick="window._cnsAltReset('${wp.ident}')">↺</span>` : '';
+            return { open: '<strong>', badge: ` <span class="alt-hint alt-pick" data-tip="${title}" tabindex="0" aria-label="${title}" onclick="window._cnsAltPick('${wp.ident}')">alt${ov ? '·m' : ''}</span>${reset}` };
         }
         // Lightweight tooltip for the [alt] badge: appended to <body> so the scrollable planner
         // sidebar (overflow-y:auto / x:hidden) can't clip it, and shown INSTANTLY (no native-title delay).
@@ -2784,6 +2804,49 @@
         let plannedError = null;
         let plannedSource = 'auto';      // 'auto' (algorithm) or 'user' (after manual edit)
         let plannedLegIssues = [];       // leg indices that exceed the aircraft's effective range
+        // ---- Manual divert overrides (CNSDivertEdit, PR #28 v1) -----------------
+        // airport ident -> chosen divert ident. Ident-keyed so a choice survives
+        // node-object rebuilds; stamped onto router/validator nodes and onto
+        // plannedStops (ride-along into saved flights). No override = byte-
+        // identical to the baked catalog alternate.
+        const divertOverrides = {};
+        let _divertEditReady = false;
+        function _divertSuitable() {
+            // Same landability bar as planning (#39/#41): runway data + fits the
+            // selected aircraft; powered-lift may divert anywhere (ruled).
+            const plane = _selectedPlane();
+            const lift = /vtol/i.test(String((plane && plane.type) || ''));
+            return (ap) => !!(ap && isFinite(+ap.latitude_deg)
+                && (lift || !window.CNSRunway || (CNSRunway.hasData(ap) && CNSRunway.fits(plane, ap))));
+        }
+        function _divertOverrideKm(node) {
+            const ov = node && node.ident ? divertOverrides[node.ident] : null;
+            const alt = ov ? airportByIdent[ov] : null;
+            if (!alt) return null;
+            const self = airportByIdent[node.ident] || node;
+            const from = { lat: +(node.lat != null ? node.lat : self.latitude_deg), lon: +(node.lon != null ? node.lon : self.longitude_deg) };
+            return CNSRouting.haversineKm(from, { lat: +alt.latitude_deg, lon: +alt.longitude_deg });
+        }
+        function _stampDiverts(nodes) {
+            (nodes || []).forEach(n => {
+                if (!n || !n.ident) return;
+                const ov = divertOverrides[n.ident];
+                if (ov) { n.divertOverride = ov; const km = _divertOverrideKm(n); if (km != null) n.divertOverrideKm = km; }
+                else { delete n.divertOverride; delete n.divertOverrideKm; }
+            });
+            return nodes;
+        }
+        window._cnsAltPick = (ident) => {
+            const full = airportByIdent[ident];
+            if (!full || !window.CNSDivertEdit) return;
+            CNSDivertEdit.startAltPick({ ident, lat: +full.latitude_deg, lon: +full.longitude_deg });
+        };
+        window._cnsAltReset = (ident) => {
+            delete divertOverrides[ident];
+            refreshAfterEdit();
+            if (typeof drawLiveRoute === 'function') drawLiveRoute();
+            refreshAlternates();
+        };
         // Circular trips only: planner-inserted charging stops on the CLOSING leg
         // (Destination → back to Departure). Kept separate from plannedStops so the
         // form's origin→…→destination semantics (stop fields, removal, insertion)
@@ -2900,6 +2963,8 @@
             const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled());
             const altReserveKm = (wp) => {
                 if (!requireAlt || !wp) return 0;
+                const ovKm = _divertOverrideKm(wp);                    // manual divert (CNSDivertEdit) wins
+                if (ovKm != null) return ovKm / route;
                 const full = wp.ident ? airportByIdent[wp.ident] : null;
                 const km = (full && full.alternate_km != null) ? +full.alternate_km : (+wp.alternate_km || 0);
                 return (isFinite(km) ? km : 0) / route;
@@ -2951,6 +3016,7 @@
 
             // Preserve manual stops, auto-fill each gap — the shared routing core
             // (CNSRecompute re-plans saved flights through the SAME planChain).
+            _stampDiverts([t.origin, t.dest, ...manual]);   // manual diverts reshape the reserve the router holds
             const chainRes = CNSRouting.planChain({
                 origin: t.origin, dest: t.dest, manualStops: manual, plane,
                 allowedTypes: _allowedTypes(), allAirports,
@@ -2961,6 +3027,7 @@
             });
             if (chainRes.error && manual.length === 0) { plannedError = chainRes.error; renderStops(); return; }
             plannedStops = chainRes.stops;
+            _stampDiverts(plannedStops);   // ride-along: a re-added airport keeps its manual divert; saved flights carry the field
             // Circular: also plan the CLOSING leg (Destination → back to Departure)
             // so an over-range hop home gets charging stops just like any other
             // segment. Same per-segment pool rules as planChain: exclude airports
@@ -4133,7 +4200,12 @@
         // and would otherwise swallow the click with no card behind it.
         function _bindApCard(m, ap) {
             m.bindPopup(() => _airportCardHtml(ap), { closeButton: true, className: 'ap-card', minWidth: 230, maxWidth: 230, autoPanPadding: [26, 26] });
-            m.on('popupopen', (e) => { _openApCard = { popup: e.popup, ap }; _fillApCard(e.popup, ap.ident); });
+            m.on('popupopen', (e) => {
+                // ALT divert pick (one-shot): while picking, the clicked airport
+                // becomes the divert instead of opening its card.
+                if (window.CNSDivertEdit && CNSDivertEdit.pickPending() && CNSDivertEdit.notifyAirportPick(ap)) { map.closePopup(); return; }
+                _openApCard = { popup: e.popup, ap }; _fillApCard(e.popup, ap.ident);
+            });
             m.on('popupclose', () => { _openApCard = null; });
             m.on('mouseover', () => _loadApPhoto(ap.ident));
         }
@@ -6437,6 +6509,22 @@
             if (window.CNSScheduler) CNSScheduler.init({ chargers: chargerById, onChange: renderFolder });
             if (window.CNSAnimation) CNSAnimation.init();
             if (window.CNSRangeGraph) CNSRangeGraph.init({ map, getReachKm: () => { try { const p = _selectedPlane(); return p ? (_availableRangeKm(p) || 0) : 0; } catch (e) { return 0; } }, airports: () => allAirports, allowedFor: () => { const types = new Set(_allowedTypes()); const idents = _plannerAllowedIdents(); const plane = _selectedPlane(); const lift = /vtol/i.test(String((plane && plane.type) || '')); return (ap) => (lift || !window.CNSRunway || (CNSRunway.hasData(ap) && CNSRunway.fits(plane, ap))) && (types.has(ap.type) || idents.has(ap.ident)); } });   // WYSIWYG mirror of the router: runway gates are wing-borne concerns — powered-lift spokes to ANY airport (ruled)
+            if (window.CNSDivertEdit) {
+                CNSDivertEdit.init({
+                    map,
+                    airportByIdent,
+                    airports: () => allAirports,
+                    isSuitable: () => _divertSuitable(),
+                    onChange: (node, ident) => {
+                        if (!node || !node.ident) return;
+                        if (ident) divertOverrides[node.ident] = ident; else delete divertOverrides[node.ident];
+                        refreshAfterEdit();                                  // re-plan + re-validate (reserve changes can cascade)
+                        if (typeof drawLiveRoute === 'function') drawLiveRoute();
+                        refreshAlternates();
+                    },
+                });
+                _divertEditReady = true;
+            }
             renderFolder();
             updateDrawerSub();
             renderPlanePicker();
