@@ -2780,10 +2780,16 @@
                     // km + maxLeg are in routed (padded) units, so the raw alternate_km adds directly
                     // (the unpadded /route cancels against the padded scale) — matches validateRoute.
                     const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled(plane));
-                    const destFull = (requireAlt && selected.destination.ident) ? airportByIdent[selected.destination.ident] : null;
+                    // Divert-fit cap (mirrors routing.js/validateRoute): VFR planes skip the
+                    // deduction but the divert must still fit the FULL catalog range (routed
+                    // units here, so raw alternate_km adds directly).
+                    const fitCapKm = (window.CNSSettings && CNSSettings.alternateFitCapKm) ? CNSSettings.alternateFitCapKm(plane) : null;
+                    const destFull = ((requireAlt || fitCapKm != null) && selected.destination.ident) ? airportByIdent[selected.destination.ident] : null;
                     const altKm = (destFull && destFull.alternate_km != null) ? (+destFull.alternate_km || 0) : 0;
-                    if (km + altKm > maxLeg) {
-                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km + altKm - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
+                    if (km + (requireAlt ? altKm : 0) > maxLeg) {
+                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km + (requireAlt ? altKm : 0) - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
+                    } else if (fitCapKm != null && km + altKm > fitCapKm) {
+                        warn = ` <span class="traj-warn">⚠ divert exceeds remaining range — ${fmtDist(km + altKm - fitCapKm)} over ${fmtDist(fitCapKm)}</span>`;
                     }
                 }
                 const nVia = plannedStops.length + (circular ? closingStops.length : 0);
@@ -2974,18 +2980,26 @@
             // (routing.js passes the plane), so the validator must waive it too or it flags
             // legs the planner correctly accepted (false "No route within range").
             const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled(plane));
-            const altReserveKm = (wp) => {
-                if (!requireAlt || !wp) return 0;
+            // Divert-fit cap (mirrors routing.js): VFR planes skip the deduction but the
+            // divert must still fit the FULL catalog range after the flown leg.
+            const fitCapKm = (window.CNSSettings && CNSSettings.alternateFitCapKm) ? CNSSettings.alternateFitCapKm(plane) : null;
+            const sidPad = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(plane) : 0;
+            const fitCapGc = fitCapKm != null ? Math.max(0, fitCapKm - sidPad) / route : null;
+            const divertKm = (wp) => {                                 // raw km — override ?? baked, same tiers as the router
+                if (!wp) return 0;
                 const ovKm = _divertOverrideKm(wp);                    // manual divert (CNSDivertEdit) wins
-                if (ovKm != null) return ovKm / route;
+                if (ovKm != null) return ovKm;
                 const full = wp.ident ? airportByIdent[wp.ident] : null;
                 const km = (full && full.alternate_km != null) ? +full.alternate_km : (+wp.alternate_km || 0);
-                return (isFinite(km) ? km : 0) / route;
+                return isFinite(km) ? km : 0;
             };
+            const altReserveKm = (wp) => requireAlt ? divertKm(wp) / route : 0;
             const chain = _ringChain(t);
             for (let i = 0; i < chain.length - 1; i++) {
                 const d = CNSRouting.haversineKm(chain[i], chain[i + 1]);
-                if (d + altReserveKm(chain[i + 1]) > maxLeg) plannedLegIssues.push(i);   // arrival node carries the divert reserve
+                const over = d + altReserveKm(chain[i + 1]) > maxLeg   // arrival node carries the divert reserve
+                          || (fitCapGc != null && d + divertKm(chain[i + 1]) / route > fitCapGc);
+                if (over) plannedLegIssues.push(i);
             }
             if (plannedLegIssues.length) {
                 const n = plannedLegIssues.length;
