@@ -2779,7 +2779,7 @@
                     // Divert reserve (when on): the destination must also reach its nearest alternate.
                     // km + maxLeg are in routed (padded) units, so the raw alternate_km adds directly
                     // (the unpadded /route cancels against the padded scale) — matches validateRoute.
-                    const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled());
+                    const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled(plane));
                     const destFull = (requireAlt && selected.destination.ident) ? airportByIdent[selected.destination.ident] : null;
                     const altKm = (destFull && destFull.alternate_km != null) ? (+destFull.alternate_km || 0) : 0;
                     if (km + altKm > maxLeg) {
@@ -2964,13 +2964,16 @@
             // Effective reach honours the model landing-reserve setting
             // when on; otherwise it's nameplate range (no advanced override).
             const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
-            const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
+            const route  = (window.CNSSettings ? CNSSettings.routingFactor(plane) : 1.0);
             const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
             // Mirror routing.js's altReserveKm (line 89): when the alternate reserve is on, each
             // ARRIVAL node must ALSO hold enough range to divert to its nearest airport
             // (alternate_km / route — unpadded, a divert is flown direct). 0 when off, so the
             // per-leg test stays byte-identical to before and matches what the planner enforces.
-            const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled());
+            // Plane-aware gates: VFR / range-inc-reserves waive the deduction in the PLANNER
+            // (routing.js passes the plane), so the validator must waive it too or it flags
+            // legs the planner correctly accepted (false "No route within range").
+            const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled(plane));
             const altReserveKm = (wp) => {
                 if (!requireAlt || !wp) return 0;
                 const ovKm = _divertOverrideKm(wp);                    // manual divert (CNSDivertEdit) wins
@@ -4896,8 +4899,6 @@
             if (!legIssues.length) {
                 const plane = _selectedPlane();
                 if (plane && plane.range_km) {
-                    const usable = (window.CNSSettings ? CNSSettings.usableFraction(plane) : 1.0);
-                    const route  = (window.CNSSettings ? CNSSettings.routingFactor() : 1.0);
                     const maxLeg = _availableRangeKm(plane);   // available range already folds in route padding (= effective range)
                     const chain = [
                         { lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg },
