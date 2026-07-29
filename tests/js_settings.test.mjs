@@ -225,6 +225,26 @@ test('published-data gates: range_incl_reserves waives the alternate deduction t
     'diversion energy already inside the published effective range');
 });
 
+test('alternateFitCapKm: VFR excl-reserves planes get the full-range divert-fit ceiling', () => {
+  const { S } = loadSettings();
+  S.save({ alternateReserve: { enabled: true } });
+  assert.equal(S.alternateFitCapKm({ regime: 'VFR', range_km: 500 }), 500,
+    'ceiling = full catalog range (divert rides in the landing-reserve margin)');
+  assert.equal(S.alternateFitCapKm({ regime: 'VFR', range_km: 500, range_incl_reserves: true }), null,
+    'inc-reserves figure already contains the diversion energy');
+  assert.equal(S.alternateFitCapKm({ regime: 'IFR', range_km: 500 }), null,
+    'IFR deducts the divert from usable range instead');
+  assert.equal(S.alternateFitCapKm(null), null, 'no plane -> no rule');
+  assert.equal(S.alternateFitCapKm({ regime: 'VFR' }), null, 'no range -> no rule');
+});
+
+test('alternateFitCapKm: global alternate-reserve toggle off disables the rule', () => {
+  const { S } = loadSettings();
+  S.save({ alternateReserve: { enabled: false } });
+  assert.equal(S.alternateFitCapKm({ regime: 'VFR', range_km: 500 }), null,
+    'toggle off = alternates unmodelled everywhere');
+});
+
 test('effectiveChargePower: published max_charge_kw caps the TOTAL draw, taper on or off', () => {
   const { S } = loadSettings();
   S.save({ chargeTaper: { enabled: true, cRate: 5.0 } });

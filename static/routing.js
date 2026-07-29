@@ -110,28 +110,43 @@ window.CNSRouting = (function () {
         // range-inc-reserves planes just skip the range DEDUCTION (settings gate).
         const requireAlt = (window.CNSSettings && CNSSettings.alternateReserveEnabled)
                          ? CNSSettings.alternateReserveEnabled(plane) : false;
+        // Divert-fit cap (ruled 2026-07-29): planes that skip the deduction but
+        // whose published range EXCLUDES reserves (VFR) must still FIT the divert
+        // in the full catalog range after the flown leg — the landing-reserve
+        // margin is the energy the divert rides on. Null = rule off.
+        const fitCapKm = (window.CNSSettings && CNSSettings.alternateFitCapKm)
+                       ? CNSSettings.alternateFitCapKm(plane) : null;
         // Per-airport divert reserve. Every ARRIVAL node (each stop + the
         // destination) must arrive holding enough charge to reach its nearest
         // airport — that airport's pre-baked great-circle `alternate_km`. We
         // divide by `route` so the short divert is NOT inflated by cruise
         // airways padding (a divert is flown near-direct). Built once and only
-        // when the toggle is on, so the planner is identical when off.
+        // when a divert rule is on, so the planner is identical when off.
+        const needAlt = requireAlt || fitCapKm != null;
         const altByIdent = new Map();
-        if (requireAlt) {
+        if (needAlt) {
             for (const a of allAirports) {
                 if (a && a.ident != null) altByIdent.set(a.ident, +a.alternate_km || 0);
             }
         }
-        const altReserveKm = (n) => {
-            if (!requireAlt || !n) return 0;
+        const divertKm = (n) => {
+            if (!needAlt || !n) return 0;
             // Manual divert (CNSDivertEdit): the host stamps the chosen divert's raw
             // km onto the node — a user's pick beats the baked catalog alternate.
-            if (n.divertOverrideKm != null && isFinite(+n.divertOverrideKm)) return (+n.divertOverrideKm) / route;
+            if (n.divertOverrideKm != null && isFinite(+n.divertOverrideKm)) return +n.divertOverrideKm;
             const km = (n.ident != null && altByIdent.has(n.ident))
                      ? altByIdent.get(n.ident)
                      : (+n.alternate_km || 0);
-            return km / route;
+            return isFinite(km) ? km : 0;
         };
+        const altReserveKm = (n) => requireAlt ? divertKm(n) / route : 0;
+        // Fit test in great-circle km: legKm·route + sid + divertKm ≤ fitCapKm.
+        // For the class the rule targets (VFR) route = 1 and sid = 0, but keep
+        // the general form so a future non-identity class stays single-count.
+        const sidPad = (window.CNSSettings && CNSSettings.sidStarPaddingKm)
+                     ? CNSSettings.sidStarPaddingKm(plane) : 0;
+        const fitCapGc = fitCapKm != null ? Math.max(0, fitCapKm - sidPad) / route : null;
+        const fitsDivert = (d, n) => fitCapGc == null || d + divertKm(n) / route <= fitCapGc;
         // Caller may pass an explicit max straight-line leg (the planner's "available
         // range", already incl. reserve + routing padding, or a per-flight override).
         const maxLeg = options.maxLegKm != null ? options.maxLegKm
@@ -141,7 +156,7 @@ window.CNSRouting = (function () {
         const O = { lat: origin.lat, lon: origin.lon };
         const D = { lat: destination.lat, lon: destination.lon };
         const direct = haversineKm(O, D);
-        if (direct <= maxLeg - altReserveKm(destination)) return { stops: [], totalDistanceKm: direct, legCount: 1 };
+        if (direct <= maxLeg - altReserveKm(destination) && fitsDivert(direct, destination)) return { stops: [], totalDistanceKm: direct, legCount: 1 };
 
         const skip = new Set();
         if (origin.ident) skip.add(origin.ident);
@@ -190,6 +205,7 @@ window.CNSRouting = (function () {
                         if (done[j]) return;
                         const d = haversineKm(from, pos(j));
                         if (d + altReserveKm(obj(j)) > maxLeg) return;   // not flyable incl. divert reserve
+                        if (!fitsDivert(d, obj(j))) return;              // divert must fit the full-range margin
                         const pen = (j === DEST) ? 0 : options.stopPenaltyKm + (typePen[type(j)] || 0);
                         const t = g[i] + d + pen;
                         if (t < g[j]) { g[j] = t; came[j] = i; open.push({ i: j, f: t + haversineKm(pos(j), D) }); }

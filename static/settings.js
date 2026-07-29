@@ -158,6 +158,26 @@ window.CNSSettings = (function () {
         return !!(s && s.enabled);
     }
 
+    /** Full-range ceiling for the divert-fit rule (ruled 2026-07-29): a VFR
+     *  plane whose published range EXCLUDES reserves skips the alternate
+     *  deduction from usable range (alternateReserveEnabled → false), but a
+     *  leg is only flyable if the shown divert still FITS the full catalog
+     *  range after the flown leg — the landing-reserve margin is the energy
+     *  the divert rides on:  legKm·route + sid + divertKm ≤ range_km.
+     *  Returns that ceiling in flown km, or null when the rule doesn't apply
+     *  (IFR planes deduct the divert from usable range instead; a
+     *  range-inc-reserves figure already contains the diversion energy;
+     *  global toggle off = alternates unmodelled).
+     *  Seam: when the catalog grows a per-aircraft reserve-distance column,
+     *  subtract it here (range_km − reserve_km). */
+    function alternateFitCapKm(plane) {
+        if (!plane || !_isVfr(plane) || plane.range_incl_reserves) return null;
+        const s = loadAll().alternateReserve;
+        if (!(s && s.enabled)) return null;
+        const r = +plane.range_km || 0;
+        return r > 0 ? r : null;
+    }
+
     /** Fixed km added to EACH leg to approximate SID/STAR terminal track miles.
      *  0 when off (identity); clamped to the slider's [5,50] when on. Additive,
      *  applied AFTER the routingPadding multiplier:
@@ -299,6 +319,6 @@ window.CNSSettings = (function () {
         loadAll, save, reset, subscribe,
         usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
-        alternateReserveEnabled, climbOverheadPct, climbSatFrac,
+        alternateReserveEnabled, alternateFitCapKm, climbOverheadPct, climbSatFrac,
     };
 })();
