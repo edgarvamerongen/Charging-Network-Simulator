@@ -3058,6 +3058,34 @@
         // fields, auto-fills gaps between manual stops, validates and renders.
         function refreshAfterEdit() { smartReplan(); }
 
+        // Safety net (ruled 2026-07-29): re-run the planner after ANY user action.
+        // The retired charging-stops toggle (#44) doubled as a manual "recompute"
+        // button; without it a stale plan — e.g. reserves changed under an
+        // already-drawn route — could report "impossible" for a plannable route
+        // with no way to retrigger. recomputeRoute is idempotent for unchanged
+        // inputs, so the net effect is only that the plan always reflects the
+        // latest inputs. Debounced; map gestures are excluded (the map flows
+        // call their own replans), and the planner only reruns once a terminus
+        // exists. Programmatic DOM rebuilds fire no 'change' events -> no loops.
+        (function () {
+            let t = null;
+            const kick = () => {
+                clearTimeout(t);
+                t = setTimeout(() => {
+                    const ready = selected.origin && (_isCircularTrip() || selected.destination);
+                    if (!ready) return;
+                    smartReplan();
+                    if (typeof drawLiveRoute === 'function') drawLiveRoute();
+                }, 400);
+            };
+            document.addEventListener('change', (e) => {
+                const el = e.target;
+                if (!el || !(el instanceof Element)) return;
+                if (el.closest('#map')) return;
+                kick();
+            }, true);
+        })();
+
         // Find the best place to slot a new stop into the chain (smallest detour).
         function bestInsertionIndex(newStop) {
             const t = _terminus(); if (!t) return plannedStops.length;
