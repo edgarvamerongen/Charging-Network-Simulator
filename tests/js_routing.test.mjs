@@ -438,5 +438,21 @@ test('runway gate: a with-data sibling is picked over the no-data airport', () =
   assert.equal(idents(res).join(','), 'B');
 });
 
+test('powered-lift: an eVTOL may stop at ANY airport — runway gates skipped (ruled)', () => {
+  const R = loadRouting({});
+  const plane = { range_km: 200, type: 'eVTOL', runway_req: { paved: 0, grass: 0, gravel: 0, dirt: 0, water: 0, unknown: 0 } };
+  const res = R.planRoute({ origin: node('O', 0), destination: node('D', 3), plane,
+    allowedTypes: ['medium_airport'], allAirports: [bare('A', 1.5)], options: {} });
+  assert.ok(!res.error, 'eVTOL must route via the no-runway-data airport: ' + res.error);
+  assert.equal(idents(res).join(','), 'A');
+});
+
+test('powered-lift: wing-borne planes still cannot use the same no-data airport', () => {
+  const R = loadRouting({});
+  const res = R.planRoute({ origin: node('O', 0), destination: node('D', 3), plane: { range_km: 200, type: 'CTOL' },
+    allowedTypes: ['medium_airport'], allAirports: [bare('A', 1.5)], options: {} });
+  assert.ok(res.error, 'CTOL must still be gated by the missing runway data');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

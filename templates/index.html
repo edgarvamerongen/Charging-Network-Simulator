@@ -1727,6 +1727,7 @@
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fSmall" value="small_airport"><span>Small</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fMedium" value="medium_airport" checked><span>Medium</span></label>
                         <label class="opt-check"><input class="airport-filter" type="checkbox" id="fLarge" value="large_airport" checked><span>Large</span></label>
+                        <label class="opt-check"><input type="checkbox" id="fHideNoRwy"><span>Hide no-rwy-data</span></label>
                         <label class="opt-check"><input type="checkbox" id="fReachGraph"><span>Range graph</span></label>
                     </div>
                     <div class="opt-group">
@@ -2599,11 +2600,19 @@
             medium_airport: L.layerGroup(),
             large_airport: L.layerGroup()
         };
+        // No-runway-data airports (dimmed dots) keep their own per-type groups so
+        // the Map Options 'Hide no-rwy-data' toggle can drop them without touching
+        // the size filters.
+        const bareDots = {
+            small_airport: L.layerGroup(),
+            medium_airport: L.layerGroup(),
+            large_airport: L.layerGroup()
+        };
         // A1 Step 2: reference layer of NRG2fly's real installed chargers (toggled
         // independently of the airport-size filters via #nrgChargerToggle).
         const nrgChargerLayer = L.layerGroup();
         // Only show the layers whose filter checkbox is ticked (Small is off by default).
-        document.querySelectorAll('.airport-filter').forEach(cb => { if (cb.checked) map.addLayer(clusters[cb.value]); });
+        document.querySelectorAll('.airport-filter').forEach(cb => { if (cb.checked) { map.addLayer(clusters[cb.value]); map.addLayer(bareDots[cb.value]); } });
 
         let allAirports = [];
         let nrgChargerDb = {};
@@ -4077,8 +4086,7 @@
             let rwy = '';
             if (window.CNSRunway) {
                 if (!CNSRunway.hasData(ap)) {
-                    // Un-plannable (#39): no auto stops, no reach spokes — say so on the card.
-                    rwy = `<div class="ap-card-rwy"><span class="ap-card-rwy-warn">no rwy data — excluded from planning</span></div>`;
+                    rwy = `<div class="ap-card-rwy"><span class="ap-card-rwy-warn">no runway data</span></div>`;
                 } else {
                     const chips = CNSRunway.summary(ap);
                     const fit = CNSRunway.suitability(_selectedPlane(), ap);
@@ -4138,7 +4146,7 @@
         }
         function _rescaleDots() {
             const s = _dotScale();
-            Object.values(clusters).forEach(g => g.eachLayer(m => { if (m._dotR) m.setRadius(m._dotR * s); }));
+            [...Object.values(clusters), ...Object.values(bareDots)].forEach(g => g.eachLayer(m => { if (m._dotR) m.setRadius(m._dotR * s); }));
         }
         map.on('zoomend', _rescaleDots);
         async function loadAirports() {
@@ -4151,6 +4159,7 @@
                 nrgChargerDb = chargerDb || {};
                 const chargerIdents = new Set(Object.keys(nrgChargerDb));
                 const buckets = { small_airport: [], medium_airport: [], large_airport: [] };
+                const bareBuckets = { small_airport: [], medium_airport: [], large_airport: [] };
                 allAirports.forEach(ap => {
                     airportByIdent[ap.ident] = ap;
                     // Charger airports are managed by refreshNrgChargerLayer() instead of
@@ -4158,9 +4167,11 @@
                     // from a single source — skip here to avoid a duplicate dot.
                     if (chargerIdents.has(ap.ident)) return;
                     if (!ap.latitude_deg || !ap.longitude_deg || !buckets[ap.type]) return;
-                    buckets[ap.type].push(_airportDot(ap));
+                    const bare = window.CNSRunway && !CNSRunway.hasData(ap);   // dimmed + hideable via 'Hide no-rwy-data'
+                    (bare ? bareBuckets : buckets)[ap.type].push(_airportDot(ap));
                 });
                 Object.keys(buckets).forEach(t => buckets[t].forEach(m => clusters[t].addLayer(m)));
+                Object.keys(bareBuckets).forEach(t => bareBuckets[t].forEach(m => bareDots[t].addLayer(m)));
                 map.addLayer(nrgChargerLayer);      // always on the map; its contents are managed
                 refreshNrgChargerLayer();           // A1 Step 2 — coords are loaded now
                 _rebuildSavedTripCoords();          // backfill coords on pre-coords saved trips so the engine can always profile them
@@ -4208,10 +4219,13 @@
         // size-cluster groups. The route's own markers are drawn separately and stay too.
         function _applyAirportVisibility() {
             const hide = _hideAirportsOnRoute && _routeEndpoints.length > 0;
+            const hideBareCb = document.getElementById('fHideNoRwy');
+            const hideBare = !!(hideBareCb && hideBareCb.checked);
             ['small_airport', 'medium_airport', 'large_airport'].forEach(type => {
                 const cb = document.querySelector(`.airport-filter[value="${type}"]`);
                 const show = !hide && cb && cb.checked;
                 if (show) map.addLayer(clusters[type]); else map.removeLayer(clusters[type]);
+                if (show && !hideBare) map.addLayer(bareDots[type]); else map.removeLayer(bareDots[type]);
             });
         }
         // Rebuild the NRG2fly layer. Visibility model (per spec — the two are OR'd
@@ -4293,6 +4307,9 @@
             _applyAirportVisibility();
             refreshNrgChargerLayer();
         });
+        // Map Options → hide no-runway-data airports (display only; the planner
+        // already never uses them for wing-borne aircraft).
+        document.getElementById('fHideNoRwy')?.addEventListener('change', _applyAirportVisibility);
         document.querySelectorAll('.airport-filter').forEach(cb => cb.addEventListener('change', () => {
             _applyAirportVisibility();   // honour the size filter AND the hide-on-route option
             refreshNrgChargerLayer();   // charger-airport dots follow the size filters too (OR)
@@ -6023,7 +6040,7 @@
                 if (!(+p.battery_kwh > 0) || !(+p.range_km > 0)) { el.textContent = ''; return; }
                 const eMax = pct * p.battery_kwh;
                 const dSat = CNSSettings.climbSatFrac() * p.range_km;
-                el.textContent = `${p.name}: +${Math.round(eMax)} kWh / climb · full above ${Math.round(dSat)} km · short hops pro-rata`;
+                el.textContent = `${p.name}: +${Math.round(eMax)} kWh per climb — full on legs ≥ ${Math.round(dSat)} km, proportional below`;
             }
             function updateBadge() {
                 // Count only the per-factor flags (exclude the `anyOn` summary).
@@ -6378,7 +6395,7 @@
             await loadAirports();
             if (window.CNSScheduler) CNSScheduler.init({ chargers: chargerById, onChange: renderFolder });
             if (window.CNSAnimation) CNSAnimation.init();
-            if (window.CNSRangeGraph) CNSRangeGraph.init({ map, getReachKm: () => { try { const p = _selectedPlane(); return p ? (_availableRangeKm(p) || 0) : 0; } catch (e) { return 0; } }, airports: () => allAirports, allowedFor: () => { const types = new Set(_allowedTypes()); const idents = _plannerAllowedIdents(); const plane = _selectedPlane(); return (ap) => (window.CNSRunway ? CNSRunway.hasData(ap) && CNSRunway.fits(plane, ap) : true) && (types.has(ap.type) || idents.has(ap.ident)); } });   // WYSIWYG: no runway data OR plane can't land there -> router won't stop there -> no spoke
+            if (window.CNSRangeGraph) CNSRangeGraph.init({ map, getReachKm: () => { try { const p = _selectedPlane(); return p ? (_availableRangeKm(p) || 0) : 0; } catch (e) { return 0; } }, airports: () => allAirports, allowedFor: () => { const types = new Set(_allowedTypes()); const idents = _plannerAllowedIdents(); const plane = _selectedPlane(); const lift = /vtol/i.test(String((plane && plane.type) || '')); return (ap) => (lift || !window.CNSRunway || (CNSRunway.hasData(ap) && CNSRunway.fits(plane, ap))) && (types.has(ap.type) || idents.has(ap.ident)); } });   // WYSIWYG mirror of the router: runway gates are wing-borne concerns — powered-lift spokes to ANY airport (ruled)
             renderFolder();
             updateDrawerSub();
             renderPlanePicker();
