@@ -188,6 +188,11 @@
       });
     }
 
+    // The map needs a view BEFORE any layer geometry is queried — Circle
+    // .getBounds() projects through the map and throws on a viewless map
+    // (which is exactly how v1 of this feature shipped a blank embed).
+    map.setView(oLatLng, 7);
+
     var circle = L.circle(oLatLng, {
       radius: timeline[0].range_km * 1000,
       color: 'rgba(29,158,117,0.35)', fillColor: 'rgba(29,158,117,0.07)', weight: 1.5
@@ -215,7 +220,8 @@
       label.innerHTML = '<b>' + s.year + '</b> · ' + s.name +
         (s.seats ? ' · ' + s.seats + ' seats' : '') + ' · ' + s.range_km + ' km';
       slider.value = idx;
-      var b = circle.getBounds().pad(0.06);
+      // Pure lat/lng maths (no projection): safe regardless of map state.
+      var b = L.latLng(oLatLng).toBounds(s.range_km * 2000).pad(0.05);
       if (animate) map.flyToBounds(b, { duration: 0.9 });
       else map.fitBounds(b);
     }
