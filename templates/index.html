@@ -3643,6 +3643,20 @@
         const _acField = (g, k) => String(g.entries[0][k] || '');
         const _visibleGroups = () => AIRCRAFT_GROUPS.filter(g =>
             _FILTER_DIMS.every(d => !_planeFilters[d.key] || _acField(g, d.key) === _planeFilters[d.key]));
+        // Default filters: CTOL + electric. Matched against the live catalog values
+        // (Notion emits 'electric', older catalogs 'fully electric') and only applied
+        // when at least one airframe survives, so a sparse catalog never starts with
+        // an empty strip.
+        (function () {
+            const vals = k => [...new Set(AIRCRAFT_GROUPS.map(g => _acField(g, k)).filter(Boolean))];
+            const matches = f => AIRCRAFT_GROUPS.some(g =>
+                _FILTER_DIMS.every(d => !f[d.key] || _acField(g, d.key) === f[d.key]));
+            const type = vals('type').find(v => v === 'CTOL') || null;
+            const prop = vals('propulsion').find(v => /^(fully[ _-])?electric$/i.test(v)) || null;
+            for (const f of [{ type, propulsion: prop }, { type, propulsion: null }, { type: null, propulsion: prop }]) {
+                if ((f.type || f.propulsion) && matches(f)) { Object.assign(_planeFilters, f); break; }
+            }
+        })();
         const _groupOf = id => AIRCRAFT_GROUPS.find(g => g.entries.some(p => p.id === id)) || null;
         const _profileMemory = {};                 // aircraft key → last used row id (per pageload)
         const _pkLabel = p => p.profile_label || 'Standard';
@@ -6593,8 +6607,11 @@
             const o = airportByIdent['EHLE'], d = airportByIdent['EDDF'];
             if (!o || !d) return;                                   // airports not in dataset → leave blank
             const planeSel = document.getElementById('plane');
-            if (planeSel && [...planeSel.options].some(op => op.value === 'beta_plane')) {
-                planeSel.value = 'beta_plane';
+            // Beta is the standard demo aircraft; the catalog id differs per source
+            // (Notion: beta_alia, legacy/fixture: beta_plane) so match the family.
+            const betaId = planeSel && [...planeSel.options].map(op => op.value).find(v => /^beta/i.test(v));
+            if (betaId) {
+                planeSel.value = betaId;
                 planeSel.dispatchEvent(new Event('change'));
             }
             // (charger follows the plane: Beta -> its default 320 kW, set by the plane change above)
