@@ -42,6 +42,16 @@ window.CNSFlight = (function () {
     function _climbOverheadPct() { const s = _settings(); return (s && s.climbOverheadPct) ? s.climbOverheadPct() : 0; }
     function _climbSatFrac() { const s = _settings(); return (s && s.climbSatFrac) ? s.climbSatFrac() : 0.15; }
 
+    // How many chargers this aircraft charges on AT ONCE (catalog
+    // simultaneous_charging, Notion-driven; e.g. Elysian: 2). Routes carry no
+    // charger-availability info, so planning assumes ALL N are available —
+    // charge power is N × the airport's charger, and the demand calculator
+    // books N bays (CNSCharging/DES honour the same count). 1 for everyone else.
+    function nChargers(plane) {
+        const s = plane && plane.simultaneous_charging;
+        return (s && s.enabled) ? Math.max(1, Math.floor(+s.max) || 1) : 1;
+    }
+
     // ---- Climb-energy model (CLIMB_ENERGY_MODEL.md) -------------------------------
     // Wing-borne aircraft pay a NET climb-minus-descent overhead per leg:
     //     E(leg) = cruisePerKm·distKm + eMaxKwh·min(1, distKm / dSatKm)
@@ -133,7 +143,12 @@ window.CNSFlight = (function () {
         const maxFlownKm = (eMaxClimb > 0) ? maxFlownLegKm(plane) : range * usableFrac;   // usable-energy max leg, flown km
         const availRangeKm = (range > 0 && route > 0) ? Math.max(0, maxFlownKm - sidStar) / route : 0;   // great-circle reach the planner enforces: the fixed SID/STAR pad is carved out so a padded leg (rawKm·route + sidStar) still respects the plane's max range. The DISPLAYED available range stays the full usable reach (pad shown in the LEG, not the headline reach). With the climb model on, the usable reach solves E(d)=usable in closed form (maxFlownLegKm).
         const getTarget = (typeof opts.getTargetSoc === 'function') ? opts.getTargetSoc : (() => _chargeTargetDefault());
-        const getChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => +opts.chargerKw || 0);
+        const _rawChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => +opts.chargerKw || 0);
+        // Multi-charger aircraft draw N chargers at once (assume all N available —
+        // routes carry no charger-availability info); the pack-side caps (c-rate,
+        // taper) still apply to the COMBINED power inside _effectiveChargePower.
+        const nCharge = nChargers(plane);
+        const getChargerKw = (ident) => _rawChargerKw(ident) * nCharge;
         // Interim-deficit charging (per-rotation opts supplied by the scheduler): a shared aircraft
         // flying this route >1x/day may depart a non-first rotation below full, and a non-final rotation
         // tops the terminus only to the away-stop target instead of 100%. Defaults reproduce D6 exactly.
@@ -280,6 +295,7 @@ window.CNSFlight = (function () {
                 training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : cat.training_range_km,
                 type: cat.type,                       // climb-model gate (wing-borne vs powered-lift) — catalog-sourced, trips don't persist it
                 range_incl_reserves: cat.range_incl_reserves,   // reserves already flown off the catalog range — usableFraction returns 1
+                simultaneous_charging: cat.simultaneous_charging,   // multi-charger aircraft charge on N units at once
             };
             // Battery deliberately NOT required: an absent battery_kwh is a
             // non-charging hybrid — batt=0 flows through simulateTrip as zero
@@ -312,5 +328,5 @@ window.CNSFlight = (function () {
         return ch ? ch.energyKwh : null;
     }
 
-    return { simulateTrip, _expandChain, profileForTrip, chargeEnergyAt, climbParams, legEnergyKwh, maxFlownLegKm };
+    return { simulateTrip, _expandChain, profileForTrip, chargeEnergyAt, climbParams, legEnergyKwh, maxFlownLegKm, nChargers };
 })();

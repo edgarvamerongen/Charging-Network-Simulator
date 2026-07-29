@@ -140,7 +140,7 @@ window.CNSScheduler = (function () {
             // size, so this only feeds charge time + peak). 0 for a rare unresolvable trip.
             // forcedChargerId → planCharging pins this flight to its chosen
             // charger here (manual-first); the resulting power feeds powers[t.id].
-            return { _i: i, energy: prof ? prof.energyAt(ident) : 0, size: batteryOf(t), forcedChargerId: t.chargerOverride };
+            return { _i: i, energy: prof ? prof.energyAt(ident) : 0, size: batteryOf(t), forcedChargerId: t.chargerOverride, nChargers: _nChOf(t) };
         });
         const powers = {};
         if (window.CNSCharging && fleet.length) {
@@ -170,6 +170,12 @@ window.CNSScheduler = (function () {
     // EFFECTIVE power used for both charge time and peak draw. Identity when the
     // acceptance toggle is off. Pass the plane's c_rate (catalog) when known.
     const _cRateOf = (trip) => ((window.PLANES_BY_ID || {})[trip.planeId] || trip || {}).c_rate;
+    // Chargers this trip's aircraft draws AT ONCE (catalog simultaneous_charging;
+    // 1 for everyone else). Single source: CNSFlight.nChargers — the engine applies
+    // the same count to its charge times, planCharging books this many bays, and
+    // the global sim claims this many physical slots.
+    const _nChOf = (trip) => (window.CNSFlight && CNSFlight.nChargers)
+        ? CNSFlight.nChargers((window.PLANES_BY_ID || {})[trip.planeId] || trip || {}) : 1;
     const _effPower = (power, batt, cRate) =>
         (_rs() && CNSSettings.effectiveChargePower) ? CNSSettings.effectiveChargePower(power, batt, cRate) : (power || 0);
     // Nameplate power of the charger a flight manually pinned (forcedChargerId),
@@ -390,7 +396,7 @@ window.CNSScheduler = (function () {
         loadTrips().filter(t => t.feasible !== false).forEach(t => {
             const { ph, total } = tripPhases(t, null);     // charges carry .ident
             const starts = instanceStarts(t);
-            const base = { trip: t, ph, total, cap: batteryOf(t), cRate: _cRateOf(t) };
+            const base = { trip: t, ph, total, cap: batteryOf(t), cRate: _cRateOf(t), nCh: _nChOf(t) };
             if (fleetSeparate(t) && starts.length > 1) {
                 // Separate aircraft (fleet) → one lane each, can fly in parallel.
                 starts.forEach((d, k) => lanes.push({ ...base, desired: [d], planeIdx: k + 1, planeTotal: starts.length, schedSlot: k }));
@@ -486,30 +492,33 @@ window.CNSScheduler = (function () {
             // is busy. A pin whose charger isn't in this airport's fleet leaves
             // bi < 0 and falls through to the automatic rule, so it can never
             // deadlock the sim.
-            let bi = -1;
+            // A multi-charger aircraft (L.nCh > 1, catalog simultaneous_charging)
+            // claims up to nCh DISTINCT bays at once — all occupied for the same
+            // (shorter) duration, combined draw. want=1 reproduces the old rules
+            // exactly (strongest bay free at arrival, else earliest-free).
+            const want = Math.max(1, Math.min(L.nCh || 1, pool.length));
+            let chosen = [];
             const forced = rot.tpl.ph[e.ci].forcedPower || 0;
             if (forced) {
-                for (let i = 0; i < pool.length; i++) {
-                    if (pool[i].power !== forced) continue;
-                    if (bi < 0 || pool[i].freeAt < pool[bi].freeAt) bi = i;
-                }
+                chosen = pool.map((_, i) => i).filter(i => pool[i].power === forced)
+                    .sort((x, y) => pool[x].freeAt - pool[y].freeAt).slice(0, want);
             }
-            // Otherwise claim the MOST POWERFUL charger free at arrival (operators
-            // plug into the fastest open bay). pool is ordered power-desc, so the
-            // first free slot scanning from the top is the strongest one available
-            // now. If every charger is busy, wait for whichever frees earliest.
-            if (bi < 0) {
-                for (let i = 0; i < pool.length; i++) if (pool[i].freeAt <= e.arrival) { bi = i; break; }
-                if (bi < 0) { bi = 0; for (let i = 1; i < pool.length; i++) if (pool[i].freeAt < pool[bi].freeAt) bi = i; }
+            if (!chosen.length) {
+                const free = [], busy = [];
+                pool.forEach((b, i) => (b.freeAt <= e.arrival ? free : busy).push(i));   // pool is power-desc: free[] keeps strongest-first
+                busy.sort((x, y) => pool[x].freeAt - pool[y].freeAt);
+                chosen = free.slice(0, want);
+                while (chosen.length < want && busy.length) chosen.push(busy.shift());
             }
-            const start = Math.max(e.arrival, pool[bi].freeAt);
-            // Size this charge by the PHYSICAL charger it claimed — not the
-            // planCharging estimate. Power is the slot's nameplate, capped by the
-            // battery's acceptance (C-rate) so the recorded draw and duration are
-            // both physical. The bay is still occupied for the (capped) duration.
-            const power = _effPower(pool[bi].power, L.cap, L.cRate);
+            const start = Math.max(e.arrival, ...chosen.map(i => pool[i].freeAt));
+            // Size this charge by the PHYSICAL chargers it claimed — not the
+            // planCharging estimate. Power is the claimed slots' nameplate sum,
+            // each capped by the battery's acceptance (C-rate) so the recorded
+            // draw and duration are both physical. Every claimed bay is occupied
+            // for the (capped) duration.
+            const power = chosen.reduce((s, i) => s + _effPower(pool[i].power, L.cap, L.cRate), 0);
             const dur = _chargeMin(rot.tpl.ph[e.ci].energy, power, L.cap, rot.tpl.ph[e.ci].arrivalFrac);
-            pool[bi].freeAt = start + dur;
+            chosen.forEach(i => { pool[i].freeAt = start + dur; });
             const phase = rot.phases[e.ci];
             phase.start = start;                 // ACTUAL charge start (queue wait already in)
             phase.dur = dur;                      // ACTUAL duration on the claimed charger

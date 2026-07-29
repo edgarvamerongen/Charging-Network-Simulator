@@ -53,17 +53,27 @@ window.CNSCharging = (function () {
         // the automatic heuristic touches a slot. A pin naming a charger this
         // airport doesn't have is dropped here, so the flight rejoins the
         // automatic pool below instead of fighting for a non-existent slot.
+        // Rule 1b: a multi-charger aircraft (nChargers > 1 — catalog
+        // simultaneous_charging, e.g. the Elysian) claims up to nChargers
+        // DISTINCT bays at once: one assignment, combined power, N slots
+        // booked toward peak. Everyone else is unchanged (nChargers = 1).
+        const wantOf = (ac) => Math.max(1, Math.floor(+(ac && ac.nChargers)) || 1);
+
         const autoOrder = [];
         aircraft.forEach((ac, i) => {
             const forced = ac && ac.forcedChargerId ? chargerById[ac.forcedChargerId] : null;
             if (forced) {
+                // A pinned multi-charger flight claims up to nChargers bays OF THE
+                // PINNED MODEL (duplicates in the fleet); with one unit installed it
+                // degrades to that single bay, exactly the old behaviour.
+                const bays = sortedChargers.filter(c => c.id === forced.id).slice(0, wantOf(ac));
                 // Same peak rule as the automatic path below: a pinned flight
                 // that needs no energy (pass-through / already charged) draws
-                // nothing, so its bay must NOT count toward peak.
-                if (ac.energy > 0) usedSlots.add(forced._slot);
-                const power = forced.power_kw;
+                // nothing, so its bays must NOT count toward peak.
+                if (ac.energy > 0) bays.forEach(c => usedSlots.add(c._slot));
+                const power = bays.reduce((s, c) => s + c.power_kw, 0);
                 assignments[i] = {
-                    aircraft: ac, charger: forced, power, forced: true,
+                    aircraft: ac, charger: bays[0] || forced, chargers: bays, bays: bays.length, power, forced: true,
                     chargeTimeMin: power ? (ac.energy / power) * 60 : Infinity
                 };
             } else {
@@ -88,18 +98,25 @@ window.CNSCharging = (function () {
         const pool = rotation.length ? rotation : sortedChargers;
         const m = pool.length;
 
-        ranked.forEach((entry, rank) => {
-            const charger = m ? pool[rank % m] : null;
+        let cursor = 0;   // moving bay cursor: a multi-charger aircraft consumes several positions
+        ranked.forEach((entry) => {
+            const want = m ? Math.min(wantOf(entry.ac), m) : 0;
+            const bays = [];
+            for (let j = 0; j < want; j++) {
+                const c = pool[cursor % m]; cursor++;
+                if (!bays.includes(c)) bays.push(c);   // wrap can repeat a bay — count it once
+            }
             // Only a charger that actually delivers energy contributes to peak draw.
             // A pass-through aircraft (arrives with enough charge -> energy 0) is still
             // assigned a charger for ordering, but draws nothing, so its slot must NOT
             // count toward peakPower — otherwise an airport a flight merely overflies
             // shows a phantom peak equal to its charger's nameplate (0 kWh but 60 kW).
-            if (charger && entry.ac.energy > 0) usedSlots.add(charger._slot);
-            const power = charger ? charger.power_kw : 0;
+            if (bays.length && entry.ac.energy > 0) bays.forEach(c => usedSlots.add(c._slot));
+            const power = bays.reduce((s, c) => s + c.power_kw, 0);
             assignments[entry.i] = {
                 aircraft: entry.ac,
-                charger,
+                charger: bays[0] || null,
+                chargers: bays, bays: bays.length,
                 power,
                 chargeTimeMin: power ? (entry.ac.energy / power) * 60 : Infinity
             };

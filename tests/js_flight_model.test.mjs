@@ -222,5 +222,28 @@ for (const c of golden.cases) {
   }
 })();
 
+// ---- simultaneous_charging: a multi-charger aircraft draws N chargers at once —
+//      the engine multiplies the per-unit charger power by N (callers keep passing
+//      the SINGLE-unit kW; planCharging/DES book the bays separately).
+(function multiChargerIntegration() {
+  const S = loadStack();
+  S.CNSSettings.reset();
+  const base = PLANES.beta_plane;
+  const twin = { ...base, simultaneous_charging: { enabled: true, max: 2 } };
+  const run = (plane) => S.CNSFlight.simulateTrip(plane, [wp('EHAM'), wp('LFPG')], { tripType: 'one-way', getChargerKw: () => 250 });
+  const single = run(base), dual = run(twin);
+  const c1 = single.charges[0], c2 = dual.charges[0];
+  const checks = [
+    [S.CNSFlight.nChargers(base) === 1 && S.CNSFlight.nChargers(twin) === 2, `nChargers reads the catalog flag (1 vs 2)`],
+    [c2.powerKw === S.CNSSettings.effectiveChargePower(500, twin.battery_kwh, twin.c_rate), `charge power = effectiveChargePower(2 × 250) (got ${c2.powerKw})`],
+    [c2.energyKwh === c1.energyKwh, `charge ENERGY is unchanged (${c2.energyKwh} vs ${c1.energyKwh})`],
+    [c2.chargeMin < c1.chargeMin, `charge time drops with the second charger (${c2.chargeMin} < ${c1.chargeMin})`],
+  ];
+  for (const [okc, msg] of checks) {
+    if (okc) { pass++; console.log(`  ok    multi-charger — ${msg}`); }
+    else { fail++; console.log(`  FAIL  multi-charger — ${msg}`); }
+  }
+})();
+
 console.log(`\n${pass} pass, ${deltas} intended delta(s), ${fail} fail (of ${golden.cases.length * golden._meta.settings.length})`);
 process.exit(fail ? 1 : 0);
