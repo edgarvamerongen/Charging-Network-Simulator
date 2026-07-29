@@ -450,6 +450,21 @@ def share_open(slug):
     ))
 
 
+# The embed's timeline mode: the electric-aviation vision as year stops.
+# Aircraft names/seats resolve live from the catalog; the ranges are the
+# fixed VISION numbers told on nrg2fly.com (not the catalog spec sheet), so
+# the story stays stable even when catalog entries are retuned in Notion.
+# Entries whose plane id has left the catalog are skipped silently.
+# (year, catalog plane id, vision range km, display name — catalog names can be
+#  long/technical ("… — Max (9 seats)"), the bar wants the short marketing name)
+EMBED_TIMELINE = [
+    ('2024', 'pipistrel_velis', 100, 'Velis Electro'),
+    ('2027', 'beta_plane',      350, 'Beta Alia CX300'),
+    ('2030', 'vaeridion',       500, 'Vaeridion Microliner'),
+    ('2035', 'elysian_e9x',     750, 'Elysian E9X'),
+]
+
+
 @app.route('/embed')
 def embed():
     """Public embed page — serves a lightweight, iframe-embeddable preview card."""
@@ -460,6 +475,7 @@ def embed():
     trip_type   = request.args.get('tripType', 'one-way')
     theme       = request.args.get('theme', 'light')
     utm_source  = request.args.get('utm_source', '')
+    timeline_on = request.args.get('timeline', '') == '1'
 
     airports = simulator.get_all_airports()
 
@@ -524,21 +540,56 @@ def embed():
     else:
         click_url = cns_base + '/'
 
+    # Timeline mode (range tier only): resolve the vision stops against the
+    # live catalog. Falls back to the normal single-plane embed when nothing
+    # in EMBED_TIMELINE survives the catalog lookup.
+    timeline = None
+    if timeline_on and tier == 'range':
+        by_id = {p['id']: p for p in simulator.planes}
+        stops = [{'year': y, 'name': label or by_id[pid]['name'],
+                  'seats': by_id[pid].get('seats'), 'range_km': rng}
+                 for (y, pid, rng, label) in EMBED_TIMELINE if pid in by_id]
+        if stops:
+            timeline = stops
+
     # Reachable airports for range tier
     reachable = []
     if tier == 'range':
-        range_km = plane.get('range_km', 500)
         olat, olon = origin['latitude_deg'], origin['longitude_deg']
-        for ap in airports:
-            if ap['ident'] == origin['ident']:
-                continue
-            d = _haversine(olat, olon, ap['latitude_deg'], ap['longitude_deg'])
-            if d <= range_km:
-                reachable.append({
-                    'ident': ap['ident'], 'name': ap['name'],
-                    'lat': ap['latitude_deg'], 'lon': ap['longitude_deg'],
-                    'type': ap['type'], 'dist': round(d, 1),
-                })
+        if timeline:
+            # ONE payload for every era: computed at the largest vision range,
+            # each entry carrying its distance so the client slider filters
+            # instantly. Pool: medium+large across the whole span, plus the
+            # small airfields inside the smallest (trainer-era) range — those
+            # are the whole point of the 2024 view, but including every small
+            # strip out to 750 km would triple the payload and the marker
+            # count for dots nobody can tell apart at that zoom.
+            max_rng = max(s['range_km'] for s in timeline)
+            min_rng = min(s['range_km'] for s in timeline)
+            for ap in airports:
+                if ap['ident'] == origin['ident']:
+                    continue
+                d = _haversine(olat, olon, ap['latitude_deg'], ap['longitude_deg'])
+                if d <= max_rng and (
+                        ap.get('type') in ('large_airport', 'medium_airport')
+                        or d <= min_rng):
+                    reachable.append({
+                        'ident': ap['ident'], 'name': ap['name'],
+                        'lat': ap['latitude_deg'], 'lon': ap['longitude_deg'],
+                        'type': ap['type'], 'dist': round(d, 1),
+                    })
+        else:
+            range_km = plane.get('range_km', 500)
+            for ap in airports:
+                if ap['ident'] == origin['ident']:
+                    continue
+                d = _haversine(olat, olon, ap['latitude_deg'], ap['longitude_deg'])
+                if d <= range_km:
+                    reachable.append({
+                        'ident': ap['ident'], 'name': ap['name'],
+                        'lat': ap['latitude_deg'], 'lon': ap['longitude_deg'],
+                        'type': ap['type'], 'dist': round(d, 1),
+                    })
 
     # Airports for network tier (medium+ only to keep the map fast)
     network_airports = []
@@ -558,6 +609,7 @@ def embed():
         sim_result=sim_result,
         reachable=reachable,
         network_airports=network_airports,
+        timeline=timeline,
         click_url=click_url,
         utm_source=utm_source,
     ))

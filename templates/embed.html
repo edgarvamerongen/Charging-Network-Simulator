@@ -58,11 +58,52 @@
     background: #e74c3c; border: 2px solid #fff;
     box-shadow: 0 0 4px rgba(0,0,0,.3);
   }
+  /* Timeline bar (range tier with ?timeline=1) */
+  .tl-bar {
+    background: var(--card); border-top: 1px solid var(--border);
+    padding: 9px 14px 7px; cursor: default;
+  }
+  .tl-row { display: flex; align-items: center; gap: 10px; }
+  .tl-play {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    border: 1.5px solid var(--green); background: transparent; color: var(--green);
+    font-size: 12px; line-height: 1; cursor: pointer; padding: 0;
+    transition: background .15s, color .15s;
+  }
+  .tl-play:hover, .tl-play.playing { background: var(--green); color: #fff; }
+  .tl-slider { flex: 1; accent-color: var(--green); cursor: pointer; min-width: 0; }
+  .tl-years {
+    display: flex; justify-content: space-between;
+    font-size: 10px; font-weight: 700; color: var(--text-2);
+    padding: 3px 40px 0 40px;
+  }
+  .tl-years span.on { color: var(--green); }
+  .tl-label {
+    text-align: center; font-size: 12px; font-weight: 600; color: var(--text-1);
+    padding-top: 2px; min-height: 17px;
+  }
+  .tl-label b { color: var(--green); font-size: 13px; }
 </style>
 </head>
 <body onclick="window.open({{ click_url | tojson }},'_blank')">
 
 <div id="map"></div>
+
+{% if timeline %}
+<!-- Timeline: clicks stay inside the bar (the body is one big click-through). -->
+<div class="tl-bar" onclick="event.stopPropagation()">
+  <div class="tl-row">
+    <button class="tl-play" id="tlPlay" aria-label="Play the timeline" type="button">▶</button>
+    <input class="tl-slider" id="tlSlider" type="range"
+           min="0" max="{{ timeline|length - 1 }}" step="1" value="0"
+           aria-label="Year">
+  </div>
+  <div class="tl-years" id="tlYears">
+    {% for s in timeline %}<span>{{ s.year }}</span>{% endfor %}
+  </div>
+  <div class="tl-label" id="tlLabel"></div>
+</div>
+{% endif %}
 
 {% if tier in ('route', 'full') and sim_result and sim_result.success %}
 <div class="stat-bar">
@@ -91,6 +132,7 @@
   var reachable = {{ reachable | tojson }};
   var networkAP = {{ network_airports | tojson }};
   var plane     = {{ plane | tojson }};
+  var timeline  = {{ timeline | tojson }};
 
   var map = L.map('map', {
     zoomControl: false,
@@ -122,6 +164,85 @@
         fillOpacity: 1, weight: 1
       }).bindTooltip(ap.name, { direction: 'top', offset: [0, -5] }).addTo(map);
     }
+  }
+
+  else if (tier === 'range' && timeline && timeline.length) {
+    // Timeline mode: one payload, the slider filters by precomputed distance.
+    var oLatLng = [origin.latitude_deg, origin.longitude_deg];
+    L.marker(oLatLng, { icon: dot('origin-dot') })
+      .bindTooltip(origin.name, { permanent: true, direction: 'top', offset: [0, -8], className: '' })
+      .addTo(map);
+
+    // Canvas renderer keeps ~500 dots fluid while the map animates.
+    var canvas = L.canvas({ padding: 0.3 });
+    var markers = [];
+    for (var i = 0; i < reachable.length; i++) {
+      var ap = reachable[i];
+      markers.push({
+        dist: ap.dist,
+        m: L.circleMarker([ap.lat, ap.lon], {
+          renderer: canvas, radius: 4,
+          color: 'rgba(0,0,0,0.25)', weight: 1,
+          fillColor: '#F5C842', fillOpacity: 0.95
+        }).bindTooltip(ap.name, { direction: 'top', offset: [0, -5] })
+      });
+    }
+
+    var circle = L.circle(oLatLng, {
+      radius: timeline[0].range_km * 1000,
+      color: 'rgba(29,158,117,0.35)', fillColor: 'rgba(29,158,117,0.07)', weight: 1.5
+    }).addTo(map);
+
+    var slider = document.getElementById('tlSlider');
+    var label  = document.getElementById('tlLabel');
+    var years  = document.getElementById('tlYears').children;
+    var playBtn = document.getElementById('tlPlay');
+    var current = -1;
+
+    function showStop(idx, animate) {
+      idx = Math.max(0, Math.min(timeline.length - 1, idx));
+      if (idx === current) return;
+      current = idx;
+      var s = timeline[idx];
+      circle.setRadius(s.range_km * 1000);
+      for (var j = 0; j < markers.length; j++) {
+        var inRange = markers[j].dist <= s.range_km;
+        var onMap = map.hasLayer(markers[j].m);
+        if (inRange && !onMap) markers[j].m.addTo(map);
+        else if (!inRange && onMap) map.removeLayer(markers[j].m);
+      }
+      for (var y = 0; y < years.length; y++) years[y].className = y === idx ? 'on' : '';
+      label.innerHTML = '<b>' + s.year + '</b> · ' + s.name +
+        (s.seats ? ' · ' + s.seats + ' seats' : '') + ' · ' + s.range_km + ' km';
+      slider.value = idx;
+      var b = circle.getBounds().pad(0.06);
+      if (animate) map.flyToBounds(b, { duration: 0.9 });
+      else map.fitBounds(b);
+    }
+
+    // Play: step through the eras, range growing as it goes.
+    var playTimer = null;
+    function stopPlay() {
+      if (playTimer) { clearInterval(playTimer); playTimer = null; }
+      playBtn.textContent = '▶';
+      playBtn.classList.remove('playing');
+    }
+    playBtn.addEventListener('click', function () {
+      if (playTimer) { stopPlay(); return; }
+      if (current >= timeline.length - 1) showStop(0, true);
+      playBtn.textContent = '⏸';
+      playBtn.classList.add('playing');
+      playTimer = setInterval(function () {
+        if (current >= timeline.length - 1) { stopPlay(); return; }
+        showStop(current + 1, true);
+      }, 2200);
+    });
+    slider.addEventListener('input', function () {
+      stopPlay();                              // the visitor takes control
+      showStop(parseInt(slider.value, 10), true);
+    });
+
+    showStop(0, false);
   }
 
   else if (tier === 'range') {
