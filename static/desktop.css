@@ -19,6 +19,7 @@
     --brand-orange-4:  #c75e36;      /* press-state orange */
     --brand-gold:      #e6c149;      /* highlight / caution */
     --brand-ink:       #32326E;      /* NRG2FLY brand navy */
+    --brand-ink-2:     #4a3a8a;      /* violet-navy gradient partner */
     --brand-ink-soft:  #4a4f76;
     --brand-ink-mist:  #6b7194;      /* muted copy — navy family, AA on cream */
     --brand-cream:     #f6efde;      /* silky page background */
@@ -29,7 +30,15 @@
     --green-500:       #2f9e6e;      /* success fills */
     --green-200:       #a8d9c0;      /* remote/soft success */
     --red-500:         #c33d3d;
+    --red-700:         #a31818;      /* danger as text on tint */
     --steel-200:       #d6d9e4;      /* queued / inert */
+    --gold-800:        #6b541a;      /* gold-family text on gold tints */
+    --gold-900:        #3a2e0a;
+    --orange-800:      #a44a23;      /* coral-family text on coral tints */
+    --green-300:       #34d399;      /* success accents on dark navy */
+    --green-900:       #0b3d2e;      /* text on green-300 */
+    --excel-500:       #2a8a5a;      /* deliberate third-party brand: Excel export */
+    --excel-600:       #217346;
 
     /* ---- Layer 2 · semantics ---- */
     --bg:           var(--brand-cream);
@@ -43,6 +52,13 @@
     --warn:         var(--brand-gold);
     --danger:       var(--red-500);
     --grad-brand:   linear-gradient(135deg, var(--brand-orange-1), var(--brand-orange-2) 55%, var(--brand-orange-3));
+
+    /* soft tints — shared hover / fill washes */
+    --ink-tint:          rgba(50,50,110,.06);
+    --ink-tint-strong:   rgba(50,50,110,.10);
+    --accent-tint:       rgba(229,120,80,.10);
+    --accent-tint-strong:rgba(229,120,80,.18);
+    --grad-ink:     linear-gradient(135deg, var(--brand-ink) 0%, var(--brand-ink-2) 100%);
 
     /* surfaces — paper (content) vs glass (chrome) */
     --paper:        var(--brand-paper);
@@ -176,7 +192,7 @@ a { color: var(--primary); }
     color: var(--ink-soft); background: #fff; border: 1px solid var(--panel-border); border-radius: 7px;
     transition: background .12s, border-color .12s, color .12s;
 }
-.ap-card-btn:hover { background: #f1f5f9; border-color: #cbd5e1; color: var(--ink); }
+.ap-card-btn:hover { background: var(--accent-tint); border-color: rgba(229,120,80,.35); color: var(--ink); }
 .ap-card .leaflet-popup-close-button {
     top: 7px; right: 7px; width: 22px; height: 22px; padding: 0;
     background: rgba(20,24,40,.5); color: #fff; border-radius: 50%;
@@ -636,7 +652,8 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
     border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;   /* nests inside the panel's 1px border arc */
 }
 .panel-title {
-    font-size: 1.02rem; margin: 0; font-weight: 700; letter-spacing: -.01em;
+    font-size: 1.02rem; margin: 0; font-weight: 600; letter-spacing: -.01em;
+    font-family: var(--font-display);
     display: inline-flex; align-items: center; gap: 8px;
 }
 .panel-title::before {
@@ -652,29 +669,33 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 .field { margin-bottom: 12px; position: relative; }
 .field > label { display: block; font-size: .7rem; font-weight: 700; color: var(--ink-soft); margin-bottom: 5px; letter-spacing: .05em; text-transform: uppercase; }
 .field .form-control, .field .form-select, .input-group .form-control, .input-group .form-select {
-    border-radius: var(--radius-sm); border-color: #e2e8f0; font-size: .9rem; color: var(--ink);
+    border-radius: var(--radius-sm); border-color: var(--hairline); background-color: #fff;
+    font-size: .9rem; color: var(--ink);
+    transition: border-color .12s ease, box-shadow .12s ease;
 }
+.field .form-control:hover:not(:focus), .field .form-select:hover:not(:focus) { border-color: rgba(50,50,110,.26); }
 .field .form-control:focus, .field .form-select:focus,
 .input-group .form-control:focus, .input-group .form-select:focus {
-    border-color: var(--primary); box-shadow: 0 0 0 3px rgba(229,120,80,.22);
+    border-color: var(--primary); box-shadow: 0 0 0 3px var(--accent-tint-strong);
 }
-.input-group-text { background: #f1f5f9; border-color: #e2e8f0; font-size: .82rem; color: var(--ink-soft); }
+.input-group-text { background: var(--ink-tint); border-color: var(--hairline); font-size: .82rem; color: var(--ink-soft); }
 
-/* Primary actions */
+/* Primary actions — one base, gradient/success/ghost variants. */
 .btn-cns, .btn-cns-success, .btn-cns-ghost {
-    width: 100%; padding: 10px 16px; border-radius: var(--radius-sm); font-weight: 600;
-    border: 1px solid transparent; cursor: pointer; font-size: .9rem; transition: transform .05s, box-shadow .15s, background .15s;
+    width: 100%; padding: 10px 16px; border-radius: 10px; font-weight: 600;
+    border: 1px solid transparent; cursor: pointer; font-size: .9rem;
+    transition: transform .12s ease, box-shadow .15s, background .15s, filter .15s;
 }
-.btn-cns          { background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3)); color: #fff; box-shadow: 0 4px 12px rgba(229,120,80,.28); }
-.btn-cns:hover    { box-shadow: 0 8px 18px rgba(229,120,80,.36); }
-.btn-cns-success  { background: linear-gradient(180deg, #34d399, #10b981); color: #fff; box-shadow: 0 4px 12px rgba(16,185,129,.28); }
-.btn-cns-success:hover { box-shadow: 0 8px 18px rgba(16,185,129,.36); }
-.btn-cns-ghost    { background: transparent; border-color: #e2e8f0; color: var(--ink-soft); }
-.btn-cns-ghost:hover { background: #f8fafc; color: var(--ink); }
+.btn-cns          { background: var(--grad-brand); color: #fff; box-shadow: var(--glow-cta), inset 0 1px 0 rgba(255,255,255,.35); }
+.btn-cns:hover    { box-shadow: 0 10px 22px -6px rgba(229,120,80,.6), inset 0 1px 0 rgba(255,255,255,.35); transform: translateY(-1px); }
+.btn-cns-success  { background: linear-gradient(180deg, var(--green-500), var(--green-600)); color: #fff; box-shadow: 0 6px 18px -6px rgba(47,158,110,.55), inset 0 1px 0 rgba(255,255,255,.25); }
+.btn-cns-success:hover { box-shadow: 0 10px 22px -6px rgba(47,158,110,.6), inset 0 1px 0 rgba(255,255,255,.25); transform: translateY(-1px); }
+.btn-cns-ghost    { background: transparent; border-color: var(--hairline); color: var(--ink-soft); }
+.btn-cns-ghost:hover { background: var(--ink-tint); color: var(--ink); }
 .btn-cns:active, .btn-cns-success:active, .btn-cns-ghost:active { transform: translateY(1px); }
-/* Export-to-spreadsheet button: classic Excel green. */
-#exportSpreadsheet { background: linear-gradient(180deg, #2a8a5a, #217346); color: #fff; box-shadow: 0 4px 12px rgba(33,115,70,.28); }
-#exportSpreadsheet:hover { box-shadow: 0 8px 18px rgba(33,115,70,.38); }
+/* Export-to-spreadsheet button: classic Excel green (deliberate third-party brand). */
+#exportSpreadsheet { background: linear-gradient(180deg, var(--excel-500), var(--excel-600)); color: #fff; box-shadow: 0 6px 18px -6px rgba(33,115,70,.5), inset 0 1px 0 rgba(255,255,255,.22); }
+#exportSpreadsheet:hover { box-shadow: 0 10px 22px -6px rgba(33,115,70,.55); }
 
 /* Compact variant of the primary button (drawer header CTA) */
 .btn-sm-cns {
@@ -695,9 +716,75 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
     padding: 6px 10px; border-radius: var(--radius-sm);
     transition: background .15s, color .15s;
 }
-.btn-ghost-tool:hover { background: rgba(43,47,90,.05); color: var(--ink); }
+.btn-ghost-tool:hover { background: var(--ink-tint); color: var(--ink); }
 .btn-ghost-tool .gear { font-size: 1em; opacity: .75; }
 .btn-ghost-tool:hover .gear { opacity: 1; }
+
+/* =========================================================
+   Bootstrap de-leak — stock .btn-* (modal footers, drawer
+   tools) join the design system instead of shipping B5 blue.
+   Overrides ride Bootstrap's own CSS-variable API where the
+   fill is flat; the primary gradient sits as background-image
+   over the --bs-btn-bg fallback.
+   ========================================================= */
+.btn { --bs-btn-font-weight: 600; border-radius: var(--radius-sm); }
+.btn-primary {
+    --bs-btn-bg: var(--brand-orange-3); --bs-btn-border-color: transparent;
+    --bs-btn-hover-bg: var(--brand-orange-4); --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-bg: var(--brand-orange-4); --bs-btn-active-border-color: transparent;
+    --bs-btn-disabled-bg: var(--brand-orange-2); --bs-btn-disabled-border-color: transparent;
+    --bs-btn-focus-shadow-rgb: 229,120,80;
+    background-image: var(--grad-brand);
+    box-shadow: var(--glow-cta), inset 0 1px 0 rgba(255,255,255,.3);
+}
+.btn-primary:hover, .btn-primary:active { background-image: none; }
+.btn-secondary {
+    --bs-btn-bg: transparent; --bs-btn-color: var(--ink-soft);
+    --bs-btn-border-color: rgba(50,50,110,.22);
+    --bs-btn-hover-bg: var(--ink-tint); --bs-btn-hover-color: var(--ink);
+    --bs-btn-hover-border-color: rgba(50,50,110,.32);
+    --bs-btn-active-bg: var(--ink-tint-strong); --bs-btn-active-color: var(--ink);
+    --bs-btn-active-border-color: rgba(50,50,110,.32);
+    --bs-btn-focus-shadow-rgb: 50,50,110;
+}
+.btn-success {
+    --bs-btn-bg: var(--green-500); --bs-btn-border-color: transparent;
+    --bs-btn-hover-bg: var(--green-600); --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-bg: var(--green-600); --bs-btn-active-border-color: transparent;
+    --bs-btn-focus-shadow-rgb: 47,158,110;
+}
+.btn-danger {
+    --bs-btn-bg: var(--red-500); --bs-btn-border-color: transparent;
+    --bs-btn-hover-bg: var(--red-700); --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-bg: var(--red-700); --bs-btn-active-border-color: transparent;
+    --bs-btn-focus-shadow-rgb: 195,61,61;
+}
+.btn-outline-primary {
+    --bs-btn-color: var(--ink); --bs-btn-border-color: rgba(50,50,110,.30);
+    --bs-btn-hover-bg: var(--ink); --bs-btn-hover-border-color: var(--ink); --bs-btn-hover-color: #fff;
+    --bs-btn-active-bg: var(--ink); --bs-btn-active-border-color: var(--ink); --bs-btn-active-color: #fff;
+    --bs-btn-focus-shadow-rgb: 50,50,110;
+}
+.btn-outline-secondary {
+    --bs-btn-color: var(--ink-soft); --bs-btn-border-color: rgba(50,50,110,.22);
+    --bs-btn-hover-bg: var(--ink-tint); --bs-btn-hover-color: var(--ink); --bs-btn-hover-border-color: rgba(50,50,110,.32);
+    --bs-btn-active-bg: var(--ink-tint-strong); --bs-btn-active-color: var(--ink); --bs-btn-active-border-color: rgba(50,50,110,.32);
+    --bs-btn-focus-shadow-rgb: 50,50,110;
+}
+.btn-outline-danger {
+    --bs-btn-color: var(--danger); --bs-btn-border-color: rgba(195,61,61,.4);
+    --bs-btn-hover-bg: var(--danger); --bs-btn-hover-border-color: var(--danger);
+    --bs-btn-active-bg: var(--red-700); --bs-btn-active-border-color: var(--red-700);
+    --bs-btn-focus-shadow-rgb: 195,61,61;
+}
+/* Form controls inherit the house accent (checkboxes, radios, ranges). */
+input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color: var(--primary); }
+.form-check-input:checked { background-color: var(--primary); border-color: var(--primary); }
+.form-check-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--accent-tint-strong); }
+.form-range::-webkit-slider-thumb { background: var(--primary); }
+.form-range::-moz-range-thumb { background: var(--primary); }
+/* Navy-tinted modal scrim instead of Bootstrap black. */
+.modal-backdrop { --bs-backdrop-bg: #21214a; --bs-backdrop-opacity: .45; }
 
 /* =========================================================
    Trajectory pill + autocomplete
@@ -705,7 +792,7 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 /* Fleet-mode segmented selector under the frequency field. */
 .fleet-mode {
     display: flex; gap: 6px; margin-top: 8px;
-    background: rgba(43,47,90,.04); border: 1px solid var(--panel-border);
+    background: var(--ink-tint); border: 1px solid var(--hairline-soft);
     border-radius: var(--radius-sm); padding: 4px;
 }
 .fleet-mode .fleet-opt {
@@ -716,10 +803,11 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 }
 .fleet-mode .fleet-opt input { accent-color: var(--primary); margin: 0; }
 .fleet-mode .fleet-opt:has(input:checked) {
-    background: var(--panel-strong); color: var(--ink); font-weight: 600;
-    box-shadow: var(--shadow-sm);
+    background: var(--ink); color: #fff; font-weight: 600;
 }
+.fleet-mode .fleet-opt:has(input:checked) input { accent-color: #fff; }
 .fleet-mode .fleet-opt strong { color: var(--primary); }
+.fleet-mode .fleet-opt:has(input:checked) strong { color: var(--brand-gold); }
 
 .trip-traj {
     font-size: .82rem; padding: 8px 12px; margin-bottom: 12px;
@@ -735,14 +823,14 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 .ac-wrap { position: relative; }
 .ac-list {
     position: absolute; z-index: 1000; top: 100%; left: 0; right: 0;
-    max-height: 240px; overflow-y: auto; background: #fff;
-    border: 1px solid #e2e8f0; border-top: none;
+    max-height: 240px; overflow-y: auto; background: var(--paper);
+    border: 1px solid var(--hairline); border-top: none;
     border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-    box-shadow: 0 10px 24px rgba(15,23,41,.12);
+    box-shadow: 0 18px 38px -12px rgba(50,50,110,.28);
 }
 .ac-list.d-none { display: none; }
 .ac-item { padding: .45rem .65rem; cursor: pointer; font-size: .85rem; }
-.ac-item:hover, .ac-item.active { background: #eff6ff; }
+.ac-item:hover, .ac-item.active { background: var(--accent-tint); }
 .ac-item small { color: var(--muted); }
 .ac-input.ac-unset { border-color: var(--warn); }
 
@@ -787,7 +875,7 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 /* No label — the green € amount IS the signal (tooltip names it). Amount left,
    its derivation right, so the line reads "€81.60   ←   136 kWh · €0.60/kWh". */
 .hl-rev-per { font-size: .78rem; font-weight: 700; opacity: .75; margin-left: 5px; letter-spacing: 0; }
-.hl-rev-amt { flex: 0 0 auto; text-align: left; font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: #34d399; }  /* brand green (matches the success / Add-to-demand button), distinct from the gold stat tiles */
+.hl-rev-amt { flex: 0 0 auto; text-align: left; font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: var(--green-300); }  /* brand green (matches the success / Add-to-demand button), distinct from the gold stat tiles */
 .hl-rev-sub { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: .62rem; opacity: .75; letter-spacing: .03em; }
 .lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
 
@@ -808,18 +896,20 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
    STOP = navy-tinted (a structural intermediate point).
    TRAINING = red (kept distinctive — semantic warning + matches map circle).
    AIRCRAFT / TRIP = result-panel section labels; stay neutral navy/gold. */
-.tag-aircraft { background: #e9ebf3; color: var(--brand-ink); border-color: #d2d6e3; }
-.tag-trip     { background: #faf0d6; color: #6b541a;        border-color: #ecdba8; }
-.tag-home     { background: #fde5d4; color: #a44a23;        border-color: #f6cdb0; }
-.tag-dest     { background: #faecbe; color: #6b541a;        border-color: #ead993; }
-.tag-stop     { background: #e3e6f1; color: var(--brand-ink); border-color: #c9cee0; }
-.tag-training { background: #fde0e0; color: #a31818;        border-color: #f6c0c0; }
+/* Regenerated from four token tints (navy / gold / coral / green) —
+   was 9 hand-picked pastel pairs with 24 loose hexes. */
+.tag-aircraft { background: var(--ink-tint-strong); color: var(--ink); border-color: rgba(50,50,110,.18); }
+.tag-trip     { background: rgba(230,193,73,.16);  color: var(--gold-800);   border-color: rgba(230,193,73,.5); }
+.tag-home     { background: rgba(229,120,80,.14);  color: var(--orange-800); border-color: rgba(229,120,80,.34); }
+.tag-dest     { background: rgba(230,193,73,.24);  color: var(--gold-800);   border-color: rgba(230,193,73,.6); }
+.tag-stop     { background: var(--ink-tint);       color: var(--ink);        border-color: rgba(50,50,110,.14); }
+.tag-training { background: rgba(195,61,61,.10);   color: var(--red-700);    border-color: rgba(195,61,61,.28); }
 /* result-panel detail groups (F7): Route / Charging. */
-.tag-route    { background: #e3ecfb; color: #1c4e8a;        border-color: #cadcf4; }
-.tag-charging { background: #e2f3ea; color: #1b6b43;        border-color: #c8e9d6; }
+.tag-route    { background: var(--ink-tint-strong); color: var(--ink);          border-color: rgba(50,50,110,.18); }
+.tag-charging { background: rgba(47,158,110,.13);   color: var(--success-deep); border-color: rgba(47,158,110,.32); }
 
 .spec-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
-.spec-table td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+.spec-table td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid var(--hairline-soft); }
 .spec-table tr:last-child td { border-bottom: none; }
 .spec-table td:first-child { color: var(--muted); width: 42%; font-weight: 500; font-size: .78rem; }
 .spec-table td:last-child { color: var(--ink); font-weight: 500; }
@@ -835,8 +925,8 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 .step-sub { color: var(--muted); font-size: .76rem; margin-top: 1px; }
 .step-ico { display: inline-block; width: 1.1em; margin-right: 5px; text-align: center; }
 .step-fly { color: var(--brand-ink); }
-.step-charge-ico { color: #10b981; }
-.route-steps .step-total td { border-top: 1px solid #e2e8f0; padding-top: 7px; }
+.step-charge-ico { color: var(--success); }
+.route-steps .step-total td { border-top: 1px solid var(--hairline); padding-top: 7px; }
 /* collapsible sections — clickable header bar with a large chevron */
 .sec-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
 .sec-header .section-tag { margin-bottom: 6px; }
@@ -845,10 +935,10 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 .result-group.collapsed .sec-chev { transform: rotate(-90deg); }
 .result-group.collapsed .spec-table { display: none; }
 /* return divider + destination highlight */
-.step-return td { width: auto; font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--brand-ink); background: #eef1f8; border-radius: 4px; padding: 5px 8px !important; border-bottom: none; }
+.step-return td { width: auto; font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--brand-ink); background: var(--ink-tint); border-radius: 4px; padding: 5px 8px !important; border-bottom: none; }
 .ret-ico { margin-right: 6px; font-size: 1.05em; }
-.step-dest { background: #fff7e6; }
-.step-dest .step-main { color: #8a5a14; }
+.step-dest { background: rgba(230,193,73,.14); }
+.step-dest .step-main { color: var(--gold-800); }
 .dest-badge { margin-left: 7px; font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--brand-gold); color: #3a2e0a; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
 .charge-note-row td { width: auto !important; color: var(--muted) !important; font-size: .72rem !important; font-style: italic; font-weight: 400 !important; padding-top: 2px !important; border-bottom: none; }
 
@@ -890,7 +980,7 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
    Notes read as prose; term = formula = RESULT rows keep the flight-log structure
    with the derived result emphasized; the → conclusion gets the house accent. */
 #calcPanel {
-    font-size: .76rem; background: #f8fafc; border: 1px solid #e2e8f0;
+    font-size: .76rem; background: rgba(50,50,110,.035); border: 1px solid var(--hairline-soft);
     padding: 12px 14px; border-radius: var(--radius-sm); color: var(--ink-soft);
 }
 #calcPanel .calc-note { font-size: .74rem; color: var(--muted); line-height: 1.5; }
@@ -942,7 +1032,7 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
     transition: background .15s, color .15s;
 }
 .seg-btn:hover { color: var(--ink); }
-.seg-btn.active { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(229,120,80,.30); }
+.seg-btn.active { background: var(--ink); color: #fff; box-shadow: 0 2px 6px rgba(50,50,110,.30); }
 .control-pill {
     display: inline-flex; align-items: center; gap: 10px;
     background: var(--panel-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -1018,7 +1108,7 @@ body:has(.drawer.open)::after {
    over :hover so a hover mid-confirm doesn't flip it back. */
 .drawer-handle.confirming,
 .drawer-handle.confirming:hover {
-    background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+    background: var(--grad-ink);
     border-color: transparent; color: #fff; box-shadow: var(--shadow-lg);
 }
 .drawer-handle.confirming .chevron { opacity: 0; }
@@ -1056,15 +1146,15 @@ body:has(.drawer.open)::after {
     position: absolute; top: 12px; right: 14px; z-index: 6;
     width: 30px; height: 30px; padding: 0; border: none; border-radius: 50%;
     display: grid; place-items: center; line-height: 1;
-    background: rgba(15,23,41,.06); color: var(--ink-soft); font-size: 20px; cursor: pointer;
+    background: var(--ink-tint); color: var(--ink-soft); font-size: 20px; cursor: pointer;
     transition: background .15s ease;
 }
-.drawer-close:hover { background: rgba(15,23,41,.12); }
+.drawer-close:hover { background: var(--ink-tint-strong); }
 .drawer-head { padding-right: 36px; }
 
 .drawer-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
-.drawer-title { font-size: 1.1rem; font-weight: 700; margin: 0; }
-.folder-airport-name { font-size: 1.7rem; font-weight: 700; line-height: 1.15; }
+.drawer-title { font-size: 1.1rem; font-weight: 600; margin: 0; font-family: var(--font-display); letter-spacing: -.01em; }
+.folder-airport-name { font-size: 1.7rem; font-weight: 600; line-height: 1.15; font-family: var(--font-display); letter-spacing: -.015em; }
 .folder-airport-sub { font-size: .85rem; color: var(--muted); margin-top: 2px; }
 .folder-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .drawer-tools { display: flex; gap: 12px; align-items: center; margin-left: auto; flex-wrap: wrap; }
@@ -1082,7 +1172,8 @@ body:has(.drawer.open)::after {
 }
 #folder [data-dest]:hover { box-shadow: var(--shadow); border-color: var(--border-strong, #cbd5e1) !important; }
 #folder [data-dest] h5 {
-    font-size: 1rem; font-weight: 700; letter-spacing: -.01em;
+    font-size: 1rem; font-weight: 600; letter-spacing: -.01em;
+    font-family: var(--font-display);
     display: inline-flex; align-items: center; gap: 8px;
 }
 #folder [data-dest] h5::before {
@@ -1097,7 +1188,7 @@ body:has(.drawer.open)::after {
 .folder-trip-infeasible td { opacity: .55; }
 .folder-trip-infeasible td:first-child { opacity: 1; }   /* keep the role + flag legible */
 .tag-infeasible { display: inline-block; font-size: .68rem; font-weight: 700; letter-spacing: .02em;
-    color: #92400e; background: #fde68a; border: 1px solid #f59e0b; border-radius: 999px;
+    color: var(--gold-800); background: rgba(230,193,73,.28); border: 1px solid var(--brand-gold); border-radius: 999px;
     padding: 1px 7px; margin-left: 6px; cursor: help; white-space: nowrap; }
 #folder .table-sm thead th {
     font-size: .65rem !important; font-weight: 700; text-transform: uppercase;
@@ -1107,7 +1198,7 @@ body:has(.drawer.open)::after {
 }
 /* Aggregates row (legacy bg-primary class kept for any other consumers) */
 #folder .bg-primary {
-    background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%) !important;
+    background: var(--grad-ink) !important;
     border-radius: var(--radius-sm) !important;
     box-shadow: 0 6px 16px rgba(43,47,90,.22);
 }
@@ -1138,14 +1229,14 @@ body:has(.drawer.open)::after {
     color: var(--brand-orange-3); flex-shrink: 0;
 }
 .sched-card-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.sched-card-title { font-weight: 700; font-size: .9rem; color: var(--ink); }
+.sched-card-title { font-weight: 600; font-size: .9rem; color: var(--ink); font-family: var(--font-display); }
 .sched-card-summary { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sched-card-chev { font-size: .9rem; color: var(--muted); opacity: .8; }
 .sched-card:hover .sched-card-chev { color: var(--brand-orange-3); opacity: 1; }
 
 /* ---- Per-airport stats summary: 2 hero + 3 small ---- */
 .agg-block {
-    background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+    background: var(--grad-ink);
     color: #fff; border-radius: var(--radius-sm);
     padding: 16px 20px; box-shadow: 0 6px 16px rgba(43,47,90,.22);
     margin-bottom: 16px;
@@ -1157,7 +1248,7 @@ body:has(.drawer.open)::after {
 }
 .agg-hero-rev { cursor: pointer; border-radius: 8px; transition: background .12s; }
 .agg-hero-rev:hover { background: rgba(255,255,255,.06); }
-.agg-hero-rev .agg-hero-num { color: #6ee7a8; }   /* revenue reads as money, not load */
+.agg-hero-rev .agg-hero-num { color: var(--green-300); }   /* revenue reads as money, not load */
 .agg-hero {
     display: flex; flex-direction: column; gap: 4px;
 }
@@ -1177,7 +1268,7 @@ body:has(.drawer.open)::after {
     transition: background .15s, color .15s;
 }
 .rev-seg-btn:hover { color: #fff; }
-.rev-seg-btn.active { background: #34d399; color: #0b3d2e; }
+.rev-seg-btn.active { background: var(--green-300); color: var(--green-900); }
 .agg-hero-num {
     font-size: 2.05rem; font-weight: 800; line-height: 1;
     letter-spacing: -.02em; color: var(--brand-gold);
@@ -1203,7 +1294,7 @@ body:has(.drawer.open)::after {
     padding: 10px 14px !important;
 }
 #folder .alert-warning {
-    background: #fffbeb; color: #92400e;
+    background: rgba(230,193,73,.14); color: var(--gold-800);
     border-left: 3px solid var(--warn);
 }
 
@@ -1245,7 +1336,13 @@ body:has(.drawer.open)::after {
    Misc utilities + small modal polish
    ========================================================= */
 .est-note { font-size: .72rem; color: var(--muted); }
-.modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-lg); }
+.modal-content {
+    border-radius: var(--radius-lg); border: 1px solid var(--glass-edge);
+    background: var(--paper); box-shadow: var(--glass-shine), var(--shadow-lg);
+}
+.modal-header { border-bottom-color: var(--hairline-soft); }
+.modal-footer { border-top-color: var(--hairline-soft); }
+.modal-title { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; color: var(--ink); }
 
 /* ---- Edit-flight modal: reuse the app's spec-card visual language so the
    editor reads as native, not a bolted-on Bootstrap form. Scoped to
@@ -1298,13 +1395,13 @@ body:has(.drawer.open)::after {
 .rs-cell-static .rs-cell-ctrl { opacity: 1 !important; }
 .rs-cell-wide { grid-column: 1 / -1; }
 .rs-cell-wide .rs-cell-ctrl .form-range { flex: 0 1 230px; }
-.rs-q { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #cbd5e1; background: #fff; color: var(--muted); font-size: .66rem; font-weight: 700; line-height: 15px; text-align: center; cursor: help; display: inline-block; user-select: none; }
+.rs-q { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--hairline); background: #fff; color: var(--muted); font-size: .66rem; font-weight: 700; line-height: 15px; text-align: center; cursor: help; display: inline-block; user-select: none; }
 .rs-q:hover, .rs-q:focus { background: var(--primary); color: #fff; border-color: var(--primary); outline: none; }
 .rs-q-inline { width: 14px; height: 14px; line-height: 13px; font-size: .6rem; vertical-align: middle; }
 .rs-curve { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--panel-border); }
 .rs-curve:not(.on) .rs-curve-body { opacity: .4; }
 .rs-curve-body { margin-top: 6px; }
-.taper-curve { display: block; width: 100%; height: auto; background: #f8fafc; border: 1px solid var(--panel-border); border-radius: var(--radius-sm); margin-bottom: 6px; }
+.taper-curve { display: block; width: 100%; height: auto; background: rgba(50,50,110,.035); border: 1px solid var(--hairline-soft); border-radius: var(--radius-sm); margin-bottom: 6px; }
 .rs-curve-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; }
 .rs-curve-sliders .rs-cell-ctrl { margin-top: 0; }
 /* Neutral ink for the curve's value chips — brand orange here reads as a warning, not a current value (scoped to this panel only). */
@@ -1430,7 +1527,7 @@ body:has(.drawer.open)::after {
 .soc-toggle:has(+ .soc-panel:not(.d-none)) .chev { transform: rotate(180deg); }
 .soc-panel {
     margin-top: 10px; padding: 12px 14px;
-    background: #f8fafc; border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+    background: rgba(50,50,110,.035); border: 1px solid var(--hairline-soft); border-radius: var(--radius-sm);
 }
 .soc-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
 .soc-row .form-range { flex: 1; min-width: 140px; max-width: 280px; }
@@ -1541,9 +1638,10 @@ body:has(.drawer.open)::after {
 .freq-compact { display: flex; align-items: center; gap: 8px; }
 .freq-compact .freq-n { width: 60px; flex: 0 0 auto; text-align: center; }
 .freq-sep { color: var(--muted); font-size: .8rem; white-space: nowrap; }
-.freq-seg { display: inline-flex; background: #eef1f6; border-radius: 8px; padding: 2px; gap: 2px; }
-.freq-seg-btn { border: none; background: transparent; color: var(--ink-soft); font-size: .8rem; font-weight: 600; padding: 4px 13px; border-radius: 6px; cursor: pointer; }
-.freq-seg-btn[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: var(--shadow-sm); }
+.freq-seg { display: inline-flex; background: var(--ink-tint); border: 1px solid var(--hairline-soft); border-radius: 8px; padding: 2px; gap: 2px; }
+.freq-seg-btn { border: none; background: transparent; color: var(--ink-soft); font-size: .8rem; font-weight: 600; padding: 4px 13px; border-radius: 6px; cursor: pointer; transition: background .12s, color .12s; }
+.freq-seg-btn:hover { color: var(--ink); }
+.freq-seg-btn[aria-pressed="true"] { background: var(--ink); color: #fff; }
 /* Usable-reach bar (in the slimmed spec card; photo/name/stats live on the tiles) */
 .ps-id-hidden, .ps-stat-hide { display: none !important; }
 .reach-row { margin: 2px 0 6px; }
@@ -1552,7 +1650,7 @@ body:has(.drawer.open)::after {
 .reach-bar { height: 8px; border-radius: 999px; background: rgba(43,47,90,.10); overflow: hidden; }
 .reach-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--brand-orange-1), var(--brand-orange-3)); transition: width .25s ease; }
 /* Trip-type segmented control (drives the hidden #tripType select) */
-.trip-seg { display: flex; border: 1px solid var(--panel-border); border-radius: 999px; padding: 3px; background: #fffdf7; gap: 2px; }
+.trip-seg { display: flex; border: 1px solid var(--hairline-soft); border-radius: 999px; padding: 3px; background: var(--ink-tint); gap: 2px; }
 .trip-seg-btn { flex: 1 1 0; border: none; background: transparent; border-radius: 999px; padding: 6px 4px; font-size: .78rem; font-weight: 600; color: var(--ink-soft); cursor: pointer; transition: background .12s, color .12s; white-space: nowrap; }
 .trip-seg-btn:hover { color: var(--ink); }
 .trip-seg-btn.active { background: var(--brand-ink); color: #fff; }
@@ -1669,7 +1767,7 @@ body:has(.drawer.open)::after {
 .stops-advanced[open] summary { color: var(--primary); font-weight: 600; }
 .adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; padding: 8px; background: rgba(15,23,41,.03); border-radius: 8px; }
 .adv-field label { display: block; font-size: .65rem; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
-.adv-field input, .adv-field select { width: 100%; font-size: .8rem; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
+.adv-field input, .adv-field select { width: 100%; font-size: .8rem; padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 6px; background: #fff; }
 
 .stops-section { margin-bottom: 12px; padding: 10px; background: rgba(229,120,80,.07); border-left: 3px solid var(--primary); border-radius: 8px; }
 .stops-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;
@@ -1691,9 +1789,9 @@ body:has(.drawer.open)::after {
 .stops-list li .step { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--primary); color: #fff; font-size: .65rem; font-weight: 700; }
 .stops-list li.terminus .step { background: var(--ink-soft); }
 .stops-list .type-tag { font-size: .62rem; padding: 1px 5px; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-.stops-list .type-medium { background: #dbeafe; color: #1d4ed8; }
-.stops-list .type-large { background: #d1fae5; color: #065f46; }
-.stops-list .type-small { background: #fee2e2; color: #991b1b; }
+.stops-list .type-medium { background: var(--ink-tint-strong); color: var(--ink); }
+.stops-list .type-large { background: rgba(47,158,110,.16); color: var(--success-deep); }
+.stops-list .type-small { background: rgba(195,61,61,.12); color: var(--red-700); }
 .stops-list .leg-dist { font-size: .7rem; color: var(--muted); justify-self: end; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stops-error { color: var(--danger); font-size: .82rem; }
 .stops-error button, #enableAllTypesBtn, #enableNetworkBtn, #enableAllPoolsBtn { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
@@ -1712,10 +1810,10 @@ body:has(.drawer.open)::after {
 .alt-tip { position: fixed; z-index: 4000; display: none; background: #1f2937; color: #fff; padding: 4px 9px; border-radius: 6px; font-size: .72rem; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.3); }
 .stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
 .stops-list .stops-add { padding: 6px 0 0 0; position: relative; }
-.stops-list .stops-add input { width: 100%; padding: 5px 8px; font-size: .82rem; border: 1px solid #e2e8f0; border-radius: 6px; }
+.stops-list .stops-add input { width: 100%; padding: 5px 8px; font-size: .82rem; border: 1px solid var(--hairline); border-radius: 6px; }
 .stops-list .stops-add input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(229,120,80,.18); }
 .stops-btn { font-size: .76rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--panel-border); background: rgba(255,255,255,.8); color: var(--ink-soft); cursor: pointer; font-weight: 600; }
-.stops-btn:hover { background: #fff; color: var(--ink); border-color: #cbd5e1; }
+.stops-btn:hover { background: #fff; color: var(--ink); border-color: rgba(50,50,110,.3); }
 
 /* Custom-entry list inside the plane/charger modals */
 .custom-list .cl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
@@ -1749,9 +1847,9 @@ body:has(.drawer.open)::after {
 
 /* ---- report airport picker (was a second inline block) ---- */
 .report-ap-list { display: flex; flex-direction: column; gap: 6px; max-height: 48vh; overflow-y: auto; }
-.report-ap-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border, #e2e8f0); border-radius: 10px; cursor: pointer; margin: 0; transition: border-color .12s, background .12s; }
-.report-ap-row:hover { border-color: #94a3b8; }
-.report-ap-row.is-sel { border-color: #2563eb; background: #eff4ff; box-shadow: 0 0 0 1px #2563eb inset; }
+.report-ap-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 10px; cursor: pointer; margin: 0; transition: border-color .12s, background .12s; }
+.report-ap-row:hover { border-color: rgba(50,50,110,.35); }
+.report-ap-row.is-sel { border-color: var(--primary); background: var(--accent-tint); box-shadow: 0 0 0 1px var(--primary) inset; }
 .report-ap-row input { margin: 0; flex: 0 0 auto; }
 .report-ap-main { display: flex; flex-direction: column; line-height: 1.25; }
 .report-ap-name { font-weight: 600; color: var(--ink, #0f1729); }
