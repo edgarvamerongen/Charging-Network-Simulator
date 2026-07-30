@@ -1,42 +1,112 @@
 /* =========================================================
-   CNS — design tokens (NRG2fly palette)
+   CNS — design tokens (NRG2fly design language)
    ----
-   Warm brand identity matching nrg2fly.com: orange gradient
-   for primary actions, gold accent for highlights, deep navy
-   ink for typography, cream background for the (uncovered)
-   page area. Cool slate tones are kept only as semantic
-   greys (`--ink-soft`, `--muted`) for legibility on cream.
+   Layered system: primitives → semantics → components.
+   Raw hex is allowed ONLY inside the primitives block; every
+   rule below consumes semantic tokens, so a future dark theme
+   is a single remap under [data-theme="dark"].
+   Surface doctrine ("glass chrome, paper content"): liquid
+   glass is reserved for non-scrolling chrome — topbar, popups,
+   map controls, drawer handle, dropdowns, toasts. Scrolling
+   surfaces (rails, drawer body, Gantt) sit on near-solid
+   paper so dense data stays crisp and scroll stays cheap.
    ========================================================= */
 :root {
-    /* NRG2fly brand */
+    /* ---- Layer 1 · primitives (the only raw hex in the system) ---- */
     --brand-orange-1:  #f5b074;      /* lightest peach in the logo gradient */
     --brand-orange-2:  #ed8d6f;      /* mid coral */
     --brand-orange-3:  #e57850;      /* deepest warm orange */
-    --brand-gold:      #e6c149;      /* CTA / highlight */
-    --brand-ink:       #2b2f5a;      /* deep navy wordmark colour */
+    --brand-orange-4:  #c75e36;      /* press-state orange */
+    --brand-gold:      #e6c149;      /* highlight / caution */
+    --brand-ink:       #32326E;      /* NRG2FLY brand navy */
+    --brand-ink-soft:  #4a4f76;
+    --brand-ink-mist:  #6b7194;      /* muted copy — navy family, AA on cream */
     --brand-cream:     #f6efde;      /* silky page background */
-    --brand-cream-2:   #ebe0c4;      /* slightly darker cream for borders */
+    --brand-cream-2:   #ebe0c4;      /* darker cream for borders */
+    --brand-paper:     #fffbf4;      /* opaque warm paper for content surfaces */
+    --brand-white:     #ffffff;
+    --green-600:       #1f7a55;      /* success as text */
+    --green-500:       #2f9e6e;      /* success fills */
+    --green-200:       #a8d9c0;      /* remote/soft success */
+    --red-500:         #c33d3d;
+    --steel-200:       #d6d9e4;      /* queued / inert */
 
-    /* Semantic aliases (everything else in the stylesheet uses these) */
+    /* ---- Layer 2 · semantics ---- */
     --bg:           var(--brand-cream);
     --ink:          var(--brand-ink);
-    --ink-soft:     #4a4f76;
-    --muted:        #64748b;          /* bumped from #94a3b8 — passes AA on cream */
+    --ink-soft:     var(--brand-ink-soft);
+    --muted:        var(--brand-ink-mist);
     --primary:      var(--brand-orange-3);
-    --primary-2:    #c75e36;          /* deeper press-state orange */
-    --success:      #10b981;
+    --primary-2:    var(--brand-orange-4);
+    --success:      var(--green-500);
+    --success-deep: var(--green-600);
     --warn:         var(--brand-gold);
-    --danger:       #c33d3d;
-    --panel:        rgba(255,250,242,0.88);
-    --panel-strong: rgba(255,251,244,0.96);
-    --panel-solid:  #fffbf4;                 /* opaque cream — sticky caps use this, not blur */
-    --panel-border: rgba(43,47,90,0.10);
-    --shadow-sm:    0 1px 2px rgba(43,47,90,.05), 0 1px 3px rgba(43,47,90,.06);
-    --shadow:       0 12px 32px rgba(43,47,90,.10), 0 2px 6px rgba(43,47,90,.06);
-    --shadow-lg:    0 28px 60px rgba(43,47,90,.18), 0 6px 12px rgba(43,47,90,.06);
-    --radius:       14px;
+    --danger:       var(--red-500);
+    --grad-brand:   linear-gradient(135deg, var(--brand-orange-1), var(--brand-orange-2) 55%, var(--brand-orange-3));
+
+    /* surfaces — paper (content) vs glass (chrome) */
+    --paper:        var(--brand-paper);
+    --hairline:     rgba(50,50,110,.14);
+    --hairline-soft:rgba(50,50,110,.09);
+    --glass-bg:     rgba(252,247,238,.60);
+    --glass-bg-strong: rgba(253,249,242,.72);
+    --glass-blur:   blur(15px) saturate(180%);
+    --glass-edge:   rgba(255,255,255,.55);   /* 1px border on glass */
+    --glass-shine:  inset 0 1px 0 rgba(255,255,255,.6);
+
+    /* legacy surface names (pre-facelift rules still consume these) */
+    --panel:        rgba(255,251,244,.94);
+    --panel-strong: rgba(255,251,244,.97);
+    --panel-solid:  var(--brand-paper);
+    --panel-border: var(--hairline-soft);
+
+    /* elevation — navy-tinted, warm */
+    --shadow-sm:    0 1px 2px rgba(50,50,110,.05), 0 1px 3px rgba(50,50,110,.06);
+    --shadow:       0 12px 32px rgba(50,50,110,.10), 0 2px 6px rgba(50,50,110,.06);
+    --shadow-lg:    0 28px 60px rgba(50,50,110,.18), 0 6px 12px rgba(50,50,110,.06);
+    --glow-cta:     0 6px 18px -6px rgba(229,120,80,.55);
+
+    /* scales */
     --radius-sm:    8px;
+    --radius:       12px;
+    --radius-lg:    18px;
+    --radius-xl:    24px;
+    --radius-pill:  999px;
+    --fs-12: .8rem;  --fs-13: .867rem;  --fs-15: 1rem;  --fs-17: 1.133rem;  --fs-20: 1.333rem;
+
+    /* type — Poppins carries brand display moments, Inter carries data */
+    --font-ui:      'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Poppins', var(--font-ui);
+
+    /* focus — one visible ring for every interactive element */
+    --focus:        rgba(229,120,80,.75);
+    --focus-ring:   0 0 0 2.5px rgba(229,120,80,.30);
+
+    /* Gantt states — single source; scheduler.js paints via .gb-* classes */
+    --gantt-fly:        var(--brand-ink);
+    --gantt-charge:     var(--green-500);
+    --gantt-charge-away:var(--green-200);
+    --gantt-wait:       var(--brand-gold);
+    --gantt-queue:      var(--steel-200);
+    --gantt-overflow:   var(--red-500);
+    --gantt-grid:       rgba(50,50,110,.10);
+    --gantt-grid-soft:  rgba(50,50,110,.06);
 }
+
+/* Liquid-glass chrome recipe (never on scrolling surfaces). */
+.glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-edge);
+    box-shadow: var(--glass-shine), var(--shadow);
+}
+@supports not (backdrop-filter: blur(1px)) {
+    :root { --glass-bg: rgba(253,249,242,.94); --glass-bg-strong: rgba(253,249,242,.96); }
+}
+
+/* Visible keyboard focus everywhere; mouse clicks stay clean. */
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 * { box-sizing: border-box; }
 /* 15px root: every rem-based size (incl. Bootstrap controls/modals) renders
    ~6% denser — the professional, instrument-panel feel without per-rule churn. */
