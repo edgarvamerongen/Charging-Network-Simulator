@@ -1,0 +1,1688 @@
+/* =========================================================
+   CNS — design tokens (NRG2fly palette)
+   ----
+   Warm brand identity matching nrg2fly.com: orange gradient
+   for primary actions, gold accent for highlights, deep navy
+   ink for typography, cream background for the (uncovered)
+   page area. Cool slate tones are kept only as semantic
+   greys (`--ink-soft`, `--muted`) for legibility on cream.
+   ========================================================= */
+:root {
+    /* NRG2fly brand */
+    --brand-orange-1:  #f5b074;      /* lightest peach in the logo gradient */
+    --brand-orange-2:  #ed8d6f;      /* mid coral */
+    --brand-orange-3:  #e57850;      /* deepest warm orange */
+    --brand-gold:      #e6c149;      /* CTA / highlight */
+    --brand-ink:       #2b2f5a;      /* deep navy wordmark colour */
+    --brand-cream:     #f6efde;      /* silky page background */
+    --brand-cream-2:   #ebe0c4;      /* slightly darker cream for borders */
+
+    /* Semantic aliases (everything else in the stylesheet uses these) */
+    --bg:           var(--brand-cream);
+    --ink:          var(--brand-ink);
+    --ink-soft:     #4a4f76;
+    --muted:        #64748b;          /* bumped from #94a3b8 — passes AA on cream */
+    --primary:      var(--brand-orange-3);
+    --primary-2:    #c75e36;          /* deeper press-state orange */
+    --success:      #10b981;
+    --warn:         var(--brand-gold);
+    --danger:       #c33d3d;
+    --panel:        rgba(255,250,242,0.88);
+    --panel-strong: rgba(255,251,244,0.96);
+    --panel-solid:  #fffbf4;                 /* opaque cream — sticky caps use this, not blur */
+    --panel-border: rgba(43,47,90,0.10);
+    --shadow-sm:    0 1px 2px rgba(43,47,90,.05), 0 1px 3px rgba(43,47,90,.06);
+    --shadow:       0 12px 32px rgba(43,47,90,.10), 0 2px 6px rgba(43,47,90,.06);
+    --shadow-lg:    0 28px 60px rgba(43,47,90,.18), 0 6px 12px rgba(43,47,90,.06);
+    --radius:       14px;
+    --radius-sm:    8px;
+}
+* { box-sizing: border-box; }
+/* 15px root: every rem-based size (incl. Bootstrap controls/modals) renders
+   ~6% denser — the professional, instrument-panel feel without per-rule churn. */
+html { font-size: 15px; }
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: var(--ink); background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+}
+/* Figures align like instruments: fixed-width digits everywhere numbers stack. */
+.big, .hl-rev-amt, .hl-rev-sub, .agg-hero-num, .agg-small-num, .leg-dist,
+.stops-summary, .reach-label strong, .spec-table td, .folder-trip td,
+.result-stat b, #calcPanel { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+/* Compact form controls (Bootstrap defaults read chunky next to the new chrome) */
+.form-control, .form-select { font-size: .875rem; padding: .45rem .7rem; }
+/* Silky paper texture — subtle SVG turbulence on the cream background.
+   Visible only where the map doesn't cover (topbar, gaps around panels)
+   and through the cream-tinted glass blur. Very low contrast so it
+   feels like fibre, not pattern. */
+body::before {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.17  0 0 0 0 0.18  0 0 0 0 0.35  0 0 0 0.10 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.65'/></svg>");
+    mix-blend-mode: multiply;
+    opacity: .35;
+}
+button { font-family: inherit; }
+a { color: var(--primary); }
+
+/* Global slim scrollbar styling — replaces the chunky platform default
+   with something that reads as part of the design system. Firefox uses
+   the standard `scrollbar-*` properties; WebKit gets the pseudo-element
+   treatment. Both transparent track + cream-tinted thumb that pops on
+   hover. */
+* { scrollbar-width: thin; scrollbar-color: rgba(43,47,90,.22) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+    background: rgba(43,47,90,.18); border-radius: 999px;
+    border: 2px solid transparent; background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(43,47,90,.35); background-clip: padding-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* =========================================================
+   Map canvas
+   ========================================================= */
+#map { position: fixed; inset: 0; z-index: 0; }
+#folderMap { height: 520px; width: 100%; border-radius: var(--radius-sm); }
+.leaflet-container { font-family: inherit; background: #e9eef7; }
+.popup-btn { font-size: .78rem; padding: .25rem .5rem; margin-top: 5px; width: 100%; border-radius: 6px; }
+/* Airport hover-popup photo (Wikipedia/Wikidata or Esri satellite — /api/airport-photo). */
+/* Airport CLICK card (Eindhoven-style): full-bleed photo banner + name +
+   ICAO·IATA·municipality + Divert + Origin/Destination/Add stop. Opens on dot
+   click (× to close); hover only preloads the photo so it's instant on open. */
+.ap-card .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; border-radius: 13px; }
+.ap-card .leaflet-popup-content { margin: 0; width: 230px; }
+.ap-card .ap-photo-wrap { border-radius: 0; margin: 0; }
+.ap-card-name { font-weight: 700; font-size: .92rem; color: var(--ink); padding: 9px 12px 0; letter-spacing: -.01em; }
+.ap-card-meta { color: var(--muted); font-size: .72rem; padding: 2px 12px 0; }
+.ap-card-divert { color: var(--muted); font-size: .72rem; padding: 4px 12px 0; }
+.ap-card-rwy { color: var(--muted); font-size: .72rem; padding: 2px 12px 0; }
+.ap-card-rwy-warn { color: #b4550a; font-weight: 600; }   /* runway fit warning for the selected aircraft */
+.ap-card-actions { display: flex; gap: 6px; padding: 10px 12px 12px; }
+.ap-card-btn {
+    flex: 1; padding: 5px 4px; font-size: .72rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+    color: var(--ink-soft); background: #fff; border: 1px solid var(--panel-border); border-radius: 7px;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.ap-card-btn:hover { background: #f1f5f9; border-color: #cbd5e1; color: var(--ink); }
+.ap-card .leaflet-popup-close-button {
+    top: 7px; right: 7px; width: 22px; height: 22px; padding: 0;
+    background: rgba(20,24,40,.5); color: #fff; border-radius: 50%;
+    font: 700 15px/22px sans-serif; text-align: center;
+}
+.ap-card .leaflet-popup-close-button:hover { background: rgba(20,24,40,.72); color: #fff; }
+/* range-graph airport labels (CNSRangeGraph) — navy ICAO, cream halo, no box */
+.leaflet-div-icon.rg-lbl { background: none; border: none; width: auto !important; height: auto !important; }
+.rg-lbl span { display: inline-block; transform: translate(8px, -50%); font: 700 10px/1 system-ui, sans-serif; color: var(--brand-ink); white-space: nowrap; text-shadow: 0 0 2px var(--brand-cream), 0 0 3px var(--brand-cream), 0 0 3px var(--brand-cream); }
+.ap-photo-wrap {
+    position: relative; width: 100%; aspect-ratio: 16 / 9; margin-bottom: 9px;
+    border-radius: 8px; overflow: hidden;
+    background: linear-gradient(100deg, #eceff4 30%, #e1e6ef 50%, #eceff4 70%);
+    background-size: 220% 100%; animation: ap-shimmer 1.15s linear infinite;
+}
+.ap-photo-wrap.is-empty { display: none; }
+.ap-photo-wrap.is-loaded { animation: none; background: #e1e6ef; }
+.ap-photo { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .25s ease; }
+.ap-photo-wrap.is-loaded .ap-photo { opacity: 1; }
+.ap-photo-credit {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 7px 3px;
+    font-size: 8.5px; line-height: 1.15; color: #fff; text-align: right;
+    background: linear-gradient(transparent, rgba(0,0,0,.5)); pointer-events: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+@keyframes ap-shimmer { to { background-position: -220% 0; } }
+
+/* =========================================================
+   Top bar
+   ========================================================= */
+.topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px;
+    /* Soft white brand bar — airy blur over the map; nav items integrate into it */
+    background: linear-gradient(to bottom, rgba(255,255,255,.94), rgba(255,255,255,.82));
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--panel-border);
+    box-shadow: 0 1px 6px rgba(15,23,41,.05);
+}
+.brand {
+    display: flex; align-items: center; gap: 12px;
+    color: var(--ink); text-decoration: none; line-height: 1;
+}
+.brand-wide { height: 32px; display: block; }
+.brand-tagline {
+    font-weight: 600; font-size: .82rem; color: var(--ink-soft);
+    padding-left: 12px; border-left: 1px solid var(--panel-border);
+    letter-spacing: .01em;
+    /* Optical alignment with the logo: the NRG2FLY wordmark sits in the lower
+       half of the PNG (the chevron mark spans the full height), so a centred
+       tagline reads ~3px high next to it. Nudge down to the wordmark's centre. */
+    transform: translateY(3px);
+}
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: .82rem; font-weight: 600; color: var(--ink-soft); user-select: none; padding: 0 6px; }
+.switch input { appearance: none; width: 34px; height: 20px; background: #cbd5e1; border-radius: 999px; position: relative; transition: background .2s; cursor: pointer; }
+.switch input:checked { background: var(--primary); }
+.switch input::before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.switch input:checked::before { left: 16px; }
+
+/* =========================================================
+   Topbar tools + Options dropdown
+   ========================================================= */
+.topbar-tools { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; justify-content: flex-end; }
+/* Header airport search — jump the map anywhere, then act from the popup */
+.topbar-search { position: relative; }
+.topbar-search .ac-input {
+    width: 210px; padding: 7px 12px 7px 30px; font-size: .82rem;
+    border: 1px solid transparent; border-radius: 8px;
+    background: rgba(15,23,41,.055); color: var(--ink);
+    transition: background .15s, border-color .15s;
+}
+.topbar-search .ac-input::placeholder { color: var(--muted); font-weight: 500; }
+.topbar-search .ac-input:focus { background: #fff; border-color: var(--panel-border); }
+.topbar-search .search-ico { position: absolute; left: 11px; top: 6px; color: var(--muted); pointer-events: none; }
+.topbar-search .ac-list { left: 0; right: 0; top: calc(100% + 4px); }
+.options-wrap { position: relative; }
+
+/* B4 — NRG2fly platform buttons (onepager download + back-to-platform).
+   Outline/secondary by default; the CTA variant gets the brand-orange
+   gradient fill so it reads as the primary "return" action. Pill shape
+   + flex-wrap on .topbar-tools lets both stack gracefully on narrow nav. */
+/* Onepager uses the exact ghost-control look (see .options-btn) so the whole
+   tools row reads as ONE set — one tone, one size, one radius, one hover. */
+.cns-brand-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: 1px solid transparent; color: var(--ink-soft);
+    font-size: .82rem; font-weight: 600; line-height: 1; white-space: nowrap;
+    padding: 7px 10px; border-radius: 8px; cursor: pointer; text-decoration: none;
+    transition: background .15s, color .15s;
+}
+.cns-brand-btn:hover { background: rgba(15,23,41,.06); color: var(--ink); }
+.cns-brand-btn-cta {
+    background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3));
+    border-color: var(--brand-orange-3); color: #fff;
+    box-shadow: 0 2px 6px rgba(229,120,80,.30);
+}
+.cns-brand-btn-cta:hover {
+    background: linear-gradient(180deg, var(--brand-orange-3), var(--primary-2));
+    color: #fff; box-shadow: 0 4px 10px rgba(229,120,80,.40);
+}
+
+/* B3 — brand news ticker. Black band FIXED directly under the 56px topbar
+   (height 28px → the rails start at 90px, leaving a gap). A static
+   "⚡ NEWS" label sits on the left; the headlines scroll past it. Pure-CSS
+   marquee: .cns-ticker-track holds TWO identical spans sliding 0 → -50%
+   for a seamless loop. Content is populated from static/ticker.json — edit
+   that file to update the news (read fresh on every load). */
+.cns-ticker {
+    position: fixed; top: 56px; left: 0; right: 0; height: 28px; z-index: 25;
+    display: flex; align-items: stretch; overflow: hidden;
+    background: #0f1923; color: #e6e9ef;
+    font-size: .8rem; font-weight: 600; line-height: 1;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.cns-ticker-label {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+    padding: 0 14px; color: #ffd23f; font-weight: 800;
+    letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,.14);
+}
+.cns-ticker-viewport { flex: 1 1 auto; min-width: 0; overflow: hidden; display: flex; align-items: center; }
+.cns-ticker-track {
+    display: inline-flex; flex-wrap: nowrap; white-space: nowrap;
+    will-change: transform; animation: ticker-scroll 76s linear infinite;
+}
+.cns-ticker-text { padding: 0; display: inline-block; }
+.cns-ticker:hover .cns-ticker-track { animation-play-state: paused; }
+@keyframes ticker-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cns-ticker-track { animation: none; }
+}
+/* Map Options → Display → Show news ticker. When hidden, drop the band and
+   lift the rails up under the topbar so no empty gap is left behind. */
+body.ticker-off .cns-ticker { display: none; }
+body.ticker-off .rail-left,
+body.ticker-off .rail-right { top: 62px; }
+body.ticker-off .rail-left .panel { max-height: calc(100vh - 86px); }
+.options-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: 1px solid transparent; color: var(--ink-soft);
+    font-size: .82rem; font-weight: 600;
+    padding: 7px 10px; border-radius: 8px; cursor: pointer;
+    transition: background .15s, color .15s;
+}
+.options-btn .gear { font-size: .95rem; line-height: 1; opacity: .85; transition: transform .25s; }
+.options-btn:hover { background: rgba(15,23,41,.06); color: var(--ink); }
+.options-btn[aria-expanded="true"] { background: rgba(15,23,41,.09); color: var(--ink); }
+/* Help "?" — same ink tone + size as every other glyph: a quiet outlined
+   circle, no special accent, so Tour matches Map Options and Onepager. */
+.help-btn { color: var(--ink-soft); }
+.help-btn .help-glyph {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 1.5px solid currentColor; background: transparent;
+    color: inherit; font-weight: 700; font-size: .6rem;
+}
+.help-btn:hover { background: rgba(15,23,41,.06); color: var(--ink); }
+
+/* Driver.js popover: re-skinned to match the NRG2fly palette. */
+.cns-tour-popover.driver-popover {
+    background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
+    border-radius: var(--radius); color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    max-width: 360px;
+}
+.cns-tour-popover .driver-popover-title {
+    color: var(--brand-ink); font-weight: 700; font-size: 1rem; letter-spacing: -.005em;
+}
+.cns-tour-popover .driver-popover-description {
+    color: var(--ink-soft); font-size: .85rem; line-height: 1.5;
+}
+.cns-tour-popover .driver-popover-description p { margin: 0 0 .7em 0; }
+.cns-tour-popover .driver-popover-description p:last-child { margin-bottom: 0; }
+.cns-tour-popover .driver-popover-description .tour-foot {
+    font-size: .76rem; color: var(--muted); margin-top: 1em;
+    padding-top: .7em; border-top: 1px dashed var(--panel-border);
+}
+.cns-tour-popover .driver-popover-description .role {
+    display: inline-block; font-size: .65rem; font-weight: 700; letter-spacing: .06em;
+    padding: 0 5px; border-radius: 3px; color: #fff; vertical-align: middle;
+}
+.cns-tour-popover .driver-popover-description .role-home { background: #a44a23; }
+.cns-tour-popover .driver-popover-description .role-dest { background: #6b541a; }
+.cns-tour-popover .driver-popover-description .role-stop { background: var(--brand-ink); }
+/* Welcome slide: wider, more spacious popover to host the Leadership cards.
+   Cap its height to the viewport and let the body scroll so the Next/Prev
+   footer stays reachable on shorter screens (the hero + cards run tall). */
+.cns-tour-popover.cns-tour-welcome.driver-popover {
+    max-width: 640px; max-height: calc(100vh - 24px);
+    /* !important beats Driver.js's inline display:block so the flex column
+       applies; the scrollable description then keeps the footer pinned. */
+    display: flex !important; flex-direction: column; overflow: hidden;
+}
+.cns-tour-popover.cns-tour-welcome .driver-popover-description {
+    overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1 1 auto;
+}
+/* Welcome hero: the wide brand logo on a warm banner. The logo is the
+   wordmark, so the popover's text title is hidden for this slide. */
+.cns-tour-popover.cns-tour-welcome .driver-popover-title { display: none !important; }
+.tour-welcome-hero {
+    margin: 2px 0 18px; padding: 26px 22px 22px; text-align: center;
+    background:
+        radial-gradient(140% 130% at 50% -25%, rgba(245,176,116,.36), rgba(230,193,73,.10) 46%, rgba(255,251,244,0) 76%),
+        linear-gradient(180deg, var(--brand-cream), var(--panel-strong));
+    border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
+}
+.tour-welcome-logo { height: 50px; width: auto; max-width: 100%; display: inline-block; }
+.tour-welcome-tag {
+    margin-top: 13px; font-size: .8rem; font-weight: 700; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--ink-soft);
+}
+/* Leadership cards (nrg2fly.com/about.html style) embedded in the welcome slide. */
+.tour-lead { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--panel-border); }
+.tour-lead-overline { font-size: .64rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.tour-lead-head { font-size: 1.3rem; font-weight: 700; color: var(--brand-ink); margin: 2px 0 12px; letter-spacing: -.01em; }
+.tour-lead-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.tour-lead-card {
+    background: #fff; border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+    padding: 16px 14px; text-align: center; display: flex; flex-direction: column; align-items: center;
+}
+.tlc-photo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; border: 3px solid var(--brand-ink); margin-bottom: 10px; }
+.tlc-name { font-weight: 700; color: var(--ink); font-size: .95rem; }
+.tlc-role { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 10px; }
+.tlc-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 10px; }
+.tlc-tag { font-size: .62rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+           color: var(--brand-ink); background: rgba(43,47,90,.06); border: 1px solid var(--panel-border);
+           border-radius: 999px; padding: 2px 9px; }
+.tlc-links { font-size: .72rem; color: var(--muted); margin-top: auto; }
+.tlc-links a { color: var(--brand-ink); text-decoration: none; }
+.tlc-links a:hover { text-decoration: underline; }
+@media (max-width: 680px) { .cns-tour-popover.cns-tour-welcome.driver-popover { max-width: 92vw; } .tour-lead-grid { grid-template-columns: 1fr; } }
+/* Welcome / landing modal — body scrolls, footer (CTA) stays pinned. */
+.welcome-dialog { max-width: 640px; }
+#welcomeModal .modal-content.welcome-content {
+    border: none; border-radius: var(--radius); padding: 0; overflow: hidden;
+    max-height: calc(100vh - 40px); display: flex; flex-direction: column; position: relative;
+}
+.welcome-close {
+    position: absolute; top: 12px; right: 14px; z-index: 3;
+    width: 28px; height: 28px; padding: 0; border-radius: 50%;
+    background-color: rgba(43,47,90,.07); border: 1px solid var(--panel-border);
+    opacity: .65; transition: background-color .15s, opacity .15s;
+}
+.welcome-close:hover { background-color: rgba(43,47,90,.13); opacity: 1; }
+.welcome-body { padding: 22px 22px 8px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.welcome-body p { font-size: .9rem; color: var(--ink); line-height: 1.5; margin-bottom: 10px; }
+.welcome-foot {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; padding: 12px 22px;
+    background: var(--panel-strong); border-top: 1px solid var(--panel-border);
+}
+.welcome-dontshow { font-size: .78rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+.welcome-actions { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; }
+.welcome-skip { background: none; border: none; color: var(--muted); font-size: .85rem; font-weight: 600; padding: 8px 6px; cursor: pointer; }
+.welcome-skip:hover { color: var(--ink); text-decoration: underline; }
+.welcome-start {
+    background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3));
+    color: #fff; font-weight: 700; font-size: .95rem; padding: 10px 22px; border: none;
+    border-radius: var(--radius-sm); box-shadow: 0 6px 16px rgba(229,120,80,.35); cursor: pointer;
+}
+.welcome-start:hover { filter: brightness(1.06); color: #fff; }
+/* Network-animation tour step: lift the Bootstrap modal above the
+   tour overlay so the map is visible (not darkened), and pin the
+   popover to the bottom of the viewport so it doesn't cover the
+   map content the user is supposed to be watching. */
+.tour-modal-front, .tour-modal-front .modal-backdrop { z-index: 100050 !important; }
+body.tour-network-step .driver-overlay { z-index: 100040; }
+/* Model-settings tour step: lower the overlay so the lifted #modelSettingsModal
+   shows; its top-pinned popover (cns-tour-popover-top, z 100070) floats above. */
+body.tour-modalfront-step .driver-overlay { z-index: 100040; }
+/* Demand Calculator tour step: lift the WHOLE drawer above the tour
+   overlay so the trigger pill reads as bright/active instead of dimmed.
+   The .drawer parent has position:fixed + z-index:20 which creates a
+   stacking context — putting z-index on the child handle alone gets
+   clamped to z-index 20 in the page stacking order. Lifting the
+   parent works. */
+body.tour-demand-step .drawer { z-index: 100060 !important; }
+body.tour-demand-step .drawer-handle {
+    box-shadow: 0 0 0 4px rgba(229,120,80,.35), var(--shadow-lg);
+}
+/* Rotation scheduler tour step: same lift pattern so the Gantt
+   chart inside the drawer body is fully visible (not darkened
+   by the tour overlay). The popover sits at the TOP of the
+   viewport via the cns-tour-popover-top class. */
+body.tour-scheduler-step .drawer { z-index: 100060 !important; }
+.cns-tour-popover.cns-tour-popover-top {
+    position: fixed !important;
+    left: 50% !important;
+    top: 24px !important;
+    bottom: auto !important;
+    transform: translateX(-50%) !important;
+    z-index: 100070 !important;
+    max-width: 520px !important;
+}
+.cns-tour-popover.cns-tour-popover-top .driver-popover-arrow { display: none !important; }
+.cns-tour-popover.cns-tour-popover-bottom {
+    position: fixed !important;
+    left: 50% !important;
+    top: auto !important;
+    bottom: 24px !important;
+    transform: translateX(-50%) !important;
+    z-index: 100060 !important;
+    max-width: 520px !important;
+}
+.cns-tour-popover.cns-tour-popover-bottom .driver-popover-arrow { display: none !important; }
+.cns-tour-popover .driver-popover-description kbd {
+    background: rgba(43,47,90,.08); border: 1px solid rgba(43,47,90,.15);
+    padding: 1px 5px; border-radius: 4px; font-size: .78rem;
+}
+.cns-tour-popover .driver-popover-footer button {
+    background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3));
+    color: #fff; border: none; border-radius: var(--radius-sm); padding: 6px 14px;
+    font-weight: 600; font-size: .82rem; text-shadow: none;
+    box-shadow: 0 2px 6px rgba(229,120,80,.30);
+}
+.cns-tour-popover .driver-popover-footer button:hover { box-shadow: 0 4px 10px rgba(229,120,80,.40); }
+.cns-tour-popover .driver-popover-prev-btn {
+    background: transparent !important; color: var(--ink-soft) !important;
+    box-shadow: none !important; border: 1px solid var(--panel-border) !important;
+}
+.cns-tour-popover .driver-popover-progress-text {
+    color: var(--muted); font-size: .72rem; font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase;
+}
+.cns-tour-popover .driver-popover-close-btn { color: var(--muted); font-size: 1.1rem; }
+.cns-tour-popover .driver-popover-arrow-side-bottom { border-bottom-color: var(--panel-strong); }
+.cns-tour-popover .driver-popover-arrow-side-top    { border-top-color:    var(--panel-strong); }
+.cns-tour-popover .driver-popover-arrow-side-left   { border-left-color:   var(--panel-strong); }
+.cns-tour-popover .driver-popover-arrow-side-right  { border-right-color:  var(--panel-strong); }
+.options-btn[aria-expanded="true"] { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(229,120,80,.28); }
+.options-btn[aria-expanded="true"] .gear { transform: rotate(45deg); }
+.options-menu {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+    min-width: 220px;
+    background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
+    border-radius: var(--radius);
+    padding: 10px;
+    opacity: 0; transform: translateY(-6px); pointer-events: none;
+    transition: opacity .18s, transform .18s;
+}
+.options-menu.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.opt-group { padding: 8px 6px; }
+.opt-group + .opt-group { border-top: 1px solid var(--panel-border); }
+.opt-label { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+.opt-check { display: flex; align-items: center; gap: 8px; padding: 4px 4px; font-size: .85rem; cursor: pointer; border-radius: 6px; color: var(--ink); }
+.opt-check:hover { background: #f1f5f9; }
+.opt-check input[type=checkbox] { accent-color: var(--primary); cursor: pointer; }
+.opt-check.opt-sub { padding-left: 24px; font-size: .8rem; color: var(--muted); }
+.opt-check.is-disabled { opacity: .4; pointer-events: none; }
+.seg-row { display: inline-flex; background: #f1f5f9; padding: 3px; border-radius: 999px; }
+.opt-action {
+    width: 100%; text-align: left;
+    background: transparent; border: none; color: var(--ink); cursor: pointer;
+    padding: 8px 6px; font-size: .85rem; font-weight: 500; border-radius: 6px;
+}
+.opt-action:hover { background: #f1f5f9; }
+
+/* =========================================================
+   Left rail (form + result)
+   ========================================================= */
+.rail-left {
+    position: fixed; top: 90px; left: 16px; z-index: 10;
+    width: 360px; max-height: calc(100vh - 114px);
+    overflow: visible;
+    display: flex; flex-direction: column; gap: 12px;
+    pointer-events: none;       /* let map drags through gaps */
+    /* Scrollbar hidden: a reserved classic bar sat in the right gutter, and the
+       rounded clip sliced its top/bottom — reading as a broken right corner.
+       Trackpad/wheel scroll still works. */
+    scrollbar-width: none;
+}
+.rail-left > * { pointer-events: auto; }
+.rail-left::-webkit-scrollbar { display: none; }
+
+/* =========================================================
+   Glass panel
+   ========================================================= */
+.panel {
+    /* Opaque, NO backdrop-filter. Both .panel uses (form + result) SCROLL inside
+       their rails, and a blurred element re-rasterizes every frame as it scrolls
+       in Chrome — that was the jank dragging the sticky caps with it. The bg was
+       --panel-strong (0.96 alpha), so the blur showed through ~4%; going fully
+       solid is visually identical and scrolls smooth. Map still shows in the
+       gaps between panels, where the glass never lived. */
+    background: var(--panel-solid);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px;
+}
+/* Option 2 — the form panel is a fixed-height card: the header and Simulate
+   row are STATIC bands, the fields scroll BETWEEN them, and overflow:hidden
+   keeps the rounded corners permanent (scrolled content is clipped to the
+   curve, never squared off). No position:sticky on the form -> nothing lags,
+   nothing shifts; the bands are genuinely stationary. */
+.rail-left .panel { display: flex; flex-direction: column; max-height: calc(100vh - 114px); overflow: hidden; }
+/* Create-a-route panel -> white, to match the soft-white header. Re-point the
+   panel bg tokens locally so the body AND the sticky head/footer bands (which
+   all read var(--panel-solid/--panel-strong)) turn white in one place. */
+.rail-left .panel {
+    --panel-solid: #ffffff;
+    --panel-strong: #ffffff;
+    --panel: rgba(255,255,255,.90);
+}
+.rail-left .panel > #simForm { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.form-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+.form-scroll { scrollbar-width: none; }
+.form-scroll::-webkit-scrollbar { display: none; }
+/* Result panel still uses sticky caps; keep them on their own GPU layer. */
+.headline-box, .sticky-cta { will-change: transform; }
+/* ---- Results panel: hover-reveal minimize / click-to-expand ---- */
+#result { position: relative; }
+.result-min {
+    position: absolute; top: 10px; right: 10px; z-index: 6;
+    width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%;
+    display: grid; place-items: center; line-height: 1;
+    background: rgba(255,255,255,.18); color: #fff; font-size: 17px; cursor: pointer;
+    opacity: 0; transition: opacity .15s ease, background .15s ease;
+}
+#result:hover .result-min { opacity: 1; }
+.result-min:hover { background: rgba(255,255,255,.34); }
+/* Minimized: keep the figures AND the one action that matters — adding the
+   flight to the demand calculator — visible; everything else collapses. */
+#result.minimized > :not(.headline-box):not(.cta-row) { display: none !important; }
+#result.minimized .cta-row { margin-top: 10px; }
+#result.minimized .headline-box { cursor: pointer; position: relative; padding-bottom: 22px; }
+/* Expand hint: bottom-centre, in reserved padding — never over the stat labels
+   (top-right overlapped "CHARGE TIME" and was too faint to read as a control). */
+#result.minimized .headline-box::after {
+    content: '⌄'; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);
+    font-size: 16px; line-height: 1; color: rgba(255,255,255,.75); pointer-events: none;
+}
+#result.minimized .headline-box:hover::after { color: #fff; }
+/* Share-route button (paired with Add-to-DC) + copy toast */
+.cta-row { display: flex; gap: 8px; align-items: stretch; }
+.cta-row #addFolder { flex: 1 1 auto; margin-top: 0; }
+.btn-share { flex: 0 0 auto; width: 46px; display: grid; place-items: center; border: 1.5px solid var(--panel-border); background: #fff; border-radius: var(--radius-sm); cursor: pointer; color: var(--brand-ink, #2b2f5a); transition: background .14s ease, border-color .14s ease, color .14s ease; }
+.btn-share:hover { border-color: var(--primary); color: var(--primary); background: rgba(43,47,90,.05); }
+.cns-share-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(8px); background: var(--brand-ink, #2b2f5a); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: .82rem; font-weight: 600; box-shadow: 0 6px 22px rgba(0,0,0,.28); opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 9999; }
+.cns-share-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    flex: 0 0 auto;
+    /* Opaque cream, NO backdrop-filter: a blurred sticky cap repaints every
+       scroll frame in Safari (visible jitter) and its translucency let field
+       corners bleed through. Solid bg sits cleanly over the glass panel body. */
+    background: var(--panel-solid);
+    margin: -16px -16px 14px; padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--panel-border);
+    border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;   /* nests inside the panel's 1px border arc */
+}
+.panel-title {
+    font-size: 1.02rem; margin: 0; font-weight: 700; letter-spacing: -.01em;
+    display: inline-flex; align-items: center; gap: 8px;
+}
+.panel-title::before {
+    content: ''; display: inline-block; width: 3px; height: 16px;
+    background: linear-gradient(180deg, var(--primary), var(--primary-2));
+    border-radius: 2px;
+}
+.est-pill { font-size: .62rem; text-transform: uppercase; color: var(--muted); border: 1px solid var(--panel-border); padding: 2px 8px; border-radius: 999px; cursor: help; font-weight: 600; letter-spacing: .04em; }
+
+/* =========================================================
+   Form fields (override Bootstrap subtly)
+   ========================================================= */
+.field { margin-bottom: 12px; position: relative; }
+.field > label { display: block; font-size: .7rem; font-weight: 700; color: var(--ink-soft); margin-bottom: 5px; letter-spacing: .05em; text-transform: uppercase; }
+.field .form-control, .field .form-select, .input-group .form-control, .input-group .form-select {
+    border-radius: var(--radius-sm); border-color: #e2e8f0; font-size: .9rem; color: var(--ink);
+}
+.field .form-control:focus, .field .form-select:focus,
+.input-group .form-control:focus, .input-group .form-select:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 3px rgba(229,120,80,.22);
+}
+.input-group-text { background: #f1f5f9; border-color: #e2e8f0; font-size: .82rem; color: var(--ink-soft); }
+
+/* Primary actions */
+.btn-cns, .btn-cns-success, .btn-cns-ghost {
+    width: 100%; padding: 10px 16px; border-radius: var(--radius-sm); font-weight: 600;
+    border: 1px solid transparent; cursor: pointer; font-size: .9rem; transition: transform .05s, box-shadow .15s, background .15s;
+}
+.btn-cns          { background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3)); color: #fff; box-shadow: 0 4px 12px rgba(229,120,80,.28); }
+.btn-cns:hover    { box-shadow: 0 8px 18px rgba(229,120,80,.36); }
+.btn-cns-success  { background: linear-gradient(180deg, #34d399, #10b981); color: #fff; box-shadow: 0 4px 12px rgba(16,185,129,.28); }
+.btn-cns-success:hover { box-shadow: 0 8px 18px rgba(16,185,129,.36); }
+.btn-cns-ghost    { background: transparent; border-color: #e2e8f0; color: var(--ink-soft); }
+.btn-cns-ghost:hover { background: #f8fafc; color: var(--ink); }
+.btn-cns:active, .btn-cns-success:active, .btn-cns-ghost:active { transform: translateY(1px); }
+/* Export-to-spreadsheet button: classic Excel green. */
+#exportSpreadsheet { background: linear-gradient(180deg, #2a8a5a, #217346); color: #fff; box-shadow: 0 4px 12px rgba(33,115,70,.28); }
+#exportSpreadsheet:hover { box-shadow: 0 8px 18px rgba(33,115,70,.38); }
+
+/* Compact variant of the primary button (drawer header CTA) */
+.btn-sm-cns {
+    width: auto; padding: 6px 14px; font-size: .85rem;
+    border-radius: var(--radius-sm);
+}
+/* Terse export buttons (PDF / XLSX) — compact so they don't crowd the drawer header. */
+.btn-export { padding: 5px 11px; font-size: .8rem; }
+.btn-export .dl { opacity: .75; margin-right: 2px; }
+
+/* Ghost utility button for low-emphasis tool actions (Model settings).
+   Renders as plain text + icon with a tinted hover state — visually
+   recedes vs the orange primary CTA so the value-delivery action wins. */
+.btn-ghost-tool {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: none; background: transparent; cursor: pointer;
+    color: var(--ink-soft); font-weight: 600; font-size: .85rem;
+    padding: 6px 10px; border-radius: var(--radius-sm);
+    transition: background .15s, color .15s;
+}
+.btn-ghost-tool:hover { background: rgba(43,47,90,.05); color: var(--ink); }
+.btn-ghost-tool .gear { font-size: 1em; opacity: .75; }
+.btn-ghost-tool:hover .gear { opacity: 1; }
+
+/* =========================================================
+   Trajectory pill + autocomplete
+   ========================================================= */
+/* Fleet-mode segmented selector under the frequency field. */
+.fleet-mode {
+    display: flex; gap: 6px; margin-top: 8px;
+    background: rgba(43,47,90,.04); border: 1px solid var(--panel-border);
+    border-radius: var(--radius-sm); padding: 4px;
+}
+.fleet-mode .fleet-opt {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 6px 8px; border-radius: 6px; cursor: pointer; margin: 0;
+    font-size: .76rem; color: var(--ink-soft); text-align: center;
+    transition: background .12s, color .12s;
+}
+.fleet-mode .fleet-opt input { accent-color: var(--primary); margin: 0; }
+.fleet-mode .fleet-opt:has(input:checked) {
+    background: var(--panel-strong); color: var(--ink); font-weight: 600;
+    box-shadow: var(--shadow-sm);
+}
+.fleet-mode .fleet-opt strong { color: var(--primary); }
+
+.trip-traj {
+    font-size: .82rem; padding: 8px 12px; margin-bottom: 12px;
+    background: rgba(229,120,80,.10); border-left: 3px solid var(--primary); border-radius: 8px; color: var(--ink);
+}
+.trip-traj.d-none { display: none; }
+/* Over-range warning inside the trajectory pill — flips the pill to a
+   red treatment so the user can't miss that the current Model settings
+   make the chosen route infeasible. */
+.trip-traj.traj-error { background: rgba(195,61,61,.10); border-left-color: var(--danger); }
+.trip-traj .traj-warn { color: var(--danger); font-weight: 700; }
+
+.ac-wrap { position: relative; }
+.ac-list {
+    position: absolute; z-index: 1000; top: 100%; left: 0; right: 0;
+    max-height: 240px; overflow-y: auto; background: #fff;
+    border: 1px solid #e2e8f0; border-top: none;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    box-shadow: 0 10px 24px rgba(15,23,41,.12);
+}
+.ac-list.d-none { display: none; }
+.ac-item { padding: .45rem .65rem; cursor: pointer; font-size: .85rem; }
+.ac-item:hover, .ac-item.active { background: #eff6ff; }
+.ac-item small { color: var(--muted); }
+.ac-input.ac-unset { border-color: var(--warn); }
+
+/* =========================================================
+   Result panel
+   ========================================================= */
+.headline-box {
+    /* Pinned while the panel scrolls: the figures stay in view over the
+       route/charging detail (its solid ink bg covers what slides under). */
+    position: sticky; top: 0; z-index: 7;
+    /* Flat brand ink + neutral shadow — the gradient + orange glow read as
+       restless next to the gold stats, green revenue and orange CTAs. */
+    background: var(--brand-ink);
+    color: #fff; border-radius: var(--radius); padding: 14px 4px;
+    margin-bottom: 14px;
+    box-shadow: 0 6px 16px rgba(43,47,90,.25);
+}
+/* Every tile shares the same rhythm: labels START at the same y in a fixed
+   two-line box (so "CHARGE TIME" sits level with the wrapped labels), and the
+   values start at the same y below it. A value may wrap its unit onto a
+   second line when the column is tight ("324 / kWh", "4h / 18min"). */
+.headline-box .lbl { min-height: 2.4em; line-height: 1.2; display: flex; align-items: flex-start; justify-content: center; }
+.headline-box .big { font-size: 1.3rem; font-weight: 800; line-height: 1.15; margin: 3px 0; letter-spacing: -.02em; color: var(--brand-gold); }
+.headline-box .unit { font-size: .65rem; opacity: .7; letter-spacing: .04em; }
+/* Fly/charge phase strip under the headline tiles */
+#phaseStrip { margin: 10px 2px 0; }
+.phase-strip { display: flex; height: 14px; border-radius: 7px; overflow: hidden; }
+.phase-strip .ph { min-width: 3px; }
+.phase-strip .ph.fly { background: var(--brand-ink); }
+.phase-strip .ph.charge { background: var(--primary); }
+.phase-legend { display: flex; gap: 14px; font-size: .7rem; color: var(--muted); margin-top: 5px; }
+.phase-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.phase-legend .leg-fly { background: var(--brand-ink); }
+.phase-legend .leg-charge { background: var(--primary); }
+.headline-box .col-4 { padding: 0 4px; }
+/* Revenue band — the headline business figure, larger than the stat tiles. */
+.hl-revenue {
+    border-top: 1px solid rgba(255,255,255,.16);
+    margin: 10px 8px 0; padding-top: 9px;
+    display: flex; align-items: baseline; gap: 6px;
+}
+/* No label — the green € amount IS the signal (tooltip names it). Amount left,
+   its derivation right, so the line reads "€81.60   ←   136 kWh · €0.60/kWh". */
+.hl-rev-per { font-size: .78rem; font-weight: 700; opacity: .75; margin-left: 5px; letter-spacing: 0; }
+.hl-rev-amt { flex: 0 0 auto; text-align: left; font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: #34d399; }  /* brand green (matches the success / Add-to-demand button), distinct from the gold stat tiles */
+.hl-rev-sub { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: .62rem; opacity: .75; letter-spacing: .03em; }
+.lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
+
+.section-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: .6rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; padding: 3px 9px 3px 7px;
+    border-radius: 999px; margin-bottom: 10px;
+    border: 1px solid transparent;
+}
+.section-tag::before {
+    content: ''; display: inline-block; width: 5px; height: 5px;
+    border-radius: 50%; background: currentColor;
+}
+/* Role tag chips — aligned to the NRG2fly palette.
+   HOME = warm orange (home base, brand colour).
+   DEST = gold (the destination is the "prize" of the trip).
+   STOP = navy-tinted (a structural intermediate point).
+   TRAINING = red (kept distinctive — semantic warning + matches map circle).
+   AIRCRAFT / TRIP = result-panel section labels; stay neutral navy/gold. */
+.tag-aircraft { background: #e9ebf3; color: var(--brand-ink); border-color: #d2d6e3; }
+.tag-trip     { background: #faf0d6; color: #6b541a;        border-color: #ecdba8; }
+.tag-home     { background: #fde5d4; color: #a44a23;        border-color: #f6cdb0; }
+.tag-dest     { background: #faecbe; color: #6b541a;        border-color: #ead993; }
+.tag-stop     { background: #e3e6f1; color: var(--brand-ink); border-color: #c9cee0; }
+.tag-training { background: #fde0e0; color: #a31818;        border-color: #f6c0c0; }
+/* result-panel detail groups (F7): Route / Charging. */
+.tag-route    { background: #e3ecfb; color: #1c4e8a;        border-color: #cadcf4; }
+.tag-charging { background: #e2f3ea; color: #1b6b43;        border-color: #c8e9d6; }
+
+.spec-table { width: 100%; font-size: .85rem; border-collapse: collapse; }
+.spec-table td { padding: 6px 4px; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+.spec-table tr:last-child td { border-bottom: none; }
+.spec-table td:first-child { color: var(--muted); width: 42%; font-weight: 500; font-size: .78rem; }
+.spec-table td:last-child { color: var(--ink); font-weight: 500; }
+
+/* result-panel grouped layout (F7) */
+.result-group { margin-top: 14px; }
+.result-aircraft { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.result-aircraft .ac-photo { width: 150px; height: 62px; margin-bottom: 0; flex: 0 0 auto; }
+.result-ac-name { font-weight: 700; font-size: .95rem; color: var(--ink); margin-top: 0; }
+/* route itinerary: one row per leg / charge */
+.route-steps .step td { width: auto; color: var(--ink); font-size: .85rem; }
+.step-main { font-weight: 600; color: var(--ink); font-size: .84rem; }
+.step-sub { color: var(--muted); font-size: .76rem; margin-top: 1px; }
+.step-ico { display: inline-block; width: 1.1em; margin-right: 5px; text-align: center; }
+.step-fly { color: var(--brand-ink); }
+.step-charge-ico { color: #10b981; }
+.route-steps .step-total td { border-top: 1px solid #e2e8f0; padding-top: 7px; }
+/* collapsible sections — clickable header bar with a large chevron */
+.sec-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+.sec-header .section-tag { margin-bottom: 6px; }
+.sec-chev { font-size: 1.6rem; line-height: .5; color: var(--muted); transition: transform .15s; display: inline-block; padding: 0 4px 6px 4px; }
+.sec-header:hover .sec-chev { color: var(--brand-ink); }
+.result-group.collapsed .sec-chev { transform: rotate(-90deg); }
+.result-group.collapsed .spec-table { display: none; }
+/* return divider + destination highlight */
+.step-return td { width: auto; font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--brand-ink); background: #eef1f8; border-radius: 4px; padding: 5px 8px !important; border-bottom: none; }
+.ret-ico { margin-right: 6px; font-size: 1.05em; }
+.step-dest { background: #fff7e6; }
+.step-dest .step-main { color: #8a5a14; }
+.dest-badge { margin-left: 7px; font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--brand-gold); color: #3a2e0a; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
+.charge-note-row td { width: auto !important; color: var(--muted) !important; font-size: .72rem !important; font-style: italic; font-weight: 400 !important; padding-top: 2px !important; border-bottom: none; }
+
+.ac-photo {
+    width: 100%; height: 130px; object-fit: cover; display: block;
+    border-radius: var(--radius-sm); margin-bottom: 8px;
+    border: 1px solid var(--panel-border);
+}
+
+/* Selected-aircraft spec card under the planner Aircraft dropdown */
+.plane-spec-card {
+    margin-top: 8px; border: 1px solid var(--panel-border);
+    border-radius: var(--radius-sm); overflow: hidden; background: #fff;
+}
+.plane-spec-card.overridden { border-color: var(--brand-ink); box-shadow: inset 0 0 0 1px var(--brand-ink); }
+.ps-thumb { width: 100%; height: 96px; object-fit: cover; display: block; border-bottom: 1px solid var(--panel-border); }
+.ps-main { padding: 8px 10px; }
+.ps-name { font-weight: 600; font-size: .9rem; color: var(--ink); }
+.ps-stats { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 6px; }
+.ps-stat { display: flex; flex-direction: column; line-height: 1.15; }
+.ps-stat strong { font-size: .9rem; color: var(--ink); }
+.ps-stat-l { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+/* The available range is the main, editable variable — highlight it. */
+.ps-stat-avail { background: rgba(255,122,0,.12); border: 1px solid rgba(255,122,0,.4); border-radius: 8px; padding: 3px 10px; margin: -3px 0; }
+.ps-stat-avail strong { color: var(--brand-orange-3, #ff7a00); }
+.ps-override-toggle { margin-top: 8px; background: none; border: none; padding: 0; font-size: .76rem; color: var(--brand-ink); cursor: pointer; font-weight: 500; }
+.ps-override-toggle .chev { font-size: .7rem; }
+.plane-spec-card.overridden .ps-override-toggle::after { content: " · overridden"; color: var(--brand-ink); font-weight: 600; }
+.ps-override { padding: 2px 10px 10px; }
+.ps-override-grid { display: grid; grid-template-columns: 1fr; gap: 6px 8px; }
+.ps-override-grid label { font-size: .66rem; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.ps-override-grid .ps-u { color: var(--muted); font-weight: 400; }
+.ps-override-grid input { font-size: .82rem; }
+.ps-override-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.ps-override-note { font-size: .66rem; color: var(--muted); }
+.ps-reset { background: none; border: none; padding: 0; font-size: .72rem; color: var(--brand-ink); cursor: pointer; }
+
+/* "Show calculation" — the audit trail, typeset instead of a raw monospace dump.
+   Notes read as prose; term = formula = RESULT rows keep the flight-log structure
+   with the derived result emphasized; the → conclusion gets the house accent. */
+#calcPanel {
+    font-size: .76rem; background: #f8fafc; border: 1px solid #e2e8f0;
+    padding: 12px 14px; border-radius: var(--radius-sm); color: var(--ink-soft);
+}
+#calcPanel .calc-note { font-size: .74rem; color: var(--muted); line-height: 1.5; }
+#calcPanel .calc-gap { height: 8px; }
+#calcPanel .calc-sec { margin: 2px 0 3px; font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+#calcPanel .calc-row { display: flex; gap: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.55; }
+#calcPanel .calc-term { flex: 0 0 96px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+#calcPanel .calc-math { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+#calcPanel .calc-res { font-weight: 700; color: var(--brand-ink); }
+#calcPanel .calc-item { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding-left: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+#calcPanel .calc-total { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--ink); border-top: 1px dashed #e2e8f0; margin-top: 6px; padding-top: 6px; }
+#calcPanel .calc-conclusion {
+    margin: 4px 0 2px; padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: .74rem;
+    border-left: 3px solid var(--primary); background: rgba(229,120,80,.08); color: var(--ink);
+}
+#calcPanel .calc-foot { margin-top: 8px; font-size: .66rem; color: var(--muted); font-style: italic; }
+
+/* =========================================================
+   Right rail (result panel + error)
+   ========================================================= */
+.rail-right {
+    position: fixed; top: 90px; right: 16px; z-index: 10;
+    width: 360px; max-height: calc(100vh - 114px);
+    overflow-y: auto; padding-left: 6px;
+    display: flex; flex-direction: column; gap: 12px;
+    pointer-events: none;
+    scrollbar-width: thin;
+}
+.rail-right > * { pointer-events: auto; }
+/* Right rail: scrollbar hidden — its track sat flush against the right clip edge,
+   showing as a thin line in the corner. Trackpad/wheel scroll still works. */
+.rail-right { scrollbar-width: none; }
+.rail-right::-webkit-scrollbar { display: none; }
+.rail-right:empty, .rail-right .d-none + .d-none:last-child { display: none; }
+
+/* =========================================================
+   Floating map controls (bottom-right, stacked)
+   ========================================================= */
+.map-controls {
+    position: fixed; bottom: 16px; right: 16px; z-index: 10;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+}
+.segmented {
+    padding: 4px;
+}
+.seg-btn {
+    border: none; background: transparent; color: var(--ink-soft);
+    padding: 5px 12px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .78rem;
+    transition: background .15s, color .15s;
+}
+.seg-btn:hover { color: var(--ink); }
+.seg-btn.active { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(229,120,80,.30); }
+.control-pill {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--panel-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-border); box-shadow: var(--shadow);
+    border-radius: 999px; padding: 7px 14px;
+    font-size: .82rem; color: var(--ink); white-space: nowrap;
+}
+.control-pill .pill-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.control-pill label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 500; }
+.control-pill input[type=checkbox] { accent-color: var(--primary); cursor: pointer; }
+.btn-pill { cursor: pointer; }
+.btn-pill:hover { background: #fff; }
+
+/* =========================================================
+   Bottom drawer (Demand Calculator)
+   ========================================================= */
+.drawer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; pointer-events: none; }
+/* When the Demand Calculator drawer is open, dim the map + side rails
+   so the planner/result panels don't visually compete with the DC.
+   Layered between rails (z-index 10) and drawer (z-index 20). The
+   topbar (z-index 30) stays at full brightness — it's small and
+   navigationally useful. pointer-events:none lets clicks pass
+   through so the underlying UI stays interactive. */
+@keyframes cns-drawer-dim-in { from { opacity: 0; } to { opacity: 1; } }
+body:has(.drawer.open)::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: rgba(43,47,90,.42);
+    z-index: 15;
+    pointer-events: none;
+    animation: cns-drawer-dim-in .28s ease;
+}
+.drawer-handle, .drawer-body { pointer-events: auto; }
+.drawer-handle {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--panel-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-border); box-shadow: var(--shadow);
+    border-radius: 999px; padding: 10px 22px;
+    font-size: .92rem; font-weight: 600; color: var(--ink); cursor: pointer;
+    white-space: nowrap;
+    transition: background .28s ease, box-shadow .28s ease, color .22s ease, border-color .22s ease;
+}
+.drawer-handle:hover { background: #fff; box-shadow: var(--shadow-lg); }
+.drawer-handle .chevron { display: inline-block; transition: transform .25s, opacity .22s; font-size: .8em; }
+.drawer.open .drawer-handle .chevron { transform: rotate(180deg); }
+.drawer-handle .handle-sub { font-weight: 400; color: var(--muted); font-size: .82rem; }
+
+/* The handle hosts three overlaid states — normal / hover-action /
+   added-confirmation — stacked in one grid cell. The pill sizes to the
+   widest state (the normal label), so the others simply CROSS-FADE in
+   place: this is what lets the DC handle "morph" into the success bar
+   without a second element that could sit on top of it. */
+.drawer-handle .handle-stack { display: grid; align-items: center; }
+.drawer-handle .handle-layer {
+    grid-area: 1 / 1; display: flex; align-items: center; gap: 8px;
+    white-space: nowrap; transition: opacity .22s ease;
+}
+.drawer-handle .handle-title { font-weight: 600; }
+.drawer-handle .handle-action,
+.drawer-handle .handle-confirm { opacity: 0; pointer-events: none; }
+.drawer-handle .handle-confirm { justify-content: center; }
+
+/* Hover swaps the label to an explicit action verb. */
+.drawer-handle .act-close { display: none; }
+.drawer.open .drawer-handle .act-open { display: none; }
+.drawer.open .drawer-handle .act-close { display: inline; }
+.drawer-handle:hover .handle-normal { opacity: 0; }
+.drawer-handle:hover .handle-action { opacity: 1; }
+
+/* Confirmation: the pill morphs into the navy "added" bar — white text,
+   a green check — then morphs back (toggled by JS for ~1.5s). It wins
+   over :hover so a hover mid-confirm doesn't flip it back. */
+.drawer-handle.confirming,
+.drawer-handle.confirming:hover {
+    background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+    border-color: transparent; color: #fff; box-shadow: var(--shadow-lg);
+}
+.drawer-handle.confirming .chevron { opacity: 0; }
+.drawer-handle.confirming .handle-normal,
+.drawer-handle.confirming .handle-action { opacity: 0; }
+.drawer-handle.confirming .handle-confirm { opacity: 1; }
+.drawer-handle .hc-check {
+    flex-shrink: 0; display: inline-grid; place-items: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--success); color: #fff; font-size: .72rem; font-weight: 700;
+}
+
+.drawer-body {
+    position: absolute; left: 0; right: 0; bottom: 70px;
+    /* Fit the DC into the central column between the two 360px side rails:
+       grow with the viewport, but never narrower than the content needs
+       (min) nor wider than its full-bleed size on a 1080p screen (max). */
+    width: clamp(720px, calc(100vw - 800px), 1888px); margin-inline: auto;
+    background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
+    border-radius: var(--radius);
+    max-height: calc(85vh - 80px);
+    display: flex; flex-direction: column; overflow: hidden;
+    padding: 18px 20px;
+    transform: translateY(24px); opacity: 0; pointer-events: none;
+    transition: transform .28s ease, opacity .28s ease;
+}
+.drawer.open .drawer-body { transform: translateY(0); opacity: 1; pointer-events: auto; }
+/* Sticky header: the drawer body itself no longer scrolls; #folder does,
+   so the title bar + intro line stay pinned while the airport cards scroll. */
+.drawer-body > #folder { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.drawer-body > p { border-bottom: 1px solid var(--panel-border); padding-bottom: 10px; }
+/* Close (×) — top-right of the drawer, mirrors the result-panel minimise. */
+.drawer-close {
+    position: absolute; top: 12px; right: 14px; z-index: 6;
+    width: 30px; height: 30px; padding: 0; border: none; border-radius: 50%;
+    display: grid; place-items: center; line-height: 1;
+    background: rgba(15,23,41,.06); color: var(--ink-soft); font-size: 20px; cursor: pointer;
+    transition: background .15s ease;
+}
+.drawer-close:hover { background: rgba(15,23,41,.12); }
+.drawer-head { padding-right: 36px; }
+
+.drawer-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.drawer-title { font-size: 1.1rem; font-weight: 700; margin: 0; }
+.folder-airport-name { font-size: 1.7rem; font-weight: 700; line-height: 1.15; }
+.folder-airport-sub { font-size: .85rem; color: var(--muted); margin-top: 2px; }
+.folder-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.drawer-tools { display: flex; gap: 12px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+.inline-field { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--ink-soft); }
+.inline-field select { font-size: .85rem; min-width: 160px; }
+
+/* renderFolder cards inside the drawer feel native to the new design */
+#folder [data-dest] {
+    background: rgba(255,255,255,.7) !important;
+    border: 1px solid var(--panel-border) !important;
+    border-radius: var(--radius) !important;
+    padding: 18px !important;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow .15s, border-color .15s;
+}
+#folder [data-dest]:hover { box-shadow: var(--shadow); border-color: var(--border-strong, #cbd5e1) !important; }
+#folder [data-dest] h5 {
+    font-size: 1rem; font-weight: 700; letter-spacing: -.01em;
+    display: inline-flex; align-items: center; gap: 8px;
+}
+#folder [data-dest] h5::before {
+    content: ''; display: inline-block; width: 3px; height: 14px;
+    background: linear-gradient(180deg, var(--primary), var(--primary-2));
+    border-radius: 2px;
+}
+.folder-trip { font-size: .85rem; }
+.folder-trip td { padding: 8px 6px !important; vertical-align: middle; }
+/* A flight the recompute marked infeasible (no route at current settings): listed
+   but muted, with a clear amber flag; it contributes nothing to demand/peak. */
+.folder-trip-infeasible td { opacity: .55; }
+.folder-trip-infeasible td:first-child { opacity: 1; }   /* keep the role + flag legible */
+.tag-infeasible { display: inline-block; font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+    color: #92400e; background: #fde68a; border: 1px solid #f59e0b; border-radius: 999px;
+    padding: 1px 7px; margin-left: 6px; cursor: help; white-space: nowrap; }
+#folder .table-sm thead th {
+    font-size: .65rem !important; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--muted) !important;
+    border-bottom: 1px solid var(--panel-border);
+    padding: 8px 6px !important;
+}
+/* Aggregates row (legacy bg-primary class kept for any other consumers) */
+#folder .bg-primary {
+    background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%) !important;
+    border-radius: var(--radius-sm) !important;
+    box-shadow: 0 6px 16px rgba(43,47,90,.22);
+}
+.agg-num { font-weight: 800; font-size: 1.15rem; letter-spacing: -.02em; }
+
+/* Rotation-scheduler feature card. Replaces the old plain outline
+   button — surfaces the key summary numbers inline so users can scan
+   them without clicking, and reads as a feature rather than a control. */
+.sched-card {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; margin-top: 12px;
+    background: #fff;
+    border: 1px solid rgba(43,47,90,.18);
+    border-left: 3px solid var(--brand-orange-3);
+    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+    color: var(--ink); text-align: left; font: inherit;
+    box-shadow: 0 1px 3px rgba(43,47,90,.08);
+    cursor: pointer; transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.sched-card:hover {
+    background: rgba(229,120,80,.07);
+    border-color: rgba(229,120,80,.45);
+    box-shadow: 0 4px 14px rgba(43,47,90,.13);
+}
+.sched-card-icon {
+    font-size: 1.4rem; line-height: 1;
+    color: var(--brand-orange-3); flex-shrink: 0;
+}
+.sched-card-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.sched-card-title { font-weight: 700; font-size: .9rem; color: var(--ink); }
+.sched-card-summary { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sched-card-chev { font-size: .9rem; color: var(--muted); opacity: .8; }
+.sched-card:hover .sched-card-chev { color: var(--brand-orange-3); opacity: 1; }
+
+/* ---- Per-airport stats summary: 2 hero + 3 small ---- */
+.agg-block {
+    background: linear-gradient(135deg, var(--brand-ink) 0%, #4a3a8a 100%);
+    color: #fff; border-radius: var(--radius-sm);
+    padding: 16px 20px; box-shadow: 0 6px 16px rgba(43,47,90,.22);
+    margin-bottom: 16px;
+}
+.agg-hero-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;
+    padding-bottom: 14px; margin-bottom: 14px;
+    border-bottom: 1px solid rgba(255,255,255,.18);
+}
+.agg-hero-rev { cursor: pointer; border-radius: 8px; transition: background .12s; }
+.agg-hero-rev:hover { background: rgba(255,255,255,.06); }
+.agg-hero-rev .agg-hero-num { color: #6ee7a8; }   /* revenue reads as money, not load */
+.agg-hero {
+    display: flex; flex-direction: column; gap: 4px;
+}
+.agg-hero-lbl {
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
+    font-weight: 600; opacity: .8;
+}
+.agg-hero-lbl-row { display: flex; align-items: center; justify-content: space-between; gap: 4px 8px; flex-wrap: wrap; }
+.agg-hero-rev { cursor: pointer; }
+/* Segmented day/year chips — both periods visible up front (the old ⇄ glyph
+   read as decoration, so nobody discovered the toggle). */
+.rev-seg { display: inline-flex; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; padding: 2px; }
+.rev-seg-btn {
+    border: none; background: transparent; color: rgba(255,255,255,.65);
+    font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    padding: 2px 9px; border-radius: 999px; cursor: pointer; line-height: 1.4;
+    transition: background .15s, color .15s;
+}
+.rev-seg-btn:hover { color: #fff; }
+.rev-seg-btn.active { background: #34d399; color: #0b3d2e; }
+.agg-hero-num {
+    font-size: 2.05rem; font-weight: 800; line-height: 1;
+    letter-spacing: -.02em; color: var(--brand-gold);
+}
+.agg-hero-sub {
+    font-size: .72rem; opacity: .65; letter-spacing: .02em;
+}
+.agg-small-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+}
+.agg-small {
+    display: flex; flex-direction: column; gap: 2px;
+}
+.agg-small-lbl {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .06em;
+    font-weight: 600; opacity: .7;
+}
+.agg-small-num {
+    font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em;
+}
+#folder .alert {
+    border-radius: var(--radius-sm); border: none; font-size: .85rem;
+    padding: 10px 14px !important;
+}
+#folder .alert-warning {
+    background: #fffbeb; color: #92400e;
+    border-left: 3px solid var(--warn);
+}
+
+/* =========================================================
+   "Route added" success feedback
+   The bottom-centre Demand-Calculator handle itself morphs into a
+   success bar (see the .drawer-handle rules + the #addFolder
+   handler) so the confirmation never collides with the open-the-
+   drawer affordance. Two companion cues live here: a highlight-fade
+   on the airport card(s) the new flight touched, and a small pulse
+   on the Add button. Motion is suppressed under prefers-reduced-motion.
+   ========================================================= */
+/* Highlight-fade ("yellow fade technique", 37signals): briefly washes
+   the touched card with a green glow + tint, then recedes so it doesn't
+   linger as visual noise. Uses box-shadow only (inc. a large-spread
+   inset for the fill) so it never fights the !important border/bg rules
+   on #folder [data-dest]. */
+.cns-card-flash { animation: cns-card-flash 1.6s ease-out both; }
+@keyframes cns-card-flash {
+    0%   { box-shadow: 0 0 0 3px rgba(16,185,129,.55), inset 0 0 0 999px rgba(16,185,129,.13); }
+    60%  { box-shadow: 0 0 0 2px rgba(16,185,129,.30), inset 0 0 0 999px rgba(16,185,129,.06); }
+    100% { box-shadow: 0 0 0 0 rgba(16,185,129,0),     inset 0 0 0 999px rgba(16,185,129,0); }
+}
+
+/* Button micro-interaction: a brief confirming pop on "Added". */
+.btn-cns-success.is-added { animation: cns-btn-pop .42s cubic-bezier(.2,.9,.25,1); }
+@keyframes cns-btn-pop { 0% { transform: none; } 42% { transform: scale(1.045); } 100% { transform: none; } }
+
+/* Keep the confirmation, drop the movement. animation-duration is kept
+   non-zero so the JS animationend cleanup still fires; the handle morph
+   falls back to an instant state swap. */
+@media (prefers-reduced-motion: reduce) {
+    .cns-card-flash { animation-duration: 1ms; }
+    .btn-cns-success.is-added { animation: none; }
+    .drawer-handle, .drawer-handle .handle-layer, .drawer-handle .chevron { transition: none; }
+}
+
+/* =========================================================
+   Misc utilities + small modal polish
+   ========================================================= */
+.est-note { font-size: .72rem; color: var(--muted); }
+.modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow-lg); }
+
+/* ---- Edit-flight modal: reuse the app's spec-card visual language so the
+   editor reads as native, not a bolted-on Bootstrap form. Scoped to
+   #editFlightModal / .charger-pin so nothing else is touched. ---- */
+#editFlightModal .ef-route-sub { font-size: .76rem; font-weight: 500; color: var(--muted); margin-top: 2px; }
+#editFlightModal .ef-plane-card {
+    display: flex; align-items: center; gap: 12px; padding: 8px 10px;
+    border: 1px solid var(--panel-border); border-radius: var(--radius-sm); background: #fff;
+}
+#editFlightModal .ef-thumb {
+    width: 88px; height: 56px; flex-shrink: 0; object-fit: contain;
+    border-radius: 6px; background: #f6f7f9;
+}
+#editFlightModal .ef-plane-name { font-weight: 600; font-size: .9rem; color: var(--ink); }
+#editFlightModal .ef-plane-stats { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+/* The "pinned charger" badge on a demand-calculator row — a small,
+   intentional chip rather than a bare floating emoji. */
+.charger-pin {
+    display: inline-flex; align-items: center; vertical-align: 1px; margin-left: 4px;
+    padding: 1px 6px; border-radius: 999px; font-size: .68rem; line-height: 1.5;
+    color: var(--brand-ink); background: rgba(43,47,90,.08); cursor: help;
+}
+
+/* Model-settings modal: one row per opt-in factor. */
+.rs-row { padding: 9px 0; border-bottom: 1px solid var(--panel-border); }
+.rs-row:last-child { border-bottom: none; }
+.rs-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; font-size: .9rem; color: var(--ink); }
+.rs-toggle input[type=checkbox] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
+.rs-detail { margin-top: 8px; padding-left: 26px; opacity: .5; transition: opacity .2s; }
+.rs-row.on .rs-detail { opacity: 1; }
+.rs-slider-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.rs-slider-row label { font-size: .8rem; color: var(--ink-soft); display: flex; justify-content: space-between; align-items: center; }
+.rs-val { color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+.rs-help { font-size: .78rem; color: var(--muted); margin: 4px 0 0 0; line-height: 1.4; }
+.rs-na-note { display: none; font-style: italic; }
+.rs-cell.rs-na .rs-cell-ctrl { opacity: .45; }
+.rs-cell.rs-na .rs-na-note { display: block; }
+/* F8: 2-column grid + categories + hover [?] tooltips + full-width taper curve */
+.rs-cat { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--primary); margin: 16px 0 7px; }
+.rs-cat:first-of-type { margin-top: 4px; }
+.rs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 24px; margin-bottom: 2px; }
+.rs-cell-head { display: flex; align-items: center; gap: 6px; }
+.rs-cell-head .rs-toggle { flex: 1; min-width: 0; font-size: .82rem; gap: 7px; }
+.rs-cell-head .rs-toggle span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-static-label { flex: 1; min-width: 0; font-size: .82rem; font-weight: 600; color: var(--ink); }
+.rs-cell-ctrl { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.rs-cell-ctrl .form-range { flex: 1; min-width: 0; height: 5px; padding: 0; }
+.rs-cell-ctrl .rs-val { font-size: .74rem; min-width: 48px; text-align: right; }
+.rs-cell:not(.on) .rs-cell-ctrl { opacity: .4; }
+.rs-cell-static .rs-cell-ctrl { opacity: 1 !important; }
+.rs-cell-wide { grid-column: 1 / -1; }
+.rs-cell-wide .rs-cell-ctrl .form-range { flex: 0 1 230px; }
+.rs-q { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #cbd5e1; background: #fff; color: var(--muted); font-size: .66rem; font-weight: 700; line-height: 15px; text-align: center; cursor: help; display: inline-block; user-select: none; }
+.rs-q:hover, .rs-q:focus { background: var(--primary); color: #fff; border-color: var(--primary); outline: none; }
+.rs-q-inline { width: 14px; height: 14px; line-height: 13px; font-size: .6rem; vertical-align: middle; }
+.rs-curve { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--panel-border); }
+.rs-curve:not(.on) .rs-curve-body { opacity: .4; }
+.rs-curve-body { margin-top: 6px; }
+.taper-curve { display: block; width: 100%; height: auto; background: #f8fafc; border: 1px solid var(--panel-border); border-radius: var(--radius-sm); margin-bottom: 6px; }
+.rs-curve-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; }
+.rs-curve-sliders .rs-cell-ctrl { margin-top: 0; }
+/* Neutral ink for the curve's value chips — brand orange here reads as a warning, not a current value (scoped to this panel only). */
+.rs-curve-sliders .rs-val { color: var(--ink); }
+.rs-mini-l { font-size: .72rem; color: var(--muted); min-width: 32px; }
+
+/* F5: per-leg route pin — a route icon that smoothly expands into a brand
+   label (distance · time · energy) on hover. */
+.flight-pin-wrap { background: none; border: none; }
+.flight-pin {
+    position: absolute;
+    transform: translate(-50%, -50%);   /* centred on the leg line; the legLabelPane keeps it above everything */
+    display: inline-flex;
+    align-items: center;
+    background: #fff;
+    border: 1px solid var(--panel-border);
+    border-radius: 9px;
+    box-shadow: 0 2px 6px rgba(15, 23, 41, .16);
+    padding: 4px;
+    cursor: pointer;
+    transition: padding .22s ease, border-color .22s ease, box-shadow .22s ease;
+}
+.flight-pin-ico { width: 20px; height: 20px; flex: 0 0 auto; display: block; }
+.flight-pin-text {
+    max-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 0;
+    margin-left: 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--brand-ink);
+    transition: max-width .26s ease, opacity .2s ease .03s, margin-left .26s ease;
+}
+.flight-pin:hover,
+#map.flight-labels-open .flight-pin {
+    border-color: var(--brand-orange-3);
+    box-shadow: 0 4px 12px rgba(255, 122, 0, .30);
+    padding: 4px 9px 4px 5px;
+}
+.flight-pin:hover .flight-pin-text,
+#map.flight-labels-open .flight-pin-text { max-width: 220px; opacity: 1; margin-left: 6px; }
+
+/* A1 Step 2: NRG2fly charger markers — favicon teardrop floated above the
+   airport dot so the dot's Dep/Dest/Stop popup stays clickable. */
+.nrg-charger-wrap { background: none; border: none; }
+.nrg-charger-pin {
+    position: absolute;
+    transform: translate(-50%, -100%) translateY(-6px);   /* tail tip ~6px above the airport dot */
+    display: flex; flex-direction: column; align-items: center;
+    cursor: pointer;
+    filter: drop-shadow(0 2px 3px rgba(15, 23, 41, .35));
+}
+/* Head = the inverted favicon (white chevron on the orange disc) filling the
+   circle, ringed white. The disc PNG has square JPEG corners — the 50% clip
+   with overflow:hidden trims them away. */
+.nrg-pin-head {
+    width: 34px; height: 34px; border-radius: 50%; overflow: hidden;
+    background: #fff; border: 2px solid #fff;
+    display: flex; align-items: center; justify-content: center;
+}
+/* The favicon bitmap keeps a thin white margin around its disc — oversize the
+   image so the disc bleeds past the circular clip (no white sliver inside
+   the ring; the route variant's blue ring sits directly on the orange). */
+.nrg-pin-ico { width: 116%; height: 116%; flex: none; object-fit: cover; }
+.nrg-pin-tail {
+    width: 0; height: 0; margin-top: -1px;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 10px solid #fff;   /* white, matching the head ring — the disc supplies the orange (route variant overrides to blue) */
+}
+.nrg-tip-sub { color: var(--ink-soft, #475569); font-size: .9em; }
+/* Route variant — a blue copy of the teardrop drawn in routePane, directly
+   over the orange network teardrop, so a departure / destination / stop
+   dominates the charging-station marker it sits on. */
+.nrg-charger-pin.route .nrg-pin-head { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .30); }
+.nrg-charger-pin.route .nrg-pin-tail { border-top-color: #2563eb; }
+.nrg-charger-pin.construction { opacity: .55; }
+.nrg-charger-pin.construction .nrg-pin-head { border-color: #b45309; box-shadow: 0 0 0 3px rgba(180, 83, 9, .25); }
+.nrg-charger-pin.construction .nrg-pin-tail { border-top-color: #b45309; }
+
+/* Alternate airport overlay — permanent distance label on each dashed connector */
+.alt-dist-label {
+    background: #fff; color: #7c3aed; border: 1px solid #7c3aed;
+    border-radius: 6px; font-size: .7rem; font-weight: 700;
+    padding: 1px 5px; box-shadow: var(--shadow-sm); white-space: nowrap;
+}
+.alt-dist-label::before { display: none; }   /* hide the tooltip caret */
+
+/* Badge on the trigger button — shows the count of active factors.
+   Flex-centred so the digit sits dead-centre in the pill. */
+.model-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px;
+    background: var(--primary); color: #fff; font-size: .7rem; font-weight: 700;
+    padding: 0 6px; border-radius: 999px; margin-left: 4px; line-height: 1;
+}
+
+/* Per-airport "Charge target" control: button reveals slider panel. */
+/* Inline label-chip pattern for the charge target picker.
+   Reads as: "Charge target  [auto ▾]" — the static label sets context,
+   the chip is the only interactive thing. Less button-noise than the
+   outline-button it replaced. */
+.soc-inline {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: .82rem; color: var(--ink-soft);
+}
+.soc-label {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .06em;
+    font-weight: 600; color: var(--muted);
+}
+.soc-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(43,47,90,.06); border: 1px solid rgba(43,47,90,.10);
+    color: var(--ink); font-weight: 600; font-size: .82rem;
+    padding: 3px 10px; border-radius: 999px;
+    cursor: pointer; transition: background .15s, border-color .15s;
+}
+.soc-chip:hover { background: rgba(229,120,80,.10); border-color: rgba(229,120,80,.25); }
+.soc-chip strong { font-weight: 700; color: var(--brand-orange-3); }
+.soc-chip .chev { display: inline-block; transition: transform .15s; font-size: .8em; opacity: .6; }
+.soc-toggle.active .chev,
+.soc-toggle:has(+ .soc-panel:not(.d-none)) .chev { transform: rotate(180deg); }
+.soc-panel {
+    margin-top: 10px; padding: 12px 14px;
+    background: #f8fafc; border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+}
+.soc-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.soc-row .form-range { flex: 1; min-width: 140px; max-width: 280px; }
+.soc-row .soc-val { color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
+.soc-row .opt-check { padding: 0; gap: 6px; font-size: .85rem; cursor: pointer; }
+.soc-row .opt-check input[type=radio] { accent-color: var(--primary); cursor: pointer; }
+.soc-row .opt-check input[type=radio]:checked + span { color: var(--ink); font-weight: 600; }
+.soc-panel .rs-help { margin-top: 6px; font-size: .76rem; }
+
+/* Map color system — one meaning per hue:
+   navy = the airport world (dots + saved network)
+   blue = the ACTIVE route (solid out, dashed return)
+   orange = NRG2FLY assets only (charger discs)
+   green/amber/red = semantic states, never cartography. */
+
+/* Aircraft photo-grid picker (drives the hidden #plane select) */
+/* Aircraft carousel — mirrors the charger carousel below; drives the hidden #plane select. */
+.plane-carousel { position: relative; margin-top: 2px; border-radius: var(--radius-sm); overflow: hidden; border: 1.5px solid var(--panel-border); }
+.plane-stage { position: relative; aspect-ratio: 3 / 2; background: #f4f1e8; }
+.plane-stage .plane-card { position: absolute; inset: 0; display: block; border: 0; padding: 0; background: none; animation: charger-fade .22s ease; }
+.plane-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.plane-stage .plane-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-ink); font-size: 2.4rem; }
+.plane-stage .plane-overlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 9px; text-align: left; pointer-events: none; background: linear-gradient(transparent, rgba(43,47,90,.55) 45%, rgba(43,47,90,.92)); }
+.plane-stage .plane-name { font-size: 1rem; font-weight: 800; color: #fff; line-height: 1.1; letter-spacing: -.01em; }
+.plane-stage .plane-name .plane-oem { color: rgba(255,255,255,.6); font-weight: 600; }
+.plane-stage .plane-specs { font-size: .62rem; color: rgba(255,255,255,.82); margin-top: 2px; text-transform: uppercase; letter-spacing: .06em; }
+.plane-nav { position: absolute; top: 0; bottom: 0; width: 30%; z-index: 2; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; color: #fff; font-size: 26px; line-height: 1; padding: 0 5px; transition: background .16s ease; }
+.plane-nav span { text-shadow: 0 1px 5px rgba(0,0,0,.6); opacity: .82; transition: opacity .16s ease; }
+.plane-nav:hover span { opacity: 1; }
+.plane-prev { left: 0; justify-content: flex-start; }
+.plane-next { right: 0; justify-content: flex-end; }
+.plane-prev:hover { background: linear-gradient(to right, rgba(43,47,90,.5), rgba(43,47,90,0)); }
+.plane-next:hover { background: linear-gradient(to left, rgba(43,47,90,.5), rgba(43,47,90,0)); }
+.plane-strip { position: relative; display: flex; gap: 6px; overflow-x: auto; margin-top: 6px; padding: 1px; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
+.plane-strip::-webkit-scrollbar { height: 0; }
+.plane-thumb { flex: 0 0 auto; width: 46px; height: 38px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: #f4f1e8; opacity: .55; cursor: pointer; transition: opacity .14s ease, border-color .14s ease; }
+.plane-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.plane-thumb:hover { opacity: 1; }
+.plane-thumb[aria-selected="true"] { opacity: 1; border-color: var(--brand-ink, #2b2f5a); }
+.plane-thumb-glyph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--brand-ink, #2b2f5a); }
+.plane-thumb { position: relative; }
+.plane-thumb-count { position: absolute; top: 1px; right: 1px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; background: var(--brand-ink, #2b2f5a); color: #fff; font-size: .55rem; font-weight: 800; line-height: 13px; text-align: center; pointer-events: none; }
+/* Profile / regime knobs on the stage: one thumb per airframe, these pick
+   WHICH catalog row (performance profile + VFR/IFR) feeds the sim. Greyed,
+   not hidden, when the aircraft has only one choice — colleagues should see
+   the dimension exists (rows come from Notion). Sits above .plane-nav (z:2). */
+.plane-knobs { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; flex: 0 0 auto; margin-left: auto; pointer-events: auto; }
+.pk-seg { display: flex; border-radius: 999px; overflow: hidden; box-shadow: 0 1px 5px rgba(0,0,0,.3); }
+.pk-btn { border: 0; padding: 3px 9px; font-size: .6rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: rgba(43,47,90,.78); color: #fff; cursor: pointer; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background .14s ease, color .14s ease; }
+.pk-btn + .pk-btn { border-left: 1px solid rgba(255,255,255,.28); }
+.pk-btn:hover:not(:disabled):not([aria-pressed="true"]) { background: rgba(43,47,90,.95); }
+.pk-btn[aria-pressed="true"] { background: #fff; color: var(--brand-ink, #2b2f5a); }
+.pk-btn:disabled { opacity: .45; cursor: default; }
+.pk-seg.pk-locked .pk-btn { opacity: .55; cursor: default; }
+.pk-seg.pk-locked .pk-btn[aria-pressed="true"] { opacity: .8; }
+/* Top overlay row: status badge left, knobs right — ONE flex container so
+   the two can never overlap. When space runs out the informational badge
+   shrinks and ellipsizes (full text in its title); the interactive knobs
+   keep their full size. */
+.plane-topbar { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 3; display: flex; align-items: flex-start; gap: 8px; pointer-events: none; }
+.plane-status { display: flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgba(43,47,90,.78); color: #fff; font-size: .6rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; box-shadow: 0 1px 5px rgba(0,0,0,.3); pointer-events: none; flex: 0 1 auto; min-width: 0; }
+.plane-status .st-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plane-status .st-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa1b5; flex: 0 0 auto; }
+.plane-status.s-certified .st-dot { background: #43c463; }
+.plane-status.s-prototype-flying .st-dot { background: #5aa9e6; }
+.plane-status.s-in-development .st-dot { background: #c98a4b; }
+.plane-status.s-under-construction .st-dot { background: #ff9d4d; }
+.plane-status.s-concept .st-dot { background: #b7bdd1; }
+/* Catalog filters above the carousel: Type / Propulsion chip rows. A row
+   only renders when the catalog has values for it; chips that would leave
+   zero aircraft (given the other filter) are disabled, so no dead ends. */
+.plane-filters { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 6px; }
+.pf-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.pf-group + .pf-group { padding-left: 12px; border-left: 1px solid var(--panel-border); }
+.pf-chip { border: 1px solid var(--panel-border); border-radius: 999px; background: transparent; padding: 1px 8px; font-size: .62rem; font-weight: 600; color: var(--ink); cursor: pointer; text-transform: capitalize; transition: background .14s ease, color .14s ease, border-color .14s ease; }
+.pf-chip:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--brand-ink, #2b2f5a); }
+.pf-chip[aria-pressed="true"] { background: var(--brand-ink, #2b2f5a); border-color: var(--brand-ink, #2b2f5a); color: #fff; }
+.pf-chip:disabled { opacity: .35; cursor: default; }
+/* Charger carousel — full-bleed image of the selected charger; chevrons float on
+   top with a side hover-shade; navigation loops. Drives the hidden #charger select. */
+.charger-carousel { position: relative; margin-top: 2px; border-radius: var(--radius-sm); overflow: hidden; border: 1.5px solid var(--panel-border); }
+.charger-stage { position: relative; aspect-ratio: 1494 / 1236; background: #f4f1e8; }
+.charger-stage .charger-card { position: absolute; inset: 0; display: block; border: 0; padding: 0; background: none; animation: charger-fade .22s ease; }
+@keyframes charger-fade { from { opacity: .35; } to { opacity: 1; } }
+.charger-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.charger-stage .charger-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-ink); font-size: 2.4rem; }
+.charger-stage .charger-overlay { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 9px; text-align: left; pointer-events: none; background: linear-gradient(transparent, rgba(43,47,90,.55) 45%, rgba(43,47,90,.92)); }
+.charger-stage .charger-power { font-size: 1.1rem; font-weight: 800; color: #fff; line-height: 1.05; letter-spacing: -.01em; }
+.charger-stage .charger-type { font-size: .6rem; color: rgba(255,255,255,.82); margin-top: 2px; text-transform: uppercase; letter-spacing: .07em; }
+.charger-nav { position: absolute; top: 0; bottom: 0; width: 30%; z-index: 2; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; color: #fff; font-size: 26px; line-height: 1; padding: 0 5px; transition: background .16s ease; }
+.charger-nav span { text-shadow: 0 1px 5px rgba(0,0,0,.6); opacity: .82; transition: opacity .16s ease; }
+.charger-nav:hover span { opacity: 1; }
+.charger-prev { left: 0; justify-content: flex-start; }
+.charger-next { right: 0; justify-content: flex-end; }
+.charger-prev:hover { background: linear-gradient(to right, rgba(43,47,90,.5), rgba(43,47,90,0)); }
+.charger-next:hover { background: linear-gradient(to left, rgba(43,47,90,.5), rgba(43,47,90,0)); }
+.charger-custom-link { margin-top: 6px; width: 100%; background: none; border: 1px dashed var(--panel-border); color: var(--muted); border-radius: var(--radius-sm); padding: 5px; font-size: .72rem; font-weight: 600; cursor: pointer; transition: color .12s, border-color .12s; }
+.charger-custom-link:hover { color: var(--primary); border-color: var(--primary); }
+/* discoverability rail — mini thumbnail strip under the hero (client ask); edge fade hints "more to scroll". */
+.charger-strip { position: relative; display: flex; gap: 6px; overflow-x: auto; margin-top: 6px; padding: 1px; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
+.charger-strip::-webkit-scrollbar { height: 0; }
+.charger-thumb { flex: 0 0 auto; width: 46px; height: 38px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: #f4f1e8; opacity: .55; cursor: pointer; transition: opacity .14s ease, border-color .14s ease; }
+.charger-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.charger-thumb:hover { opacity: 1; }
+.charger-thumb[aria-selected="true"] { opacity: 1; border-color: var(--brand-ink, #2b2f5a); }
+.charger-thumb-glyph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--brand-ink, #2b2f5a); }
+/* Compact expected-frequency: narrow number + day/week segment (mirrors #freqUnit). */
+.freq-compact { display: flex; align-items: center; gap: 8px; }
+.freq-compact .freq-n { width: 60px; flex: 0 0 auto; text-align: center; }
+.freq-sep { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.freq-seg { display: inline-flex; background: #eef1f6; border-radius: 8px; padding: 2px; gap: 2px; }
+.freq-seg-btn { border: none; background: transparent; color: var(--ink-soft); font-size: .8rem; font-weight: 600; padding: 4px 13px; border-radius: 6px; cursor: pointer; }
+.freq-seg-btn[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: var(--shadow-sm); }
+/* Usable-reach bar (in the slimmed spec card; photo/name/stats live on the tiles) */
+.ps-id-hidden, .ps-stat-hide { display: none !important; }
+.reach-row { margin: 2px 0 6px; }
+.reach-label { font-size: .76rem; color: var(--ink-soft); margin-bottom: 4px; }
+.reach-label strong { color: var(--ink); }
+.reach-bar { height: 8px; border-radius: 999px; background: rgba(43,47,90,.10); overflow: hidden; }
+.reach-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--brand-orange-1), var(--brand-orange-3)); transition: width .25s ease; }
+/* Trip-type segmented control (drives the hidden #tripType select) */
+.trip-seg { display: flex; border: 1px solid var(--panel-border); border-radius: 999px; padding: 3px; background: #fffdf7; gap: 2px; }
+.trip-seg-btn { flex: 1 1 0; border: none; background: transparent; border-radius: 999px; padding: 6px 4px; font-size: .78rem; font-weight: 600; color: var(--ink-soft); cursor: pointer; transition: background .12s, color .12s; white-space: nowrap; }
+.trip-seg-btn:hover { color: var(--ink); }
+.trip-seg-btn.active { background: var(--brand-ink); color: #fff; }
+
+/* Advanced section + suggested route list (the charging-stops toggle is
+   retired — stops are always planned; #withStops is a hidden checkbox). */
+/* "+ Add stop" link between Departure and Destination inputs. Small,
+   ghost-style affordance — doesn't compete with the primary form. */
+/* Right-aligned so Departure / Destination read as a single unit
+   with the link as a discrete affordance on the side. */
+/* Departure label + inline "+ Add stop" share one row. */
+.field-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+/* Caption style is bound to `.field > label`; this label is nested in the row,
+   so the `>` skips it — restate the caption treatment to match the others. */
+.field-label-row label { margin: 0; font-size: .7rem; font-weight: 700; color: var(--ink-soft); letter-spacing: .05em; text-transform: uppercase; }
+.addstop-link {
+    background: none; border: none; padding: 2px 8px;
+    font-size: .76rem; color: var(--brand-orange-3); font-weight: 600;
+    cursor: pointer; border-radius: 6px;
+}
+.addstop-link:hover { background: rgba(229,120,80,.10); color: var(--primary-2); }
+
+/* Manual stop fields — same look-and-feel as Departure / Destination
+   with an inline × delete control in the label row. */
+.stop-field { margin-bottom: 8px; }
+.stop-field-label {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 5px;
+}
+.stop-field-label .stop-num {
+    font-size: .7rem; font-weight: 600; color: var(--ink-soft);
+    text-transform: uppercase; letter-spacing: .04em;
+}
+.stop-remove {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 1rem; line-height: 1;
+    padding: 0 6px; border-radius: 4px;
+}
+.stop-remove:hover { color: var(--danger); background: rgba(195,61,61,.10); }
+/* Drag-reorder affordance — small grip glyph that becomes the cursor
+   when hovered. The whole stop-field is draggable; the glyph just
+   signals it. */
+.stop-drag {
+    cursor: grab; color: var(--muted); font-weight: 700;
+    padding: 0 4px; user-select: none; font-size: .9rem;
+}
+.stop-field-label { gap: 6px; }
+.stop-field-label .stop-num { flex: 1; }
+.stop-field.dragging { opacity: .5; }
+.stop-field { transition: transform .12s; }
+
+/* Simulate + Reset row. Reset is a square icon-button next to the
+   primary action — small enough to stay inside the panel, prominent
+   enough to find when you need to clear the form quickly. */
+.sim-row {
+    display: flex; gap: 8px; align-items: stretch;
+    flex: 0 0 auto;
+    background: var(--panel-solid);   /* opaque, no blur — see .panel-head */
+    margin: 14px -16px -16px; padding: 12px 16px 14px;
+    border-top: 1px solid var(--panel-border);
+    border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
+}
+.sim-btn { flex: 1; min-width: 0; }
+/* Bottom-pinned CTA inside a scrolling panel: the halo paints panel-tone
+   around the button so content never peeks past its rounded corners. */
+.sticky-cta { position: sticky; bottom: 0; z-index: 7; box-shadow: 0 0 0 10px var(--panel-solid); }
+.sim-reset {
+    flex: 0 0 auto; width: 42px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.15rem; font-weight: 600;
+    background: rgba(195,61,61,.08); color: var(--danger);
+    border: 1px solid rgba(195,61,61,.25); border-radius: var(--radius-sm);
+    cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+}
+.sim-reset:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+/* Compact "Model settings" trigger in the Plan a flight panel.
+   Opens the same modal as the Demand Calculator's button. Sits
+   where the old > Advanced details used to live. */
+/* Model-settings trigger: borderless ghost pill — gear + label, with the
+   active-factor count as a notification dot on the button's corner. */
+.modelset-btn {
+    position: relative; background: none; border: none;
+    border-radius: 999px; padding: 5px 10px;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: .78rem; font-weight: 600; color: var(--ink-soft);
+    cursor: pointer; flex: none; white-space: nowrap;
+    transition: background .15s, color .15s;
+}
+.modelset-btn:hover { background: rgba(43,47,90,.08); color: var(--ink); }
+.panel-head-tools { display: inline-flex; align-items: center; gap: 4px; }
+.panel-head-tools .modelset-btn { padding: 3px 7px; }   /* icon-only in the header — the gear + badge carry it */
+.modelset-btn .gear { font-size: 1.15rem; line-height: 1; opacity: .85; position: relative; top: 1px; }  /* optical-centre the ⚙ glyph (sits high in its box) against the label */
+.modelset-btn .model-badge {
+    position: absolute; top: -4px; right: -2px; margin: 0;
+    min-width: 16px; height: 16px; padding: 0 4px; font-size: .62rem;
+    border: 2px solid #fffbf4;   /* punch-out ring in the panel tone so the dot reads cleanly */
+}
+
+/* Preference order — inline in the Suggested route section. */
+.stops-pref {
+    display: flex; align-items: center; gap: 8px;
+    font-size: .76rem; color: var(--muted);
+    margin: 4px 0 8px 0;
+}
+.stops-pref label { font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.stops-pref select {
+    background: #fff; border: 1px solid var(--panel-border); border-radius: 6px;
+    padding: 2px 8px; font-size: .78rem; color: var(--ink); cursor: pointer;
+}
+.stops-advanced { font-size: .78rem; color: var(--ink-soft); }
+.stops-advanced summary { cursor: pointer; padding: 2px 6px; border-radius: 6px; user-select: none; }
+.stops-advanced summary:hover { background: rgba(15,23,41,.04); }
+.stops-advanced[open] summary { color: var(--primary); font-weight: 600; }
+.adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; padding: 8px; background: rgba(15,23,41,.03); border-radius: 8px; }
+.adv-field label { display: block; font-size: .65rem; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.adv-field input, .adv-field select { width: 100%; font-size: .8rem; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
+
+.stops-section { margin-bottom: 12px; padding: 10px; background: rgba(229,120,80,.07); border-left: 3px solid var(--primary); border-radius: 8px; }
+.stops-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;
+    width: 100%; background: none; border: none; padding: 0; cursor: pointer; text-align: left; color: inherit; font: inherit; }
+.stops-chev { margin-left: 8px; align-self: center; transition: transform .15s ease; opacity: .65; }
+.stops-section.stops-collapsed .stops-chev { transform: rotate(-90deg); }
+.stops-section.stops-collapsed .stops-head { margin-bottom: 0; }
+.stops-section.stops-collapsed .stops-pref,
+.stops-section.stops-collapsed #stopsList,
+.stops-section.stops-collapsed #stopsHint { display: none; }
+.stops-title { font-size: .72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .04em; }
+.stops-summary { font-size: .74rem; color: var(--ink-soft); }
+/* Clean grid: step · name(1fr) · alt · size · range. Each li is display:contents so its
+   5 cells become items of this one grid, so the columns align across every row. */
+.stops-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: auto minmax(0,1fr) auto auto auto; column-gap: 7px; row-gap: 4px; align-items: start; font-size: .82rem; }
+.stops-list li { display: contents; }
+.stops-list li.stops-error { display: block; grid-column: 1 / -1; }
+.stops-list li strong { line-height: 18px; min-width: 0; }   /* col 2: match the step-circle height so the number sits on the first name line; min-width:0 lets a long name wrap */
+.stops-list li .step { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--primary); color: #fff; font-size: .65rem; font-weight: 700; }
+.stops-list li.terminus .step { background: var(--ink-soft); }
+.stops-list .type-tag { font-size: .62rem; padding: 1px 5px; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.stops-list .type-medium { background: #dbeafe; color: #1d4ed8; }
+.stops-list .type-large { background: #d1fae5; color: #065f46; }
+.stops-list .type-small { background: #fee2e2; color: #991b1b; }
+.stops-list .leg-dist { font-size: .7rem; color: var(--muted); justify-self: end; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stops-error { color: var(--danger); font-size: .82rem; }
+.stops-error button, #enableAllTypesBtn, #enableNetworkBtn, #enableAllPoolsBtn { margin-left: 6px; font-size: .78rem; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--danger); background: transparent; color: var(--danger); cursor: pointer; }
+.stops-error-inline { color: var(--danger); font-size: .78rem; }
+.stops-list .stop-removable { cursor: pointer; }
+.stops-list .stop-removable:hover { text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 1.5px; }
+.stops-list .leg-dist.over-range { color: var(--danger); font-weight: 700; }
+.divert-marker-wrap { background: none; border: none; }
+.divert-marker { width: 14px; height: 14px; border-radius: 50%; background: #7c3aed; border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(124,58,237,.5); cursor: grab; }
+.divert-marker.manual { background: #5b21b6; box-shadow: 0 0 0 2px rgba(124,58,237,.6); }
+.stops-list .alt-cell { display: inline-flex; gap: 3px; align-items: center; min-width: 0; }
+.stops-list .alt-hint.alt-pick { cursor: pointer; }
+.stops-retry { display: inline-block; margin-top: 6px; font-size: .72rem; font-weight: 700; color: #fff; background: var(--primary, #e2612e); border: none; border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.stops-list .alt-hint.alt-reset { cursor: pointer; margin-left: 2px; }
+.stops-list .alt-hint { font-size: .56rem; font-weight: 700; color: #7c3aed; background: rgba(124,58,237,.12); padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; cursor: default; }
+.alt-tip { position: fixed; z-index: 4000; display: none; background: #1f2937; color: #fff; padding: 4px 9px; border-radius: 6px; font-size: .72rem; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.3); }
+.stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
+.stops-list .stops-add { padding: 6px 0 0 0; position: relative; }
+.stops-list .stops-add input { width: 100%; padding: 5px 8px; font-size: .82rem; border: 1px solid #e2e8f0; border-radius: 6px; }
+.stops-list .stops-add input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(229,120,80,.18); }
+.stops-btn { font-size: .76rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--panel-border); background: rgba(255,255,255,.8); color: var(--ink-soft); cursor: pointer; font-weight: 600; }
+.stops-btn:hover { background: #fff; color: var(--ink); border-color: #cbd5e1; }
+
+/* Custom-entry list inside the plane/charger modals */
+.custom-list .cl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.custom-list .cl-title { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 700; margin: 0; }
+.custom-list .cl-count { font-size: .72rem; color: var(--muted); font-weight: 600; }
+.custom-list ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--panel-border); }
+.custom-list li { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; border-bottom: 1px solid var(--panel-border); font-size: .85rem; }
+.custom-list li small { color: var(--muted); }
+.custom-list .cl-empty { color: var(--muted); font-size: .8rem; padding: 6px 2px; }
+.custom-list .cl-rm { border: none; background: transparent; color: var(--danger); cursor: pointer; padding: 0 6px; border-radius: 4px; font-size: 1.1rem; line-height: 1; }
+.custom-list .cl-rm:hover { background: rgba(239,68,68,.1); }
+
+/* Single-row topbar that condenses instead of wrapping: progressively drop
+   non-essential items as width shrinks so the bar never breaks onto two rows. */
+@media (max-width: 1180px) { .topbar-search .ac-input { width: 170px; } }
+@media (max-width: 1040px) { .brand-tagline { display: none; } }
+@media (max-width: 900px) {
+    .topbar-search { display: none; }
+    .switch span { display: none; }
+}
+@media (max-width: 720px) {
+    .rail-left { left: 8px; right: 8px; width: auto; max-height: 60vh; }
+    .map-controls { top: 64px; right: 8px; }
+    .control-pill .pill-label { display: none; }
+    .topbar { padding: 0 12px; }
+    .topbar-tools { gap: 2px; }
+    /* keep the controls uniform when compacting */
+    .options-btn, .cns-brand-btn { padding: 6px 8px; font-size: .78rem; }
+    .switch { font-size: .78rem; padding: 0 4px; }
+}
+
+/* ---- report airport picker (was a second inline block) ---- */
+.report-ap-list { display: flex; flex-direction: column; gap: 6px; max-height: 48vh; overflow-y: auto; }
+.report-ap-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border, #e2e8f0); border-radius: 10px; cursor: pointer; margin: 0; transition: border-color .12s, background .12s; }
+.report-ap-row:hover { border-color: #94a3b8; }
+.report-ap-row.is-sel { border-color: #2563eb; background: #eff4ff; box-shadow: 0 0 0 1px #2563eb inset; }
+.report-ap-row input { margin: 0; flex: 0 0 auto; }
+.report-ap-main { display: flex; flex-direction: column; line-height: 1.25; }
+.report-ap-name { font-weight: 600; color: var(--ink, #0f1729); }
+.report-ap-sub { font-size: .8rem; color: var(--muted, #94a3b8); }
