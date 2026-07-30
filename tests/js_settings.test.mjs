@@ -211,38 +211,23 @@ test('published-data gates: VFR plane gets identity padding + no alternate deduc
   const vfr = { regime: 'VFR' }, ifr = { regime: 'IFR' };
   assert.equal(S.routingFactor(vfr), 1.0, 'VFR flies near the great-circle');
   assert.equal(S.sidStarPaddingKm(vfr), 0, 'no SID/STAR procedures under VFR');
-  assert.equal(S.alternateReserveEnabled(vfr), false, 'VFR files no destination alternate');
+  assert.equal(S.alternateReserveEnabled(vfr), true,
+    'VFR excl-reserves DEDUCTS the alternate — the divert must fit the available range (ruled 2026-07-30)');
   assert.equal(S.routingFactor(ifr), 1.05, 'IFR keeps the airways padding');
   assert.equal(S.sidStarPaddingKm(ifr), 10);
   assert.equal(S.alternateReserveEnabled(ifr), true);
   assert.equal(S.routingFactor(), 1.05, 'no plane -> global behaviour (back-compat)');
 });
 
-test('published-data gates: range_incl_reserves waives the alternate deduction too', () => {
+test('published-data gates: ONLY range_incl_reserves waives the alternate deduction', () => {
   const { S } = loadSettings();
   S.save({ alternateReserve: { enabled: true } });
   assert.equal(S.alternateReserveEnabled({ regime: 'IFR', range_incl_reserves: true }), false,
     'diversion energy already inside the published effective range');
-});
-
-test('alternateFitCapKm: VFR excl-reserves planes get the full-range divert-fit ceiling', () => {
-  const { S } = loadSettings();
-  S.save({ alternateReserve: { enabled: true } });
-  assert.equal(S.alternateFitCapKm({ regime: 'VFR', range_km: 500 }), 500,
-    'ceiling = full catalog range (divert rides in the landing-reserve margin)');
-  assert.equal(S.alternateFitCapKm({ regime: 'VFR', range_km: 500, range_incl_reserves: true }), null,
-    'inc-reserves figure already contains the diversion energy');
-  assert.equal(S.alternateFitCapKm({ regime: 'IFR', range_km: 500 }), null,
-    'IFR deducts the divert from usable range instead');
-  assert.equal(S.alternateFitCapKm(null), null, 'no plane -> no rule');
-  assert.equal(S.alternateFitCapKm({ regime: 'VFR' }), null, 'no range -> no rule');
-});
-
-test('alternateFitCapKm: global alternate-reserve toggle off disables the rule', () => {
-  const { S } = loadSettings();
-  S.save({ alternateReserve: { enabled: false } });
-  assert.equal(S.alternateFitCapKm({ regime: 'VFR', range_km: 500 }), null,
-    'toggle off = alternates unmodelled everywhere');
+  assert.equal(S.alternateReserveEnabled({ regime: 'VFR', range_incl_reserves: true }), false,
+    'inc-reserves waives regardless of regime');
+  assert.equal(S.alternateReserveEnabled({ regime: 'VFR' }), true,
+    'excl-reserves deducts regardless of regime: leg + alternate <= available range');
 });
 
 test('effectiveChargePower: published max_charge_kw caps the TOTAL draw, taper on or off', () => {
