@@ -4620,7 +4620,7 @@
                 let g = '';
                 [0, 0.5, 1].forEach(p => { g += `<line x1="${mL}" y1="${py(p)}" x2="${W - mR}" y2="${py(p)}" stroke="#e2e8f0"/><text x="${mL - 3}" y="${py(p) + 3}" font-size="7" text-anchor="end" fill="#94a3b8">${p * 100}</text>`; });
                 [0, 0.5, 1].forEach(s => { g += `<text x="${px(s)}" y="${H - 7}" font-size="7" text-anchor="middle" fill="#94a3b8">${s * 100}%</text>`; });
-                const knee = `<line x1="${px(thr)}" y1="${py(0)}" x2="${px(thr)}" y2="${py(1)}" stroke="#f59e0b" stroke-dasharray="3 2"/><text x="${px(thr)}" y="${mT - 6}" font-size="7" text-anchor="middle" fill="#d97706">knee</text>`;
+                const knee = `<line x1="${px(thr)}" y1="${py(0)}" x2="${px(thr)}" y2="${py(1)}" stroke="#e6c149" stroke-dasharray="3 2"/><text x="${px(thr)}" y="${mT - 6}" font-size="7" text-anchor="middle" fill="#6b541a">knee</text>`;
                 const area = `M${px(0)},${py(0)} L${pts.join(' L')} L${px(1)},${py(0)} Z`;
                 svg.innerHTML = g + knee
                     + `<path d="${area}" fill="rgba(37,99,235,.12)"/>`

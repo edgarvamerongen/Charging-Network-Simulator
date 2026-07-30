@@ -208,7 +208,7 @@ a { color: var(--primary); }
 .ap-card-meta { color: var(--muted); font-size: .72rem; padding: 2px 12px 0; }
 .ap-card-divert { color: var(--muted); font-size: .72rem; padding: 4px 12px 0; }
 .ap-card-rwy { color: var(--muted); font-size: .72rem; padding: 2px 12px 0; }
-.ap-card-rwy-warn { color: #b4550a; font-weight: 600; }   /* runway fit warning for the selected aircraft */
+.ap-card-rwy-warn { color: var(--orange-800); font-weight: 600; }   /* runway fit warning for the selected aircraft */
 .ap-card-actions { display: flex; gap: 6px; padding: 10px 12px 12px; }
 .ap-card-btn {
     flex: 1; padding: 5px 4px; font-size: .72rem; font-weight: 600; cursor: pointer; white-space: nowrap;
@@ -402,8 +402,8 @@ body.ticker-off .rail-left .panel { max-height: calc(100vh - 86px); }
     display: inline-block; font-size: .65rem; font-weight: 700; letter-spacing: .06em;
     padding: 0 5px; border-radius: 3px; color: #fff; vertical-align: middle;
 }
-.cns-tour-popover .driver-popover-description .role-home { background: #a44a23; }
-.cns-tour-popover .driver-popover-description .role-dest { background: #6b541a; }
+.cns-tour-popover .driver-popover-description .role-home { background: var(--orange-800); }
+.cns-tour-popover .driver-popover-description .role-dest { background: var(--gold-800); }
 .cns-tour-popover .driver-popover-description .role-stop { background: var(--brand-ink); }
 /* Welcome slide: wider, more spacious popover to host the Leadership cards.
    Cap its height to the viewport and let the body scroll so the Next/Prev
@@ -651,7 +651,7 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 /* Share-route button (paired with Add-to-DC) + copy toast */
 .cta-row { display: flex; gap: 8px; align-items: stretch; }
 .cta-row #addFolder { flex: 1 1 auto; margin-top: 0; }
-.btn-share { flex: 0 0 auto; width: 46px; display: grid; place-items: center; border: 1.5px solid var(--panel-border); background: #fff; border-radius: var(--radius-sm); cursor: pointer; color: var(--brand-ink, #2b2f5a); transition: background .14s ease, border-color .14s ease, color .14s ease; }
+.btn-share { flex: 0 0 auto; width: 46px; display: grid; place-items: center; border: 1.5px solid var(--panel-border); background: #fff; border-radius: var(--radius-sm); cursor: pointer; color: var(--brand-ink); transition: background .14s ease, border-color .14s ease, color .14s ease; }
 .btn-share:hover { border-color: var(--primary); color: var(--primary); background: var(--accent-tint); }
 .cns-share-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(8px); background: var(--glass-bg-strong); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-edge); color: var(--ink); padding: 9px 16px; border-radius: 999px; font-size: .82rem; font-weight: 600; box-shadow: var(--glass-shine), var(--shadow-lg); opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 9999; }
 .cns-share-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -954,7 +954,7 @@ input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color:
 .ret-ico { margin-right: 6px; font-size: 1.05em; }
 .step-dest { background: rgba(230,193,73,.14); }
 .step-dest .step-main { color: var(--gold-800); }
-.dest-badge { margin-left: 7px; font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--brand-gold); color: #3a2e0a; padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
+.dest-badge { margin-left: 7px; font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--brand-gold); color: var(--gold-900); padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
 .charge-note-row td { width: auto !important; color: var(--muted) !important; font-size: .72rem !important; font-style: italic; font-weight: 400 !important; padding-top: 2px !important; border-bottom: none; }
 
 .ac-photo {
@@ -1006,7 +1006,7 @@ input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color:
 #calcPanel .calc-math { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 #calcPanel .calc-res { font-weight: 700; color: var(--brand-ink); }
 #calcPanel .calc-item { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding-left: 12px; line-height: 1.55; overflow-wrap: anywhere; }
-#calcPanel .calc-total { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--ink); border-top: 1px dashed #e2e8f0; margin-top: 6px; padding-top: 6px; }
+#calcPanel .calc-total { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--ink); border-top: 1px dashed var(--hairline); margin-top: 6px; padding-top: 6px; }
 #calcPanel .calc-conclusion {
     margin: 4px 0 2px; padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: .74rem;
     border-left: 3px solid var(--primary); background: rgba(229,120,80,.08); color: var(--ink);
@@ -1186,7 +1186,7 @@ body:has(.drawer.open)::after {
     box-shadow: var(--shadow-sm);
     transition: box-shadow .15s, border-color .15s;
 }
-#folder [data-dest]:hover { box-shadow: var(--shadow); border-color: var(--border-strong, #cbd5e1) !important; }
+#folder [data-dest]:hover { box-shadow: var(--shadow); border-color: rgba(50,50,110,.30) !important; }
 #folder [data-dest] h5 {
     font-size: 1rem; font-weight: 600; letter-spacing: -.01em;
     font-family: var(--font-display);
@@ -1395,7 +1395,7 @@ body:has(.drawer.open)::after {
 }
 #editFlightModal .ef-thumb {
     width: 88px; height: 56px; flex-shrink: 0; object-fit: contain;
-    border-radius: 6px; background: #f6f7f9;
+    border-radius: 6px; background: #f4f1e8;
 }
 #editFlightModal .ef-plane-name { font-weight: 600; font-size: .9rem; color: var(--ink); }
 #editFlightModal .ef-plane-stats { font-size: .78rem; color: var(--muted); margin-top: 2px; }
@@ -1514,7 +1514,7 @@ body:has(.drawer.open)::after {
     border-right: 6px solid transparent;
     border-top: 10px solid #fff;   /* white, matching the head ring — the disc supplies the orange (route variant overrides to blue) */
 }
-.nrg-tip-sub { color: var(--ink-soft, #475569); font-size: .9em; }
+.nrg-tip-sub { color: var(--ink-soft); font-size: .9em; }
 /* Route variant — a blue copy of the teardrop drawn in routePane, directly
    over the orange network teardrop, so a departure / destination / stop
    dominates the charging-station marker it sits on. */
@@ -1627,10 +1627,10 @@ body:has(.drawer.open)::after {
 .plane-thumb { flex: 0 0 auto; width: 46px; height: 38px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: #f4f1e8; opacity: .55; cursor: pointer; transition: opacity .14s ease, border-color .14s ease; }
 .plane-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .plane-thumb:hover { opacity: 1; }
-.plane-thumb[aria-selected="true"] { opacity: 1; border-color: var(--brand-ink, #2b2f5a); }
-.plane-thumb-glyph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--brand-ink, #2b2f5a); }
+.plane-thumb[aria-selected="true"] { opacity: 1; border-color: var(--brand-ink); }
+.plane-thumb-glyph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--brand-ink); }
 .plane-thumb { position: relative; }
-.plane-thumb-count { position: absolute; top: 1px; right: 1px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; background: var(--brand-ink, #2b2f5a); color: #fff; font-size: .55rem; font-weight: 800; line-height: 13px; text-align: center; pointer-events: none; }
+.plane-thumb-count { position: absolute; top: 1px; right: 1px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; background: var(--brand-ink); color: #fff; font-size: .55rem; font-weight: 800; line-height: 13px; text-align: center; pointer-events: none; }
 /* Profile / regime knobs on the stage: one thumb per airframe, these pick
    WHICH catalog row (performance profile + VFR/IFR) feeds the sim. Greyed,
    not hidden, when the aircraft has only one choice — colleagues should see
@@ -1640,7 +1640,7 @@ body:has(.drawer.open)::after {
 .pk-btn { border: 0; padding: 3px 9px; font-size: .6rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: rgba(43,47,90,.78); color: #fff; cursor: pointer; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background .14s ease, color .14s ease; }
 .pk-btn + .pk-btn { border-left: 1px solid rgba(255,255,255,.28); }
 .pk-btn:hover:not(:disabled):not([aria-pressed="true"]) { background: rgba(43,47,90,.95); }
-.pk-btn[aria-pressed="true"] { background: #fff; color: var(--brand-ink, #2b2f5a); }
+.pk-btn[aria-pressed="true"] { background: #fff; color: var(--brand-ink); }
 .pk-btn:disabled { opacity: .45; cursor: default; }
 .pk-seg.pk-locked .pk-btn { opacity: .55; cursor: default; }
 .pk-seg.pk-locked .pk-btn[aria-pressed="true"] { opacity: .8; }
@@ -1664,8 +1664,8 @@ body:has(.drawer.open)::after {
 .pf-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .pf-group + .pf-group { padding-left: 12px; border-left: 1px solid var(--panel-border); }
 .pf-chip { border: 1px solid var(--panel-border); border-radius: 999px; background: transparent; padding: 1px 8px; font-size: .62rem; font-weight: 600; color: var(--ink); cursor: pointer; text-transform: capitalize; transition: background .14s ease, color .14s ease, border-color .14s ease; }
-.pf-chip:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--brand-ink, #2b2f5a); }
-.pf-chip[aria-pressed="true"] { background: var(--brand-ink, #2b2f5a); border-color: var(--brand-ink, #2b2f5a); color: #fff; }
+.pf-chip:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--brand-ink); }
+.pf-chip[aria-pressed="true"] { background: var(--brand-ink); border-color: var(--brand-ink); color: #fff; }
 .pf-chip:disabled { opacity: .35; cursor: default; }
 /* Charger carousel — full-bleed image of the selected charger; chevrons float on
    top with a side hover-shade; navigation loops. Drives the hidden #charger select. */
@@ -1693,8 +1693,8 @@ body:has(.drawer.open)::after {
 .charger-thumb { flex: 0 0 auto; width: 46px; height: 38px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: #f4f1e8; opacity: .55; cursor: pointer; transition: opacity .14s ease, border-color .14s ease; }
 .charger-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .charger-thumb:hover { opacity: 1; }
-.charger-thumb[aria-selected="true"] { opacity: 1; border-color: var(--brand-ink, #2b2f5a); }
-.charger-thumb-glyph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--brand-ink, #2b2f5a); }
+.charger-thumb[aria-selected="true"] { opacity: 1; border-color: var(--brand-ink); }
+.charger-thumb-glyph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--brand-ink); }
 /* Compact expected-frequency: narrow number + day/week segment (mirrors #freqUnit). */
 .freq-compact { display: flex; align-items: center; gap: 8px; }
 .freq-compact .freq-n { width: 60px; flex: 0 0 auto; text-align: center; }
@@ -1808,7 +1808,7 @@ body:has(.drawer.open)::after {
 .modelset-btn .model-badge {
     position: absolute; top: -4px; right: -2px; margin: 0;
     min-width: 16px; height: 16px; padding: 0 4px; font-size: .62rem;
-    border: 2px solid #fffbf4;   /* punch-out ring in the panel tone so the dot reads cleanly */
+    border: 2px solid var(--brand-paper);   /* punch-out ring in the panel tone so the dot reads cleanly */
 }
 
 /* Preference order — inline in the Suggested route section. */
@@ -1865,10 +1865,10 @@ body:has(.drawer.open)::after {
 .divert-marker.manual { background: var(--red-700); box-shadow: 0 0 0 2px rgba(195,61,61,.6); }
 .stops-list .alt-cell { display: inline-flex; gap: 3px; align-items: center; min-width: 0; }
 .stops-list .alt-hint.alt-pick { cursor: pointer; }
-.stops-retry { display: inline-block; margin-top: 6px; font-size: .72rem; font-weight: 700; color: #fff; background: var(--primary, #e2612e); border: none; border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.stops-retry { display: inline-block; margin-top: 6px; font-size: .72rem; font-weight: 700; color: #fff; background: var(--primary); border: none; border-radius: 6px; padding: 3px 10px; cursor: pointer; }
 .stops-list .alt-hint.alt-reset { cursor: pointer; margin-left: 2px; }
 .stops-list .alt-hint { font-size: .56rem; font-weight: 700; color: var(--danger); background: rgba(195,61,61,.10); padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; cursor: default; }
-.alt-tip { position: fixed; z-index: 4000; display: none; background: #1f2937; color: #fff; padding: 4px 9px; border-radius: 6px; font-size: .72rem; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.3); }
+.alt-tip { position: fixed; z-index: 4000; display: none; background: var(--brand-ink); color: #fff; padding: 4px 9px; border-radius: 6px; font-size: .72rem; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.3); }
 .stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
 .stops-list .stops-add { padding: 6px 0 0 0; position: relative; }
 .stops-list .stops-add input { width: 100%; padding: 5px 8px; font-size: .82rem; border: 1px solid var(--hairline); border-radius: 6px; }
@@ -1913,5 +1913,5 @@ body:has(.drawer.open)::after {
 .report-ap-row.is-sel { border-color: var(--primary); background: var(--accent-tint); box-shadow: 0 0 0 1px var(--primary) inset; }
 .report-ap-row input { margin: 0; flex: 0 0 auto; }
 .report-ap-main { display: flex; flex-direction: column; line-height: 1.25; }
-.report-ap-name { font-weight: 600; color: var(--ink, #0f1729); }
-.report-ap-sub { font-size: .8rem; color: var(--muted, #94a3b8); }
+.report-ap-name { font-weight: 600; color: var(--ink); }
+.report-ap-sub { font-size: .8rem; color: var(--muted); }
