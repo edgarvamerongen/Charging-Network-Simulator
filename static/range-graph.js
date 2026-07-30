@@ -21,7 +21,7 @@
 window.CNSRangeGraph = (function () {
     'use strict';
     const PANE = 'rangeGraphPane';
-    const NAVY = '#2b2f5a';                 // --brand-ink: the map's "world" hue
+    const NAVY = '#32326E';                 // --brand-ink: the map's "world" hue
     const SPOKE_MAX = 250;                  // density guard — nearest N reachable airports (perf backstop)
     const LABEL_TYPES = { large_airport: 1 };               // ICAO labels on the big hubs only (readability)
 

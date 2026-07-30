@@ -44,7 +44,7 @@ window.CNSAnimation = (function () {
     function planeIcon(svg) {
         const inner = svg
             ? `<img src="/pics/plane_svgs/${svg}" style="width:30px;height:30px;display:block">`
-            : `<div style="width:14px;height:14px;background:#444;border:2px solid #fff;border-radius:50%"></div>`;
+            : `<div style="width:14px;height:14px;background:#32326E;border:2px solid #fff;border-radius:50%"></div>`;
         return L.divIcon({ className: 'cns-plane-icon', html: `<div class="cns-plane">${inner}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
     }
 
@@ -56,8 +56,8 @@ window.CNSAnimation = (function () {
             .cns-plane-icon { background: none; border: none; }
             .cns-plane { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
             .cns-plane img { filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
-            .cns-plane.charging { box-shadow: 0 0 0 3px rgba(25,135,84,.55); animation: cnsPulse 1s ease-in-out infinite; }
-            @keyframes cnsPulse { 0%,100% { box-shadow: 0 0 0 2px rgba(25,135,84,.5); } 50% { box-shadow: 0 0 0 7px rgba(25,135,84,.15); } }`;
+            .cns-plane.charging { box-shadow: 0 0 0 3px rgba(47,158,110,.55); animation: cnsPulse 1s ease-in-out infinite; }
+            @keyframes cnsPulse { 0%,100% { box-shadow: 0 0 0 2px rgba(47,158,110,.5); } 50% { box-shadow: 0 0 0 7px rgba(47,158,110,.15); } }`;
         document.head.appendChild(s);
     }
 
@@ -85,23 +85,23 @@ window.CNSAnimation = (function () {
                 // circular closes the loop with the final leg back home
                 const chainOut = [o, ...(t.stops || []).map(s => [+s.lat, +s.lon]), d];
                 if (t.tripType === 'circular') chainOut.push(o);
-                L.polyline(chainOut, { color: '#9ab', weight: 2, opacity: .6 }).addTo(layer);
+                L.polyline(chainOut, { color: '#8a8fae', weight: 2, opacity: .6 }).addTo(layer);
                 if (t.tripType === 'retour') {
-                    L.polyline(chainOut.slice().reverse(), { color: '#9ab', weight: 2, opacity: .5, dashArray: '6 5' }).addTo(layer);
+                    L.polyline(chainOut.slice().reverse(), { color: '#8a8fae', weight: 2, opacity: .5, dashArray: '6 5' }).addTo(layer);
                 }
                 (t.stops || []).forEach(s => {
-                    L.circleMarker([+s.lat, +s.lon], { radius: 5, color: '#000', weight: 1, fillColor: '#2563eb', fillOpacity: .9 })
+                    L.circleMarker([+s.lat, +s.lon], { radius: 5, color: '#fff', weight: 1.5, fillColor: '#32326E', fillOpacity: .9 })
                         .bindTooltip(s.name).addTo(layer);
                     pts.push([+s.lat, +s.lon]);
                 });
             } else if (t.tripType === 'retour') {
-                L.polyline(arcPoints(o, d, 0.12),  { color: '#9ab', weight: 2, opacity: .6 }).addTo(layer);
-                L.polyline(arcPoints(o, d, -0.12), { color: '#9ab', weight: 2, opacity: .6, dashArray: '6 5' }).addTo(layer);
+                L.polyline(arcPoints(o, d, 0.12),  { color: '#8a8fae', weight: 2, opacity: .6 }).addTo(layer);
+                L.polyline(arcPoints(o, d, -0.12), { color: '#8a8fae', weight: 2, opacity: .6, dashArray: '6 5' }).addTo(layer);
             } else {
-                L.polyline([o, d], { color: '#9ab', weight: 2, opacity: .6 }).addTo(layer);
+                L.polyline([o, d], { color: '#8a8fae', weight: 2, opacity: .6 }).addTo(layer);
             }
             [[o, t.originName], [d, t.destName]].forEach(([p, nm]) =>
-                L.circleMarker(p, { radius: 5, color: '#000', weight: 1, fillColor: '#ff7800', fillOpacity: .9 }).bindTooltip(nm).addTo(layer));
+                L.circleMarker(p, { radius: 5, color: '#fff', weight: 1.5, fillColor: '#e57850', fillOpacity: .9 }).bindTooltip(nm).addTo(layer));
             pts.push(o, d);
         });
         if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.25));
