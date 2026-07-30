@@ -227,11 +227,11 @@ a { color: var(--primary); }
     position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 30;
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 20px;
-    /* Soft white brand bar — airy blur over the map; nav items integrate into it */
-    background: linear-gradient(to bottom, rgba(255,255,255,.94), rgba(255,255,255,.82));
-    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    border-bottom: 1px solid var(--panel-border);
-    box-shadow: 0 1px 6px rgba(15,23,41,.05);
+    /* Liquid-glass brand bar — cream glass over the map; nav items integrate into it */
+    background: var(--glass-bg-strong);
+    backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--glass-edge);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 1px 10px rgba(50,50,110,.06);
 }
 .brand {
     display: flex; align-items: center; gap: 12px;
@@ -248,7 +248,7 @@ a { color: var(--primary); }
     transform: translateY(3px);
 }
 .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: .82rem; font-weight: 600; color: var(--ink-soft); user-select: none; padding: 0 6px; }
-.switch input { appearance: none; width: 34px; height: 20px; background: #cbd5e1; border-radius: 999px; position: relative; transition: background .2s; cursor: pointer; }
+.switch input { appearance: none; width: 34px; height: 20px; background: rgba(50,50,110,.25); border-radius: 999px; position: relative; transition: background .2s; cursor: pointer; }
 .switch input:checked { background: var(--primary); }
 .switch input::before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
 .switch input:checked::before { left: 16px; }
@@ -262,11 +262,11 @@ a { color: var(--primary); }
 .topbar-search .ac-input {
     width: 210px; padding: 7px 12px 7px 30px; font-size: .82rem;
     border: 1px solid transparent; border-radius: 8px;
-    background: rgba(15,23,41,.055); color: var(--ink);
+    background: var(--ink-tint); color: var(--ink);
     transition: background .15s, border-color .15s;
 }
 .topbar-search .ac-input::placeholder { color: var(--muted); font-weight: 500; }
-.topbar-search .ac-input:focus { background: #fff; border-color: var(--panel-border); }
+.topbar-search .ac-input:focus { background: #fff; border-color: var(--hairline); }
 .topbar-search .search-ico { position: absolute; left: 11px; top: 6px; color: var(--muted); pointer-events: none; }
 .topbar-search .ac-list { left: 0; right: 0; top: calc(100% + 4px); }
 .options-wrap { position: relative; }
@@ -284,11 +284,11 @@ a { color: var(--primary); }
     padding: 7px 10px; border-radius: 8px; cursor: pointer; text-decoration: none;
     transition: background .15s, color .15s;
 }
-.cns-brand-btn:hover { background: rgba(15,23,41,.06); color: var(--ink); }
+.cns-brand-btn:hover { background: var(--ink-tint); color: var(--ink); }
 .cns-brand-btn-cta {
-    background: linear-gradient(180deg, var(--brand-orange-2), var(--brand-orange-3));
-    border-color: var(--brand-orange-3); color: #fff;
-    box-shadow: 0 2px 6px rgba(229,120,80,.30);
+    background: var(--grad-brand);
+    border-color: transparent; color: #fff;
+    box-shadow: var(--glow-cta), inset 0 1px 0 rgba(255,255,255,.3);
 }
 .cns-brand-btn-cta:hover {
     background: linear-gradient(180deg, var(--brand-orange-3), var(--primary-2));
@@ -342,8 +342,8 @@ body.ticker-off .rail-left .panel { max-height: calc(100vh - 86px); }
     transition: background .15s, color .15s;
 }
 .options-btn .gear { font-size: .95rem; line-height: 1; opacity: .85; transition: transform .25s; }
-.options-btn:hover { background: rgba(15,23,41,.06); color: var(--ink); }
-.options-btn[aria-expanded="true"] { background: rgba(15,23,41,.09); color: var(--ink); }
+.options-btn:hover { background: var(--ink-tint); color: var(--ink); }
+.options-btn[aria-expanded="true"] { background: var(--ink-tint-strong); color: var(--ink); }
 /* Help "?" — same ink tone + size as every other glyph: a quiet outlined
    circle, no special accent, so Tour matches Map Options and Onepager. */
 .help-btn { color: var(--ink-soft); }
@@ -353,7 +353,7 @@ body.ticker-off .rail-left .panel { max-height: calc(100vh - 86px); }
     border: 1.5px solid currentColor; background: transparent;
     color: inherit; font-weight: 700; font-size: .6rem;
 }
-.help-btn:hover { background: rgba(15,23,41,.06); color: var(--ink); }
+.help-btn:hover { background: var(--ink-tint); color: var(--ink); }
 
 /* Driver.js popover: re-skinned to match the NRG2fly palette. */
 .cns-tour-popover.driver-popover {
@@ -533,9 +533,9 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 .options-menu {
     position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
     min-width: 220px;
-    background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
-    border-radius: var(--radius);
+    background: var(--glass-bg-strong); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-edge); box-shadow: var(--glass-shine), var(--shadow-lg);
+    border-radius: var(--radius-lg);
     padding: 10px;
     opacity: 0; transform: translateY(-6px); pointer-events: none;
     transition: opacity .18s, transform .18s;
@@ -545,17 +545,17 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 .opt-group + .opt-group { border-top: 1px solid var(--panel-border); }
 .opt-label { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
 .opt-check { display: flex; align-items: center; gap: 8px; padding: 4px 4px; font-size: .85rem; cursor: pointer; border-radius: 6px; color: var(--ink); }
-.opt-check:hover { background: #f1f5f9; }
+.opt-check:hover { background: var(--ink-tint); }
 .opt-check input[type=checkbox] { accent-color: var(--primary); cursor: pointer; }
 .opt-check.opt-sub { padding-left: 24px; font-size: .8rem; color: var(--muted); }
 .opt-check.is-disabled { opacity: .4; pointer-events: none; }
-.seg-row { display: inline-flex; background: #f1f5f9; padding: 3px; border-radius: 999px; }
+.seg-row { display: inline-flex; background: var(--ink-tint); border: 1px solid var(--hairline-soft); padding: 3px; border-radius: 999px; }
 .opt-action {
     width: 100%; text-align: left;
     background: transparent; border: none; color: var(--ink); cursor: pointer;
     padding: 8px 6px; font-size: .85rem; font-weight: 500; border-radius: 6px;
 }
-.opt-action:hover { background: #f1f5f9; }
+.opt-action:hover { background: var(--ink-tint); }
 
 /* =========================================================
    Left rail (form + result)
@@ -585,9 +585,9 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
        solid is visually identical and scrolls smooth. Map still shows in the
        gaps between panels, where the glass never lived. */
     background: var(--panel-solid);
-    border: 1px solid var(--panel-border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.7), var(--shadow);
     padding: 16px;
 }
 /* Option 2 — the form panel is a fixed-height card: the header and Simulate
@@ -596,14 +596,6 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
    curve, never squared off). No position:sticky on the form -> nothing lags,
    nothing shifts; the bands are genuinely stationary. */
 .rail-left .panel { display: flex; flex-direction: column; max-height: calc(100vh - 114px); overflow: hidden; }
-/* Create-a-route panel -> white, to match the soft-white header. Re-point the
-   panel bg tokens locally so the body AND the sticky head/footer bands (which
-   all read var(--panel-solid/--panel-strong)) turn white in one place. */
-.rail-left .panel {
-    --panel-solid: #ffffff;
-    --panel-strong: #ffffff;
-    --panel: rgba(255,255,255,.90);
-}
 .rail-left .panel > #simForm { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .form-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
 .form-scroll { scrollbar-width: none; }
@@ -637,8 +629,8 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
 .cta-row { display: flex; gap: 8px; align-items: stretch; }
 .cta-row #addFolder { flex: 1 1 auto; margin-top: 0; }
 .btn-share { flex: 0 0 auto; width: 46px; display: grid; place-items: center; border: 1.5px solid var(--panel-border); background: #fff; border-radius: var(--radius-sm); cursor: pointer; color: var(--brand-ink, #2b2f5a); transition: background .14s ease, border-color .14s ease, color .14s ease; }
-.btn-share:hover { border-color: var(--primary); color: var(--primary); background: rgba(43,47,90,.05); }
-.cns-share-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(8px); background: var(--brand-ink, #2b2f5a); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: .82rem; font-weight: 600; box-shadow: 0 6px 22px rgba(0,0,0,.28); opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 9999; }
+.btn-share:hover { border-color: var(--primary); color: var(--primary); background: var(--accent-tint); }
+.cns-share-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(8px); background: var(--glass-bg-strong); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-edge); color: var(--ink); padding: 9px 16px; border-radius: 999px; font-size: .82rem; font-weight: 600; box-shadow: var(--glass-shine), var(--shadow-lg); opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 9999; }
 .cns-share-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .panel-head {
     display: flex; align-items: center; justify-content: space-between;
@@ -649,7 +641,7 @@ body.tour-scheduler-step .drawer { z-index: 100060 !important; }
     background: var(--panel-solid);
     margin: -16px -16px 14px; padding: 14px 16px 12px;
     border-bottom: 1px solid var(--panel-border);
-    border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;   /* nests inside the panel's 1px border arc */
+    border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;   /* nests inside the panel's 1px border arc */
 }
 .panel-title {
     font-size: 1.02rem; margin: 0; font-weight: 600; letter-spacing: -.01em;
@@ -846,7 +838,7 @@ input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color:
     background: var(--brand-ink);
     color: #fff; border-radius: var(--radius); padding: 14px 4px;
     margin-bottom: 14px;
-    box-shadow: 0 6px 16px rgba(43,47,90,.25);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 6px 16px rgba(50,50,110,.28);
 }
 /* Every tile shares the same rhythm: labels START at the same y in a fixed
    two-line box (so "CHARGE TIME" sits level with the wrapped labels), and the
@@ -877,7 +869,7 @@ input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color:
 .hl-rev-per { font-size: .78rem; font-weight: 700; opacity: .75; margin-left: 5px; letter-spacing: 0; }
 .hl-rev-amt { flex: 0 0 auto; text-align: left; font-size: 1.95rem; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: var(--green-300); }  /* brand green (matches the success / Add-to-demand button), distinct from the gold stat tiles */
 .hl-rev-sub { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: .62rem; opacity: .75; letter-spacing: .03em; }
-.lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .06em; font-weight: 600; }
+.lbl { font-size: .62rem; text-transform: uppercase; opacity: .9; letter-spacing: .08em; font-weight: 600; font-family: var(--font-display); }
 
 .section-tag {
     display: inline-flex; align-items: center; gap: 5px;
@@ -1035,8 +1027,8 @@ input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color:
 .seg-btn.active { background: var(--ink); color: #fff; box-shadow: 0 2px 6px rgba(50,50,110,.30); }
 .control-pill {
     display: inline-flex; align-items: center; gap: 10px;
-    background: var(--panel-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    border: 1px solid var(--panel-border); box-shadow: var(--shadow);
+    background: var(--glass-bg-strong); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-edge); box-shadow: var(--glass-shine), var(--shadow);
     border-radius: 999px; padding: 7px 14px;
     font-size: .82rem; color: var(--ink); white-space: nowrap;
 }
@@ -1060,7 +1052,7 @@ input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color:
 body:has(.drawer.open)::after {
     content: '';
     position: fixed; inset: 0;
-    background: rgba(43,47,90,.42);
+    background: rgba(33,33,74,.45);
     z-index: 15;
     pointer-events: none;
     animation: cns-drawer-dim-in .28s ease;
@@ -1069,8 +1061,8 @@ body:has(.drawer.open)::after {
 .drawer-handle {
     position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
     display: inline-flex; align-items: center; gap: 10px;
-    background: var(--panel-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    border: 1px solid var(--panel-border); box-shadow: var(--shadow);
+    background: var(--glass-bg-strong); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-edge); box-shadow: var(--glass-shine), var(--shadow);
     border-radius: 999px; padding: 10px 22px;
     font-size: .92rem; font-weight: 600; color: var(--ink); cursor: pointer;
     white-space: nowrap;
@@ -1127,9 +1119,10 @@ body:has(.drawer.open)::after {
        grow with the viewport, but never narrower than the content needs
        (min) nor wider than its full-bleed size on a 1080p screen (max). */
     width: clamp(720px, calc(100vw - 800px), 1888px); margin-inline: auto;
-    background: var(--panel-strong); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
-    border-radius: var(--radius);
+    /* Near-solid paper, NO blur: #folder scrolls inside this surface. */
+    background: var(--panel-strong);
+    border: 1px solid var(--glass-edge); box-shadow: inset 0 1px 0 rgba(255,255,255,.7), var(--shadow-lg);
+    border-radius: var(--radius-lg);
     max-height: calc(85vh - 80px);
     display: flex; flex-direction: column; overflow: hidden;
     padding: 18px 20px;
@@ -1711,7 +1704,7 @@ body:has(.drawer.open)::after {
     background: var(--panel-solid);   /* opaque, no blur — see .panel-head */
     margin: 14px -16px -16px; padding: 12px 16px 14px;
     border-top: 1px solid var(--panel-border);
-    border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
+    border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
 }
 .sim-btn { flex: 1; min-width: 0; }
 /* Bottom-pinned CTA inside a scrolling panel: the halo paints panel-tone
