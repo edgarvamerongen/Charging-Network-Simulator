@@ -111,7 +111,7 @@ window.CNSDivertEdit = (function () {
             if (!alt) return;
             const to = { lat: +alt.latitude_deg, lon: +alt.longitude_deg };
             const line = L.polyline([[from.lat, from.lon], [to.lat, to.lon]], {
-                color: '#7c3aed', weight: 2.5, dashArray: '5 6', opacity: 0.9, interactive: false,
+                color: '#c33d3d', weight: 2.5, dashArray: '5 6', opacity: 0.9, interactive: false,
             }).addTo(_deps.map);
             const km0 = _hk(from, to);
             const overridden = !!n.divertOverride;

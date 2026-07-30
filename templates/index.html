@@ -884,10 +884,10 @@
                 const from = [full.latitude_deg, full.longitude_deg];
                 const to   = [alt.latitude_deg, alt.longitude_deg];
                 const line = L.polyline([from, to], {
-                    color: '#7c3aed', weight: 2.5, dashArray: '5 6', opacity: 0.9,
+                    color: '#c33d3d', weight: 2.5, dashArray: '5 6', opacity: 0.9,
                 });
                 const dot = L.circleMarker(to, {
-                    radius: 5, fillColor: '#7c3aed', color: '#fff',
+                    radius: 5, fillColor: '#c33d3d', color: '#fff',
                     weight: 1.5, fillOpacity: 0.9,
                 });
                 const km = (full.alternate_km != null)
@@ -2478,7 +2478,7 @@
                     pane: 'savedRoutesPane', interactive: false,
                 }));
                 savedRoutesLayer.addLayer(L.polyline(pts, {
-                    color: '#2b2f5a', weight: 1.75, opacity: .8,
+                    color: '#32326E', weight: 1.75, opacity: .8,
                     pane: 'savedRoutesPane', interactive: false,
                 }));
             });
@@ -2598,9 +2598,9 @@
             // Navy = the airport world; orange is reserved for NRG2FLY assets (the
             // charger discs), so brand color MEANS brand on this map.
             const DOT_R = { large_airport: 6.5, medium_airport: 4.2, small_airport: 3.1 };
-            const DOT_C = { large_airport: '#2b2f5a', medium_airport: '#2b2f5a', small_airport: '#4a4f76' };
+            const DOT_C = { large_airport: '#32326E', medium_airport: '#32326E', small_airport: '#4a4f76' };
             const noRwy = !!(window.CNSRunway && !CNSRunway.hasData(ap));   // no runway data -> un-plannable (#39): draw dimmed
-            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { renderer: _dotRenderer, radius: (DOT_R[ap.type] || 4.2) * _dotScale(), fillColor: DOT_C[ap.type] || '#2b2f5a', color: "#fff", weight: noRwy ? 1 : 1.25, opacity: noRwy ? 0.55 : 1, fillOpacity: noRwy ? 0.35 : 0.9 });
+            const m = L.circleMarker([ap.latitude_deg, ap.longitude_deg], { renderer: _dotRenderer, radius: (DOT_R[ap.type] || 4.2) * _dotScale(), fillColor: DOT_C[ap.type] || '#32326E', color: "#fff", weight: noRwy ? 1 : 1.25, opacity: noRwy ? 0.55 : 1, fillOpacity: noRwy ? 0.35 : 0.9 });
             m._dotR = DOT_R[ap.type] || 4.2;   // base radius — rescaled on zoom by _rescaleDots()
             _bindApCard(m, ap);
             return m;
@@ -2828,12 +2828,18 @@
             return pts;
         }
         const BEND = 0.12;
+        // Thin white under-stroke so solid route lines stay legible on satellite imagery.
+        const ROUTE_CASING = { color: '#ffffff', weight: 5.5, opacity: .45 };
         function flightLayers(p1, p2, tripType) {
             if (tripType === 'retour') return [
-                L.polyline(arcPoints(p1, p2, BEND), { color: '#0d6efd', weight: 3 }),
-                L.polyline(arcPoints(p1, p2, -BEND), { color: '#0d6efd', weight: 2, dashArray: '8 6' })
+                L.polyline(arcPoints(p1, p2, BEND), ROUTE_CASING),
+                L.polyline(arcPoints(p1, p2, BEND), { color: '#e57850', weight: 3 }),
+                L.polyline(arcPoints(p1, p2, -BEND), { color: '#e57850', weight: 2, dashArray: '8 6' })
             ];
-            return [L.polyline([p1, p2], { color: 'blue', weight: 4 })];
+            return [
+                L.polyline([p1, p2], { ...ROUTE_CASING, weight: 6.5 }),
+                L.polyline([p1, p2], { color: '#e57850', weight: 4 })
+            ];
         }
 
         function clearRoute() {
@@ -2987,25 +2993,25 @@
         //   else (off-network, or charger sites toggled off)    → a standard blue pin
         // Both live in routePane, above the orange catalog dots / network teardrops.
         // A blue route dot — covers the orange catalog dot at a "used" airport, so a
-        // route airport always reads blue regardless of the charger DB (race-proof).
+        // route airport always reads brand coral regardless of the charger DB (race-proof).
         function _routeBlueDot(e, withTip) {
             const m = L.circleMarker([e.lat, e.lon], {
-                radius: 9, fillColor: '#2563eb', color: '#fff', weight: 2.5, fillOpacity: 1, pane: 'routePane',
+                radius: 9, fillColor: '#e57850', color: '#fff', weight: 2.5, fillOpacity: 1, pane: 'routePane',
             });
             if (withTip) m.bindTooltip(e.label, { direction: 'top' });
             const ap = _airportAt(e.lat, e.lon);
             if (ap) _bindApCard(m, ap);   // route markers cover the catalog dot — the card must still open
             return m;
         }
-        // The departure/destination teardrop. Blue HALO when it's an active NRG2fly
-        // site (charger AND the network layer is on); otherwise a standard blue pin.
+        // The departure/destination teardrop. Navy HALO when it's an active NRG2fly
+        // site (charger AND the network layer is on); otherwise the brand coral pin.
         // Lives in teardropPane (above routePane) so it rides on top of the route dots.
         function _routeTeardrop(e, netOn) {
             const icao = _chargerAt(e.lat, e.lon);
             if (icao && netOn) {
                 // A charger on the active route keeps its construction styling (amber +
                 // dimmed) — the .construction rules override .route by source order — so an
-                // unfinished site never reads as a live blue halo just because it's en route.
+                // unfinished site never reads as a live navy halo just because it's en route.
                 const info = nrgChargerDb[icao] || {};
                 const isConstruction = info.status === 'construction';
                 const cls = 'nrg-charger-pin route' + (isConstruction ? ' construction' : '');
@@ -3022,16 +3028,20 @@
                 if (tap) _bindApCard(m, tap);   // teardrop covers the dot — the card must still open
                 return m;
             }
-            const m = L.marker([e.lat, e.lon], { pane: 'teardropPane' });   // standard blue pin
-            m.bindTooltip(e.label, { direction: 'top' });
+            // Brand teardrop (replaces Leaflet's stock blue pin): coral head, white ring + tail.
+            const m = L.marker([e.lat, e.lon], {
+                icon: L.divIcon({ className: 'cns-pin-wrap', iconSize: null, html: '<div class="cns-pin"><span class="cns-pin-head"></span><span class="cns-pin-tail"></span></div>' }),
+                pane: 'teardropPane',
+            });
+            m.bindTooltip(e.label, { direction: 'top', offset: [0, -34] });
             const ap = _airportAt(e.lat, e.lon);
             if (ap) _bindApCard(m, ap);
             return m;
         }
         // Redraw the route markers from _routeEndpoints + the toggle. Per the model:
-        //   every route airport      → a blue dot (covers its orange catalog dot)
+        //   every route airport      → a coral dot (covers its orange catalog dot)
         //   departure & destination  → always also a teardrop (halo if charger+on, else pin)
-        //   stop on the network      → also the blue-halo teardrop when the layer is on
+        //   stop on the network      → also the navy-halo teardrop when the layer is on
         //                              (a route airport never shows the orange network pin)
         function refreshRouteEndpoints() {
             routeEndpointMarkers.forEach(m => map.removeLayer(m)); routeEndpointMarkers = [];
@@ -3077,7 +3087,7 @@
                 // training_range_km (a typical pattern reach: fly out, circle, return).
                 const radiusM = ((data.training_range_km || 0) / 2) * 1000;
                 const circle = L.circle(p1, {
-                    radius: radiusM, color: '#dc2626', weight: 2.5, fillColor: '#fca5a5', fillOpacity: 0.18,
+                    radius: radiusM, color: '#c33d3d', weight: 2.5, fillColor: '#c33d3d', fillOpacity: 0.15,
                     dashArray: '8 6'
                 });
                 circle.bindTooltip(`Training pattern · ${Math.round((data.flight_time_h || 0) * 60)} min`, { sticky: true });
@@ -3100,12 +3110,12 @@
             setRoute(endpoints);
 
             // Per-leg colouring: legs flagged in data.legIssues (live preview)
-            // get a red dashed segment so the operator sees at a glance which
-            // hop exceeds the aircraft's range. Default blue otherwise.
+            // get a danger-red dashed segment so the operator sees at a glance
+            // which hop exceeds the aircraft's range. Brand coral otherwise.
             const issueSet = new Set(Array.isArray(data.legIssues) ? data.legIssues : []);
             const legStyle = (i) => issueSet.has(i)
-                ? { color: '#0d6efd', weight: 2, dashArray: '6 4', opacity: .9 }
-                : { color: '#0d6efd', weight: 3 };
+                ? { color: '#c33d3d', weight: 2.5, dashArray: '6 4', opacity: .95 }
+                : { color: '#e57850', weight: 3 };
             // Auto-zoom is OFF for live preview (data.fitBounds === false). It
             // was distracting during planning — the map would jump on every
             // location change. Only the Simulate flow asks for fitBounds.
@@ -3130,9 +3140,11 @@
                 for (let i = 0; i < chainOut.length - 1; i++) {
                     const a = chainOut[i], b = chainOut[i + 1];
                     if (isRetour) {
+                        if (!issueSet.has(i)) { const cas = L.polyline(arcPoints(a, b, BEND), ROUTE_CASING); cas.addTo(map); routeLayers.push(cas); }
                         const out = L.polyline(arcPoints(a, b,  BEND), legStyle(i));
                         out.addTo(map); routeLayers.push(out);
                     } else {
+                        if (!issueSet.has(i)) { const cas = L.polyline([a, b], ROUTE_CASING); cas.addTo(map); routeLayers.push(cas); }
                         const seg = L.polyline([a, b], legStyle(i));
                         seg.addTo(map); routeLayers.push(seg);
                     }
@@ -3140,11 +3152,11 @@
                 }
                 if (isRetour) {
                     // Return arcs — same per-leg pattern, bowed the other way,
-                    // green dashed so the direction reads as "back".
+                    // dashed so the direction reads as "back".
                     for (let i = chainOut.length - 1; i > 0; i--) {
                         const a = chainOut[i], b = chainOut[i - 1];
                         const back = L.polyline(arcPoints(a, b, BEND), {
-                            color: '#198754', weight: 3, dashArray: '8 6',
+                            color: '#e57850', weight: 3, dashArray: '8 6',
                         });
                         back.addTo(map); routeLayers.push(back);
                     }
@@ -4612,7 +4624,7 @@
                 const area = `M${px(0)},${py(0)} L${pts.join(' L')} L${px(1)},${py(0)} Z`;
                 svg.innerHTML = g + knee
                     + `<path d="${area}" fill="rgba(37,99,235,.12)"/>`
-                    + `<polyline fill="none" stroke="#2563eb" stroke-width="2" points="${pts.join(' ')}"/>`
+                    + `<polyline fill="none" stroke="#e57850" stroke-width="2" points="${pts.join(' ')}"/>`
                     + `<text x="2" y="${mT - 6}" font-size="7" fill="#64748b">power %</text>`;
             }
             ['rsTaperThr', 'rsTaperFloor'].forEach(id => {

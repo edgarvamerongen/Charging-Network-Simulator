@@ -188,13 +188,20 @@ a { color: var(--primary); }
    ========================================================= */
 #map { position: fixed; inset: 0; z-index: 0; }
 #folderMap { height: 520px; width: 100%; border-radius: var(--radius-sm); }
-.leaflet-container { font-family: inherit; background: #e9eef7; }
+.leaflet-container { font-family: inherit; background: #ece6d9; }
 .popup-btn { font-size: .78rem; padding: .25rem .5rem; margin-top: 5px; width: 100%; border-radius: 6px; }
 /* Airport hover-popup photo (Wikipedia/Wikidata or Esri satellite — /api/airport-photo). */
 /* Airport CLICK card (Eindhoven-style): full-bleed photo banner + name +
    ICAO·IATA·municipality + Divert + Origin/Destination/Add stop. Opens on dot
    click (× to close); hover only preloads the photo so it's instant on open. */
-.ap-card .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; border-radius: 13px; }
+.ap-card .leaflet-popup-content-wrapper {
+    padding: 0; overflow: hidden; border-radius: 14px;
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-edge);
+    box-shadow: var(--glass-shine), var(--shadow-lg);
+}
+.ap-card .leaflet-popup-tip { background: rgba(253,249,242,.94); }
 .ap-card .leaflet-popup-content { margin: 0; width: 230px; }
 .ap-card .ap-photo-wrap { border-radius: 0; margin: 0; }
 .ap-card-name { font-weight: 700; font-size: .92rem; color: var(--ink); padding: 9px 12px 0; letter-spacing: -.01em; }
@@ -970,8 +977,8 @@ input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color:
 .ps-stat strong { font-size: .9rem; color: var(--ink); }
 .ps-stat-l { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 /* The available range is the main, editable variable — highlight it. */
-.ps-stat-avail { background: rgba(255,122,0,.12); border: 1px solid rgba(255,122,0,.4); border-radius: 8px; padding: 3px 10px; margin: -3px 0; }
-.ps-stat-avail strong { color: var(--brand-orange-3, #ff7a00); }
+.ps-stat-avail { background: var(--accent-tint); border: 1px solid rgba(229,120,80,.4); border-radius: 8px; padding: 3px 10px; margin: -3px 0; }
+.ps-stat-avail strong { color: var(--brand-orange-3); }
 .ps-override-toggle { margin-top: 8px; background: none; border: none; padding: 0; font-size: .76rem; color: var(--brand-ink); cursor: pointer; font-weight: 500; }
 .ps-override-toggle .chev { font-size: .7rem; }
 .plane-spec-card.overridden .ps-override-toggle::after { content: " · overridden"; color: var(--brand-ink); font-weight: 600; }
@@ -1453,7 +1460,7 @@ body:has(.drawer.open)::after {
     background: #fff;
     border: 1px solid var(--panel-border);
     border-radius: 9px;
-    box-shadow: 0 2px 6px rgba(15, 23, 41, .16);
+    box-shadow: 0 2px 6px rgba(50, 50, 110, .18);
     padding: 4px;
     cursor: pointer;
     transition: padding .22s ease, border-color .22s ease, box-shadow .22s ease;
@@ -1473,7 +1480,7 @@ body:has(.drawer.open)::after {
 .flight-pin:hover,
 #map.flight-labels-open .flight-pin {
     border-color: var(--brand-orange-3);
-    box-shadow: 0 4px 12px rgba(255, 122, 0, .30);
+    box-shadow: 0 4px 12px rgba(229, 120, 80, .35);
     padding: 4px 9px 4px 5px;
 }
 .flight-pin:hover .flight-pin-text,
@@ -1511,15 +1518,35 @@ body:has(.drawer.open)::after {
 /* Route variant — a blue copy of the teardrop drawn in routePane, directly
    over the orange network teardrop, so a departure / destination / stop
    dominates the charging-station marker it sits on. */
-.nrg-charger-pin.route .nrg-pin-head { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .30); }
-.nrg-charger-pin.route .nrg-pin-tail { border-top-color: #2563eb; }
+.nrg-charger-pin.route .nrg-pin-head { border-color: var(--brand-ink); box-shadow: 0 0 0 3px rgba(50, 50, 110, .35); }
+.nrg-charger-pin.route .nrg-pin-tail { border-top-color: var(--brand-ink); }
 .nrg-charger-pin.construction { opacity: .55; }
-.nrg-charger-pin.construction .nrg-pin-head { border-color: #b45309; box-shadow: 0 0 0 3px rgba(180, 83, 9, .25); }
-.nrg-charger-pin.construction .nrg-pin-tail { border-top-color: #b45309; }
+.nrg-charger-pin.construction .nrg-pin-head { border-color: var(--orange-800); box-shadow: 0 0 0 3px rgba(164, 74, 35, .28); }
+.nrg-charger-pin.construction .nrg-pin-tail { border-top-color: var(--orange-800); }
+
+/* Brand teardrop for plain departure/destination pins (replaces Leaflet's
+   stock blue marker; the tail tip sits on the airport coordinate). */
+.cns-pin-wrap { background: none; border: none; }
+.cns-pin {
+    position: absolute; transform: translate(-50%, -100%);
+    display: flex; flex-direction: column; align-items: center;
+    filter: drop-shadow(0 2px 3px rgba(15, 23, 41, .35));
+}
+.cns-pin-head {
+    width: 26px; height: 26px; border-radius: 50%; box-sizing: border-box;
+    background: var(--grad-brand); border: 2px solid #fff;
+    display: flex; align-items: center; justify-content: center;
+}
+.cns-pin-head::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+.cns-pin-tail {
+    width: 0; height: 0; margin-top: -1px;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 9px solid #fff;
+}
 
 /* Alternate airport overlay — permanent distance label on each dashed connector */
 .alt-dist-label {
-    background: #fff; color: #7c3aed; border: 1px solid #7c3aed;
+    background: #fff; color: var(--danger); border: 1px solid var(--danger);
     border-radius: 6px; font-size: .7rem; font-weight: 700;
     padding: 1px 5px; box-shadow: var(--shadow-sm); white-space: nowrap;
 }
@@ -1834,13 +1861,13 @@ body:has(.drawer.open)::after {
 .stops-list .stop-removable:hover { text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 1.5px; }
 .stops-list .leg-dist.over-range { color: var(--danger); font-weight: 700; }
 .divert-marker-wrap { background: none; border: none; }
-.divert-marker { width: 14px; height: 14px; border-radius: 50%; background: #7c3aed; border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(124,58,237,.5); cursor: grab; }
-.divert-marker.manual { background: #5b21b6; box-shadow: 0 0 0 2px rgba(124,58,237,.6); }
+.divert-marker { width: 14px; height: 14px; border-radius: 50%; background: var(--danger); border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(195,61,61,.5); cursor: grab; }
+.divert-marker.manual { background: var(--red-700); box-shadow: 0 0 0 2px rgba(195,61,61,.6); }
 .stops-list .alt-cell { display: inline-flex; gap: 3px; align-items: center; min-width: 0; }
 .stops-list .alt-hint.alt-pick { cursor: pointer; }
 .stops-retry { display: inline-block; margin-top: 6px; font-size: .72rem; font-weight: 700; color: #fff; background: var(--primary, #e2612e); border: none; border-radius: 6px; padding: 3px 10px; cursor: pointer; }
 .stops-list .alt-hint.alt-reset { cursor: pointer; margin-left: 2px; }
-.stops-list .alt-hint { font-size: .56rem; font-weight: 700; color: #7c3aed; background: rgba(124,58,237,.12); padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; cursor: default; }
+.stops-list .alt-hint { font-size: .56rem; font-weight: 700; color: var(--danger); background: rgba(195,61,61,.10); padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; cursor: default; }
 .alt-tip { position: fixed; z-index: 4000; display: none; background: #1f2937; color: #fff; padding: 4px 9px; border-radius: 6px; font-size: .72rem; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.3); }
 .stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
 .stops-list .stops-add { padding: 6px 0 0 0; position: relative; }
