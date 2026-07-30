@@ -2780,16 +2780,10 @@
                     // km + maxLeg are in routed (padded) units, so the raw alternate_km adds directly
                     // (the unpadded /route cancels against the padded scale) — matches validateRoute.
                     const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled(plane));
-                    // Divert-fit cap (mirrors routing.js/validateRoute): VFR planes skip the
-                    // deduction but the divert must still fit the FULL catalog range (routed
-                    // units here, so raw alternate_km adds directly).
-                    const fitCapKm = (window.CNSSettings && CNSSettings.alternateFitCapKm) ? CNSSettings.alternateFitCapKm(plane) : null;
-                    const destFull = ((requireAlt || fitCapKm != null) && selected.destination.ident) ? airportByIdent[selected.destination.ident] : null;
+                    const destFull = (requireAlt && selected.destination.ident) ? airportByIdent[selected.destination.ident] : null;
                     const altKm = (destFull && destFull.alternate_km != null) ? (+destFull.alternate_km || 0) : 0;
-                    if (km + (requireAlt ? altKm : 0) > maxLeg) {
-                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km + (requireAlt ? altKm : 0) - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
-                    } else if (fitCapKm != null && km + altKm > fitCapKm) {
-                        warn = ` <span class="traj-warn">⚠ divert exceeds remaining range — ${fmtDist(km + altKm - fitCapKm)} over ${fmtDist(fitCapKm)}</span>`;
+                    if (km + altKm > maxLeg) {
+                        warn = ` <span class="traj-warn">⚠ ${fmtDist(km + altKm - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
                 }
                 const nVia = plannedStops.length + (circular ? closingStops.length : 0);
@@ -2976,30 +2970,22 @@
             // ARRIVAL node must ALSO hold enough range to divert to its nearest airport
             // (alternate_km / route — unpadded, a divert is flown direct). 0 when off, so the
             // per-leg test stays byte-identical to before and matches what the planner enforces.
-            // Plane-aware gates: VFR / range-inc-reserves waive the deduction in the PLANNER
+            // Plane-aware gates: only range-inc-reserves waives the deduction in the PLANNER
             // (routing.js passes the plane), so the validator must waive it too or it flags
             // legs the planner correctly accepted (false "No route within range").
             const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled(plane));
-            // Divert-fit cap (mirrors routing.js): VFR planes skip the deduction but the
-            // divert must still fit the FULL catalog range after the flown leg.
-            const fitCapKm = (window.CNSSettings && CNSSettings.alternateFitCapKm) ? CNSSettings.alternateFitCapKm(plane) : null;
-            const sidPad = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(plane) : 0;
-            const fitCapGc = fitCapKm != null ? Math.max(0, fitCapKm - sidPad) / route : null;
-            const divertKm = (wp) => {                                 // raw km — override ?? baked, same tiers as the router
-                if (!wp) return 0;
+            const altReserveKm = (wp) => {
+                if (!requireAlt || !wp) return 0;
                 const ovKm = _divertOverrideKm(wp);                    // manual divert (CNSDivertEdit) wins
-                if (ovKm != null) return ovKm;
+                if (ovKm != null) return ovKm / route;
                 const full = wp.ident ? airportByIdent[wp.ident] : null;
                 const km = (full && full.alternate_km != null) ? +full.alternate_km : (+wp.alternate_km || 0);
-                return isFinite(km) ? km : 0;
+                return (isFinite(km) ? km : 0) / route;
             };
-            const altReserveKm = (wp) => requireAlt ? divertKm(wp) / route : 0;
             const chain = _ringChain(t);
             for (let i = 0; i < chain.length - 1; i++) {
                 const d = CNSRouting.haversineKm(chain[i], chain[i + 1]);
-                const over = d + altReserveKm(chain[i + 1]) > maxLeg   // arrival node carries the divert reserve
-                          || (fitCapGc != null && d + divertKm(chain[i + 1]) / route > fitCapGc);
-                if (over) plannedLegIssues.push(i);
+                if (d + altReserveKm(chain[i + 1]) > maxLeg) plannedLegIssues.push(i);   // arrival node carries the divert reserve
             }
             if (plannedLegIssues.length) {
                 const n = plannedLegIssues.length;
@@ -5465,7 +5451,7 @@
                                     runway_req: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).runway_req,      // landability gate — catalog-sourced, trips don't persist it
                                     type: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).type,                  // climb-model gate (wing-borne vs powered-lift) — same sourcing
                                     range_incl_reserves: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).range_incl_reserves,        // reserves already in the range — no landing-reserve build-down
-                                    regime: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).regime,                                  // VFR: no padding, no alternate deduction
+                                    regime: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).regime,                                  // VFR: no padding/SID-STAR (alternate deducts for all excl-reserves planes)
                                     max_charge_kw: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).max_charge_kw }),                 // published acceptance cap
                 availableRangeKm: (plane) => _availableRangeKm(plane),
                 routingOptions: _routingOptions(),   // soft Prefer bias — stop choice, never feasibility
@@ -6205,8 +6191,8 @@
                 set('rsNaLanding', incl, `n/a for ${nm} — range includes reserves`);
                 set('rsNaRouting', vfr, `n/a for ${nm} — VFR flies near the great-circle`);
                 set('rsNaSidStar', vfr, `n/a for ${nm} — VFR: no SID/STAR procedures`);
-                set('rsNaAlternate', vfr || incl,
-                    `${nm}: alternates planned + shown, range NOT deducted — ${vfr ? 'VFR, no alternate requirement' : 'reserves included in range'}`);
+                set('rsNaAlternate', incl,
+                    `${nm}: alternates planned + shown, range NOT deducted — reserves included in range`);
             }
             // Live example under the Climb overhead slider: the knob in concrete kWh for
             // the SELECTED aircraft (same source as the spec card — CNSFlight.climbParams).

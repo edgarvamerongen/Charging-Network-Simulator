@@ -24,8 +24,6 @@ function loadRouting(flags) {
     usableFraction: () => (flags.usable != null ? flags.usable : 1.0),
     routingFactor:  () => (flags.route  != null ? flags.route  : 1.0),
     alternateReserveEnabled: () => !!flags.requireAlt,
-    alternateFitCapKm: () => (flags.fitCap != null ? flags.fitCap : null),
-    sidStarPaddingKm: () => (flags.sid != null ? flags.sid : 0),
   };
   const sandbox = {
     window: { CNSSettings }, CNSSettings,
@@ -128,53 +126,6 @@ test('alternate ON: direct flight allowed when destination alternate is near', (
   assert.equal(res.error, undefined, res.error);
   assert.equal(res.legCount, 1);
   assert.equal(res.stops.length, 0);
-});
-
-// 5b. Divert-fit cap (VFR excl-reserves, ruled 2026-07-29): the deduction is
-//     waived (requireAlt false) but leg + divert must fit the FULL range.
-//     O->D = 111.19, fitCap = 130, altD = 30 -> 141.19 > 130: direct rejected.
-test('fit cap: direct flight blocked when the divert exceeds the full-range margin', () => {
-  const O = node('O', 0.0, 0), D = node('D', 1.0, 30);
-  const res = loadRouting({ requireAlt: false, fitCap: 130 }).planRoute({
-    origin: O, destination: D, plane: PLANE(130),
-    allowedTypes: ['medium_airport'], allAirports: [O, D], options: {} });
-  assert.ok(res.error, 'expected the direct hop to fail the divert-fit cap');
-});
-
-// 5c. The margin between usable and full range is exactly where the divert
-//     rides: usable 0.8 of 250 = 200 maxLeg, fitCap 250. Leg 111.19 + divert 30
-//     doesn't fit usable but fits the full range -> direct allowed.
-test('fit cap: divert rides in the landing-reserve margin (direct allowed)', () => {
-  const O = node('O', 0.0, 0), D = node('D', 1.0, 30);
-  const res = loadRouting({ requireAlt: false, usable: 0.8, fitCap: 250 }).planRoute({
-    origin: O, destination: D, plane: PLANE(250),
-    allowedTypes: ['medium_airport'], allAirports: [O, D], options: {} });
-  assert.equal(res.error, undefined, res.error);
-  assert.equal(res.legCount, 1);
-});
-
-// 5d. Stop selection honours the cap: A's divert blows the full range at the
-//     leg distance, B's fits -> route via B.
-test('fit cap: planner picks the stop whose divert fits the margin', () => {
-  const O = node('O', 0.0, 0), D = node('D', 3.0, 5);
-  const A = ap('A', 1.5, 100), B = ap('B', 1.5, 5);
-  const res = loadRouting({ requireAlt: false, usable: 0.8, fitCap: 250 }).planRoute({
-    origin: O, destination: D, plane: PLANE(250),
-    allowedTypes: ['medium_airport'], allAirports: [O, A, B, D], options: {} });
-  assert.equal(res.error, undefined, res.error);
-  assert.deepEqual(idents(res), ['B']);
-});
-
-// 5e. A non-binding cap is byte-identical to no cap (neutrality).
-test('fit cap: non-binding cap reproduces the baseline route', () => {
-  const O = node('O', 0.0, 0), D = node('D', 3.0, 0), A = ap('A', 1.5, 5);
-  const call = (fitCap) => loadRouting({ requireAlt: false, fitCap }).planRoute({
-    origin: O, destination: D, plane: PLANE(200),
-    allowedTypes: ['medium_airport'], allAirports: [O, A, D], options: {} });
-  const base = call(undefined), capped = call(9999);
-  assert.equal(capped.error, undefined, capped.error);
-  assert.deepEqual(idents(capped), idents(base));
-  assert.equal(capped.totalDistanceKm, base.totalDistanceKm);
 });
 
 // 6. The divert reserve is NOT padded: it is alternate_km / route. Hold
