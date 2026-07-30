@@ -33,6 +33,21 @@
     <link rel="stylesheet" href="/static/desktop.css?v={{ asset_version }}">
 </head>
 <body>
+    <!-- Inline SVG icon sprite — stroked house icons (currentColor), replaces text/emoji glyphs. -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><defs>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+        <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></symbol>
+        <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+        <symbol id="i-undo" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+        <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+        <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+        <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+        <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
+    </defs></svg>
     <!-- map is the full-viewport canvas, behind everything else -->
     <div id="map"></div>
 
@@ -44,13 +59,13 @@
         </a>
         <div class="topbar-tools">
             <div class="topbar-search ac-wrap" id="topbarSearch">
-                <span class="search-ico" aria-hidden="true">⌕</span>
+                <span class="search-ico" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg></span>
                 <input type="text" id="airportSearch" class="ac-input" placeholder="Find airport — ICAO, IATA or name" autocomplete="off" aria-label="Find airport">
                 <div id="airportSearchList" class="ac-list d-none"></div>
             </div>
             <div class="options-wrap">
                 <button id="optionsBtn" class="options-btn" type="button" aria-haspopup="true" aria-expanded="false">
-                    <span class="gear">⚙</span> <span>Map Options</span>
+                    <span class="gear"><svg class="icon" aria-hidden="true"><use href="#i-gear"/></svg></span> <span>Map Options</span>
                 </button>
                 <div id="optionsMenu" class="options-menu" role="menu">
                     <div class="opt-group">
@@ -91,7 +106,7 @@
                 <span>Nautical (NM / kts)</span>
             </label>
             <!-- Onepager download (outline). Wraps on narrow nav widths. -->
-            <a class="cns-brand-btn" href="/static/NRG2fly_onepager.pdf" download title="Download NRG2fly onepager"><span aria-hidden="true">↓</span> <span class="btn-text">Onepager</span></a>
+            <a class="cns-brand-btn" href="/static/NRG2fly_onepager.pdf" download title="Download NRG2fly onepager"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg> <span class="btn-text">Onepager</span></a>
             <!-- Help / tour trigger — guided walkthrough; auto-fires on first visit (cns_tour_done). -->
             <button id="tourBtn" class="options-btn help-btn" type="button" title="Take the guided tour">
                 <span class="help-glyph" aria-hidden="true">?</span> <span>Tour</span>
@@ -124,7 +139,7 @@
                          the Demand Calculator — model factors are global, so the control
                          lives in the panel header, not among per-route fields. -->
                     <button type="button" id="planModelSettingsBtn" class="modelset-btn" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Model settings — model factors cascade through the planner, result panel and demand calculator" aria-label="Model settings">
-                        <span class="gear" aria-hidden="true">⚙</span>
+                        <span class="gear" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-gear"/></svg></span>
                         <span id="planModelBadge" class="model-badge d-none">0</span>
                     </button>
                 </span>
@@ -143,8 +158,8 @@
                     <div id="planeFilters" class="plane-filters" aria-label="Aircraft filters"></div>
                     <div class="plane-carousel">
                         <div id="planePicker" class="plane-stage" aria-live="polite" aria-label="Selected aircraft"></div>
-                        <button type="button" class="plane-nav plane-prev" data-dir="-1" aria-label="Previous aircraft"><span>‹</span></button>
-                        <button type="button" class="plane-nav plane-next" data-dir="1" aria-label="Next aircraft"><span>›</span></button>
+                        <button type="button" class="plane-nav plane-prev" data-dir="-1" aria-label="Previous aircraft"><span><svg class="icon" aria-hidden="true"><use href="#i-chev-left"/></svg></span></button>
+                        <button type="button" class="plane-nav plane-next" data-dir="1" aria-label="Next aircraft"><span><svg class="icon" aria-hidden="true"><use href="#i-chev-right"/></svg></span></button>
                     </div>
                     <div id="planeStrip" class="plane-strip" role="tablist" aria-label="All aircraft"></div>
                     <!-- Selected-aircraft spec card: thumbnail + key specs, with a
@@ -165,7 +180,7 @@
                                 <span class="ps-stat"><strong id="psUsage"></strong><span class="ps-stat-l">avg usage</span></span>
                                 <span class="ps-stat ps-stat-avail ps-stat-hide"><strong id="psAvail"></strong><span class="ps-stat-l">available range <span class="rs-q rs-q-inline" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Effective range after mandatory IFR energy deductions from the battery nameplate maximum. Deductions: fixed contingency reserve (missed approach + 30–45 min final reserve); alternate-aerodrome coverage when destination IMC is forecast; airways routing / ATC route extension (~3–8% above great-circle, per EUROCONTROL) and SID/STAR terminal track miles. Adjust the reserve floor in Model Settings → Min landing SoC.">?</span></span></span>
                             </div>
-                            <button type="button" id="psOverrideToggle" class="ps-override-toggle">Edit for this flight <span class="chev">▾</span></button>
+                            <button type="button" id="psOverrideToggle" class="ps-override-toggle">Edit for this flight <span class="chev"><svg class="icon" aria-hidden="true"><use href="#i-chev-down"/></svg></span></button>
                         </div>
                         <div id="psOverride" class="ps-override d-none">
                             <div class="ps-override-grid">
@@ -173,7 +188,7 @@
                             </div>
                             <div class="ps-override-foot">
                                 <span class="ps-override-note">Sets the usable range for this flight only — press Enter to apply.</span>
-                                <button type="button" id="psoReset" class="ps-reset">↺ reset to catalog</button>
+                                <button type="button" id="psoReset" class="ps-reset"><svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg> reset to catalog</button>
                             </div>
                         </div>
                     </div>
@@ -233,7 +248,7 @@
                     <button type="button" id="stopsHeadBtn" class="stops-head" aria-expanded="true" title="Collapse / expand the route">
                         <span class="stops-title">Suggested route</span>
                         <span id="stopsSummary" class="stops-summary"></span>
-                        <span class="stops-chev chev" aria-hidden="true">▾</span>
+                        <span class="stops-chev chev" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-chev-down"/></svg></span>
                     </button>
                     <!-- Preference order moved out of Advanced. Inline at the
                          top of the Suggested route section because it directly
@@ -284,8 +299,8 @@
                     </select>
                     <div class="charger-carousel">
                         <div id="chargerPicker" class="charger-stage" aria-live="polite" aria-label="Selected charger"></div>
-                        <button type="button" class="charger-nav charger-prev" data-dir="-1" aria-label="Previous charger"><span>‹</span></button>
-                        <button type="button" class="charger-nav charger-next" data-dir="1" aria-label="Next charger"><span>›</span></button>
+                        <button type="button" class="charger-nav charger-prev" data-dir="-1" aria-label="Previous charger"><span><svg class="icon" aria-hidden="true"><use href="#i-chev-left"/></svg></span></button>
+                        <button type="button" class="charger-nav charger-next" data-dir="1" aria-label="Next charger"><span><svg class="icon" aria-hidden="true"><use href="#i-chev-right"/></svg></span></button>
                     </div>
                     <div id="chargerStrip" class="charger-strip" role="tablist" aria-label="All chargers"></div>
                     <button type="button" id="addCustomCharger" class="charger-custom-link">＋ Add custom charger</button>
@@ -293,7 +308,7 @@
                 </div><!-- /.form-scroll -->
                 <div class="sim-row">
                     <button type="submit" class="btn-cns sim-btn">Simulate</button>
-                    <button type="button" id="planReset" class="sim-reset" title="Clear Departure, Destination, all stops + map route" aria-label="Reset">↺</button>
+                    <button type="button" id="planReset" class="sim-reset" title="Clear Departure, Destination, all stops + map route" aria-label="Reset"><svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg></button>
                 </div>
             </form>
         </section>
@@ -377,7 +392,7 @@
     <!-- bottom drawer: Demand Calculator -->
     <section class="drawer" id="demandDrawer">
         <button class="drawer-handle" id="drawerToggle" type="button">
-            <span class="chevron">▴</span>
+            <span class="chevron"><svg class="icon chev-flip" aria-hidden="true"><use href="#i-chev-down"/></svg></span>
             <span class="handle-stack">
                 <span class="handle-layer handle-normal">
                     <span class="handle-title">Demand Calculator</span>
@@ -388,7 +403,7 @@
                     <span class="act-close">Close Demand Calculator</span>
                 </span>
                 <span class="handle-layer handle-confirm" aria-hidden="true">
-                    <span class="hc-check">✓</span> Route added
+                    <span class="hc-check"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></span> Route added
                 </span>
             </span>
             <span id="addLive" class="visually-hidden" role="status" aria-live="polite"></span>
@@ -401,10 +416,10 @@
                     <label class="inline-field">Show airport
                         <select id="airportFilter" class="form-select form-select-sm"></select>
                     </label>
-                    <button id="modelSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true">⚙</span> Model settings <span id="modelBadge" class="model-badge d-none">0</span></button>
-                    <button id="generateReport" class="btn-cns btn-sm-cns btn-export" type="button" title="Generate a PDF report of the current plan"><span class="dl" aria-hidden="true">⤓</span> PDF</button>
-                    <button id="exportSpreadsheet" class="btn-cns btn-sm-cns btn-export" type="button" title="Export the whole plan as an Excel spreadsheet (.xlsx)"><span class="dl" aria-hidden="true">⤓</span> XLSX</button>
-                    <button id="shareBuild" class="btn-cns btn-sm-cns" type="button" title="Copy a shareable link to this whole network — all flights, chargers &amp; schedule"><span aria-hidden="true">🔗</span> Share build</button>
+                    <button id="modelSettingsBtn" class="btn-ghost-tool" type="button" data-bs-toggle="modal" data-bs-target="#modelSettingsModal" title="Toggle model factors (reserves, charging losses, taper, routing padding)"><span class="gear" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-gear"/></svg></span> Model settings <span id="modelBadge" class="model-badge d-none">0</span></button>
+                    <button id="generateReport" class="btn-cns btn-sm-cns btn-export" type="button" title="Generate a PDF report of the current plan"><span class="dl" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></span> PDF</button>
+                    <button id="exportSpreadsheet" class="btn-cns btn-sm-cns btn-export" type="button" title="Export the whole plan as an Excel spreadsheet (.xlsx)"><span class="dl" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></span> XLSX</button>
+                    <button id="shareBuild" class="btn-cns btn-sm-cns" type="button" title="Copy a shareable link to this whole network — all flights, chargers &amp; schedule"><svg class="icon" aria-hidden="true"><use href="#i-link"/></svg> Share build</button>
                     <button id="clearFolder" class="btn btn-sm btn-outline-danger" type="button">Clear all</button>
                 </div>
             </header>
@@ -768,6 +783,8 @@
     <script src="/static/divert-edit.js?v={{ asset_version }}"></script>
     {% if share_state %}<script>window.__CNS_SHARE__ = {{ share_state|tojson }};</script>{% endif %}
     <script>
+        // Sprite chevron that flips via the .up class (replaces the ▴/▾ ternaries).
+        function icon_chev(up) { return `<svg class="icon chev-i${up ? ' up' : ''}" aria-hidden="true"><use href="#i-chev-down"/></svg>`; }
         // HTML-escape for every data string interpolated into an innerHTML
         // template. Airport/catalog names are server data, but custom plane &
         // charger NAMES are user input shared across all visitors — without
@@ -910,7 +927,7 @@
             const km = ov ? (ovKm != null ? ' · ' + fmtDist(ovKm) : '')
                           : (full.alternate_km != null ? ' · ' + fmtDist(full.alternate_km) : '');
             const title = `Divert → ${altId}${km}${ov ? ' · manual' : ''} — click, then pick an airport on the map`;
-            const reset = ov ? `<span class="alt-hint alt-reset" title="Reset divert to auto" onclick="window._cnsAltReset('${wp.ident}')">↺</span>` : '';
+            const reset = ov ? `<span class="alt-hint alt-reset" title="Reset divert to auto" onclick="window._cnsAltReset('${wp.ident}')"><svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg></span>` : '';
             // ONE grid cell — the route list is a strict 5-cell grid (step · name ·
             // alt · size · range); a second loose span shifts every later row.
             return { open: '<strong>', badge: ` <span class="alt-cell"><span class="alt-hint alt-pick" data-tip="${title}" tabindex="0" aria-label="${title}" onclick="window._cnsAltPick('${wp.ident}')">alt${ov ? '·m' : ''}</span>${reset}</span>` };
@@ -2159,7 +2176,7 @@
             const src = img ? '/pics/' + img.split('/').map(encodeURIComponent).join('/') : '';
             const pw = +o.dataset.power, power = (isFinite(pw) && pw > 0) ? fmtPower(pw) : (o.textContent || '').trim();
             host.innerHTML = `<div class="charger-card" title="${escHtml((o.textContent || '').trim())}">` +
-                (src ? `<img src="${src}" alt="" loading="lazy">` : '<div class="charger-glyph">⚡</div>') +
+                (src ? `<img src="${src}" alt="" loading="lazy">` : '<div class="charger-glyph"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg></div>') +
                 `<div class="charger-overlay"><div class="charger-power">${escHtml(power)}</div><div class="charger-type">${escHtml(o.dataset.type || 'DC charger')}</div></div></div>`;
             syncChargerStrip();
         }
@@ -3328,7 +3345,7 @@
                 `<tr class="step"><td colspan="2"><div class="step-main"><span class="step-ico step-fly">✈</span>${_esc(from)} → ${_esc(to)}</div>` +
                 `<div class="step-sub">${fmtDist(distKm)} · ${fmtDuration(durMin)} · ${fmtEnergy(energyKwh)}</div></td></tr>`;
             const _chgRow = (name, min, energy, isDest) =>
-                `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico">⚡</span>Charge at ${_esc(name)}${isDest ? '<span class="dest-badge">destination</span>' : ''}</div>` +
+                `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg></span>Charge at ${_esc(name)}${isDest ? '<span class="dest-badge">destination</span>' : ''}</div>` +
                 `<div class="step-sub">+${fmtDuration(min)} · ${fmtEnergy(energy)}</div></td></tr>`;
             const _typeLabel = isTraining ? `Training pattern (${Math.round(flightMin)} min)`
                 : (data.trip_type === 'circular' ? 'Circular (closed loop)' : isRetour ? 'Return' : 'One-Way')
@@ -4003,21 +4020,21 @@
                         ? `<div class="alert alert-warning py-2 mt-2 mb-0">With ${fleet.length} charger${fleet.length > 1 ? 's' : ''} (${fmtPower(installed)}) the rotations don't all fit before 23:00 — the last finishes ${fmtClock(sInfo.latestEnd)}. Add chargers or reduce flights.</div>`
                         : ''}
                     <button class="sched-card sched-toggle" data-ident="${ident}" type="button" title="Open the per-charger Gantt-style scheduler for this airport">
-                        <span class="sched-card-icon" aria-hidden="true">⏱</span>
+                        <span class="sched-card-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg></span>
                         <span class="sched-card-body">
                             <span class="sched-card-title">Rotation scheduler ${schedOpen.has(ident) ? '(open)' : ''}</span>
                             <span class="sched-card-summary">${fpd} rotation${Math.round(fpd) === 1 ? '' : 's'}/day · peak ${fmtPower(peakPower * gridMul)} · last ends ${fmtClock(sInfo.latestEnd)}</span>
                         </span>
-                        <span class="sched-card-chev" aria-hidden="true">${schedOpen.has(ident) ? '▴' : '▾'}</span>
+                        <span class="sched-card-chev" aria-hidden="true">${icon_chev(schedOpen.has(ident))}</span>
                     </button>
                     <div class="sched-box mt-2 ${schedOpen.has(ident) ? '' : 'd-none'}" data-schedbox="${ident}"></div>
                     <button class="sched-card routes-toggle" data-ident="${ident}" type="button" title="Show or hide the per-route breakdown">
-                        <span class="sched-card-icon" aria-hidden="true">☰</span>
+                        <span class="sched-card-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg></span>
                         <span class="sched-card-body">
                             <span class="sched-card-title">Route breakdown</span>
                             <span class="sched-card-summary">${routesOpen.has(ident) ? 'hide' : 'show'} the per-flight detail</span>
                         </span>
-                        <span class="sched-card-chev" aria-hidden="true">${routesOpen.has(ident) ? '▴' : '▾'}</span>
+                        <span class="sched-card-chev" aria-hidden="true">${icon_chev(routesOpen.has(ident))}</span>
                     </button>
                     <div class="${routesOpen.has(ident) ? '' : 'd-none'} mt-2">
                         <table class="table table-sm align-middle mb-0">
