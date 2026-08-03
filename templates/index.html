@@ -3644,16 +3644,23 @@
         const _FILTER_DIMS = [{ key: 'type', label: 'Type' }, { key: 'propulsion', label: 'Propulsion' }];
         const _planeFilters = { type: null, propulsion: null };
         const _acField = (g, k) => String(g.entries[0][k] || '');
+        // Capability-based matching (user-ruled): a group matches a filter value
+        // when ANY of its rows carries it — a convertible like the ES-30
+        // (categorized hybrid, with an electric-mode profile) appears under BOTH
+        // propulsion chips. Type never varies within an airframe, so this is a
+        // no-op for that dimension.
+        const _acValues = (g, k) => [...new Set(g.entries.map(e => String(e[k] || '')).filter(Boolean))];
+        const _acMatches = (g, k, v) => g.entries.some(e => String(e[k] || '') === v);
         const _visibleGroups = () => AIRCRAFT_GROUPS.filter(g =>
-            _FILTER_DIMS.every(d => !_planeFilters[d.key] || _acField(g, d.key) === _planeFilters[d.key]));
+            _FILTER_DIMS.every(d => !_planeFilters[d.key] || _acMatches(g, d.key, _planeFilters[d.key])));
         // Default filters: CTOL + electric. Matched against the live catalog values
         // (Notion emits 'electric', older catalogs 'fully electric') and only applied
         // when at least one airframe survives, so a sparse catalog never starts with
         // an empty strip.
         (function () {
-            const vals = k => [...new Set(AIRCRAFT_GROUPS.map(g => _acField(g, k)).filter(Boolean))];
+            const vals = k => [...new Set(AIRCRAFT_GROUPS.flatMap(g => _acValues(g, k)))];
             const matches = f => AIRCRAFT_GROUPS.some(g =>
-                _FILTER_DIMS.every(d => !f[d.key] || _acField(g, d.key) === f[d.key]));
+                _FILTER_DIMS.every(d => !f[d.key] || _acMatches(g, d.key, f[d.key])));
             const type = vals('type').find(v => v === 'CTOL') || null;
             const prop = vals('propulsion').find(v => /^(fully[ _-])?electric$/i.test(v)) || null;
             for (const f of [{ type, propulsion: prop }, { type, propulsion: null }, { type: null, propulsion: prop }]) {
@@ -3695,8 +3702,19 @@
         }
         // Entering a group (thumb click / arrows): reuse the profile the user last
         // had on that airframe, else its catalog default (first emitted row).
-        const _groupEntryId = g => (_profileMemory[g.key] && g.entries.some(p => p.id === _profileMemory[g.key]))
-            ? _profileMemory[g.key] : g.entries[0].id;
+        const _groupEntryId = g => {
+            const rem = _profileMemory[g.key] && g.entries.find(p => p.id === _profileMemory[g.key]);
+            // Active propulsion chip steers WHICH row of a convertible you land on
+            // (picking the ES-30 under 'electric' must open its electric profile) —
+            // the remembered row still wins whenever it already matches the chip.
+            const want = _planeFilters.propulsion;
+            if (want) {
+                if (rem && String(rem.propulsion || '') === want) return rem.id;
+                const m = g.entries.find(p => String(p.propulsion || '') === want);
+                if (m) return m.id;
+            }
+            return rem ? rem.id : g.entries[0].id;
+        };
         function _renderPlaneKnobs(g, cur) {
             // Profile rows are freeform per aircraft (label + regime pairs from
             // Notion) — no fixed Max/Light taxonomy. Both knobs stay visible but
@@ -3716,9 +3734,20 @@
                     : `No ${_regShort(r)} profile for this aircraft in the catalog`;
                 return `<button type="button" class="pk-btn" data-pk="regime" data-regime="${escHtml(r)}" aria-pressed="${String(r === cur.regime)}" ${exists && !regLocked ? '' : 'disabled'} title="${escHtml(title)}">${escHtml(_regShort(r))}</button>`;
             }).join('');
+            // Propulsion knob (third row): ONLY for convertibles — airframes whose
+            // rows span 2+ propulsion modes (ES-30: electric or hybrid missions).
+            // Unlike the two rows above this one is hidden, not greyed, when the
+            // aircraft has a single mode (user-ruled): most aircraft can't convert,
+            // so a permanently-locked row would be noise on nearly every stage.
+            const modes = [];
+            g.entries.forEach(p => { const m = p.propulsion; if (m && !modes.includes(m)) modes.push(m); });
+            const propSeg = modes.length < 2 ? '' :
+                `<div class="pk-seg" role="group" aria-label="Propulsion">` + modes.map(m =>
+                    `<button type="button" class="pk-btn" data-pk="propulsion" data-prop="${escHtml(m)}" aria-pressed="${String(m === String(cur.propulsion || ''))}" title="${escHtml('Propulsion mode: ' + m)}">${escHtml(m.toUpperCase())}</button>`).join('') + `</div>`;
             return `<div class="plane-knobs" aria-label="Performance profile">`
                 + `<div class="pk-seg ${profLocked ? 'pk-locked' : ''}" role="group" aria-label="Profile">${profSeg}</div>`
                 + `<div class="pk-seg ${regLocked ? 'pk-locked' : ''}" role="group" aria-label="Flight rules">${regSeg}</div>`
+                + propSeg
                 + `</div>`;
         }
         function renderPlanePicker() {
@@ -3742,17 +3771,31 @@
                 `<div class="plane-topbar">${stHtml}${g ? _renderPlaneKnobs(g, p) : ''}</div>`;
             // Knob clicks swap WITHIN the group: same airframe, different catalog row.
             host.querySelectorAll('.pk-btn:not(:disabled)').forEach(b => b.addEventListener('click', () => {
-                const curLabel = _pkLabel(p);
+                const curLabel = _pkLabel(p), curProp = String(p.propulsion || '');
+                const prop = e => String(e.propulsion || '');
                 let target = null;
                 if (b.dataset.pk === 'profile') {
-                    // Prefer the clicked label in the current regime, else its first row.
-                    target = g.entries.find(e => _pkLabel(e) === b.dataset.label && e.regime === p.regime)
-                        || g.entries.find(e => _pkLabel(e) === b.dataset.label);
+                    // Prefer the clicked label in the current regime AND propulsion,
+                    // then relax propulsion, then regime, then label alone.
+                    const L = e => _pkLabel(e) === b.dataset.label;
+                    target = g.entries.find(e => L(e) && e.regime === p.regime && prop(e) === curProp)
+                        || g.entries.find(e => L(e) && e.regime === p.regime)
+                        || g.entries.find(e => L(e) && prop(e) === curProp)
+                        || g.entries.find(L);
+                } else if (b.dataset.pk === 'regime') {
+                    // Keep label + propulsion where the sparse matrix allows.
+                    const R = e => e.regime === b.dataset.regime;
+                    target = g.entries.find(e => R(e) && _pkLabel(e) === curLabel && prop(e) === curProp)
+                        || g.entries.find(e => R(e) && _pkLabel(e) === curLabel)
+                        || g.entries.find(e => R(e) && prop(e) === curProp)
+                        || g.entries.find(R);
                 } else {
-                    // Prefer the current label in the clicked regime, else that
-                    // regime's first (default-ordered) row — labels may be sparse.
-                    target = g.entries.find(e => e.regime === b.dataset.regime && _pkLabel(e) === curLabel)
-                        || g.entries.find(e => e.regime === b.dataset.regime);
+                    // Propulsion switch: keep label + regime where possible.
+                    const M = e => prop(e) === b.dataset.prop;
+                    target = g.entries.find(e => M(e) && _pkLabel(e) === curLabel && e.regime === p.regime)
+                        || g.entries.find(e => M(e) && _pkLabel(e) === curLabel)
+                        || g.entries.find(e => M(e) && e.regime === p.regime)
+                        || g.entries.find(M);
                 }
                 if (target) _selectPlane(target.id);
             }));
@@ -3799,15 +3842,15 @@
             // on it (a lone label-less chip that filters nothing is noise).
             const dims = _FILTER_DIMS.map(d => {
                 const values = [];
-                AIRCRAFT_GROUPS.forEach(g => { const v = _acField(g, d.key); if (v && !values.includes(v)) values.push(v); });
+                AIRCRAFT_GROUPS.forEach(g => _acValues(g, d.key).forEach(v => { if (!values.includes(v)) values.push(v); }));
                 return { ...d, values };
             }).filter(d => d.values.length >= 2);
             host.innerHTML = dims.map(d => {
                 const chips = d.values.map(v => {
                     const on = _planeFilters[d.key] === v;
                     // Would picking this value (other filter as-is) leave any aircraft?
-                    const ok = on || AIRCRAFT_GROUPS.some(g => _acField(g, d.key) === v &&
-                        _FILTER_DIMS.every(o => o.key === d.key || !_planeFilters[o.key] || _acField(g, o.key) === _planeFilters[o.key]));
+                    const ok = on || AIRCRAFT_GROUPS.some(g => _acMatches(g, d.key, v) &&
+                        _FILTER_DIMS.every(o => o.key === d.key || !_planeFilters[o.key] || _acMatches(g, o.key, _planeFilters[o.key])));
                     return `<button type="button" class="pf-chip" data-dim="${escHtml(d.key)}" data-val="${escHtml(v)}" aria-pressed="${String(on)}" ${ok ? '' : 'disabled'} title="${escHtml(d.label + ': ' + v)}">${escHtml(v)}</button>`;
                 }).join('');
                 return `<span class="pf-group">${chips}</span>`;

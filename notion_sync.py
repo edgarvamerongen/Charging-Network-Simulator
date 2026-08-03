@@ -75,6 +75,14 @@ SNAPSHOT_KEEP = 30
 
 _REGIME_CANON = {"vfr": "VFR", "ifr+reserves": "IFR+reserves", "ifr": "IFR+reserves"}
 
+# Propulsion appears on BOTH databases: the Aircraft value is the airframe's
+# categorization; a Profile value (optional) is the mode actually flown in that
+# operating case — convertibles like the Heart ES-30 fly electric OR hybrid
+# missions from the same airframe. Blank profile propulsion inherits the
+# aircraft's. The map folds legacy select vocab into one canonical spelling.
+_PROPULSION_CANON = {"electric": "electric", "fully electric": "electric",
+                     "hybrid": "hybrid", "h2": "H2", "hydrogen": "H2"}
+
 
 class NotionError(RuntimeError):
     """Notion API / auth / transport failure — treated as a global abort."""
@@ -196,6 +204,11 @@ def _canon_regime(v):
     return _REGIME_CANON.get(t.lower(), t)
 
 
+def _canon_propulsion(v):
+    t = _norm_text(v)
+    return _PROPULSION_CANON.get(t.lower(), t)
+
+
 def kt_to_kmh(kt):
     return round(kt * KT_TO_KMH)
 
@@ -215,7 +228,7 @@ def parse_aircraft(page):
         "type_": _norm_text(p.get("Type")),
         "status": _norm_text(p.get("Status")),
         "cert_year": _num(p.get("Certification year")),
-        "propulsion": _norm_text(p.get("Propulsion")),
+        "propulsion": _canon_propulsion(p.get("Propulsion")),
         "battery_kwh": _num(p.get("Battery (kWh)")),
         "cruise_kt": _num(p.get("Cruise speed (kt)")),
         "max_kw": _num(p.get("Max kW")),
@@ -244,6 +257,7 @@ def parse_profile(page):
         "seats": _num(p.get("Seats")),
         "payload_kg": _num(p.get("Payload (kg)")),
         "regime": _canon_regime(p.get("Regime")),
+        "propulsion": _canon_propulsion(p.get("Propulsion")),
         "range_km": _num(p.get("Range (km)")),
         # 'Range inc. reserves' checkbox: the profile's Range (km) is already the
         # USABLE range (reserves flown off) — the landing-reserve build-down must
@@ -440,7 +454,7 @@ def build_entries(ac, profs):
             "type": ac["type_"],
             "status": ac["status"],
             "certification_year": _clean_int(ac["cert_year"]) if ac["cert_year"] is not None else None,
-            "propulsion": ac["propulsion"],
+            "propulsion": p["propulsion"] or ac["propulsion"],
             "max_charge_kw": _clean_int(ac["max_kw"]) if ac["max_kw"] is not None else None,
             "country": ac["country"],
             "mtow_kg": _clean_int(ac["mtow_kg"]) if ac["mtow_kg"] is not None else None,

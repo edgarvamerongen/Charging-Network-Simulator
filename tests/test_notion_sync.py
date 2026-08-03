@@ -106,6 +106,44 @@ class TransformTest(unittest.TestCase):
         self.assertIsNone(report["abort"])
         self.assertNotIn("range_incl_reserves", entries[0])
 
+    def test_profile_propulsion_overrides_aircraft(self):
+        # Convertible (ES-30-style): aircraft categorized hybrid, one profile
+        # flies electric. The electric row overrides; the blank row inherits.
+        ac = [aircraft("A", slug="es30", battery=980, cruise=150,
+                       props={"Propulsion": _sel("hybrid")})]
+        pr = [profile("P1", "A", label="30 pax electric", emit="es30", rng=200,
+                      props={"Propulsion": _sel("electric")}),
+              profile("P2", "A", label="30 pax hybrid", emit="es30_hyb",
+                      default=False, rng=400)]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertIsNone(report["abort"])
+        by_id = {e["id"]: e for e in entries}
+        self.assertEqual(by_id["es30"]["propulsion"], "electric")
+        self.assertEqual(by_id["es30_hyb"]["propulsion"], "hybrid")
+
+    def test_propulsion_canonicalized_on_both_levels(self):
+        # Legacy vocab folds into one spelling: 'Fully Electric' -> electric,
+        # 'Hydrogen' -> H2. Unknown values pass through untouched (soft).
+        ac = [aircraft("A", slug="x", battery=100, cruise=100,
+                       props={"Propulsion": _sel("Fully Electric")}),
+              aircraft("B", slug="y", battery=100, cruise=100,
+                       props={"Propulsion": _sel("Hydrogen")})]
+        pr = [profile("P1", "A", emit="x"),
+              profile("P2", "B", emit="y",
+                      props={"Propulsion": _sel("weird-mode")})]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertIsNone(report["abort"])
+        by_id = {e["id"]: e for e in entries}
+        self.assertEqual(by_id["x"]["propulsion"], "electric")
+        self.assertEqual(by_id["y"]["propulsion"], "weird-mode")
+
+    def test_no_propulsion_anywhere_emits_no_key(self):
+        ac = [aircraft("A", slug="bare", battery=100, cruise=100)]
+        pr = [profile("P", "A", emit="bare")]
+        entries, report = ns.transform(ac, pr, KNOWN_CHARGERS, {})
+        self.assertIsNone(report["abort"])
+        self.assertNotIn("propulsion", entries[0])
+
     def test_basic_emit_shape_and_speed_conversion(self):
         ac = [aircraft("A", name="Velis Electro", slug="pipistrel_velis",
                        battery=22, cruise=80, chargers=("dc_22",),
