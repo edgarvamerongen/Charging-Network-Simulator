@@ -84,6 +84,14 @@ _IMPORT_TOKEN = os.environ.get('CNS_IMPORT_TOKEN') or ''
 _SYNC_TOKEN = os.environ.get('CNS_SYNC_TOKEN') or ''
 AUTH_ENABLED = bool(_PASSWORD_HASH or _PASSWORD_PLAIN)
 
+# Carto basemap key (optional). The Voyager raster endpoint serves fine WITHOUT
+# a key, so absent = unchanged behaviour; setting it attributes tile usage to
+# our Carto account. It is NOT a secret — any visitor can read it out of the
+# served page — so the real control is domain-restricting the key in the Carto
+# dashboard. It lives in the environment purely to keep it out of this PUBLIC
+# repo's git history (same place as the auth trio: /etc/cns.env on the VPS).
+CARTO_KEY = os.environ.get('CNS_CARTO_KEY') or ''
+
 _secret_key = os.environ.get('CNS_SECRET_KEY')
 if not _secret_key:
     # Ephemeral key: the app still works, but sessions reset on every restart.
@@ -187,6 +195,15 @@ def _compute_asset_version():
 
 
 ASSET_VERSION = _compute_asset_version()
+
+
+@app.context_processor
+def _inject_carto_key():
+    """Expose the Carto key to EVERY template (read per request, so tests and a
+    restart-free env change both take effect) as the ready-to-append query
+    string — empty when unset, which is the keyless endpoint we shipped with."""
+    return {'carto_key_qs': ('?key=' + CARTO_KEY) if CARTO_KEY else ''}
+
 
 # MDN-recommended UA test: presence of "Mobi" covers iPhone Safari, Chrome/
 # Firefox on Android, etc., without false-positiving Android tablets. Users
