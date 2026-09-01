@@ -145,7 +145,7 @@
     keyboard: false
   });
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png' + {{ carto_key_qs | tojson }}, {
     attribution: '&copy; OSM &copy; CARTO',
     subdomains: 'abcd',
     maxZoom: 19
