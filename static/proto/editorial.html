@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<title>CNS — Instrument prototype</title>
+<title>CNS — Editorial prototype</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/pics/logos/fav.ico">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8,19 +8,19 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 /* ======================================================================
-   Design A · Instrument — token layer
+   Design C · Editorial — token layer
    ====================================================================== */
 :root{
-  --canvas:#f3f3f7; --surface:#fff; --raised:#fff;
-  --line:#e2e2ea; --line-2:#cfcfda;
-  --ink:#32326E; --muted:#6f7290; --faint:#a3a6bb;
+  --canvas:#eeebe4; --surface:#fbf9f5; --raised:#fffdf9;
+  --line:#e1dcd1; --line-2:#cfc8b9;
+  --ink:#32326E; --muted:#7a7d93; --faint:#b0b0c0;
   --accent:#d84c26; --on-accent:#fff;
   --danger:#b3261e; --success:#1f7a55;
-  --r:3px;
-  --fs-cap:11px; --fs:13px; --fs-lg:14px; --fs-num:22px;
-  --pad:14px; --field-h:32px;
-  --topbar-h:44px; --rail-w:320px;
-  --shadow:0 4px 16px rgba(50,50,110,.12), 0 1px 3px rgba(50,50,110,.08);
+  --r:4px;
+  --fs-cap:11px; --fs:13.5px; --fs-lg:15px; --fs-num:28px;
+  --pad:16px; --field-h:36px;
+  --topbar-h:48px; --rail-w:320px;
+  --shadow:0 4px 18px rgba(60,50,30,.10), 0 1px 3px rgba(60,50,30,.06);
   --ease:cubic-bezier(.4,0,.2,1);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -272,6 +272,25 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .mock{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;position:absolute;right:12px;bottom:24px;z-index:5}
 .mock a{color:inherit;text-decoration:none}.mock a:hover{color:var(--ink)}.mock a.cur{color:var(--ink);font-weight:600}
+/* ---- Editorial overrides ---- */
+.ph{position:relative}
+.ph::after{content:"";position:absolute;left:var(--pad);bottom:-1px;width:28px;height:2px;background:var(--accent)}
+.media{height:96px;background:#dfe0e8 center/cover no-repeat;border-bottom:1px solid var(--line)}
+.media.ch{height:72px;border-top:1px solid var(--line)}
+.sec{padding:12px var(--pad) 14px}
+.lbl{margin-bottom:10px}
+.name{font-size:14.5px}
+.bar{height:3px}
+.btn{height:40px}
+.btn.i{flex:0 0 40px}
+.split .b{height:6px}
+.cost{padding:12px var(--pad);flex-direction:column;align-items:flex-start;gap:2px}
+.cost .v{font-size:32px}
+.tiles .v{font-size:22px}
+.rh2 .ttl{font-size:15px}
+#map{background:#e6e3dc}
+.rail{box-shadow:0 8px 28px rgba(60,50,30,.12), 0 1px 3px rgba(60,50,30,.06)}
+.chg-cur{display:flex;align-items:center;justify-content:space-between}
 </style></head>
 <body>
 <svg width="0" height="0" style="position:absolute"><defs>
@@ -323,7 +342,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
   <div class="gantt" id="gantt"></div>
 </section>
 <div class="toast" id="toast"></div>
-<div class="mock">Prototype <a class="cur" href="instrument.html">A Instrument</a> · <a href="editorial.html">C Editorial</a> · raw Python engine numbers</div>
+<div class="mock">Prototype <a href="instrument.html">A Instrument</a> · <a class="cur" href="editorial.html">C Editorial</a> · raw Python engine numbers</div>
 
 <script>
 /* ======================================================================
@@ -473,9 +492,10 @@ function renderForm(){
   const pickHtml = S.picking ? `<div class="pick">${PLANES.map(x=>`<button data-act="plane" data-id="${x.id}" class="${x.id===S.planeId?'on':''}"><img src="/pics/${esc(x.image||'')}" onerror="this.onerror=null;this.src='/pics/plane_svgs/${esc(x.svg||'beta.svg')}'" alt=""><span><span class="n">${esc(x.name)}</span><br><span class="m">${esc(x.oem||'')} · ${x.seats} seats · ${x.battery_kwh?x.battery_kwh+' kWh':'no battery'} · ${esc(x.status||'')}</span></span><span class="r num">${x.range_km} km<small>${esc(x.regime||'')} ${x.max_charge_kw?'· '+x.max_charge_kw+' kW max':''}</small></span></button>`).join('')}</div>` : '';
   $('#railBody').innerHTML = `
     <div class="ph"><h3>Create a route</h3><div class="tools"><span>Estimates</span><button class="sw ${S.estimates?'on':''}" data-act="estimates" title="Show estimate flags"></button></div></div>
+    <div class="media" style="background-image:url('/pics/${esc(p.image||'')}')"></div>
     <div class="sec"><div class="lbl"><span class="cap">Aircraft</span><button class="lnk" data-act="pick">${S.picking?'Close':'Change'}</button></div>
       ${pickHtml}
-      <div class="row" style="${S.picking?'margin-top:10px':''}"><img class="thumb" src="/pics/${esc(p.image||'')}" onerror="this.onerror=null;this.src='/pics/plane_svgs/${esc(p.svg||'beta.svg')}'" alt=""><div><div class="name">${esc(p.name)}</div><div class="meta">${esc(p.oem||'')} · ${p.seats} seats · ${p.battery_kwh} kWh · ${p.range_km} km · ${esc(p.regime||'')}</div></div></div>
+      <div class="name">${esc(p.name)}</div><div class="meta">${esc(p.oem||'')} · ${p.seats} seats · ${p.battery_kwh} kWh · ${p.range_km} km · ${esc(p.regime||'')}</div>
       <div class="bar"><i class="${fits?'':'over'}" style="width:${Math.min(100,Math.round(usable(p)/p.range_km*100))}%"></i></div>
       <div class="meta num">Usable reach ${usable(p)} of ${p.range_km} km · ${p.speed_kmh} km/h</div>
     </div>
@@ -488,8 +508,10 @@ function renderForm(){
     </div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Trip type</div><div class="seg sm" data-seg="trip">${Object.keys(tripLabel).map(k=>`<button data-v="${k}" class="${S.trip===k?'on':''}">${tripLabel[k]}</button>`).join('')}</div><div class="hint">${tripHint[S.trip]}</div></div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="99" value="${S.freq}" data-act="freq" class="num"><span class="t">routes /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per==='day'?'on':''}">day</button><button data-v="week" class="${S.per==='week'?'on':''}">week</button></div></div></div>
-    <div class="sec"><div class="lbl"><span class="cap">Charger</span><button class="lnk" data-act="allChargers">${S.allChargers?'Fewer':'All chargers'}</button></div>
-      ${chList.map(x=>`<button class="chg ${x.id===S.chargerId?'on':''}" data-act="charger" data-id="${x.id}"><img src="/pics/${esc(x.image||'')}" alt=""><span class="n">${esc(x.name.replace(/\s*\d+(\.\d+)?\s*(k|M)W$/,''))}</span><span class="kw num">${x.power_kw>=1000?(x.power_kw/1000)+' MW':x.power_kw+' kW'}</span></button>`).join('')}
+    <div class="media ch" style="background-image:url('/pics/${esc(ch.image||'')}')"></div>
+    <div class="sec"><div class="lbl"><span class="cap">Charger</span><button class="lnk" data-act="allChargers">${S.allChargers?'Close':'Change'}</button></div>
+      ${S.allChargers?'':`<div class="chg-cur"><div><div class="name">${esc(ch.name.replace(/\s*\d+(\.\d+)?\s*(k|M)W$/,''))}</div><div class="meta">${esc(ch.type||'')} · DC${p.max_charge_kw&&ch.power_kw>p.max_charge_kw?' · capped at '+p.max_charge_kw+' kW':''}</div></div><div class="name num">${ch.power_kw>=1000?(ch.power_kw/1000)+' MW':ch.power_kw+' kW'}</div></div>`}
+      ${S.allChargers?chList.map(x=>`<button class="chg ${x.id===S.chargerId?'on':''}" data-act="charger" data-id="${x.id}"><img src="/pics/${esc(x.image||'')}" alt=""><span class="n">${esc(x.name.replace(/\s*\d+(\.\d+)?\s*(k|M)W$/,''))}</span><span class="kw num">${x.power_kw>=1000?(x.power_kw/1000)+' MW':x.power_kw+' kW'}</span></button>`).join(''):''}
       ${p.max_charge_kw && ch.power_kw>p.max_charge_kw?`<div class="hint num">Aircraft accepts max ${p.max_charge_kw} kW — the charger is capped.</div>`:''}
     </div>
     ${S.err?`<div class="sec err">${esc(S.err)}</div>`:''}`;
@@ -523,10 +545,10 @@ function renderResult(){
   const lastCharge = d.charges[d.charges.length-1];
   $('#railBody').innerHTML = `
     <div class="rh2"><div><div class="ttl">${title}</div><div class="m">${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}${S.estimates?' · <span style="color:var(--accent)">est.</span>':''}</div></div><button class="lnk" data-act="edit">Edit</button></div>
-    <div class="stats"><div><div class="cap">Energy</div><div class="v num">${Math.round(d.used)}<small>kWh</small></div><div class="s">${d.legs.length>1?d.legs.length+' legs':'per flight'}</div></div>
-      <div><div class="cap">Travel</div><div class="v num">${fmtH(d.travelH)}<small>h</small></div><div class="s">${d.travelH>d.flyH?'incl. en-route charging':'block time'}</div></div>
-      <div><div class="cap">Charge</div><div class="v num">${Math.round(d.chargeMin)}<small>min</small></div><div class="s">${d.charges.length>1?'over '+d.charges.length+' stops':'at '+(lastCharge?.ident||'destination')}</div></div></div>
     <div class="cost"><div class="v num">€${fmtE(costDay)}<small>/ ${S.per==='day'?'day':'day avg'}</small></div><div class="m num">${Math.round(d.charged*fpd)} kWh · €${TARIFF.toFixed(2)} / kWh</div></div>
+    <div class="stats"><div><div class="cap">Energy</div><div class="v num">${Math.round(d.used)}<small>kWh</small></div><div class="s">${d.legs.length>1?d.legs.length+' legs':'per flight'}</div></div>
+      <div><div class="cap">Travel</div><div class="v num">${fmtH(d.travelH)}<small>h</small></div><div class="s">${d.travelH>d.flyH?'incl. charging':'block time'}</div></div>
+      <div><div class="cap">Charge</div><div class="v num">${Math.round(d.chargeMin)}<small>min</small></div><div class="s">${d.charges.length>1?'over '+d.charges.length+' stops':'at '+(lastCharge?.ident||'destination')}</div></div></div>
     <div class="split"><div class="b"><i class="f" style="flex:${d.flyH.toFixed(3)}"></i><i class="c" style="flex:${(d.chargeMin/60).toFixed(3)}"></i></div><div class="lg"><span><i></i>Fly ${fmtH(d.flyH)} h</span><span><i class="c"></i>Charge ${fmtMin(d.chargeMin)}</span><span style="margin-left:auto" class="num">${fmtD(d.dist)}</span></div></div>
     <div class="acc ${S.open.route?'open':''}" data-acc="route"><button><span>Route <span class="sub">${d.legs.length} leg${d.legs.length>1?'s':''} · ${c.length-2>0?(c.length-2)+' stop'+(c.length-2>1?'s':''):'no stops'}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane"><table class="tbl"><tr><th>Leg</th><th class="r">${ukm()}</th><th class="r">Time</th><th class="r">kWh</th></tr>
@@ -651,7 +673,7 @@ document.addEventListener('click',e=>{
     case 'share': toast('Share link copied (mock)'); break;
     case 'pick': S.picking=!S.picking; renderRail(); break;
     case 'plane': S.planeId=t.dataset.id; S.picking=false; const dc=plane().default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; onFormChange(false); break;
-    case 'charger': S.chargerId=t.dataset.id; onFormChange(false); break;
+    case 'charger': S.chargerId=t.dataset.id; S.allChargers=false; onFormChange(false); break;
     case 'allChargers': S.allChargers=!S.allChargers; renderRail(); break;
     case 'addStop': S.stops.push(null); renderRail(); setTimeout(()=>{ const i=$$('[data-ac^=stop]').pop(); i&&i.focus(); },0); break;
     case 'rmStop': S.stops.splice(+t.dataset.i,1); onFormChange(true); break;
