@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>CNS facelift v2 — design board</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-family:Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum","cv11"}
+body{background:#e9e9ee;color:#1f2140;padding:36px 40px 60px}
+.board-h{display:flex;align-items:baseline;gap:24px;margin-bottom:8px}
+.board-h h1{font-size:20px;font-weight:600;letter-spacing:-.01em}
+.board-h .sub{font-size:13px;color:#6b6f8a}
+.diag{display:flex;gap:28px;font-size:12px;color:#4a4d6a;margin:14px 0 28px;padding:12px 16px;background:#fff;border:1px solid #d9d9e2;width:max-content}
+.diag b{color:#1f2140;font-weight:600}
+.diag span{display:flex;flex-direction:column;gap:2px}
+.diag i{font-style:normal;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#8b8ea3}
+.grid{display:grid;grid-template-columns:repeat(3,376px);gap:28px;align-items:start}
+.dir{background:#fff;border:1px solid #d3d3dc;padding:0 0 18px}
+.dir-h{padding:14px 18px 12px;border-bottom:1px solid #e6e6ee;display:flex;align-items:baseline;justify-content:space-between}
+.dir-h h2{font-size:14px;font-weight:600}
+.dir-h h2 small{font-weight:500;color:#8b8ea3;margin-left:8px;font-size:12px}
+.dir-h .rec{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#fff;background:#32326E;padding:3px 7px}
+.tokens{display:flex;gap:6px;padding:12px 18px;border-bottom:1px solid #e6e6ee;align-items:center;flex-wrap:wrap}
+.sw{width:22px;height:22px;border:1px solid rgba(0,0,0,.08)}
+.tk{font-size:11px;color:#6b6f8a;margin-left:6px}
+.tk b{color:#1f2140;font-weight:600}
+.frame{margin:18px;background:var(--canvas);border:1px solid var(--line);padding:0;overflow:hidden}
+.notes{padding:0 18px;font-size:12px;color:#4a4d6a;line-height:1.5}
+.notes li{margin:4px 0 4px 14px}
+.notes b{color:#1f2140;font-weight:600}
+.cap{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#8b8ea3;padding:10px 18px 6px}
+
+/* ---------- direction tokens ---------- */
+.dir[data-dir=a]{--canvas:#f3f3f7;--surface:#fff;--line:#e2e2ea;--line-2:#cfcfda;--ink:#32326E;--muted:#6f7290;--accent:#d84c26;--on-accent:#fff;--cta:#d84c26;--on-cta:#fff;--r:3px;--fs:13px;--fs-cap:11px;--num:22px;--pad:14px;--field-h:32px}
+.dir[data-dir=b]{--canvas:#f1f2f5;--surface:#fff;--line:#dadbe3;--line-2:#c4c6d2;--ink:#26284f;--muted:#6f7290;--accent:#d84c26;--on-accent:#fff;--cta:#26284f;--on-cta:#fff;--r:0px;--fs:12.5px;--fs-cap:10.5px;--num:18px;--pad:12px;--field-h:30px}
+.dir[data-dir=c]{--canvas:#eeebe4;--surface:#fbf9f5;--line:#e1dcd1;--line-2:#cfc8b9;--ink:#32326E;--muted:#7a7d93;--accent:#d84c26;--on-accent:#fff;--cta:#d84c26;--on-cta:#fff;--r:4px;--fs:13.5px;--fs-cap:11px;--num:28px;--pad:16px;--field-h:36px}
+
+/* ---------- shared app components (the proposal) ---------- */
+.app{font-size:var(--fs);color:var(--ink)}
+.topbar{height:44px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 12px}
+.dir[data-dir=b] .topbar{height:40px}
+.dir[data-dir=c] .topbar{height:48px}
+.topbar img{height:20px;display:block}
+.topbar .t{display:none}
+.topbar .sp{flex:1}
+.topbar .search{overflow:hidden;height:26px;border:1px solid var(--line);border-radius:var(--r);width:108px;white-space:nowrap;display:flex;align-items:center;gap:6px;padding:0 8px;font-size:11px;color:var(--muted);background:var(--surface)}
+.topbar .tb{font-size:11.5px;font-weight:500;color:var(--ink);padding:5px 7px;border-radius:var(--r)}
+.rail{width:320px;margin:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.dir[data-dir=b] .rail{margin:10px}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:12px var(--pad) 10px;border-bottom:1px solid var(--line)}
+.ph h3{font-size:14px;font-weight:600;letter-spacing:-.005em}
+.dir[data-dir=c] .ph h3{font-size:15px}
+.dir[data-dir=c] .ph{position:relative}
+.dir[data-dir=c] .ph::after{content:"";position:absolute;left:var(--pad);bottom:-1px;width:28px;height:2px;background:var(--accent)}
+.ph .tools{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:11.5px}
+.ph .tools .sw2{width:22px;height:12px;border:1px solid var(--line-2);border-radius:var(--r);position:relative}
+.ph .tools .sw2::after{content:"";position:absolute;left:1px;top:1px;width:8px;height:8px;background:var(--line-2)}
+.ic{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:-2px}
+.sec{padding:10px var(--pad) 12px;border-bottom:1px solid var(--line)}
+.sec:last-child{border-bottom:0}
+.lbl{font-size:var(--fs-cap);font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.lbl a{font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink);text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--line-2);font-size:11.5px}
+.row{display:flex;align-items:center;gap:10px}
+.thumb{width:64px;height:42px;object-fit:cover;border-radius:2px;background:#dfe0e8;flex:none}
+.name{font-weight:600;font-size:var(--fs)}
+.meta{font-size:11px;color:var(--muted);margin-top:2px}
+.bar{height:2px;background:var(--line);margin:8px 0 4px;position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink)}
+.dir[data-dir=c] .bar{height:3px}
+.field{height:var(--field-h);border:1px solid var(--line-2);border-radius:var(--r);display:flex;align-items:center;padding:0 10px;font-size:var(--fs);background:var(--surface);justify-content:space-between}
+.field .icao{font-size:11px;color:var(--muted);letter-spacing:.04em;font-weight:500}
+.field+.field{margin-top:6px}
+.seg{display:flex;border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;height:var(--field-h)}
+.seg span{flex:1;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--ink);border-right:1px solid var(--line-2)}
+.seg span:last-child{border-right:0}
+.seg span.on{background:var(--ink);color:#fff}
+.dir[data-dir=b] .seg span.on{background:var(--ink)}
+.dir[data-dir=c] .seg span.on{background:var(--ink)}
+.hint{font-size:11px;color:var(--muted);margin-top:6px}
+.route{margin-top:8px;border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+.route .rh{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px}
+.route .rh b{color:var(--ink);font-weight:600}
+.stop{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:8px;font-size:12px;padding:3px 0}
+.stop .n{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.04em}
+.stop .d{font-size:11px;color:var(--muted)}
+.stop+.stop{position:relative}
+.stop+.stop::before{content:"";position:absolute;left:5px;top:-6px;height:8px;border-left:1px solid var(--line-2)}
+.freq{display:flex;align-items:center;gap:8px}
+.freq .field{width:56px;justify-content:center}
+.freq .seg{width:110px}
+.freq .t{font-size:12px;color:var(--muted)}
+.chg{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.chg:last-of-type{border-bottom:0}
+.chg img{width:48px;height:32px;object-fit:cover;border-radius:2px;background:#dfe0e8}
+.chg .n{font-weight:500;font-size:12.5px;flex:1}
+.chg .kw{font-weight:600;font-size:12.5px}
+.chg.on{box-shadow:inset 2px 0 0 var(--ink);padding-left:8px}
+.dir[data-dir=c] .chg.on{box-shadow:inset 2px 0 0 var(--accent)}
+.btns{display:flex;gap:6px;padding:12px var(--pad) var(--pad)}
+.btn{height:36px;flex:1;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border-radius:var(--r);border:1px solid var(--line-2);background:var(--surface);color:var(--ink)}
+.btn.p{background:var(--cta);color:var(--on-cta);border-color:var(--cta)}
+.btn.i{flex:0 0 36px}
+.dir[data-dir=b] .btn{height:32px;font-size:12.5px}
+.dir[data-dir=c] .btn{height:40px}
+/* result */
+.rh2{display:flex;align-items:center;justify-content:space-between;padding:12px var(--pad) 10px;border-bottom:1px solid var(--line)}
+.rh2 .ttl{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}
+.rh2 .ttl .ar{color:var(--muted);font-weight:400}
+.rh2 .m{font-size:11px;color:var(--muted);margin-top:2px}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--line)}
+.stats>div{padding:10px var(--pad);border-right:1px solid var(--line)}
+.stats>div:last-child{border-right:0}
+.stats .k{font-size:var(--fs-cap);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.stats .v{font-size:var(--num);font-weight:600;letter-spacing:-.02em;line-height:1.15;margin-top:4px}
+.stats .v small{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:2px}
+.stats .s{font-size:11px;color:var(--muted);margin-top:2px}
+.cost{display:flex;align-items:baseline;justify-content:space-between;padding:10px var(--pad);border-bottom:1px solid var(--line)}
+.cost .v{font-size:var(--num);font-weight:600;letter-spacing:-.02em}
+.cost .v small{font-size:12px;font-weight:500;color:var(--muted);margin-left:2px;letter-spacing:0}
+.cost .m{font-size:11px;color:var(--muted)}
+.split{padding:10px var(--pad);border-bottom:1px solid var(--line)}
+.split .b{height:4px;display:flex;gap:2px}
+.split .b i{display:block;height:100%}
+.split .b .f{background:var(--ink);flex:0 0 76%}
+.split .b .c{background:var(--accent);flex:1}
+.dir[data-dir=b] .split .b .c{background:var(--line-2)}
+.split .lg{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:6px}
+.split .lg i{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:-1px;background:var(--ink)}
+.split .lg i.c{background:var(--accent)}
+.dir[data-dir=b] .split .lg i.c{background:var(--line-2)}
+.acc{display:flex;align-items:center;justify-content:space-between;padding:10px var(--pad);border-bottom:1px solid var(--line);font-size:12.5px;font-weight:500}
+.acc .sub{font-size:11px;color:var(--muted);font-weight:400;margin-left:8px}
+/* ledger rows (B) */
+.kv{display:flex;align-items:center;justify-content:space-between;height:34px;padding:0 var(--pad);border-bottom:1px solid var(--line);font-size:12.5px}
+.kv .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;font-weight:600}
+.kv .v{font-weight:500;display:flex;align-items:center;gap:8px}
+.kv .v .sub{color:var(--muted);font-weight:400;font-size:11.5px}
+.kv .v .ch{color:var(--muted)}
+.kv .seg{height:22px;width:208px}
+.kv .seg span{font-size:10.5px;white-space:nowrap;padding:0 3px}
+.kv.big{height:auto;padding:10px var(--pad)}
+.kv.big .v{font-size:var(--num);font-weight:600;letter-spacing:-.02em}
+.kv.big .v small{font-size:11.5px;color:var(--muted);font-weight:500;letter-spacing:0}
+/* editorial media (C) */
+.media{height:104px;background:#dfe0e8 center/cover no-repeat;border-bottom:1px solid var(--line)}
+.media.ch{height:84px}
+.dir[data-dir=c] .sec{padding:12px var(--pad) 14px}
+.dir[data-dir=c] .lbl{margin-bottom:10px}
+.dir[data-dir=c] .name{font-size:14.5px}
+.rules{margin-top:36px;background:#fff;border:1px solid #d3d3dc;padding:18px 22px;display:grid;grid-template-columns:repeat(4,1fr);gap:24px;font-size:12px;color:#4a4d6a;line-height:1.55}
+.rules h4{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#8b8ea3;margin-bottom:6px}
+.rules b{color:#1f2140;font-weight:600}
+.rules ul{margin-left:14px}
+</style></head><body>
+<div class="board-h"><h1>CNS facelift v2 — three directions</h1><span class="sub">Same constraints for all three: radius ≤ 4 px · one accent · no gradients, blur or glow · Inter only · hairlines instead of nested cards</span></div>
+<div class="diag">
+  <span><i>Production today</i><b>93 hex colours · 20 radius values</b> in index.html</span>
+  <span><i>July “Flight Deck” branch</i><b>61 hex · 142 radius rules · 13 blurs</b> + dark theme, conflicts with main</span>
+  <span><i>Proposal</i><b>≈ 9 colours · 1 radius · 0 blurs</b> per theme</span>
+</div>
+<div class="grid">
+
+<!-- ================= A · INSTRUMENT ================= -->
+<section class="dir" data-dir="a">
+  <div class="dir-h"><h2>A · Instrument <small>white, hairlines, one coral</small></h2><span class="rec">Recommended</span></div>
+  <div class="tokens">
+    <div class="sw" style="background:#f3f3f7"></div><div class="sw" style="background:#fff"></div><div class="sw" style="background:#e2e2ea"></div><div class="sw" style="background:#32326E"></div><div class="sw" style="background:#6f7290"></div><div class="sw" style="background:#d84c26"></div>
+    <span class="tk">radius <b>3</b> · type <b>11 / 13 / 14 / 22</b> · CTA <b>coral</b></span>
+  </div>
+  <div class="frame app">
+    <div class="topbar"><img src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt=""><span class="t">Charging Network Simulator</span><span class="sp"></span><span class="search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Find airport…</span><span class="tb">Map</span><span class="tb">Export</span><span class="tb">Tour</span></div>
+    <div class="rail">
+      <div class="ph"><h3>Create a route</h3><div class="tools"><span>Estimates</span><span class="sw2"></span><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div></div>
+      <div class="sec"><div class="lbl">Aircraft <a>Change</a></div>
+        <div class="row"><img class="thumb" src="/pics/beta.png" alt=""><div><div class="name">Alia CX300</div><div class="meta">BETA · 6 seats · 225 kWh · 500 km · VFR</div></div></div>
+        <div class="bar"><i style="width:78%"></i></div><div class="meta">Usable reach 389 of 500 km · 41 kWh/100 km</div>
+      </div>
+      <div class="sec"><div class="lbl">Route <a>+ Add stop</a></div>
+        <div class="field"><span>Lelystad Airport</span><span class="icao">EHLE</span></div>
+        <div class="field"><span>Frankfurt Main Airport</span><span class="icao">EDDF</span></div>
+        <div class="route"><div class="rh"><span><b>Direct</b> · 344 km</span><span>Prefer: Medium → Large → Small</span></div>
+          <div class="stop"><span class="n">01</span><span>Lelystad Airport</span><span class="d">EHLE</span></div>
+          <div class="stop"><span class="n">02</span><span>Frankfurt Main Airport</span><span class="d">344 km</span></div></div>
+      </div>
+      <div class="sec"><div class="lbl">Trip type</div><div class="seg"><span class="on">One-way</span><span>Return</span><span>Circular</span><span>Training</span></div><div class="hint">A to B · charge to full at the destination</div></div>
+      <div class="sec"><div class="lbl">Frequency</div><div class="freq"><div class="field">1</div><span class="t">routes /</span><div class="seg"><span class="on">day</span><span>week</span></div></div></div>
+      <div class="sec"><div class="lbl">Charger <a>All chargers</a></div>
+        <div class="chg on"><img src="/pics/chargers/Beta-Cube_320kW.jpg" alt=""><span class="n">Beta Cube</span><span class="kw">320 kW</span></div>
+        <div class="chg"><img src="/pics/chargers/NRG2fly-Charger_250kW.jpg" alt=""><span class="n">NRG2fly Charger</span><span class="kw">250 kW</span></div>
+        <div class="chg"><img src="/pics/chargers/Beta-Mini-Cube_65kW.jpg" alt=""><span class="n">Beta Mini Cube</span><span class="kw">65 kW</span></div>
+      </div>
+      <div class="btns"><div class="btn p">Simulate</div><div class="btn i"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></div></div>
+    </div>
+    <div class="cap" style="padding-left:12px">Result state — same rail</div>
+    <div class="rail" style="margin-top:0">
+      <div class="rh2"><div><div class="ttl">EHLE <span class="ar">→</span> EDDF</div><div class="m">Alia CX300 · One-way · 1 / day · Beta Cube 320 kW</div></div><a class="tb" style="font-size:11.5px;text-decoration:underline;text-underline-offset:2px">Edit</a></div>
+      <div class="stats"><div><div class="k">Energy</div><div class="v">139<small>kWh</small></div></div><div><div class="k">Travel</div><div class="v">1:23<small>h</small></div></div><div><div class="k">Charge</div><div class="v">26<small>min</small></div><div class="s">at destination</div></div></div>
+      <div class="cost"><div class="v">€83.40<small>/ day</small></div><div class="m">139 kWh · €0.60 / kWh</div></div>
+      <div class="split"><div class="b"><i class="f"></i><i class="c"></i></div><div class="lg"><span><i></i>Fly 1 h 23</span><span><i class="c"></i>Charge 26 min</span></div></div>
+      <div class="acc"><span>Route <span class="sub">1 leg · no stops</span></span><svg class="ic" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></div>
+      <div class="acc"><span>Charging <span class="sub">EDDF · 26 min · 320 kW</span></span><svg class="ic" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></div>
+      <div class="acc" style="border-bottom:0"><span>Calculation</span><svg class="ic" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></div>
+      <div class="btns"><div class="btn p">Add to demand calculator</div><div class="btn i"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></div></div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Keeps</b> the Flight Deck's one rail (form ↔ result in place) and Plan | Network switch.</li>
+    <li><b>Drops</b> the hero photos, pastel tags, navy stat box, gold/green/cyan numbers, glass, gradients.</li>
+    <li><b>Hierarchy</b> comes from weight and caps labels, not colour. Coral appears exactly twice: Simulate and the route line.</li>
+  </ul>
+</section>
+
+<!-- ================= B · LEDGER ================= -->
+<section class="dir" data-dir="b">
+  <div class="dir-h"><h2>B · Ledger <small>rows, square, monochrome</small></h2></div>
+  <div class="tokens">
+    <div class="sw" style="background:#f1f2f5"></div><div class="sw" style="background:#fff"></div><div class="sw" style="background:#dadbe3"></div><div class="sw" style="background:#26284f"></div><div class="sw" style="background:#6f7290"></div><div class="sw" style="background:#d84c26"></div>
+    <span class="tk">radius <b>0</b> · type <b>10.5 / 12.5 / 14 / 18</b> · CTA <b>navy</b>, coral only on the map</span>
+  </div>
+  <div class="frame app">
+    <div class="topbar"><img src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt=""><span class="t">Charging Network Simulator</span><span class="sp"></span><span class="search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Find airport…</span><span class="tb">Map</span><span class="tb">Export</span><span class="tb">Tour</span></div>
+    <div class="rail">
+      <div class="ph"><h3>Route</h3><div class="tools"><span>Estimates</span><span class="sw2"></span><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></div></div>
+      <div class="kv"><span class="k">Aircraft</span><span class="v">Alia CX300 <span class="sub">BETA · 500 km</span><span class="ch">›</span></span></div>
+      <div class="kv"><span class="k">Reach</span><span class="v">389 km <span class="sub">excl. reserves · 41 kWh/100 km</span></span></div>
+      <div class="kv"><span class="k">From</span><span class="v">Lelystad Airport <span class="sub">EHLE</span><span class="ch">›</span></span></div>
+      <div class="kv"><span class="k">To</span><span class="v">Frankfurt Main <span class="sub">EDDF · 344 km</span><span class="ch">›</span></span></div>
+      <div class="kv"><span class="k">Stops</span><span class="v"><span class="sub">Direct leg fits the range</span><span class="ch">+ Add</span></span></div>
+      <div class="kv"><span class="k">Trip</span><div class="seg"><span class="on">One-way</span><span>Return</span><span>Circular</span><span>Training</span></div></div>
+      <div class="kv"><span class="k">Frequency</span><span class="v">1 <span class="sub">route /</span><div class="seg" style="width:90px"><span class="on">day</span><span>week</span></div></span></div>
+      <div class="kv"><span class="k">Charger</span><span class="v">Beta Cube <span class="sub">320 kW</span><span class="ch">›</span></span></div>
+      <div class="btns"><div class="btn p">Simulate</div><div class="btn i"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></div></div>
+    </div>
+    <div class="cap" style="padding-left:10px">Result state — same rail</div>
+    <div class="rail" style="margin-top:0">
+      <div class="rh2"><div><div class="ttl">EHLE <span class="ar">→</span> EDDF</div><div class="m">Alia CX300 · One-way · 1 / day · Beta Cube 320 kW</div></div><a class="tb" style="font-size:11.5px;text-decoration:underline;text-underline-offset:2px">Edit</a></div>
+      <div class="kv big"><span class="k">Energy</span><span class="v">139 <small>kWh</small></span></div>
+      <div class="kv big"><span class="k">Travel time</span><span class="v">1 h 23 <small>min</small></span></div>
+      <div class="kv big"><span class="k">Charge</span><span class="v">26 <small>min at destination</small></span></div>
+      <div class="kv big"><span class="k">Cost</span><span class="v">€83.40 <small>/ day · €0.60 / kWh</small></span></div>
+      <div class="split"><div class="b"><i class="f"></i><i class="c"></i></div><div class="lg"><span><i></i>Fly</span><span><i class="c"></i>Charge</span></div></div>
+      <div class="acc"><span>Route <span class="sub">1 leg</span></span><span>›</span></div>
+      <div class="acc"><span>Charging <span class="sub">EDDF · 320 kW</span></span><span>›</span></div>
+      <div class="acc" style="border-bottom:0"><span>Calculation</span><span>›</span></div>
+      <div class="btns"><div class="btn p">Add to demand calculator</div><div class="btn i"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></div></div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Densest.</b> Every input is a key-value row; the form reads like a flight plan. Pickers open as popovers.</li>
+    <li><b>Strictest palette:</b> no coral in the chrome at all — navy CTA, coral lives only on the map and in alerts.</li>
+    <li><b>Risk:</b> less visual, less “demo-able” for airport clients; hides the aircraft and charger imagery.</li>
+  </ul>
+</section>
+
+<!-- ================= C · EDITORIAL ================= -->
+<section class="dir" data-dir="c">
+  <div class="dir-h"><h2>C · Editorial <small>warm paper, big numbers, flat media</small></h2></div>
+  <div class="tokens">
+    <div class="sw" style="background:#eeebe4"></div><div class="sw" style="background:#fbf9f5"></div><div class="sw" style="background:#e1dcd1"></div><div class="sw" style="background:#32326E"></div><div class="sw" style="background:#7a7d93"></div><div class="sw" style="background:#d84c26"></div>
+    <span class="tk">radius <b>4</b> · type <b>11 / 13.5 / 15 / 28</b> · CTA <b>coral</b> + 2 px coral rule</span>
+  </div>
+  <div class="frame app">
+    <div class="topbar"><img src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt=""><span class="t">Charging Network Simulator</span><span class="sp"></span><span class="search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Find airport…</span><span class="tb">Map</span><span class="tb">Export</span><span class="tb">Tour</span></div>
+    <div class="rail">
+      <div class="ph"><h3>Create a route</h3><div class="tools"><span>Estimates</span><span class="sw2"></span></div></div>
+      <div class="media" style="background-image:url('/pics/beta.png')"></div>
+      <div class="sec"><div class="lbl">Aircraft <a>Change</a></div>
+        <div class="name">Alia CX300</div><div class="meta">BETA · 6 seats · 225 kWh · 500 km · VFR</div>
+        <div class="bar"><i style="width:78%"></i></div><div class="meta">Usable reach 389 km of 500 km · 41 kWh/100 km</div>
+      </div>
+      <div class="sec"><div class="lbl">Route <a>+ Add stop</a></div>
+        <div class="field"><span>Lelystad Airport</span><span class="icao">EHLE</span></div>
+        <div class="field"><span>Frankfurt Main Airport</span><span class="icao">EDDF</span></div>
+        <div class="hint">Direct · 344 km · fits the aircraft's range, no stops needed</div>
+      </div>
+      <div class="sec"><div class="lbl">Trip type</div><div class="seg"><span class="on">One-way</span><span>Return</span><span>Circular</span><span>Training</span></div></div>
+      <div class="sec"><div class="lbl">Frequency</div><div class="freq"><div class="field">1</div><span class="t">routes /</span><div class="seg"><span class="on">day</span><span>week</span></div></div></div>
+      <div class="media ch" style="background-image:url('/pics/chargers/Beta-Cube_320kW.jpg')"></div>
+      <div class="sec"><div class="lbl">Charger <a>Change</a></div><div class="row" style="justify-content:space-between"><div><div class="name">Beta Cube</div><div class="meta">BETA · DC · liquid-cooled</div></div><div class="name">320 kW</div></div></div>
+      <div class="btns"><div class="btn p">Simulate</div><div class="btn i"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></div></div>
+    </div>
+    <div class="cap" style="padding-left:12px">Result state — same rail</div>
+    <div class="rail" style="margin-top:0">
+      <div class="rh2"><div><div class="ttl">EHLE <span class="ar">→</span> EDDF</div><div class="m">Alia CX300 · One-way · 1 / day · Beta Cube 320 kW</div></div><a class="tb" style="font-size:11.5px;text-decoration:underline;text-underline-offset:2px">Edit</a></div>
+      <div class="cost"><div class="v">€83.40<small>/ day</small></div><div class="m">139 kWh · €0.60 / kWh</div></div>
+      <div class="stats"><div><div class="k">Energy</div><div class="v">139<small>kWh</small></div></div><div><div class="k">Travel</div><div class="v">1:23<small>h</small></div></div><div><div class="k">Charge</div><div class="v">26<small>min</small></div><div class="s">at destination</div></div></div>
+      <div class="split"><div class="b" style="height:6px"><i class="f"></i><i class="c"></i></div><div class="lg"><span><i></i>Fly 1 h 23</span><span><i class="c"></i>Charge 26 min</span></div></div>
+      <div class="acc"><span>Route <span class="sub">1 leg · no stops</span></span><svg class="ic" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></div>
+      <div class="acc"><span>Charging <span class="sub">EDDF · 26 min · 320 kW</span></span><svg class="ic" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></div>
+      <div class="acc" style="border-bottom:0"><span>Calculation</span><svg class="ic" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></div>
+      <div class="btns"><div class="btn p">Add to demand calculator</div><div class="btn i"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></div></div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>Keeps the brand warmth</b> (cream paper) and the photography, but flat: no overlay gradients, no rounded hero cards.</li>
+    <li><b>Cost leads</b> the result; numbers are the largest thing on screen. Best for client demos and the one-pager.</li>
+    <li><b>Risk:</b> media strips eat ~190 px of rail height; the least “tight” of the three.</li>
+  </ul>
+</section>
+</div>
+
+<div class="rules">
+  <div><h4>Palette (per theme)</h4><ul><li><b>3 surfaces</b>: canvas, panel, raised (popover)</li><li><b>2 lines</b>: hairline, field border</li><li><b>2 inks</b>: ink, muted</li><li><b>1 accent</b>: coral — primary action + live route</li><li><b>2 states</b>: danger, success — text/borders only, never decoration</li></ul></div>
+  <div><h4>Geometry</h4><ul><li>One radius token (0–4 px); pills and circles only for the units toggle and map dots</li><li>No card-in-card: sections divide with hairlines</li><li>Shadow only on floating layers (dropdown, popover, toast) — one level</li><li>No blur, gradient or glow anywhere</li></ul></div>
+  <div><h4>Type</h4><ul><li>Inter only, tabular numerals everywhere</li><li>Caps labels 11 px / 600 / .08 em for every section and stat</li><li>Body 13, titles 14–15 / 600, figures 18–28 / 600 with a 12 px unit</li><li>Hierarchy by weight and size — never by colour</li></ul></div>
+  <div><h4>Map furniture</h4><ul><li>Airports: neutral grey dots, 2–4 px, no rings</li><li>Route: 2 px coral, 4 px white casing; return dashed; over-range danger</li><li>NRG2FLY assets: 10 px navy squares</li><li>Popups: white, hairline, no blur</li></ul></div>
+</div>
+</body></html>
