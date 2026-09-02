@@ -250,17 +250,18 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .drawer .dh{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;cursor:pointer;border-bottom:1px solid var(--line)}
 .drawer .dh .t{font-size:12.5px;font-weight:600;display:flex;gap:10px;align-items:center}
 .drawer .dh .t span{font-weight:400;color:var(--muted);font-size:11.5px}
+.drawer .dh .tools{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted)}
 .drawer .dh svg{color:var(--muted);transition:transform .2s var(--ease)}
 .drawer.open .dh svg{transform:rotate(180deg)}
 .gantt{padding:10px 14px;overflow:auto;height:224px}
-.grow{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;height:30px;border-bottom:1px solid var(--line)}
+.grow{display:grid;grid-template-columns:160px 1fr;gap:10px;align-items:center;height:28px;border-bottom:1px solid var(--line)}
 .grow.axis{height:22px;border-bottom:1px solid var(--line-2);color:var(--muted);font-size:10px}
 .grow .lab{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .grow .lab small{color:var(--muted);font-weight:400;margin-left:6px;font-size:11px}
 .track{position:relative;height:100%}
 .track .tick{position:absolute;top:0;bottom:0;border-left:1px solid var(--line)}
 .track .tick span{position:absolute;top:2px;left:3px}
-.track .blk{position:absolute;top:8px;height:14px;border-radius:1px;font-size:10px;line-height:14px;padding:0 4px;color:#fff;white-space:nowrap;overflow:hidden}
+.track .blk{position:absolute;top:7px;height:14px;border-radius:1px;font-size:10px;line-height:14px;padding:0 4px;color:#fff;white-space:nowrap;overflow:hidden}
 .track .blk.fly{background:var(--ink)}
 .track .blk.chg{background:var(--accent)}
 .glegend{display:flex;gap:14px;font-size:11px;color:var(--muted);padding:6px 0 0}
@@ -291,6 +292,15 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 #map{background:#e6e3dc}
 .rail{box-shadow:0 8px 28px rgba(60,50,30,.12), 0 1px 3px rgba(60,50,30,.06)}
 .chg-cur{display:flex;align-items:center;justify-content:space-between}
+/* drawer sits beside the rail, never under it; grows with the airport count */
+.drawer{left:calc(var(--rail-w) + 24px);right:12px;width:auto;transform:none}
+body.net .drawer{left:calc(520px + 24px)}
+.drawer.open{height:var(--drawer-h,260px)}
+.gantt{height:calc(100% - 36px)}
+.grow.load{height:44px}
+.grow.load .lab small{display:block;margin-left:0;line-height:1.2}
+.grow.load .track svg{position:absolute;left:0;right:0;bottom:0;width:100%;height:40px;display:block}
+.grow.load .track path{fill:rgba(50,50,110,.16);stroke:var(--ink);stroke-width:1;vector-effect:non-scaling-stroke}
 </style></head>
 <body>
 <svg width="0" height="0" style="position:absolute"><defs>
@@ -338,7 +348,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 <aside class="rail" id="rail"><div class="body" id="railBody"></div><div id="railFoot"></div></aside>
 
 <section class="drawer" id="drawer">
-  <div class="dh" id="drawerHead"><div class="t">Demand timeline <span id="drawerSub">no flights yet</span></div><svg class="ic"><use href="#i-down"/></svg></div>
+  <div class="dh" id="drawerHead"><div class="t">Demand timeline <span id="drawerSub">no flights yet</span></div><div class="tools"><span>Departures</span><button class="sw" id="depSw" title="Show departures on the timeline"></button><svg class="ic"><use href="#i-down"/></svg></div></div>
   <div class="gantt" id="gantt"></div>
 </section>
 <div class="toast" id="toast"></div>
@@ -359,7 +369,7 @@ const S = {
   origin:null, dest:null, stops:[], trip:'one-way', freq:1, per:'day',
   units:'km', estimates:false, result:null, busy:false, err:'',
   network: JSON.parse(localStorage.getItem('cnsA.network')||'[]'),
-  base:'light', showSmall:false, showAssets:true, showNet:true, allChargers:false, picking:false,
+  base:'light', showDep:false, showSmall:false, showAssets:true, showNet:true, allChargers:false, picking:false,
   open:{route:false,charging:false,calc:false}, openAp:{}
 };
 const plane = () => PLANES.find(p=>p.id===S.planeId);
@@ -532,11 +542,12 @@ function derive(r){
   const charges = multi ? r.charges : (r.trip_type==='retour'
       ? [{name:r.destination.name,ident:S.dest?.ident,energy_kwh:r.recharge_energy_kwh,charge_time_min:r.charge_time_min,role:'dest'},{name:r.origin.name,ident:S.origin?.ident,energy_kwh:r.recharge_energy_kwh,charge_time_min:r.charge_time_min,role:'origin'}]
       : [{name:r.destination.name,ident:S.dest?.ident||S.origin?.ident,energy_kwh:r.recharge_energy_kwh,charge_time_min:r.charge_time_min,role:'dest'}]);
-  const charged = charges.reduce((s,c)=>s+c.energy_kwh,0);
-  const chargeMin = charges.reduce((s,c)=>s+c.charge_time_min,0);
+  const charges2 = charges.filter(c=>c.energy_kwh>0.05);
+  const charged = charges2.reduce((s,c)=>s+c.energy_kwh,0);
+  const chargeMin = charges2.reduce((s,c)=>s+c.charge_time_min,0);
   const flyH = multi ? r.total_flight_time_h : r.flight_time_h;
   const enrouteMin = multi ? charges.filter(c=>c.role==='stop').reduce((s,c)=>s+c.charge_time_min,0) : 0;
-  return { legs, used, charges, charged, chargeMin, flyH, travelH: flyH + enrouteMin/60, dist: r.total_distance_km, kw: r.charger?.power_kw||charger().power_kw };
+  return { legs, used, charges: charges2, charged, chargeMin, flyH, travelH: flyH + enrouteMin/60, dist: r.total_distance_km, kw: r.charger?.power_kw||charger().power_kw };
 }
 function renderResult(){
   const r=S.result, d=derive(r), p=plane(), ch=charger(); const c=chain();
@@ -580,10 +591,10 @@ function aggregate(){
   return Object.values(by).sort((a,b)=>b.kwh-a.kwh);
 }
 function renderNetwork(){
-  const ag=aggregate(); const flights=S.network.reduce((s,f)=>s+perDay(f),0); const kwh=ag.reduce((s,a)=>s+a.kwh,0); const peak=ag.reduce((s,a)=>s+a.peak,0);
+  const ag=aggregate(); const flights=S.network.reduce((s,f)=>s+perDay(f),0); const kwh=ag.reduce((s,a)=>s+a.kwh,0); const peak=loadProfile().peak;
   $('#railBody').innerHTML = `
     <div class="ph"><div><h3>Network</h3><div class="sub num">${ag.length} airport${ag.length===1?'':'s'} · ${S.network.length} route${S.network.length===1?'':'s'} · ${flights%1?flights.toFixed(1):flights} flight${flights===1?'':'s'} / day</div></div><div class="tools"><button class="lnk" data-act="clear">Clear all</button></div></div>
-    ${S.network.length?`<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${ag.length}</div></div><div><div class="cap">Flights</div><div class="v num">${flights%1?flights.toFixed(1):flights}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${kwh>=1000?(kwh/1000).toFixed(1):Math.round(kwh)}<small>${kwh>=1000?'MWh':'kWh'} / day</small></div></div><div><div class="cap">Peak</div><div class="v num">${peak>=1000?(peak/1000).toFixed(1):peak}<small>${peak>=1000?'MW':'kW'}</small></div></div></div>
+    ${S.network.length?`<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${ag.length}</div></div><div><div class="cap">Flights</div><div class="v num">${flights%1?flights.toFixed(1):flights}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${kwh>=1000?(kwh/1000).toFixed(1):Math.round(kwh)}<small>${kwh>=1000?'MWh':'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${peak>=1000?(peak/1000).toFixed(1):peak}<small>${peak>=1000?'MW':'kW'}</small></div></div></div>
     <div class="ntool"><span class="cap">Show</span><select data-act="filter"><option value="">All airports</option>${ag.map(a=>`<option value="${a.ident}" ${S.filter===a.ident?'selected':''}>${a.ident} · ${esc(shortName(a.name))}</option>`).join('')}</select><span class="sp"></span><span class="hint num" style="margin:0">€${fmtE(kwh*TARIFF)} / day</span></div>
     ${ag.filter(a=>!S.filter||a.ident===S.filter).map(a=>`<div class="ap ${S.openAp[a.ident]?'open':''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(shortName(a.name))}<small>${a.list.length} route${a.list.length===1?'':'s'}${ASSETS[a.ident]?' · NRG2FLY site':''}</small></span>
       <span class="st num">${a.flights?(a.flights%1?a.flights.toFixed(1):a.flights):"—"}<small>charges / day</small></span><span class="st num">${a.kwh?Math.round(a.kwh):"—"}<small>kWh / day</small></span><span class="st num">${a.peak||"—"}<small>peak kW</small></span><svg class="ic"><use href="#i-chev"/></svg></button>
@@ -596,23 +607,41 @@ function renderNetwork(){
 /* ======================================================================
    Drawer — demand timeline (derived from saved flights; mock scheduling)
    ====================================================================== */
+function sessions(){ // one entry per departure and per charging session on the illustrative day (departures spread 08:00–18:00)
+  const out=[]; S.network.forEach(f=>{ const n=Math.max(1,Math.round(perDay(f)));
+    for(let k=0;k<n;k++){ let t=8+k*(10/n);
+      f.legs.forEach((l,i)=>{ const from=f.chain[i], to=f.chain[i+1];
+        if(from) out.push({type:'fly',ap:from.ident,start:t,dur:l.flight_time_h,to:to?to.ident:'',plane:f.planeName});
+        t+=l.flight_time_h;
+        const ch=to&&f.charges.find(c=>c.ident===to.ident&&(c.role!=='origin'||i===f.legs.length-1));
+        if(to&&ch&&ch.energy_kwh>0){ out.push({type:'chg',ap:to.ident,start:t,dur:Math.max(ch.charge_time_min,3)/60,kw:f.kw,kwh:ch.energy_kwh}); if(ch.role==='stop') t+=ch.charge_time_min/60; } }); } });
+  return out; }
+const H0=6,H1=23,SPAN=H1-H0,SLOTS=SPAN*4;
+function loadProfile(ses){ ses=ses||sessions(); const load=new Array(SLOTS).fill(0);
+  ses.filter(s=>s.type==='chg').forEach(s=>{ const a=Math.max(0,Math.floor((s.start-H0)*4)), b=Math.min(SLOTS,Math.ceil((s.start+s.dur-H0)*4)); for(let i=a;i<b;i++) load[i]+=s.kw; });
+  return { load, peak: load.reduce((m,v)=>Math.max(m,v),0) }; }
+const fmtKw = v => v>=1000 ? (v/1000).toFixed(1)+' MW' : Math.round(v)+' kW';
 function renderDrawer(){
-  const ag=aggregate(); const flights=S.network.reduce((s,f)=>s+perDay(f),0);
-  $('#drawerSub').textContent = S.network.length ? `${ag.length} airports · ${flights%1?flights.toFixed(1):flights} flights / day · peak ${ag.reduce((s,a)=>s+a.peak,0)} kW` : 'no flights yet';
+  const ag=aggregate(); const flights=S.network.reduce((s,f)=>s+perDay(f),0); const ses=sessions(); const {load,peak}=loadProfile(ses);
+  const rowsAg = S.showDep ? ag : ag.filter(a=>ses.some(s=>s.ap===a.ident&&s.type==='chg'));
+  $('#drawerSub').textContent = S.network.length ? `${ag.length} airports · ${flights%1?flights.toFixed(1):flights} flights / day · peak load ${fmtKw(peak)}` : 'no flights yet';
   $('#netCount').textContent = S.network.length ? S.network.length : '';
-  const H0=6,H1=22,span=H1-H0; const pct=h=>Math.max(0,Math.min(100,(h-H0)/span*100));
-  const ticks=[]; for(let h=H0;h<=H1;h+=2) ticks.push(`<div class="tick" style="left:${pct(h)}%"><span>${String(h).padStart(2,'0')}:00</span></div>`);
+  const pct=h=>Math.max(0,Math.min(100,(h-H0)/SPAN*100));
+  const ticks=[]; for(let h=H0;h<H1;h+=2) ticks.push(`<div class="tick" style="left:${pct(h)}%"><span>${String(h).padStart(2,'0')}:00</span></div>`);
+  const bare=ticks.map(t=>t.replace(/<span>.*?<\/span>/,'')).join('');
   let rows = `<div class="grow axis"><div class="lab"></div><div class="track">${ticks.join('')}</div></div>`;
   if(!S.network.length) rows += `<div class="empty">Add a route to the network to see its charging sessions on the day.</div>`;
-  ag.forEach(a=>{ const blocks=[];
-    S.network.forEach(f=>{ const n=Math.max(1,Math.round(perDay(f))); let t=8;
-      for(let k=0;k<n;k++){ const dep=8+k*(10/n);
-        f.legs.forEach((l,i)=>{ const from=f.chain[i], to=f.chain[i+1]; const start=dep+f.legs.slice(0,i).reduce((s,x)=>s+x.flight_time_h,0)+f.charges.filter((c,j)=>j<i&&c.role==='stop').reduce((s,c)=>s+c.charge_time_min/60,0);
-          if(from&&from.ident===a.ident) blocks.push(`<div class="blk fly num" style="left:${pct(start)}%;width:${Math.max(.6,l.flight_time_h/span*100)}%" title="${esc(f.planeName)} → ${to?to.ident:''}">${l.flight_time_h/span*100>4?"→ "+(to?to.ident:""):""}</div>`);
-          const ch=f.charges.find(c=>c.ident===(to&&to.ident)&&(c.role!=='origin'||i===f.legs.length-1));
-          if(to&&to.ident===a.ident&&ch) blocks.push(`<div class="blk chg num" style="left:${pct(start+l.flight_time_h)}%;width:${Math.max(.6,ch.charge_time_min/60/span*100)}%" title="${Math.round(ch.energy_kwh)} kWh at ${f.kw} kW">${ch.charge_time_min/60/span*100>4?f.kw+" kW":""}</div>`); }); } });
-    rows += `<div class="grow"><div class="lab">${a.ident}<small>${esc(shortName(a.name))}</small></div><div class="track">${ticks.map(t=>t.replace(/<span>.*?<\/span>/,'')).join('')}${blocks.join('')}</div></div>`; });
-  $('#gantt').innerHTML = rows + `<div class="glegend"><span><i></i>Flying (departures from this airport)</span><span><i class="c"></i>Charging session</span><span style="margin-left:auto">Departures spread 08:00–18:00 · illustrative scheduling</span></div>`;
+  else {
+    const path = load.map((v,i)=>{ const y=(40-(peak?v/peak*36:0)).toFixed(1); return `L${i} ${y} L${i+1} ${y}`; }).join(' ');
+    rows += `<div class="grow load"><div class="lab">Network load<small>peak ${fmtKw(peak)}</small></div><div class="track">${bare}<svg viewBox="0 0 ${SLOTS} 40" preserveAspectRatio="none"><path d="M0 40 ${path} L${SLOTS} 40 Z"/></svg></div></div>`;
+    rowsAg.forEach(a=>{ const blocks=ses.filter(s=>s.ap===a.ident&&(S.showDep||s.type==='chg')).map(s=> s.type==='fly'
+        ? `<div class="blk fly num" style="left:${pct(s.start)}%;width:${Math.max(.5,s.dur/SPAN*100)}%" title="${esc(s.plane)} → ${s.to}">${s.dur/SPAN*100>4?'→ '+s.to:''}</div>`
+        : `<div class="blk chg num" style="left:${pct(s.start)}%;width:${Math.max(.5,s.dur/SPAN*100)}%" title="${Math.round(s.kwh)} kWh at ${s.kw} kW">${s.dur/SPAN*100>4?fmtKw(s.kw):''}</div>`).join('');
+      rows += `<div class="grow"><div class="lab">${a.ident}<small>${esc(shortName(a.name))}</small></div><div class="track">${bare}${blocks}</div></div>`; });
+  }
+  $('#gantt').innerHTML = rows + `<div class="glegend"><span><i class="c"></i>Charging session</span>${S.showDep?'<span><i></i>Departure (flight time)</span>':''}<span style="margin-left:auto">Departures spread 08:00–18:00 · illustrative scheduling</span></div>`;
+  const want = 36 + 22 + (S.network.length?44:60) + rowsAg.length*28 + 44;
+  $('#drawer').style.setProperty('--drawer-h', Math.min(Math.round(window.innerHeight*0.6), want)+'px');
 }
 
 /* ======================================================================
@@ -647,16 +676,17 @@ function addToNetwork(){
   S.network.push(f); localStorage.setItem('cnsA.network',JSON.stringify(S.network));
   toast(`Added ${f.chain.map(x=>x.ident).join(' → ')} to the network`); drawNet(); renderRail();
 }
-function setMode(m){ S.mode=m; if(m==='network') map.removeLayer(routeLayer); else if(!map.hasLayer(routeLayer)) routeLayer.addTo(map); $$('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m)); renderRail(); if(m==='network'){ drawNet(); if(S.network.length){ const pts=S.network.flatMap(f=>f.chain.map(c=>[c.lat,c.lon])); map.fitBounds(L.latLngBounds(pts),{paddingTopLeft:[560,60],paddingBottomRight:[40,80],maxZoom:8,animate:false}); } } }
+function setMode(m){ S.mode=m; document.body.classList.toggle('net',m==='network'); if(m==='network') map.removeLayer(routeLayer); else if(!map.hasLayer(routeLayer)) routeLayer.addTo(map); $$('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m)); renderRail(); if(m==='network'){ drawNet(); if(S.network.length){ const pts=S.network.flatMap(f=>f.chain.map(c=>[c.lat,c.lon])); map.fitBounds(L.latLngBounds(pts),{paddingTopLeft:[560,60],paddingBottomRight:[40,80],maxZoom:8,animate:false}); } } }
 function resetForm(){ S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.stops=[]; S.trip='one-way'; S.freq=1; S.per='day'; S.planeId='beta_plane'; S.chargerId='dc_320'; S.picking=false; S.allChargers=false; onFormChange(true); }
 
 document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-act],[data-seg] button,[data-acc]>button,[data-ap]>button,#modeSeg button,#unitSeg button,#mapDd [data-base],#expDd [data-exp],#drawerHead');
+  const t=e.target.closest('#depSw,[data-act],[data-seg] button,[data-acc]>button,[data-ap]>button,#modeSeg button,#unitSeg button,#mapDd [data-base],#expDd [data-exp],#drawerHead');
   // dropdown toggles
   const dd={mapBtn:'mapDd',expBtn:'expDd',setBtn:'setDd'}; const tb=e.target.closest('#mapBtn,#expBtn,#setBtn');
   $$('.dd').forEach(x=>{ if(!(tb&&x.id===dd[tb.id])&&!x.contains(e.target)) x.classList.remove('open'); });
   if(tb){ $('#'+dd[tb.id]).classList.toggle('open'); return; }
   if(!t) return;
+  if(t.id==='depSw'){ S.showDep=!S.showDep; t.classList.toggle('on',S.showDep); renderDrawer(); return; }
   if(t.id==='drawerHead'){ $('#drawer').classList.toggle('open'); return; }
   if(t.closest('#modeSeg')){ setMode(t.dataset.mode); return; }
   if(t.closest('#unitSeg')){ S.units=t.dataset.u; $$('#unitSeg button').forEach(b=>b.classList.toggle('on',b===t)); renderRail(); drawRoute(false); return; }
@@ -705,6 +735,9 @@ $('#tourBtn').onclick=()=>toast('Guided tour — not wired in the prototype');
   S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest];
   renderRail(); drawRoute(true);
   const h=location.hash.replace('#','');
+  if(h==='big'){ S.network=[]; const R=[['EHLE','EDDF','beta_plane',1,'day','one-way'],['EHAM','EDLS','beta_plane',3,'day','one-way'],['EHRD','EBBR','beta_plane',2,'day','one-way'],['EHGG','EDDH','beta_plane',1,'day','retour'],['EHEH','EDDL','vaeridion',2,'day','one-way'],['EDDF','EDDM','beta_plane',2,'day','one-way'],['EHLE','EHTE','pipistrel_velis',4,'day','retour'],['EBBR','LFPB','vaeridion',1,'day','one-way'],['EHBK','EDDL','pipistrel_velis',2,'day','one-way'],['EHAM','EHGG','beta_plane',2,'day','retour'],['EDLS','EDDF','beta_plane',1,'day','one-way'],['EHSE','EHRD','pipistrel_velis',5,'day','one-way']];
+    for(const [o,d,pl,fr,per,tr] of R){ if(!AP_BY_ID[o]||!AP_BY_ID[d]) continue; S.origin=AP_BY_ID[o]; S.dest=AP_BY_ID[d]; S.stops=[]; S.planeId=pl; const dc=plane().default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; S.freq=fr; S.per=per; S.trip=tr; await simulate(); if(S.result) addToNetwork(); }
+    S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.trip='one-way'; S.freq=1; S.planeId='beta_plane'; S.chargerId='dc_320'; S.rail='form'; S.result=null; setMode('network'); $('#drawer').classList.add('open'); renderDrawer(); }
   if(h==='multi'){ S.dest=AP_BY_ID['EDDM']; S.stops=[AP_BY_ID['EDDF']]; await simulate(); }
   if(h==='result'||h==='network'){ await simulate(); if(h==='network'){ if(!S.network.length){ addToNetwork(); S.origin=AP_BY_ID['EHAM']; S.dest=AP_BY_ID['EDLS']; S.stops=[]; S.freq=3; await simulate(); addToNetwork(); } setMode('network'); $('#drawer').classList.add('open'); } }
 })();
