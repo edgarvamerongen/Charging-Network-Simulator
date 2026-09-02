@@ -634,6 +634,23 @@ window.CNSScheduler = (function () {
     function peakPowerKw(ident) { return summary(ident).peakKw; }
 
     // ---------- rendering ----------
+    // Single source for Gantt state visuals. Colors live in desktop.css on the
+    // .gb-* classes (design tokens --gantt-*); this map only binds phase kind →
+    // class + legend label, so bars and legend can never drift apart.
+    const GANTT_STATES = [
+        { cls: 'gb-fly',         label: 'flying' },
+        { cls: 'gb-charge',      label: 'charging here' },
+        { cls: 'gb-charge-away', label: 'charging elsewhere' },
+        { cls: 'gb-wait',        label: 'waiting for charger' },
+        { cls: 'gb-queue',       label: 'queued at another airport' },
+    ];
+    function phaseClass(p) {
+        if (p.kind === 'charge') return p.atX ? 'gb-charge' : 'gb-charge-away';
+        if (p.kind === 'wait') return 'gb-wait';
+        if (p.kind === 'waitElsewhere') return 'gb-queue';
+        return 'gb-fly';
+    }
+
     function renderInto(container, ident) {
         if (!container) return;
         const rows = rotationsAt(ident);             // actual-timed, from the global sim
@@ -650,11 +667,7 @@ window.CNSScheduler = (function () {
         legend.className = 'est-note mb-2';
         legend.innerHTML =
             'Each bar is one <strong>rotation</strong> (a single aircraft: depart → charge → return → recharge). Same aircraft can\'t overlap itself; a charger serves one plane at a time. Drag to reschedule.<br>' +
-            '<span style="display:inline-block;width:11px;height:11px;background:#0d6efd;border-radius:2px;vertical-align:middle"></span> flying' +
-            ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:#198754;border-radius:2px;vertical-align:middle"></span> charging here' +
-            ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:#9bd3ad;border-radius:2px;vertical-align:middle"></span> charging elsewhere' +
-            ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:repeating-linear-gradient(45deg,#f0ad4e,#f0ad4e 3px,#fbe4c4 3px,#fbe4c4 6px);border-radius:2px;vertical-align:middle"></span> waiting for charger' +
-            ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 3px,#eef2f6 3px,#eef2f6 6px);border-radius:2px;vertical-align:middle"></span> queued at another airport';
+            GANTT_STATES.map(s => `<span class="gb-swatch ${s.cls}"></span> ${s.label}`).join(' &nbsp;');
         container.appendChild(legend);
 
         // extend the timeline if any actual rotation spills past 23:00
@@ -674,17 +687,20 @@ window.CNSScheduler = (function () {
             const x = (h * 60 - DAY_START) * PX;
             const lbl = document.createElement('div');
             lbl.textContent = String(h).padStart(2, '0');
-            lbl.style.cssText = `position:absolute;left:${x}px;top:0;font-size:.65rem;color:#999;transform:translateX(-50%)`;
+            lbl.className = 'gantt-axis-lbl';
+            lbl.style.left = `${x}px`;
             axis.appendChild(lbl);
         }
         inner.appendChild(axis);
 
         const chart = document.createElement('div');
-        chart.style.cssText = `position:relative;height:${rows.length * LANE_H}px;border:1px solid #eee;border-radius:6px`;
+        chart.className = 'gantt-chart';
+        chart.style.cssText = `position:relative;height:${rows.length * LANE_H}px`;
         for (let h = 7; h <= lastHour; h++) {
             const x = LABEL_W + (h * 60 - DAY_START) * PX;
             const line = document.createElement('div');
-            line.style.cssText = `position:absolute;left:${x}px;top:0;bottom:0;width:1px;background:#f1f1f1`;
+            line.className = 'gantt-grid';
+            line.style.left = `${x}px`;
             chart.appendChild(line);
         }
 
@@ -693,7 +709,8 @@ window.CNSScheduler = (function () {
             const role = roleAt(trip, ident);
             const roleLabel = (role === 'home' || role === 'origin') ? 'departure' : role === 'stop' ? 'stop' : 'destination';
             const lane = document.createElement('div');
-            lane.style.cssText = `position:absolute;left:0;right:0;top:${li * LANE_H}px;height:${LANE_H}px;border-top:${li ? '1px solid #f4f4f4' : 'none'}`;
+            lane.className = 'gantt-lane';
+            lane.style.cssText = `top:${li * LANE_H}px;height:${LANE_H}px`;
 
             const label = document.createElement('div');
             label.title = `${trip.originName} → ${trip.destName} (${trip.planeName})`;
@@ -734,18 +751,15 @@ window.CNSScheduler = (function () {
 
         ph.forEach(p => {
             const bar = document.createElement('div');
-            let bg = '#0d6efd';
-            if (p.kind === 'charge') bg = p.atX ? '#198754' : '#9bd3ad';
-            if (p.kind === 'wait') bg = 'repeating-linear-gradient(45deg,#f0ad4e,#f0ad4e 4px,#fbe4c4 4px,#fbe4c4 8px)';
-            if (p.kind === 'waitElsewhere') bg = 'repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 4px,#eef2f6 4px,#eef2f6 8px)';
-            bar.style.cssText = `position:absolute;top:0;height:100%;left:${p.start * PX}px;width:${Math.max(2, p.dur * PX)}px;background:${bg};border-radius:3px;border:1px solid rgba(0,0,0,.12)`;
+            bar.className = `gb-bar ${phaseClass(p)}`;
+            bar.style.cssText = `left:${p.start * PX}px;width:${Math.max(2, p.dur * PX)}px`;
             inst.appendChild(bar);
         });
 
         const place = (s) => {
             inst.style.left = ((s - DAY_START) * PX) + 'px';
             const overflow = (s + total) > DAY_END;
-            inst.style.outline = overflow ? '2px solid #dc3545' : 'none';
+            inst.classList.toggle('gb-overflow', overflow);
             const lines = [`${trip.originName} → ${trip.destName} — rotation`, `Take-off ${fmtTime(s)}`];
             ph.slice().sort((a, b) => a.start - b.start).forEach(p => {
                 const icon = p.kind === 'fly' ? '✈' : (p.kind === 'wait' ? '⏳' : (p.kind === 'waitElsewhere' ? '🅿' : '⚡'));
