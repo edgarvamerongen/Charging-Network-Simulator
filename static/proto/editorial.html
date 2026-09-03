@@ -311,6 +311,10 @@ body.net .drawer{left:calc(520px + 24px)}
 .step button{width:26px;height:100%;font-size:15px;color:var(--muted);line-height:1}
 .step button:hover{color:var(--ink)}
 .step b{min-width:22px;text-align:center;font-weight:600;font-size:12.5px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:var(--r);padding:3px 8px;font-size:11.5px;font-weight:500;color:var(--ink);background:var(--surface)}
+.chip:hover{border-color:var(--ink)}
+.grow .lab button{font-weight:500;color:var(--ink)}
+.grow .lab button:hover{text-decoration:underline;text-underline-offset:2px}
 </style></head>
 <body>
 <svg width="0" height="0" style="position:absolute"><defs>
@@ -358,7 +362,7 @@ body.net .drawer{left:calc(520px + 24px)}
 <aside class="rail" id="rail"><div class="body" id="railBody"></div><div id="railFoot"></div></aside>
 
 <section class="drawer" id="drawer">
-  <div class="dh" id="drawerHead"><div class="t">Demand timeline <span id="drawerSub">no flights yet</span></div><div class="tools"><span>Departures</span><button class="sw" id="depSw" title="Show departures on the timeline"></button><svg class="ic"><use href="#i-down"/></svg></div></div>
+  <div class="dh" id="drawerHead"><div class="t">Demand timeline <span id="drawerSub">no flights yet</span></div><div class="tools"><button class="chip" id="focChip" data-act="focus" data-ap="" hidden></button><span>Departures</span><button class="sw" id="depSw" title="Show departures on the timeline"></button><svg class="ic"><use href="#i-down"/></svg></div></div>
   <div class="gantt" id="gantt"></div>
 </section>
 <div class="toast" id="toast"></div>
@@ -472,8 +476,8 @@ function drawRoute(fit){
 }
 function drawNet(){
   netLayer.clearLayers(); if(!S.showNet) return;
-  S.network.forEach(f=>{ const pts=f.chain.map(c=>[c.lat,c.lon]); if(pts.length<2) return;
-    netLayer.addLayer(L.polyline(pts,{pane:'net',color:'#32326E',weight:1.5,opacity:.45})); });
+  S.network.forEach(f=>{ const pts=f.chain.map(c=>[c.lat,c.lon]); if(pts.length<2) return; const hit=!S.filter||f.chain.some(c=>c.ident===S.filter);
+    netLayer.addLayer(L.polyline(pts,{pane:'net',color:'#32326E',weight:hit&&S.filter?2:1.5,opacity:S.filter?(hit?.8:.12):.45})); });
 }
 function hav(a,b){ const R=6371,dL=(b[0]-a[0])*Math.PI/180,dN=(b[1]-a[1])*Math.PI/180,x=Math.sin(dL/2)**2+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(dN/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
 map.on('zoomend',()=>{ const z=map.getZoom(); const want = S.showSmall || z>=7.5; if(want && !map.hasLayer(dotsSmall)) dotsSmall.addTo(map); if(!want && map.hasLayer(dotsSmall)) map.removeLayer(dotsSmall); });
@@ -604,15 +608,15 @@ function aggregate(){
   return Object.values(by).sort((a,b)=>b.kwh-a.kwh);
 }
 function renderNetwork(){
-  const ag=aggregate(); const ses=sessions(); const flights=S.network.reduce((s,f)=>s+perDay(f),0); const kwh=ag.reduce((s,a)=>s+a.kwh,0); const peak=loadProfile().peak;
+  const ag=aggregate(); const ses=sessions(); const foc = S.filter && ag.find(a=>a.ident===S.filter) || null; if(foc) S.openAp[foc.ident]=true; const fst = foc ? apStats(foc.ident,ses) : null; const flights=S.network.reduce((s,f)=>s+perDay(f),0); const kwh=ag.reduce((s,a)=>s+a.kwh,0); const peak=loadProfile().peak;
   $('#railBody').innerHTML = `
-    <div class="ph"><div><h3>Network</h3><div class="sub num">${ag.length} airport${ag.length===1?'':'s'} · ${S.network.length} route${S.network.length===1?'':'s'} · ${flights%1?flights.toFixed(1):flights} flight${flights===1?'':'s'} / day</div></div><div class="tools"><button class="lnk" data-act="clear">Clear all</button></div></div>
-    ${S.network.length?`<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${ag.length}</div></div><div><div class="cap">Flights</div><div class="v num">${flights%1?flights.toFixed(1):flights}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${kwh>=1000?(kwh/1000).toFixed(1):Math.round(kwh)}<small>${kwh>=1000?'MWh':'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${peak>=1000?(peak/1000).toFixed(1):peak}<small>${peak>=1000?'MW':'kW'}</small></div></div></div>
+    <div class="ph"><div>${foc?`<h3>${foc.ident} <span style="font-weight:400;color:var(--muted)">${esc(shortName(foc.name))}</span></h3><div class="sub num">${foc.list.length} route${foc.list.length===1?'':'s'} · ${fst.n} session${fst.n===1?'':'s'} / day · ${bays(foc.ident)} charger${bays(foc.ident)===1?'':'s'}</div>`:`<h3>Network</h3><div class="sub num">${ag.length} airport${ag.length===1?'':'s'} · ${S.network.length} route${S.network.length===1?'':'s'} · ${flights%1?flights.toFixed(1):flights} flight${flights===1?'':'s'} / day</div>`}</div><div class="tools">${foc?'<button class="lnk" data-act="focus" data-ap="">← All airports</button>':'<button class="lnk" data-act="clear">Clear all</button>'}</div></div>
+    ${S.network.length?`${foc?`<div class="tiles"><div><div class="cap">Sessions</div><div class="v num">${fst.n}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${foc.kwh>=1000?(foc.kwh/1000).toFixed(1):Math.round(foc.kwh)}<small>${foc.kwh>=1000?'MWh':'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${fst.peak>=1000?(fst.peak/1000).toFixed(1):fst.peak}<small>${fst.peak>=1000?'MW':'kW'}</small></div></div><div><div class="cap">Max wait</div><div class="v num">${fst.waits?fst.maxWait:'0'}<small>${fst.waits?'min · '+fst.waits+' / day':'min · no waiting'}</small></div></div></div>`:`<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${ag.length}</div></div><div><div class="cap">Flights</div><div class="v num">${flights%1?flights.toFixed(1):flights}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${kwh>=1000?(kwh/1000).toFixed(1):Math.round(kwh)}<small>${kwh>=1000?'MWh':'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${peak>=1000?(peak/1000).toFixed(1):peak}<small>${peak>=1000?'MW':'kW'}</small></div></div></div>`}
     <div class="ntool"><span class="cap">Show</span><select data-act="filter"><option value="">All airports</option>${ag.map(a=>`<option value="${a.ident}" ${S.filter===a.ident?'selected':''}>${a.ident} · ${esc(shortName(a.name))}</option>`).join('')}</select><span class="sp"></span><span class="hint num" style="margin:0">€${fmtE(kwh*TARIFF)} / day</span></div>
     ${ag.filter(a=>!S.filter||a.ident===S.filter).map(a=>`<div class="ap ${S.openAp[a.ident]?'open':''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(shortName(a.name))}<small>${a.list.length} route${a.list.length===1?'':'s'}${ASSETS[a.ident]?' · NRG2FLY site':''}</small></span>
       <span class="st num">${a.flights?(a.flights%1?a.flights.toFixed(1):a.flights):"—"}<small>charges / day</small></span><span class="st num">${a.kwh?Math.round(a.kwh):"—"}<small>kWh / day</small></span><span class="st num">${apStats(a.ident,ses).peak||"—"}<small>peak kW</small></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane">${a.list.map(f=>`<div class="fl"><span class="t">${f.chain.map(c=>c.ident).join(' → ')}<small>${esc(f.planeName)} · ${tripLabel[f.trip]}</small></span><span class="mu num">${f.freq} / ${f.per}</span><span class="mu num">${Math.round(f.charged)} kWh</span><button class="rm" data-act="rm" data-id="${f.id}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button></div>`).join('')}
-      ${(st=>`<div class="bays"><span class="cap">Chargers</span><span class="step"><button data-act="bay" data-ap="${a.ident}" data-d="-1" title="Remove a charger">−</button><b class="num">${bays(a.ident)}</b><button data-act="bay" data-ap="${a.ident}" data-d="1" title="Add a charger">+</button></span><span class="hint num" style="margin:0 0 0 auto">${st.n} session${st.n===1?'':'s'} / day · ${st.waits?st.waits+' wait · max '+st.maxWait+' min':'no waiting'}</span></div>`)(apStats(a.ident,ses))}<div class="fleet">${[...a.kws].sort((x,y)=>y-x).map(k=>`<span class="num">${k} kW</span>`).join('')}</div></div></div>`).join('')}`
+      ${(st=>`<div class="bays"><span class="cap">Chargers</span><span class="step"><button data-act="bay" data-ap="${a.ident}" data-d="-1" title="Remove a charger">−</button><b class="num">${bays(a.ident)}</b><button data-act="bay" data-ap="${a.ident}" data-d="1" title="Add a charger">+</button></span><span class="hint num" style="margin:0 0 0 auto">${st.n} session${st.n===1?'':'s'} / day · ${st.waits?st.waits+' wait · max '+st.maxWait+' min':'no waiting'}</span>${foc?'':`<button class="lnk" data-act="focus" data-ap="${a.ident}">Isolate</button>`}</div>`)(apStats(a.ident,ses))}<div class="fleet">${[...a.kws].sort((x,y)=>y-x).map(k=>`<span class="num">${k} kW</span>`).join('')}</div></div></div>`).join('')}`
     :`<div class="empty"><b>No routes in the network yet</b>Plan a route and add it — each flight contributes charging demand to its departure and arrival airports.</div>`}`;
   $('#railFoot').innerHTML = S.network.length ? `<div class="btns"><button class="btn p" data-act="exp" data-exp="share">Share build</button><button class="btn" data-act="exp" data-exp="pdf">PDF</button><button class="btn" data-act="exp" data-exp="xlsx">XLSX</button></div>` : '';
 }
@@ -628,7 +632,7 @@ function sessions(){ // departures + charging sessions on the illustrative day (
         if(from) raw.push({type:'fly',ap:from.ident,start:t,dur:l.flight_time_h,to:to?to.ident:'',plane:f.planeName});
         t+=l.flight_time_h;
         const ch=to&&f.charges.find(c=>c.ident===to.ident&&(c.role!=='origin'||i===f.legs.length-1));
-        if(to&&ch&&ch.energy_kwh>0){ raw.push({type:'chg',ap:to.ident,req:t,start:t,dur:Math.max(ch.charge_time_min,3)/60,kw:f.kw,kwh:ch.energy_kwh,plane:f.planeName,wait:0,bay:0}); if(ch.role==='stop') t+=ch.charge_time_min/60; } }); } });
+        if(to&&ch&&ch.energy_kwh>0){ raw.push({type:'chg',ap:to.ident,from:from?from.ident:'',req:t,start:t,dur:Math.max(ch.charge_time_min,3)/60,kw:f.kw,kwh:ch.energy_kwh,plane:f.planeName,wait:0,bay:0}); if(ch.role==='stop') t+=ch.charge_time_min/60; } }); } });
   const byAp={}; raw.filter(s=>s.type==='chg').forEach(s=>(byAp[s.ap]=byAp[s.ap]||[]).push(s));
   Object.entries(byAp).forEach(([ap,list])=>{ const free=new Array(bays(ap)).fill(-1);
     list.sort((a,b)=>a.req-b.req).forEach(s=>{ let b=0; for(let i=1;i<free.length;i++) if(free[i]<free[b]) b=i; s.bay=b; s.start=Math.max(s.req,free[b]); s.wait=s.start-s.req; free[b]=s.start+s.dur; }); });
@@ -641,8 +645,11 @@ const fmtKw = v => v>=1000 ? (v/1000).toFixed(1)+' MW' : Math.round(v)+' kW';
 const apStats = (ap, ses) => { const cs=ses.filter(s=>s.type==='chg'&&s.ap===ap); const w=cs.filter(s=>s.wait>0); return { n:cs.length, waits:w.length, maxWait:Math.round(Math.max(0,...cs.map(s=>s.wait))*60), peak:loadProfile(ses,ap).peak }; };
 function renderDrawer(){
   const ag=aggregate(); const flights=S.network.reduce((s,f)=>s+perDay(f),0); const ses=sessions(); const {load,peak}=loadProfile(ses);
-  const rowsAg = S.showDep ? ag : ag.filter(a=>ses.some(s=>s.ap===a.ident&&s.type==='chg'));
-  $('#drawerSub').textContent = S.network.length ? `${ag.length} airports · ${flights%1?flights.toFixed(1):flights} flights / day · peak load ${fmtKw(peak)}` : 'no flights yet';
+  const foc = S.filter && ag.find(a=>a.ident===S.filter) ? S.filter : '';
+  const rowsAg = foc ? ag.filter(a=>a.ident===foc) : (S.showDep ? ag : ag.filter(a=>ses.some(s=>s.ap===a.ident&&s.type==='chg')));
+  const fp = foc ? loadProfile(ses,foc) : null;
+  const chip=$('#focChip'); chip.hidden=!foc; if(foc) chip.innerHTML=`${foc} ${esc(shortName(AP_BY_ID[foc]?AP_BY_ID[foc].name:foc))} <svg class="ic" style="width:12px;height:12px"><use href="#i-x"/></svg>`;
+  $('#drawerSub').textContent = !S.network.length ? 'no flights yet' : foc ? (st=>`${st.n} sessions / day · ${bays(foc)} charger${bays(foc)===1?'':'s'} · peak ${fmtKw(st.peak)}${st.waits?' · max wait '+st.maxWait+' min':' · no waiting'}`)(apStats(foc,ses)) : `${ag.length} airports · ${flights%1?flights.toFixed(1):flights} flights / day · peak load ${fmtKw(peak)}`;
   $('#netCount').textContent = S.network.length ? S.network.length : '';
   const pct=h=>Math.max(0,Math.min(100,(h-H0)/SPAN*100)); const w=h=>Math.max(.5,h/SPAN*100);
   const ticks=[]; for(let h=H0;h<H1;h+=2) ticks.push(`<div class="tick" style="left:${pct(h)}%"><span>${String(h).padStart(2,'0')}:00</span></div>`);
@@ -650,15 +657,16 @@ function renderDrawer(){
   let rows = `<div class="grow axis"><div class="lab"></div><div class="track">${ticks.join('')}</div></div>`; let lanes=0, anyWait=false;
   if(!S.network.length) rows += `<div class="empty">Add a route to the network to see its charging sessions on the day.</div>`;
   else {
-    const path = load.map((v,i)=>{ const y=(40-(peak?v/peak*36:0)).toFixed(1); return `L${i} ${y} L${i+1} ${y}`; }).join(' ');
-    rows += `<div class="grow load"><div class="lab">Network load<small>peak ${fmtKw(peak)}</small></div><div class="track">${bare}<svg viewBox="0 0 ${SLOTS} 40" preserveAspectRatio="none"><path d="M0 40 ${path} L${SLOTS} 40 Z"/></svg></div></div>`;
+    const L2 = fp ? fp.load : load, P2 = fp ? fp.peak : peak;
+    const path = L2.map((v,i)=>{ const y=(40-(P2?v/P2*36:0)).toFixed(1); return `L${i} ${y} L${i+1} ${y}`; }).join(' ');
+    rows += `<div class="grow load"><div class="lab">${foc?foc+' load':'Network load'}<small>peak ${fmtKw(P2)}</small></div><div class="track">${bare}<svg viewBox="0 0 ${SLOTS} 40" preserveAspectRatio="none"><path d="M0 40 ${path} L${SLOTS} 40 Z"/></svg></div></div>`;
     const fly = s => `<div class="blk fly num" style="left:${pct(s.start)}%;width:${w(s.dur)}%" title="${esc(s.plane)} → ${s.to}">${s.dur/SPAN*100>6?'→ '+s.to:''}</div>`;
-    const chg = s => `<div class="blk chg num" style="left:${pct(s.start)}%;width:${w(s.dur)}%" title="${esc(s.plane)} · ${Math.round(s.kwh)} kWh at ${s.kw} kW${s.wait?' · waited '+Math.round(s.wait*60)+' min':''}">${s.dur/SPAN*100>6.5?fmtKw(s.kw):''}</div>`;
+    const chg = s => `<div class="blk chg num" style="left:${pct(s.start)}%;width:${w(s.dur)}%" title="${esc(s.plane)} from ${s.from} · ${Math.round(s.kwh)} kWh at ${s.kw} kW${s.wait?' · waited '+Math.round(s.wait*60)+' min':''}">${foc?(s.dur/SPAN*100>4.2?s.from:''):(s.dur/SPAN*100>6.5?fmtKw(s.kw):'')}</div>`;
     const wait = (s,i,all) => `<div class="blk wait num ${s.wait>=1?'over':''}" style="left:${pct(s.req)}%;width:${w(s.wait)}%" title="${esc(s.plane)} waits ${Math.round(s.wait*60)} min for a charger">${all.length<=3&&s.wait/SPAN*100>6?Math.round(s.wait*60)+' min':''}</div>`;
     rowsAg.forEach(a=>{ const cs=ses.filter(s=>s.type==='chg'&&s.ap===a.ident); const nb=bays(a.ident); const waits=cs.filter(s=>s.wait>0); if(waits.length) anyWait=true;
       const flyB = S.showDep ? ses.filter(s=>s.type==='fly'&&s.ap===a.ident).map(fly).join('') : '';
-      const lab = `<div class="lab">${a.ident}<small>${esc(shortName(a.name))}</small></div>`;
-      if(nb===1 && !waits.length){ rows += `<div class="grow">${lab}<div class="track">${bare}${flyB}${cs.map(chg).join('')}</div></div>`; lanes++; return; }
+      const lab = `<div class="lab"><button data-act="focus" data-ap="${a.ident}" title="Isolate ${a.ident}">${a.ident}</button><small>${esc(shortName(a.name))}</small></div>`;
+      if(!foc && nb===1 && !waits.length){ rows += `<div class="grow">${lab}<div class="track">${bare}${flyB}${cs.map(chg).join('')}</div></div>`; lanes++; return; }
       if(waits.length){ rows += `<div class="grow">${lab}<div class="track">${bare}${waits.map(wait).join('')}</div></div>`; lanes++; }
       for(let b=0;b<nb;b++){ rows += `<div class="grow ${(waits.length||b>0)?'sub':''}">${(waits.length||b>0)?`<div class="lab">charger ${b+1}${b===0&&!waits.length?'':''}</div>`:lab}<div class="track">${bare}${b===0?flyB:''}${cs.filter(s=>s.bay===b).map(chg).join('')}</div></div>`; lanes++; } });
   }
@@ -700,16 +708,18 @@ function addToNetwork(){
   S.network.push(f); localStorage.setItem('cnsA.network',JSON.stringify(S.network));
   toast(`Added ${f.chain.map(x=>x.ident).join(' → ')} to the network`); drawNet(); renderRail();
 }
+function fitNet(){ const fs=S.network.filter(f=>!S.filter||f.chain.some(c=>c.ident===S.filter)); if(!fs.length) return; map.fitBounds(L.latLngBounds(fs.flatMap(f=>f.chain.map(c=>[c.lat,c.lon]))),{paddingTopLeft:[560,60],paddingBottomRight:[40,80],maxZoom:8,animate:false}); }
 function setMode(m){ S.mode=m; document.body.classList.toggle('net',m==='network'); if(m==='network') map.removeLayer(routeLayer); else if(!map.hasLayer(routeLayer)) routeLayer.addTo(map); $$('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m)); renderRail(); if(m==='network'){ drawNet(); if(S.network.length){ const pts=S.network.flatMap(f=>f.chain.map(c=>[c.lat,c.lon])); map.fitBounds(L.latLngBounds(pts),{paddingTopLeft:[560,60],paddingBottomRight:[40,80],maxZoom:8,animate:false}); } } }
 function resetForm(){ S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.stops=[]; S.trip='one-way'; S.freq=1; S.per='day'; S.planeId='beta_plane'; S.chargerId='dc_320'; S.picking=false; S.allChargers=false; onFormChange(true); }
 
 document.addEventListener('click',e=>{
-  const t=e.target.closest('#depSw,[data-act],[data-seg] button,[data-acc]>button,[data-ap]>button,#modeSeg button,#unitSeg button,#mapDd [data-base],#expDd [data-exp],#drawerHead');
+  const t=e.target.closest('#depSw,#focChip,[data-act],[data-seg] button,[data-acc]>button,[data-ap]>button,#modeSeg button,#unitSeg button,#mapDd [data-base],#expDd [data-exp],#drawerHead');
   // dropdown toggles
   const dd={mapBtn:'mapDd',expBtn:'expDd',setBtn:'setDd'}; const tb=e.target.closest('#mapBtn,#expBtn,#setBtn');
   $$('.dd').forEach(x=>{ if(!(tb&&x.id===dd[tb.id])&&!x.contains(e.target)) x.classList.remove('open'); });
   if(tb){ $('#'+dd[tb.id]).classList.toggle('open'); return; }
   if(!t) return;
+  if(t.id==='focChip'){ S.filter=''; renderRail(); drawNet(); fitNet(); return; }
   if(t.id==='depSw'){ S.showDep=!S.showDep; t.classList.toggle('on',S.showDep); renderDrawer(); return; }
   if(t.id==='drawerHead'){ $('#drawer').classList.toggle('open'); return; }
   if(t.closest('#modeSeg')){ setMode(t.dataset.mode); return; }
@@ -732,6 +742,7 @@ document.addEventListener('click',e=>{
     case 'addStop': S.stops.push(null); renderRail(); setTimeout(()=>{ const i=$$('[data-ac^=stop]').pop(); i&&i.focus(); },0); break;
     case 'rmStop': S.stops.splice(+t.dataset.i,1); onFormChange(true); break;
     case 'estimates': S.estimates=!S.estimates; renderRail(); break;
+    case 'focus': S.filter=t.dataset.ap||''; if(S.filter) S.openAp[S.filter]=true; renderRail(); drawNet(); fitNet(); break;
     case 'bay': S.bays[t.dataset.ap]=Math.max(1,bays(t.dataset.ap)+ +t.dataset.d); localStorage.setItem('cnsA.bays',JSON.stringify(S.bays)); renderRail(); break;
     case 'rm': S.network=S.network.filter(f=>f.id!==t.dataset.id); localStorage.setItem('cnsA.network',JSON.stringify(S.network)); drawNet(); renderRail(); break;
     case 'clear': if(S.network.length&&confirm('Remove all routes from the network?')){ S.network=[]; localStorage.setItem('cnsA.network','[]'); drawNet(); renderRail(); } break;
@@ -739,7 +750,7 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{ const t=e.target;
   if(t.dataset.act==='freq'){ S.freq=Math.max(1,Math.min(99,+t.value||1)); if(S.result) renderRail(); }
-  if(t.dataset.act==='filter'){ S.filter=t.value; renderRail(); }
+  if(t.dataset.act==='filter'){ S.filter=t.value; if(S.filter) S.openAp[S.filter]=true; renderRail(); drawNet(); fitNet(); }
   if(t.id==='ckSmall'){ S.showSmall=t.checked; map.fire('zoomend'); }
   if(t.id==='ckAssets'){ S.showAssets=t.checked; drawAssets(); }
   if(t.id==='ckNet'){ S.showNet=t.checked; drawNet(); }
@@ -759,7 +770,7 @@ $('#tourBtn').onclick=()=>toast('Guided tour — not wired in the prototype');
   drawAirports(); drawAssets(); drawNet();
   S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest];
   renderRail(); drawRoute(true);
-  const h=location.hash.replace('#','');
+  const [h,focusAp]=location.hash.replace('#','').split(':');
   if(h==='big'){ S.network=[]; const R=[['EHLE','EDDF','beta_plane',1,'day','one-way'],['EHAM','EDLS','beta_plane',3,'day','one-way'],['EHRD','EBBR','beta_plane',2,'day','one-way'],['EHGG','EDDH','beta_plane',1,'day','retour'],['EHEH','EDDL','vaeridion',2,'day','one-way'],['EDDF','EDDM','beta_plane',2,'day','one-way'],['EHLE','EHTE','pipistrel_velis',4,'day','retour'],['EBBR','LFPB','vaeridion',1,'day','one-way'],['EHBK','EDDL','pipistrel_velis',2,'day','one-way'],['EHAM','EHGG','beta_plane',2,'day','retour'],['EDLS','EDDF','beta_plane',1,'day','one-way'],['EHSE','EHRD','pipistrel_velis',5,'day','one-way']];
     for(const [o,d,pl,fr,per,tr] of R){ if(!AP_BY_ID[o]||!AP_BY_ID[d]) continue; S.origin=AP_BY_ID[o]; S.dest=AP_BY_ID[d]; S.stops=[]; S.planeId=pl; const dc=plane().default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; S.freq=fr; S.per=per; S.trip=tr; await simulate(); if(S.result) addToNetwork(); }
     S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.trip='one-way'; S.freq=1; S.planeId='beta_plane'; S.chargerId='dc_320'; S.rail='form'; S.result=null; setMode('network'); $('#drawer').classList.add('open'); renderDrawer(); }
@@ -767,6 +778,7 @@ $('#tourBtn').onclick=()=>toast('Guided tour — not wired in the prototype');
     for(const [o,d,pl,fr,per,tr] of R){ if(!AP_BY_ID[o]||!AP_BY_ID[d]) continue; S.origin=AP_BY_ID[o]; S.dest=AP_BY_ID[d]; S.stops=[]; S.planeId=pl; const dc=plane().default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; S.freq=fr; S.per=per; S.trip=tr; await simulate(); if(S.result) addToNetwork(); }
     S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.trip='one-way'; S.freq=1; S.planeId='beta_plane'; S.chargerId='dc_320'; S.rail='form'; S.result=null; setMode('network'); $('#drawer').classList.add('open'); renderDrawer(); }
   if(h==='multi'){ S.dest=AP_BY_ID['EDDM']; S.stops=[AP_BY_ID['EDDF']]; await simulate(); }
+  if(focusAp&&AP_BY_ID[focusAp]){ S.filter=focusAp; S.openAp[focusAp]=true; renderRail(); drawNet(); fitNet(); }
   if(h==='result'||h==='network'){ await simulate(); if(h==='network'){ if(!S.network.length){ addToNetwork(); S.origin=AP_BY_ID['EHAM']; S.dest=AP_BY_ID['EDLS']; S.stops=[]; S.freq=3; await simulate(); addToNetwork(); } setMode('network'); $('#drawer').classList.add('open'); } }
 })();
 </script>
