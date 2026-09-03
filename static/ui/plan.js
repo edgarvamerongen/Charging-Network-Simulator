@@ -119,7 +119,10 @@
   }
   function addToNetwork() {
     const r = S.result; if (!r || !window.CNSFlightEntry || !window.CNSDemand) return;
-    const entry = CNSFlightEntry.fromSim(r, { origin: S.origin, dest: S.trip === 'training' ? S.origin : S.dest, chargerId: S.chargerId, freqN: S.freq, freqUnit: S.per });
+    // fromSim wants {ident,name,lat,lon} (the API shape), not the airport record — without lat/lon the
+    // engine profile is null and the scheduler sees a flight with no phases. An id is required too:
+    // remove/edit/recompute address flights by id (the classic uses Date.now()).
+    const entry = CNSFlightEntry.fromSim(r, { origin: toC(S.origin), dest: toC(S.trip === 'training' ? S.origin : S.dest), chargerId: S.chargerId, freqN: S.freq, freqUnit: S.per, id: String(Date.now()) });
     const folder = CNSDemand.loadFolder(); folder.push(entry); CNSDemand.saveFolder(folder); UI.folderChanged();
     UI.toast(`Added ${UI.chain().map(a => a.ident).join(' → ')} to the network`); UI.map.drawNet(); UI.render();
   }
