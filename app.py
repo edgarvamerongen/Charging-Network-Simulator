@@ -453,6 +453,13 @@ def index():
     return resp
 
 
+@app.route('/v2')
+def index_v2():
+    """The v2 desktop shell (V2_SHELL_DESIGN.md). Same context as `/`, no
+    mobile redirect — it is desktop-only until it replaces `/`."""
+    return render_template('desktop.html', planes=simulator.planes,
+                           chargers=simulator.chargers, asset_version=ASSET_VERSION)
+
 @app.route('/s/<slug>')
 def share_open(slug):
     """Open a shared route: serve the planner with the saved state injected so
