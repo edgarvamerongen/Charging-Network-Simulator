@@ -1,0 +1,129 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>CNS v2 — aircraft picker options</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--canvas:#f3f3f7;--surface:#fff;--line:#e2e2ea;--line-2:#cfcfda;--ink:#32326E;--muted:#6f7290;--faint:#a3a6bb;--accent:#d84c26;--r:3px}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum","cv11"}
+body{background:#e9e9ee;color:var(--ink);padding:36px 40px 60px;font-size:13px}
+.h1{font-size:20px;font-weight:600;letter-spacing:-.01em;margin-bottom:4px}.sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+.grid{display:grid;grid-template-columns:repeat(3,376px);gap:24px;align-items:start}
+.opt{background:#fff;border:1px solid #d3d3dc}
+.opt .oh{padding:12px 16px 10px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:baseline}
+.opt .oh .n{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.06em}.opt .oh h2{font-size:14px;font-weight:600}.opt .oh small{margin-left:auto;font-size:11px;color:var(--muted)}
+.opt .why{padding:10px 16px 14px;font-size:12px;color:#4a4d6a;line-height:1.5;border-top:1px solid var(--line)}.opt .why b{color:var(--ink);font-weight:600}
+.frame{padding:16px;background:var(--canvas)}
+.rail{width:320px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 4px 16px rgba(50,50,110,.12)}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;border-bottom:1px solid var(--line)}
+.ph h3{font-size:14px;font-weight:600}.ph .hint{margin:0}
+.cap{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.lnk{font-size:11.5px;font-weight:500;text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--line-2);color:var(--ink)}
+.sec{padding:10px 14px 12px;border-bottom:1px solid var(--line)}
+.lbl{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.hint{font-size:11px;color:var(--muted)}
+.meta{font-size:11px;color:var(--muted);margin-top:2px}
+.name{font-weight:600;font-size:13.5px}
+.num{font-variant-numeric:tabular-nums}
+.bar{height:2px;background:var(--line);margin:8px 0 4px;position:relative}.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{height:22px;padding:0 8px;border:1px solid var(--line-2);border-radius:var(--r);font-size:11px;font-weight:500;display:inline-flex;align-items:center;gap:6px;background:var(--surface)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip.dis{color:var(--faint);border-style:dashed}
+.chips .sep{width:1px;background:var(--line);margin:0 2px}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;height:22px}
+.seg span{padding:0 8px;font-size:11px;font-weight:500;display:flex;align-items:center;border-right:1px solid var(--line-2);white-space:nowrap}
+.seg span:last-child{border-right:0}.seg span.on{background:var(--ink);color:#fff}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#5aa9e6;vertical-align:-0.5px;margin-right:5px}
+.dot.cert{background:#2f9e6e}.dot.dev{background:#c98a4b}.dot.con{background:#b7bdd1}
+.stage{position:relative;height:150px;background:#dfe0e8 center/cover no-repeat;border-radius:2px;margin:8px 0}
+.stage.b{height:140px;border-radius:0;margin:0 -14px}
+.stage .arrow{position:absolute;top:50%;transform:translateY(-50%);width:26px;height:26px;background:rgba(255,255,255,.9);border:1px solid var(--line-2);border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ink)}
+.stage .arrow.l{left:6px}.stage .arrow.r{right:6px}
+.band{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);padding:6px 0}
+.strip{display:flex;gap:6px;align-items:center;margin-top:8px}
+.strip .th{width:48px;height:32px;object-fit:cover;border-radius:2px;background:#dfe0e8;border:1px solid var(--line);opacity:.75}
+.strip .th.on{outline:2px solid var(--ink);outline-offset:-1px;opacity:1}
+.strip .nav{width:22px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--muted);border:1px solid var(--line-2);border-radius:var(--r);font-size:13px}
+.spec{font-size:11.5px;color:var(--muted);margin-top:3px}.spec b{color:var(--ink);font-weight:600}
+.row{display:flex;align-items:center;gap:10px}
+.thumb{width:96px;height:60px;object-fit:cover;border-radius:2px;background:#dfe0e8;flex:none}
+.list{margin-top:8px;border:1px solid var(--line);border-radius:var(--r);max-height:320px;overflow:hidden}
+.li{display:grid;grid-template-columns:52px 1fr auto auto auto;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line);font-size:12px}
+.li:last-child{border-bottom:0}.li img{width:52px;height:34px;object-fit:cover;border-radius:2px;background:#dfe0e8}
+.li .n{font-weight:500}.li .n small{display:block;color:var(--muted);font-size:10.5px;font-weight:400}
+.li .v{font-size:11.5px;text-align:right;white-space:nowrap}.li .v small{display:block;font-size:9.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+.li.on{box-shadow:inset 2px 0 0 var(--ink);background:var(--canvas)}
+.li.sub{grid-template-columns:52px 1fr;padding:4px 8px 8px 68px;background:var(--canvas);border-top:0}
+.grid6{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:var(--r);margin-top:8px}
+.grid6>div{padding:7px 9px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.grid6>div:nth-child(3n){border-right:0}.grid6>div:nth-child(n+4){border-bottom:0}
+.grid6 .k{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.grid6 .v{font-size:13px;font-weight:600;margin-top:2px}.grid6 .v small{font-size:10px;color:var(--muted);font-weight:500;margin-left:2px}
+.pop{position:absolute;right:0;top:24px;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 4px 16px rgba(50,50,110,.12);padding:8px;width:220px;z-index:5}
+.pop .k{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:4px 0 4px}
+.fbtn{height:22px;padding:0 8px;border:1px solid var(--line-2);border-radius:var(--r);font-size:11px;font-weight:500;display:inline-flex;align-items:center;gap:6px;background:var(--surface)}
+.ghost{opacity:.45}
+</style></head><body>
+<div class="h1">Aircraft in the Create-a-route rail — three options</div>
+<div class="sub">Each carries the classic picker's whole model: type + propulsion filters, status with certification, VFR | IFR regime, per-airframe profiles (Microliner Max / Light, ES-30 electric / hybrid), the catalog, usable reach, per-flight override. Instrument tokens throughout; nothing rounded past 3 px.</div>
+<div class="grid">
+
+<!-- ================= OPTION 1 · STAGE ================= -->
+<section class="opt"><div class="oh"><span class="n">01</span><h2>Stage</h2><small>closest to the classic · photo first</small></div>
+<div class="frame"><div class="rail">
+  <div class="ph"><h3>Create a route</h3><span class="hint">VFR</span></div>
+  <div class="sec">
+    <div class="lbl"><span class="cap">Aircraft</span><span class="lnk">Edit for this flight</span></div>
+    <div class="chips" style="margin-bottom:6px"><span class="chip on">CTOL</span><span class="chip">eVTOL</span><span class="sep"></span><span class="chip on">Electric</span><span class="chip">Hybrid</span></div>
+    <div class="band"><span><i class="dot"></i>Prototype flying · cert. 2026</span><span class="seg"><span class="on">VFR</span><span>IFR</span></span></div>
+    <div class="stage" style="background-image:url('/pics/beta.png');margin-top:0"></div>
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="name">Alia CX300</div><div class="meta">Beta Technologies · USA</div></div><span class="meta num">2 of 5</span></div>
+    <div class="spec num"><b>6</b> seats · <b>225</b> kWh · <b>500</b> km · <b>250</b> km/h · <b>400</b> kW</div>
+    <div class="strip"><span class="nav">‹</span><img class="th" src="/pics/pipistrel.jpg"><img class="th on" src="/pics/beta.png"><img class="th" src="/pics/vaeridion.jpg"><img class="th" src="/pics/elysian.jpg"><span class="th" style="display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted)">ES-30</span><span class="nav">›</span></div>
+    <div class="bar"><i style="width:78%"></i></div><div class="meta num">Usable reach 389 of 500 km · 41 kWh/100 km +23 climb</div>
+  </div>
+  <div class="sec ghost"><div class="lbl"><span class="cap">Route</span><span class="lnk">+ Add stop</span></div><div style="height:32px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 10px;display:flex;align-items:center;justify-content:space-between"><span>Lelystad Airport</span><span class="meta">EHLE</span></div></div>
+</div></div>
+<div class="why"><b>What it is.</b> The classic stage, flattened: filters as bare chips in the section header, a status + regime band above a full-width photo, name and spec line under it, the thumbnail strip with arrows, reach bar. <b>Trade-off:</b> the section is ~330 px tall; profiles (Max / Light) would appear as a second knob in the band when the airframe has them.</div></section>
+
+<!-- ================= OPTION 2 · CATALOG ================= -->
+<section class="opt"><div class="oh"><span class="n">02</span><h2>Catalog</h2><small>data first · the whole fleet visible</small></div>
+<div class="frame"><div class="rail">
+  <div class="ph"><h3>Create a route</h3><span class="hint">VFR</span></div>
+  <div class="sec">
+    <div class="lbl"><span class="cap">Aircraft</span><span class="lnk">Edit for this flight</span></div>
+    <div class="row" style="align-items:flex-start"><img class="thumb" src="/pics/beta.png"><div><div class="name">Alia CX300</div><div class="meta"><i class="dot"></i>Prototype flying · cert. 2026</div><div class="spec num" style="margin-top:4px"><b>6</b> seats · <b>225</b> kWh · <b>500</b> km · <b>250</b> km/h</div><div style="margin-top:6px" class="seg"><span class="on">VFR</span><span>IFR</span></div></div></div>
+    <div class="bar"><i style="width:78%"></i></div><div class="meta num">Usable reach 389 of 500 km · 41 kWh/100 km +23 climb</div>
+    <div class="chips" style="margin-top:10px"><span class="seg"><span class="on">All</span><span>CTOL</span><span>eVTOL</span></span><span class="seg"><span class="on">All</span><span>Electric</span><span>Hybrid</span></span></div>
+    <div class="list">
+      <div class="li"><img src="/pics/pipistrel.jpg"><span class="n">Velis Electro<small><i class="dot cert"></i>certified · CTOL</small></span><span class="v num">2<small>seats</small></span><span class="v num">22<small>kWh</small></span><span class="v num">88<small>km</small></span></div>
+      <div class="li on"><img src="/pics/beta.png"><span class="n">Alia CX300<small><i class="dot"></i>prototype flying · CTOL</small></span><span class="v num">6<small>seats</small></span><span class="v num">225<small>kWh</small></span><span class="v num">500<small>km</small></span></div>
+      <div class="li"><img src="/pics/vaeridion.jpg"><span class="n">Microliner<small><i class="dot dev"></i>under construction · CTOL</small></span><span class="v num">9<small>seats</small></span><span class="v num">600<small>kWh</small></span><span class="v num">500<small>km</small></span></div>
+      <div class="li sub"><span></span><span class="seg"><span class="on">Max · 9 seats</span><span>Light · 4 seats</span></span></div>
+      <div class="li"><span style="width:52px;height:34px;background:#dfe0e8;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted)">ES-30</span><span class="n">ES-30<small><i class="dot dev"></i>in development · CTOL · electric | hybrid</small></span><span class="v num">30<small>seats</small></span><span class="v num">—<small>kWh</small></span><span class="v num">200<small>km</small></span></div>
+      <div class="li"><img src="/pics/elysian.jpg"><span class="n">E9X<small><i class="dot con"></i>concept · CTOL</small></span><span class="v num">90<small>seats</small></span><span class="v num">14 000<small>kWh</small></span><span class="v num">1 000<small>km</small></span></div>
+    </div>
+  </div>
+  <div class="sec ghost"><div class="lbl"><span class="cap">Route</span><span class="lnk">+ Add stop</span></div><div style="height:32px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 10px;display:flex;align-items:center;justify-content:space-between"><span>Lelystad Airport</span><span class="meta">EHLE</span></div></div>
+</div></div>
+<div class="why"><b>What it is.</b> The selected aircraft as a wide row with a 96 px photo, then the catalog as a table: every airframe with seats, battery and range side by side, profiles nested under the selected row, filters as two segmented controls above the list. <b>Trade-off:</b> the least photographic; but you compare aircraft without clicking, and the list scales to a 20-airframe Notion catalog.</div></section>
+
+<!-- ================= OPTION 3 · INSTRUMENT ================= -->
+<section class="opt"><div class="oh"><span class="n">03</span><h2>Instrument</h2><small>photo + spec grid · filters in a popover</small></div>
+<div class="frame"><div class="rail">
+  <div class="ph"><h3>Create a route</h3><span class="hint">VFR</span></div>
+  <div class="sec" style="position:relative">
+    <div class="lbl"><span class="cap">Aircraft</span><span style="display:flex;gap:8px;align-items:center;position:relative"><span class="fbtn">CTOL · Electric <span style="color:var(--muted)">▾</span></span><span class="lnk">Change</span>
+      <div class="pop"><div class="k">Type</div><div class="chips"><span class="chip on">CTOL</span><span class="chip">eVTOL</span></div><div class="k">Propulsion</div><div class="chips"><span class="chip on">Electric</span><span class="chip">Hybrid</span></div><div class="k">Status</div><div class="chips"><span class="chip">Certified</span><span class="chip">Flying</span><span class="chip dis">Concept</span></div></div></span></div>
+    <div class="stage b" style="background-image:url('/pics/beta.png')"><span class="arrow l">‹</span><span class="arrow r">›</span></div>
+    <div class="band" style="border-bottom:1px solid var(--line);margin:0 -14px;padding:6px 14px"><span><i class="dot"></i>Prototype flying · cert. 2026</span><span class="seg"><span class="on">VFR</span><span>IFR</span></span></div>
+    <div class="row" style="justify-content:space-between;align-items:flex-start;margin-top:10px"><div><div class="name">Alia CX300</div><div class="meta">Beta Technologies · 2 of 5</div></div><span class="lnk">Edit for this flight</span></div>
+    <div class="grid6">
+      <div><div class="k">Seats</div><div class="v num">6</div></div><div><div class="k">Battery</div><div class="v num">225<small>kWh</small></div></div><div><div class="k">Range</div><div class="v num">500<small>km</small></div></div>
+      <div><div class="k">Cruise</div><div class="v num">250<small>km/h</small></div></div><div><div class="k">Max charge</div><div class="v num">400<small>kW</small></div></div><div><div class="k">Reach</div><div class="v num">389<small>km</small></div></div>
+    </div>
+    <div class="bar"><i style="width:78%"></i></div><div class="meta num">41 kWh/100 km +23 climb · reserve 30 %</div>
+  </div>
+  <div class="sec ghost"><div class="lbl"><span class="cap">Route</span><span class="lnk">+ Add stop</span></div><div style="height:32px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 10px;display:flex;align-items:center;justify-content:space-between"><span>Lelystad Airport</span><span class="meta">EHLE</span></div></div>
+</div></div>
+<div class="why"><b>What it is.</b> Full-bleed photo with prev/next on its edges, status + regime on a hairline band under it, then the numbers as a 3×2 instrument grid instead of a sentence. Filters live in a popover behind a summary button (“CTOL · Electric”), so the header stays one line and a third dimension (status) fits without crowding. <b>Trade-off:</b> filters are one click further away; no thumbnail strip, the counter (“2 of 5”) and arrows do that job.</div></section>
+</div></body></html>
