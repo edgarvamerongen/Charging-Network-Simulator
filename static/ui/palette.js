@@ -57,7 +57,6 @@
       ['Units: kilometres', () => $('#unitSeg [data-u=km]').click()], ['Units: nautical miles', () => $('#unitSeg [data-u=nm]').click()],
       ['Export demand workbook (XLSX)', () => runExport('xlsx', $('#expBtn')), '⇧X'], ['Share this route', () => runExport('share'), '⇧L'], ['Share the network build', () => runExport('build')],
       ['Reset the route form', () => { UI.setMode('plan'); UI.plan.resetForm(); }],
-      [S.acOverlay ? 'Aircraft: stats below the photo' : 'Aircraft: stats over the photo', () => { S.acOverlay = !S.acOverlay; UI.setMode('plan'); UI.render(); }],
       ['Open the classic version', () => { location.href = '/?desktop=1'; }],
     ].filter(Boolean).filter(([l]) => hit(l));
     A.slice(0, ql ? 8 : 10).forEach(([l, run, k]) => add('Actions', esc(l), run, k || ''));
