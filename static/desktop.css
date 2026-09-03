@@ -355,3 +355,16 @@ body.net .drawer{left:calc(520px + 24px)}
 .nrg-pin .head img{width:116%;height:116%;flex:none;object-fit:cover}
 .nrg-pin .tail{width:0;height:0;margin-top:-1px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #fff}
 .nrg-pin.construction .head{opacity:.55}
+
+/* ---- aircraft section · overlay variant (stats on the photo) ---- */
+.ac-stage.ov{height:214px}
+.ac-stage.ov .ac-arrow{top:78px;transform:none}
+.ac-st{position:absolute;left:10px;top:10px;background:rgba(255,255,255,.94);border:1px solid var(--line-2);border-radius:var(--r);padding:2px 8px;font-size:11px;color:var(--ink);white-space:nowrap}
+.ac-rg{position:absolute;right:10px;top:10px;height:22px;background:var(--surface)}
+.ac-ov{position:absolute;left:0;right:0;bottom:0;background:rgba(50,50,110,.9);color:#fff;padding:8px var(--pad) 9px}
+.ac-ov .nm{font-weight:600;font-size:14px}
+.ac-ov .sub{font-size:11px;color:rgba(255,255,255,.7)}
+.ac-ov .row6{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:6px}
+.ac-ov .k{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.62);white-space:nowrap}
+.ac-ov .v{font-size:12.5px;font-weight:600;margin-top:1px;white-space:nowrap}
+.ac-ov .v small{font-size:9.5px;font-weight:500;color:rgba(255,255,255,.72);margin-left:1px}

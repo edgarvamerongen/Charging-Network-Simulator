@@ -12,7 +12,7 @@ window.CNSUI = (function () {
     filter: '', lanes: 'airports', showDep: false,
     base: 'light', showSmall: false, showAssets: true, showNet: true,
     allChargers: false, picking: false, open: { route: true, charging: false, calc: false }, openAp: {},
-    acFilters: { type: null, propulsion: null, status: null }, acFilterOpen: false, availOverride: null
+    acFilters: { type: null, propulsion: null, status: null }, acFilterOpen: false, availOverride: null, acOverlay: false
   };
   let AIRPORTS = [], AP_BY_ID = {}, ASSETS = {};
 
@@ -135,6 +135,7 @@ window.CNSUI = (function () {
     if (h === 'result') await CNSUI.plan.simulate();
     if (h === 'network') setMode('network');
     if (h === 'filters') { S.acFilterOpen = true; render(); }
+    if (h === 'overlay') { S.acOverlay = true; render(); }
     document.addEventListener('click', e => { const b = e.target.closest('#modeSeg button'); if (b) setMode(b.dataset.mode); });
   }
 
