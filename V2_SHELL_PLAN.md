@@ -1078,3 +1078,11 @@ window.CNSUI = (function () {
   UI.palette = { open, close, items };
 })();
 ```
+
+---
+
+### Task 10 (added 2026-09-03, Edgar's review): aircraft section · option 3 + NRG2FLY teardrops
+
+**Files:** `static/ui/app.js` (`CNSUI.aircraft`: groups by `aircraft_id`, profile rows, `dims/visible/groupOf/pick`), `static/ui/plan.js` (`aircraftHtml`: stage with prev/next, status + VFR|IFR band, profile/propulsion knobs, 3×2 spec grid, reach bar, per-flight range override, filter popover), `static/ui/map.js` (teardrop pins with the inverted NRG2fly icon, `construction` variant), `static/desktop.css` (`.acsec .ac-stage .ac-band .ac-grid .ac-pop .fbtn .dot.s-* .nrg-pin`), `tests/js_ui_aircraft.test.mjs`.
+
+**Verified:** 11/11 JS tests; in the browser: arrows cycle airframes with the counter, regime knob disables absent regimes, status filter narrows and re-selects the first visible airframe, popover closes on outside click, override toggles and shows in the reach line, 8 teardrop pins on the map. Design reference: `static/proto/aircraft-options.html` option 03. Gotcha: the section class must not be `.ac` — the autocomplete dropdown owns that selector (`display:none`).

@@ -8,6 +8,34 @@
   const directKm = () => { const c = UI.chain(); let d = 0; for (let i = 0; i < c.length - 1; i++) d += hav(UI.ll(c[i]), UI.ll(c[i + 1])); return d; };
   const longestLeg = () => { const c = UI.chain(); let m = 0; for (let i = 0; i < c.length - 1; i++) m = Math.max(m, hav(UI.ll(c[i]), UI.ll(c[i + 1]))); return m; };
   const kwLabel = c => c.power_kw >= 1000 ? (c.power_kw / 1000) + ' MW' : c.power_kw + ' kW';
+  const cap1 = s => { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); };
+  const reachKm = p => S.availOverride != null ? S.availOverride : usableKm(p);
+  function selectPlane(id) { S.planeId = id; S.picking = false; S.availOverride = null; const dc = UI.plane().default_charger_id; if (dc && UI.CHARGERS.find(c => c.id === dc)) S.chargerId = dc; onFormChange(false); }
+  function prefsOf(p) { return { label: String(p.profile_label || ''), regime: String(p.regime || ''), propulsion: String(p.propulsion || '') }; }
+  // Option 3 · Instrument (static/proto/aircraft-options.html): full-bleed stage with prev/next,
+  // status + regime band, name, profile/propulsion knobs, 3×2 spec grid, reach bar, override.
+  function aircraftHtml(p, reach, fits, pickHtml) {
+    const AC = UI.aircraft, F = S.acFilters; const vis = AC.visible(F); const g = AC.groupOf(p.id); const idx = vis.findIndex(x => g && x.key === g.key);
+    const climb = (window.CNSFlight && CNSFlight.climbParams) ? CNSFlight.climbParams(p) : { applies: false };
+    const usage = (p.battery_kwh && p.range_km) ? p.battery_kwh / p.range_km * 100 : 0;
+    const resv = Math.round((1 - ((window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7)) * 100);
+    const st = String(p.status || ''), stCls = st.toLowerCase().replace(/[^a-z0-9]+/g, '-'), cert = p.certification_year ? ' · cert. ' + esc(p.certification_year) : '';
+    const hasR = r => !!g && g.entries.some(e => e.regime === r);
+    const labels = g ? [...new Set(g.entries.map(e => String(e.profile_label || '')).filter(Boolean))] : []; const modes = g ? [...new Set(g.entries.map(e => String(e.propulsion || '')).filter(Boolean))] : [];
+    const dims = AC.dims(); const active = dims.map(d => F[d.key]).filter(Boolean);
+    const summary = active.length ? active.map(v => esc(cap1(v))).join(' · ') : 'All aircraft';
+    const pop = S.acFilterOpen ? `<div class="ac-pop">${dims.map(d => `<div class="k">${d.key}</div><div class="chips">${d.values.map(v => { const on = F[d.key] === v; const ok = on || AC.groups().some(gg => AC.matches(gg, Object.assign({}, F, { [d.key]: v }))); return `<button class="chip ${on ? 'on' : ''} ${ok ? '' : 'dis'}" data-act="acFilter" data-dim="${d.key}" data-val="${esc(v)}" ${ok ? '' : 'disabled'}>${esc(cap1(v))}</button>`; }).join('')}</div>`).join('')}${dims.length ? '' : '<div class="hint">The catalog has nothing to filter on yet — every aircraft is the same type and propulsion.</div>'}</div>` : '';
+    return `<div class="sec acsec"><div class="lbl"><span class="cap">Aircraft</span><span class="ac-tools"><button class="fbtn" data-act="acFilters">${summary} <span class="ch">▾</span></button><button class="lnk" data-act="pick">${S.picking ? 'Close' : 'Change'}</button>${pop}</span></div>
+      ${pickHtml}
+      <div class="ac-stage" style="background-image:url('/pics/${esc(p.image || '')}')"><button class="ac-arrow l" data-act="acPrev" title="Previous aircraft" ${vis.length > 1 ? '' : 'disabled'}>‹</button><button class="ac-arrow r" data-act="acNext" title="Next aircraft" ${vis.length > 1 ? '' : 'disabled'}>›</button></div>
+      <div class="ac-band"><span><i class="dot s-${stCls}"></i>${esc(cap1(st) || 'Status unknown')}${cert}</span><span class="seg">${['VFR', 'IFR'].map(r => `<button data-act="acRegime" data-v="${r}" class="${p.regime === r ? 'on' : ''}" ${hasR(r) ? '' : 'disabled'}>${r}</button>`).join('')}</span></div>
+      <div class="row" style="justify-content:space-between;align-items:flex-start;margin-top:10px"><div><div class="name">${esc(p.name)}</div><div class="meta">${esc(p.oem || '')}${vis.length && idx >= 0 ? ' · ' + (idx + 1) + ' of ' + vis.length : ''}</div></div><button class="lnk" data-act="acEdit">${S.availOverride != null ? 'Reset override' : 'Edit for this flight'}</button></div>
+      ${labels.length > 1 || modes.length > 1 ? `<div class="chips" style="margin-top:8px">${labels.length > 1 ? `<span class="seg">${labels.map(l => `<button data-act="acLabel" data-v="${esc(l)}" class="${String(p.profile_label || '') === l ? 'on' : ''}">${esc(l)}</button>`).join('')}</span>` : ''}${modes.length > 1 ? `<span class="seg">${modes.map(m => `<button data-act="acMode" data-v="${esc(m)}" class="${String(p.propulsion || '') === m ? 'on' : ''}">${esc(cap1(m))}</button>`).join('')}</span>` : ''}</div>` : ''}
+      <div class="ac-grid"><div><div class="k">Seats</div><div class="v num">${p.seats ?? '—'}</div></div><div><div class="k">Battery</div><div class="v num">${p.battery_kwh ?? '—'}<small>kWh</small></div></div><div><div class="k">Range</div><div class="v num">${fmt.r(fmt.km(p.range_km || 0))}<small>${fmt.ukm()}</small></div></div><div><div class="k">Cruise</div><div class="v num">${p.speed_kmh ?? '—'}<small>km/h</small></div></div><div><div class="k">Max charge</div><div class="v num">${p.max_charge_kw ?? '—'}<small>kW</small></div></div><div><div class="k">Reach</div><div class="v num">${fmt.r(fmt.km(reach))}<small>${fmt.ukm()}</small></div></div></div>
+      ${S.availOverride != null ? `<div class="row" style="margin-top:8px"><span class="hint" style="margin:0">Available range for this flight</span><input type="number" min="1" class="num" data-act="acOverride" value="${S.availOverride}" style="width:80px;height:26px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 6px;margin-left:auto;background:var(--surface)"><span class="hint" style="margin:0">km</span></div>` : ''}
+      <div class="bar"><i class="${fits ? '' : 'over'}" style="width:${Math.min(100, Math.round(reach / (p.range_km || 1) * 100))}%"></i></div>
+      <div class="meta num">${usage ? Math.round(usage) + ' kWh/100 km' : ''}${climb.applies ? ' +' + Math.round(climb.eMaxKwh) + ' climb' : ''} · reserve ${resv} %${S.availOverride != null ? ' · <b>override</b>' : ''}</div></div>`;
+  }
   const cName = c => c.name.replace(/\s*\d+(\.\d+)?\s*(k|M)W$/, '');
 
   function acHtml(list) { return list.map(a => `<button data-id="${esc(a.ident)}"><span class="id">${esc(a.ident)}</span><span class="nm">${esc(a.name)}<small>${esc(a.municipality || '')}</small></span><span class="ty">${esc((a.type || '').split('_')[0])}</span></button>`).join(''); }
@@ -20,16 +48,13 @@
   }
 
   function renderForm() {
-    const p = UI.plane(), ch = UI.charger(); const c = UI.chain(); const d = directKm(); const reach = usableKm(p); const fits = longestLeg() <= reach;
+    const p = UI.plane(), ch = UI.charger(); const c = UI.chain(); const d = directKm(); const reach = reachKm(p); const fits = longestLeg() <= reach;
     const stopsHtml = S.stops.map((s, i) => `<div class="fld wp" data-stop="${i}"><input placeholder="Add a charging stop…" value="${esc(s ? s.name : '')}" data-ac="stop${i}"><button class="x" data-act="rmStop" data-i="${i}" title="Remove stop"><svg class="ic"><use href="#i-x"/></svg></button><span class="icao">${esc(s ? s.ident : '')}</span><div class="ac" id="ac-stop${i}"></div></div>`).join('');
     const chList = S.allChargers ? UI.CHARGERS.slice().sort((a, b) => b.power_kw - a.power_kw) : [ch, ...UI.CHARGERS.filter(x => x.id !== ch.id).sort((a, b) => Math.abs(a.power_kw - ch.power_kw) - Math.abs(b.power_kw - ch.power_kw)).slice(0, 2)].sort((a, b) => b.power_kw - a.power_kw);
     const pickHtml = S.picking ? `<div class="pick">${UI.PLANES.map(x => `<button data-act="plane" data-id="${x.id}" class="${x.id === S.planeId ? 'on' : ''}"><img src="/pics/${esc(x.image || '')}" onerror="this.onerror=null;this.src='/pics/plane_svgs/${esc(x.svg || 'beta.svg')}'" alt=""><span><span class="n">${esc(x.name)}</span><br><span class="m">${esc(x.oem || '')} · ${x.seats} seats · ${x.battery_kwh ? x.battery_kwh + ' kWh' : 'no battery'} · ${esc(x.status || '')}</span></span><span class="r num">${x.range_km} km<small>${esc(x.regime || '')}${x.max_charge_kw ? ' · ' + x.max_charge_kw + ' kW max' : ''}</small></span></button>`).join('')}</div>` : '';
     $('#railBody').innerHTML = `
     <div class="ph"><h3>Create a route</h3><div class="tools"><span class="hint" style="margin:0">${esc(p.regime || '')}${p.range_incl_reserves ? ' · range incl. reserves' : ''}</span></div></div>
-    <div class="sec"><div class="lbl"><span class="cap">Aircraft</span><button class="lnk" data-act="pick">${S.picking ? 'Close' : 'Change'}</button></div>${pickHtml}
-      <div class="row" style="${S.picking ? 'margin-top:10px' : ''}"><img class="thumb" src="/pics/${esc(p.image || '')}" onerror="this.onerror=null;this.src='/pics/plane_svgs/${esc(p.svg || 'beta.svg')}'" alt=""><div><div class="name">${esc(p.name)}</div><div class="meta">${esc(p.oem || '')} · ${p.seats} seats · ${p.battery_kwh} kWh · ${p.range_km} km · ${esc(p.regime || '')}</div></div></div>
-      <div class="bar"><i class="${fits ? '' : 'over'}" style="width:${Math.min(100, Math.round(reach / p.range_km * 100))}%"></i></div>
-      <div class="meta num">Usable reach ${fmt.dist(reach)} of ${fmt.dist(p.range_km)} · ${p.speed_kmh} km/h</div></div>
+    ${aircraftHtml(p, reach, fits, pickHtml)}
     <div class="sec"><div class="lbl"><span class="cap">Route</span><button class="lnk" data-act="addStop">+ Add stop</button></div>
       <div class="fld"><input placeholder="Departure airport" value="${esc(S.origin ? S.origin.name : '')}" data-ac="origin"><span class="icao">${esc(S.origin ? S.origin.ident : '')}</span><div class="ac" id="ac-origin"></div></div>
       ${stopsHtml}
@@ -141,14 +166,21 @@
       case 'add': addToNetwork(); break;
       case 'share': if (window.CNSShare && CNSShare.copyLink) CNSShare.copyLink(); else UI.toast('Share link — phase 2'); break;
       case 'pick': S.picking = !S.picking; UI.render(); break;
-      case 'plane': { S.planeId = t.dataset.id; S.picking = false; const dc = UI.plane().default_charger_id; if (dc && UI.CHARGERS.find(c => c.id === dc)) S.chargerId = dc; onFormChange(false); break; }
+      case 'plane': selectPlane(t.dataset.id); break;
+      case 'acFilters': S.acFilterOpen = !S.acFilterOpen; UI.render(); break;
+      case 'acFilter': { const F = S.acFilters; F[t.dataset.dim] = F[t.dataset.dim] === t.dataset.val ? null : t.dataset.val; const AC = UI.aircraft; const vis = AC.visible(F); const g = AC.groupOf(S.planeId);
+        if (vis.length && (!g || !vis.some(x => x.key === g.key))) selectPlane(AC.pick(vis[0], prefsOf(UI.plane())).id); else UI.render(); break; }
+      case 'acPrev': case 'acNext': { const AC = UI.aircraft; const vis = AC.visible(S.acFilters); if (!vis.length) break; const g = AC.groupOf(S.planeId); let i = vis.findIndex(x => g && x.key === g.key); i = (i + (t.dataset.act === 'acNext' ? 1 : -1) + vis.length) % vis.length; selectPlane(AC.pick(vis[i], prefsOf(UI.plane())).id); break; }
+      case 'acRegime': case 'acLabel': case 'acMode': { const AC = UI.aircraft; const g = AC.groupOf(S.planeId); if (!g) break; const want = prefsOf(UI.plane()); want[{ acRegime: 'regime', acLabel: 'label', acMode: 'propulsion' }[t.dataset.act]] = t.dataset.v; const e = AC.pick(g, want); if (e.id !== S.planeId) selectPlane(e.id); break; }
+      case 'acEdit': S.availOverride = S.availOverride != null ? null : Math.round(reachKm(UI.plane())); onFormChange(false); break;
       case 'charger': S.chargerId = t.dataset.id; onFormChange(false); break;
       case 'allChargers': S.allChargers = !S.allChargers; UI.render(); break;
       case 'addStop': S.stops.push(null); UI.render(); setTimeout(() => { const i = $$('[data-ac^=stop]').pop(); i && i.focus(); }, 0); break;
       case 'rmStop': S.stops.splice(+t.dataset.i, 1); onFormChange(true); break;
     }
   });
-  document.addEventListener('change', e => { const t = e.target; if (t.dataset.act === 'freq') { S.freq = Math.max(1, Math.min(2000, +t.value || 1)); if (S.result) UI.render(); } });
+  document.addEventListener('change', e => { const t = e.target; if (t.dataset.act === 'freq') { S.freq = Math.max(1, Math.min(2000, +t.value || 1)); if (S.result) UI.render(); } if (t.dataset.act === 'acOverride') { S.availOverride = Math.max(1, +t.value || 1); onFormChange(false); } });
+  document.addEventListener('mousedown', e => { if (S.acFilterOpen && !e.target.closest('.ac-pop,[data-act=acFilters]')) { S.acFilterOpen = false; UI.render(); } });
   document.addEventListener('input', e => { if (e.target.dataset.act === 'freq') S.freq = Math.max(1, Math.min(2000, +e.target.value || 1)); });
 
   UI.plan = { render, simulate, resimulate, addToNetwork, derive, legsForMap, onFormChange, resetForm };

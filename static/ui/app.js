@@ -11,7 +11,8 @@ window.CNSUI = (function () {
     result: null, profile: null, busy: false, err: '',
     filter: '', lanes: 'airports', showDep: false,
     base: 'light', showSmall: false, showAssets: true, showNet: true,
-    allChargers: false, picking: false, open: { route: true, charging: false, calc: false }, openAp: {}
+    allChargers: false, picking: false, open: { route: true, charging: false, calc: false }, openAp: {},
+    acFilters: { type: null, propulsion: null, status: null }, acFilterOpen: false, availOverride: null
   };
   let AIRPORTS = [], AP_BY_ID = {}, ASSETS = {};
 
@@ -49,6 +50,25 @@ window.CNSUI = (function () {
   };
   function folderChanged() { if (window.CNSState && CNSState.notify) CNSState.notify(CNSState.KEYS.folder); if (window.CNSScheduler && CNSScheduler.runGlobal) CNSScheduler.runGlobal(); }
   function toast(t) { if (!hasDoc) return; const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), 2200); }
+
+  // ---- aircraft catalog model: airframe groups (profile rows), filters, knobs ----
+  // Mirrors the classic picker (index.html AIRCRAFT_GROUPS): rows sharing aircraft_id are one
+  // airframe; each row is a profile (label × regime × propulsion). Filters narrow airframes.
+  const aircraft = (() => {
+    const DIMS = ['type', 'propulsion', 'status'];
+    const norm = v => String(v == null ? '' : v).trim();
+    const groups = () => { const order = [], by = {}; PLANES.forEach(p => { const k = p.aircraft_id || p.id; if (!by[k]) { by[k] = []; order.push(k); } by[k].push(p); }); return order.map(k => ({ key: k, entries: by[k] })); };
+    const values = (g, dim) => { const out = []; g.entries.forEach(p => { const v = norm(p[dim]); if (v && !out.includes(v)) out.push(v); }); return out; };
+    const matches = (g, f) => DIMS.every(d => !(f && f[d]) || values(g, d).includes(f[d]));
+    const dims = () => DIMS.map(d => { const vals = []; groups().forEach(g => values(g, d).forEach(v => { if (!vals.includes(v)) vals.push(v); })); return { key: d, values: vals }; }).filter(d => d.values.length >= 2);
+    const visible = f => groups().filter(g => matches(g, f || {}));
+    const groupOf = id => groups().find(g => g.entries.some(p => p.id === id)) || null;
+    const pick = (g, want) => {   // best profile row for the wanted {label, regime, propulsion}; relaxes in that order
+      want = want || {}; const L = p => norm(p.profile_label), R = p => norm(p.regime), M = p => norm(p.propulsion);
+      const tries = [e => L(e) === want.label && R(e) === want.regime && M(e) === want.propulsion, e => L(e) === want.label && R(e) === want.regime, e => R(e) === want.regime && M(e) === want.propulsion, e => L(e) === want.label, e => R(e) === want.regime, e => M(e) === want.propulsion];
+      for (const t of tries) { const e = g.entries.find(t); if (e) return e; } return g.entries[0]; };
+    return { DIMS, groups, values, dims, visible, groupOf, pick, matches };
+  })();
 
   // ---- airport search (client-side over /api/airports) ---------------------
   const RANK = { large_airport: 0, medium_airport: 1, small_airport: 2 };
@@ -114,10 +134,11 @@ window.CNSUI = (function () {
     if (h === 'multi') { S.dest = AP_BY_ID['EDDM'] || S.dest; S.stops = [AP_BY_ID['EDDF']].filter(Boolean); await CNSUI.plan.simulate(); }
     if (h === 'result') await CNSUI.plan.simulate();
     if (h === 'network') setMode('network');
+    if (h === 'filters') { S.acFilterOpen = true; render(); }
     document.addEventListener('click', e => { const b = e.target.closest('#modeSeg button'); if (b) setMode(b.dataset.mode); });
   }
 
   return { S, PLANES, CHARGERS, SEED, D, airports: () => AIRPORTS, byId: () => AP_BY_ID, assets: () => ASSETS,
-           $, $$, esc, fmt, perDay, planeShort, shortName, plane, charger, ll, chain, toast, search,
+           $, $$, esc, fmt, perDay, planeShort, shortName, plane, charger, ll, chain, toast, search, aircraft,
            render, setMode, boot, rebuildIndexes, folderChanged, _setAirports, _applyDefaults };
 })();

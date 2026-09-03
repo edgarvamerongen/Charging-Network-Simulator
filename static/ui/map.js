@@ -33,8 +33,9 @@
   function drawAssets() {
     assetLayer.clearLayers(); if (!S.showAssets) return;
     Object.values(UI.assets()).forEach(x => { const a = UI.byId()[x.icao]; if (!a) return;
-      const m = L.marker(UI.ll(a), { pane: 'pins', icon: L.divIcon({ className: '', html: '<div class="asset"></div>', iconSize: [10, 10], iconAnchor: [5, 5] }) });
-      m.bindPopup(`<div class="pp"><div class="t"><span>${UI.esc(x.name)}</span><span class="ic2">${UI.esc(x.icao)}</span></div><div class="m">${UI.esc(x.network || 'NRG2FLY')} charging</div>
+      const construction = x.status === 'construction';
+      const m = L.marker(UI.ll(a), { pane: 'pins', icon: L.divIcon({ className: '', html: `<div class="nrg-pin${construction ? ' construction' : ''}"><div class="head"><img src="/pics/logos/NRG2fly_icon_circle_inv.png" alt=""></div><div class="tail"></div></div>`, iconSize: [0, 0], iconAnchor: [0, 0] }) });
+      m.bindPopup(`<div class="pp"><div class="t"><span>${UI.esc(x.name)}</span><span class="ic2">${UI.esc(x.icao)}</span></div><div class="m">${UI.esc(x.network || 'NRG2FLY')} charging${construction ? ' · under construction' : ''} · ${(x.plugs || []).length} plug${(x.plugs || []).length === 1 ? '' : 's'}</div>
         <div class="plugs">${(x.plugs || []).map(p => `<div><span>${UI.esc(p.label)} · ${UI.esc(p.connector)}</span><b class="num">${p.power_kw} kW</b></div>`).join('')}</div></div>`);
       assetLayer.addLayer(m); });
   }

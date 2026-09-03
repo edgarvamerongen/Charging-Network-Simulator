@@ -326,3 +326,32 @@ body.net .drawer{left:calc(520px + 24px)}
 /* v2 preview tag in the topbar */
 .v2tag{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:var(--r);padding:1px 6px;margin-left:8px;text-decoration:none}
 .v2tag:hover{background:var(--accent);color:#fff}
+
+/* ---- aircraft section · option 3 "Instrument" (static/proto/aircraft-options.html) ---- */
+.acsec .ac-tools{display:flex;gap:8px;align-items:center;position:relative}
+.fbtn{height:22px;padding:0 8px;border:1px solid var(--line-2);border-radius:var(--r);font-size:11px;font-weight:500;display:inline-flex;align-items:center;gap:6px;background:var(--surface);color:var(--ink);white-space:nowrap}
+.fbtn .ch{color:var(--muted);font-size:9px}.fbtn:hover{border-color:var(--ink)}
+.ac-pop{position:absolute;right:0;top:26px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:8px;width:236px;z-index:30;text-align:left}
+.ac-pop .k{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:4px 0}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip.dis{color:var(--faint);border-style:dashed}
+.ac-stage{position:relative;height:140px;margin:0 calc(-1 * var(--pad));background:#dfe0e8 center/cover no-repeat}
+.ac-arrow{position:absolute;top:50%;transform:translateY(-50%);width:26px;height:26px;background:rgba(255,255,255,.92);border:1px solid var(--line-2);border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;color:var(--ink)}
+.ac-arrow.l{left:8px}.ac-arrow.r{right:8px}.ac-arrow:hover{border-color:var(--ink)}.ac-arrow:disabled{opacity:.4}
+.ac-band{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);padding:6px var(--pad);margin:0 calc(-1 * var(--pad));border-bottom:1px solid var(--line)}
+.ac-band .seg,.acsec .chips .seg{height:22px}.ac-band .seg button,.acsec .chips .seg button{padding:0 8px;font-size:11px}
+.acsec .seg button:disabled{color:var(--faint);background:var(--surface)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#9aa1b5;vertical-align:-.5px;margin-right:5px}
+.dot.s-certified{background:#2f9e6e}.dot.s-prototype-flying{background:#5aa9e6}.dot.s-in-development{background:#c98a4b}.dot.s-under-construction{background:#ff9d4d}.dot.s-concept{background:#b7bdd1}
+.ac-grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:var(--r);margin-top:8px}
+.ac-grid>div{padding:7px 9px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.ac-grid>div:nth-child(3n){border-right:0}.ac-grid>div:nth-child(n+4){border-bottom:0}
+.ac-grid .k{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.ac-grid .v{font-size:13px;font-weight:600;margin-top:2px}.ac-grid .v small{font-size:10px;color:var(--muted);font-weight:500;margin-left:2px}
+/* ---- NRG2FLY charger pins: the classic teardrop, kept flat ---- */
+.nrg-pin{position:absolute;transform:translate(-50%,-100%) translateY(-5px);display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 1px 2px rgba(50,50,110,.35))}
+.nrg-pin .head{width:26px;height:26px;border-radius:50%;overflow:hidden;background:#fff;border:2px solid #fff;display:flex;align-items:center;justify-content:center}
+.nrg-pin .head img{width:116%;height:116%;flex:none;object-fit:cover}
+.nrg-pin .tail{width:0;height:0;margin-top:-1px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #fff}
+.nrg-pin.construction .head{opacity:.55}
