@@ -135,6 +135,7 @@ window.CNSUI = (function () {
     render(); CNSUI.map.drawRoute(true); CNSUI.map.drawNet(); CNSUI.map.drawAlternates();
     if (window.CNSUnits && CNSUnits.onChange) CNSUnits.onChange(() => { render(); CNSUI.map.drawRoute(false); });
     if (window.CNSSettings && CNSSettings.subscribe) CNSSettings.subscribe(() => { if (CNSUI.planner) CNSUI.planner.replan(); if (S.result) CNSUI.plan.resimulate(); render(); CNSUI.map.drawRoute(false); if (CNSUI.network) CNSUI.network.recomputeAllDebounced(); });
+    if (CNSUI.tour) CNSUI.tour.maybeWelcome(); if (CNSUI.settings) CNSUI.settings.badge();
     if (D.shareState) { try { await CNSUI.share.applyState(D.shareState); } catch (e) { console.warn('[v2] share restore failed', e); toast('This share link could not be opened'); } }
     // deep links kept from the prototype: #result #multi #network (+ :ICAO isolation later)
     const [h, focusAp, view] = location.hash.replace('#', '').split(':');
@@ -147,6 +148,9 @@ window.CNSUI = (function () {
     if (focusAp && AP_BY_ID[focusAp]) { S.filter = focusAp; S.openAp[focusAp] = true; setMode('network'); }
     if (view === 'fleet') { S.lanes = 'fleet'; $('#drawer').classList.add('open'); CNSUI.timeline.render(); }
     if (h === 'filters') { S.acFilterOpen = true; render(); }
+    if (h === 'settings') CNSUI.settings.open();
+    if (h === 'welcome') CNSUI.tour.welcome();
+    if (h === 'tour') setTimeout(() => CNSUI.tour.start(), 600);
     document.addEventListener('click', e => { const b = e.target.closest('#modeSeg button'); if (b) setMode(b.dataset.mode); });
   }
 

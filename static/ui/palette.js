@@ -7,9 +7,9 @@
   document.addEventListener('DOMContentLoaded', loadOpts);
   // ---- topbar ----------------------------------------------------------------
   document.addEventListener('click', e => {
-    const dd = { mapBtn: 'mapDd', expBtn: 'expDd', setBtn: 'setDd' }; const tb = e.target.closest('#mapBtn,#expBtn,#setBtn');
+    const dd = { mapBtn: 'mapDd', expBtn: 'expDd' }; const tb = e.target.closest('#mapBtn,#expBtn');
     $$('.dd').forEach(x => { if (!(tb && x.id === dd[tb.id]) && !x.contains(e.target)) x.classList.remove('open'); });
-    if (tb) { const box = $('#' + dd[tb.id]); box.classList.toggle('open'); if (tb.id === 'setBtn' && window.CNSSettings) $('#setSummary').textContent = (CNSSettings.activeFlags ? CNSSettings.activeFlags() : []).join(' · ') || 'defaults'; return; }
+    if (tb) { $('#' + dd[tb.id]).classList.toggle('open'); return; }
     const b = e.target.closest('#mapDd [data-base]'); if (b) { UI.map.setBase(b.dataset.base); $$('#mapDd [data-base]').forEach(x => x.classList.toggle('on', x === b)); saveOpts(); return; }
     const u = e.target.closest('#unitSeg button'); if (u) { if (window.CNSUnits) CNSUnits.set(u.dataset.u === 'nm' ? 'nautical' : 'metric'); $$('#unitSeg button').forEach(x => x.classList.toggle('on', x === u)); return; }
     const x = e.target.closest('#expDd [data-exp]'); if (x) { $$('.dd').forEach(d => d.classList.remove('open')); runExport(x.dataset.exp, x); return; }
@@ -26,7 +26,7 @@
     if (kind === 'xlsx' && window.CNSSpreadsheet) return CNSSpreadsheet.export(btn);
     if (kind === 'share') return UI.share.copyRouteLink();
     if (kind === 'build') return UI.share.copyBuildLink();
-    if (kind === 'pdf') return UI.toast('PDF report needs the airport picker — phase 4. Use the classic version for now.');
+    if (kind === 'pdf') return UI.report.pick();
   }
   // sync the topbar controls to persisted state
   function syncControls() { $$('#mapDd [data-base]').forEach(x => x.classList.toggle('on', x.dataset.base === S.base)); $$('.airport-filter').forEach(c => c.checked = S.allowedTypes.includes(c.value)); $('#nrgChargerToggle').checked = S.showAssets; $('#fSavedRoutes').checked = S.showNet; $('#fAlternates').checked = S.showAlternates; $('#flightLabelToggle').checked = S.showLabels;
@@ -47,7 +47,8 @@
       if (ai > 0) return;
       add('Airports', `Set <b>${esc(a.ident)}</b> as departure`, () => { S.origin = a; UI.setMode('plan'); UI.plan.onFormChange(true); }, 'D');
       add('Airports', `Set <b>${esc(a.ident)}</b> as destination`, () => { S.dest = a; UI.setMode('plan'); UI.plan.onFormChange(true); }, 'A');
-      add('Airports', `Add <b>${esc(a.ident)}</b> as a stop`, () => { S.stops.push(a); UI.setMode('plan'); UI.plan.onFormChange(true); }, 'S'); });
+      add('Airports', `Add <b>${esc(a.ident)}</b> as a stop`, () => { S.stops.push(a); UI.setMode('plan'); UI.plan.onFormChange(true); }, 'S');
+      if (window.CNSDemand && CNSDemand.computeAirports()[a.ident]) add('Airports', `Isolate <b>${esc(a.ident)}</b> in the network`, () => { UI.setMode('network'); S.filter = a.ident; S.openAp[a.ident] = true; UI.render(); UI.map.drawNet(); UI.map.fitNet(); $('#drawer').classList.add('open'); }, 'I'); });
     const hit = s => !ql || s.toLowerCase().includes(ql);
     UI.PLANES.filter(p => ql && hit(p.name)).slice(0, 3).forEach(p => add('Aircraft', `Aircraft: ${esc(p.name)}`, () => { S.planeId = p.id; const dc = p.default_charger_id; if (dc && UI.CHARGERS.find(c => c.id === dc)) S.chargerId = dc; UI.setMode('plan'); UI.plan.onFormChange(false); }, '', `${p.range_km} km · ${p.battery_kwh || 0} kWh`));
     UI.CHARGERS.filter(c => ql && hit(c.name)).slice(0, 3).forEach(c => add('Chargers', `Charger: ${esc(c.name)}`, () => { S.chargerId = c.id; UI.setMode('plan'); UI.plan.onFormChange(false); }));
@@ -59,6 +60,10 @@
       ['Units: kilometres', () => $('#unitSeg [data-u=km]').click()], ['Units: nautical miles', () => $('#unitSeg [data-u=nm]').click()],
       ['Export demand workbook (XLSX)', () => runExport('xlsx', $('#expBtn')), '⇧X'], ['Share this route', () => runExport('share'), '⇧L'], ['Share the network build', () => runExport('build')],
       ['Reset the route form', () => { UI.setMode('plan'); UI.plan.resetForm(); }],
+      ['Model settings', () => UI.settings.open()], ['Take the tour', () => UI.tour.start()], ['Export advisory report (PDF)', () => UI.report.pick(), '⇧P'],
+      ['Load scenario: Hub base', () => UI.network.loadScenario('hub')], ['Load scenario: Regional network', () => UI.network.loadScenario('regional')], ['Load scenario: Training school', () => UI.network.loadScenario('training')],
+      S.filter ? ['Show all airports', () => { S.filter = ''; UI.render(); UI.map.drawNet(); UI.map.fitNet(); }] : null,
+      [S.lanes === 'fleet' ? 'Timeline: airport lanes' : 'Timeline: fleet lanes', () => { S.lanes = S.lanes === 'fleet' ? 'airports' : 'fleet'; $('#drawer').classList.add('open'); UI.timeline.render(); }],
       ['Open the classic version', () => { location.href = '/?desktop=1'; }],
     ].filter(Boolean).filter(([l]) => hit(l));
     A.slice(0, ql ? 8 : 10).forEach(([l, run, k]) => add('Actions', esc(l), run, k || ''));

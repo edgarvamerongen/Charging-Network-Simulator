@@ -37,11 +37,12 @@
         aps.forEach(a => { const rl = SC().rotationsAt(a.ident); if (!rl.length) return;
           const ap = loadProfile(g.lanes, a.ident);
           rows += `<div class="grow grp"><div class="lab"><button data-act="focus" data-ap="${a.ident}" title="Isolate ${a.ident}">${a.ident}</button><small>${esc(UI.shortName(a.name))} · peak ${UI.fmt.kw(ap.peak)}</small></div><div class="track">${bare}</div></div>`; lanes++;
-          rl.forEach(L => { const t = L.trip; const blocks = L.rotations.map((rot, k) => rot.phases.map((ph, pi) => { const st = rot.takeoff + ph.start;
-              if (ph.kind === 'wait') { anyWait = true; return blk('wait', st, ph.dur, '', ph.label); }
-              if (ph.kind === 'waitElsewhere') return blk('wait away', st, ph.dur, '', ph.label);
-              if (ph.kind === 'fly') return S.showDep ? blk('fly', st, ph.dur, (ph.label || '').replace(/^Fly (to|back to) /, '→ '), `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}`, pi === 0 ? `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}"` : '') : '';
-              return blk(ph.atX ? 'chg' : 'chg away', st, ph.dur, ph.atX ? (ph.power ? ph.power + ' kW' : '') : '', `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`); }).join('')).join('');
+          rl.forEach(L => { const t = L.trip; const blocks = L.rotations.map((rot, k) => { let handled = false; const handle = () => { if (handled) return ''; handled = true; return `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}"`; };
+            return rot.phases.map(ph => { const st = rot.takeoff + ph.start;
+              if (ph.kind === 'wait') { anyWait = true; return blk('wait', st, ph.dur, '', ph.label, handle()); }
+              if (ph.kind === 'waitElsewhere') return blk('wait away', st, ph.dur, '', ph.label, handle());
+              if (ph.kind === 'fly') return S.showDep ? blk('fly', st, ph.dur, (ph.label || '').replace(/^Fly (to|back to) /, '→ '), `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}`, handle()) : '';
+              return blk(ph.atX ? 'chg' : 'chg away', st, ph.dur, ph.atX ? (ph.power ? ph.power + ' kW' : '') : '', `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`, handle()); }).join(''); }).join('');
             rows += `<div class="grow sub"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; }); });
         $('#drawerSub').textContent = foc ? `${(R.find(a => a.ident === foc) || {}).fleet?.length || 0} chargers · peak ${UI.fmt.kw(prof.peak)}` : `${R.length} airports · ${flights % 1 ? flights.toFixed(1) : flights} flights / day · peak load ${UI.fmt.kw(prof.peak)}`;
       }

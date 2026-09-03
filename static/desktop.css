@@ -248,7 +248,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .drawer .dh svg{color:var(--muted);transition:transform .2s var(--ease)}
 .drawer.open .dh svg{transform:rotate(180deg)}
 .gantt{padding:10px 14px;overflow:auto;height:224px}
-.grow{display:grid;grid-template-columns:160px 1fr;gap:10px;align-items:center;height:28px;border-bottom:1px solid var(--line)}
+.grow{display:grid;grid-template-columns:200px 1fr;gap:10px;align-items:center;height:28px;border-bottom:1px solid var(--line)}
 .grow.axis{height:22px;border-bottom:1px solid var(--line-2);color:var(--muted);font-size:10px}
 .grow .lab{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .grow .lab small{color:var(--muted);font-weight:400;margin-left:6px;font-size:11px}
@@ -415,3 +415,19 @@ body.net .drawer{left:calc(520px + 24px)}
 .grow.grp .lab{font-weight:600}
 .glegend i.a{background:rgba(216,76,38,.28)}
 .blk[data-drag]{cursor:grab}.blk[data-drag]:active{cursor:grabbing}
+
+/* ---- model settings dialog ---- */
+.ms .msr{padding:10px 0;border-bottom:1px solid var(--line)}.ms .msr:last-of-type{border-bottom:0}
+.ms .msr.off .name{color:var(--muted)}
+.ms .msl{display:grid;grid-template-columns:90px 1fr 110px;gap:10px;align-items:center;margin-top:8px}
+.ms .msl input[type=range]{accent-color:var(--ink);width:100%}.ms .msl b{font-weight:600;font-size:12px;text-align:right}
+.badge{position:absolute;right:-2px;top:-2px;min-width:14px;height:14px;padding:0 3px;border-radius:var(--r);background:var(--ink);color:#fff;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;line-height:1}
+.rp{cursor:pointer}.rp input{accent-color:var(--ink)}
+/* ---- tour (Driver.js) in the Instrument language ---- */
+.driver-popover.cns-tour{border-radius:var(--r);font-family:Inter,system-ui,sans-serif;color:var(--ink);box-shadow:0 16px 48px rgba(50,50,110,.22);border:1px solid var(--line);padding:14px 16px;max-width:340px}
+.driver-popover.cns-tour .driver-popover-title{font-size:14px;font-weight:600;color:var(--ink)}
+.driver-popover.cns-tour .driver-popover-description{font-size:12.5px;color:#4a4d6a;line-height:1.5}
+.driver-popover.cns-tour .driver-popover-progress-text{font-size:11px;color:var(--muted)}
+.driver-popover.cns-tour button{border-radius:var(--r);border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font-family:inherit;font-size:12px;font-weight:600;text-shadow:none;padding:5px 10px}
+.driver-popover.cns-tour .driver-popover-next-btn{background:var(--accent);border-color:var(--accent);color:#fff}
+.driver-popover.cns-tour .driver-popover-close-btn{border:0;background:transparent;color:var(--muted)}

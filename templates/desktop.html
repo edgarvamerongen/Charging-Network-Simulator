@@ -12,6 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
     <link rel="stylesheet" href="/static/desktop.css?v={{ asset_version }}">
 </head>
 <body>
@@ -52,8 +53,8 @@
   <div class="units"><span>Units</span><div class="seg" id="unitSeg"><button data-u="km" class="on">km</button><button data-u="nm">NM</button></div></div>
   <div style="position:relative"><button class="tb" id="expBtn"><svg class="ic"><use href="#i-dl"/></svg>Export</button>
     <div class="dd" id="expDd"><button data-exp="pdf">Advisory report (PDF)</button><button data-exp="xlsx">Demand workbook (XLSX)</button><button data-exp="share">Share this route</button><button data-exp="build">Share the network build</button><a href="/static/NRG2fly_onepager.pdf" target="_blank" rel="noopener" style="display:flex;align-items:center;height:30px;padding:0 8px;font-size:12.5px;text-decoration:none;color:var(--ink)">One-pager</a></div></div>
-  <div style="position:relative"><button class="tb icon" id="setBtn" title="Model settings"><svg class="ic"><use href="#i-gear"/></svg></button>
-    <div class="dd" id="setDd" style="min-width:240px"><div class="h">Model settings</div><div class="hint" style="padding:0 8px 6px" id="setSummary"></div><hr><div class="hint" style="padding:0 8px 6px">Editing lands in phase 4 — use the classic version to change settings; both shells read the same values.</div></div></div>
+  <button class="tb" id="tourBtn"><svg class="ic"><use href="#i-help"/></svg>Tour</button>
+  <button class="tb icon" id="setBtn" title="Model settings" style="position:relative"><svg class="ic"><use href="#i-gear"/></svg><span class="badge" id="setBadge" hidden></span></button>
 </header>
 
 <div id="map"></div>
@@ -108,6 +109,10 @@ window.CNS_DATA = {
 <script src="/static/ui/network.js?v={{ asset_version }}"></script>
 <script src="/static/ui/timeline.js?v={{ asset_version }}"></script>
 <script src="/static/ui/palette.js?v={{ asset_version }}"></script>
+<script src="/static/ui/settings.js?v={{ asset_version }}"></script>
+<script src="/static/ui/report.js?v={{ asset_version }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+<script src="/static/ui/tour.js?v={{ asset_version }}"></script>
 <script>CNSUI.boot();</script>
 </body>
 </html>
