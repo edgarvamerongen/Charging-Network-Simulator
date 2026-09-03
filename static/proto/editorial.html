@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CNS — Editorial prototype</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/pics/logos/fav.ico">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ======================================================================
+   Design C · Editorial — token layer
+   ====================================================================== */
+:root{
+  --canvas:#eeebe4; --surface:#fbf9f5; --raised:#fffdf9;
+  --line:#e1dcd1; --line-2:#cfc8b9;
+  --ink:#32326E; --muted:#7a7d93; --faint:#b0b0c0;
+  --accent:#d84c26; --on-accent:#fff;
+  --danger:#b3261e; --success:#1f7a55;
+  --r:4px;
+  --fs-cap:11px; --fs:13.5px; --fs-lg:15px; --fs-num:28px;
+  --pad:16px; --field-h:36px;
+  --topbar-h:48px; --rail-w:320px;
+  --shadow:0 4px 18px rgba(60,50,30,.10), 0 1px 3px rgba(60,50,30,.06);
+  --ease:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{font:var(--fs)/1.4 Inter,system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--canvas);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum","cv11";overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+a{color:inherit}
+.num{font-variant-numeric:tabular-nums}
+svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.cap{font-size:var(--fs-cap);font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.lnk{font-size:11.5px;font-weight:500;color:var(--ink);text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--line-2)}
+.lnk:hover{text-decoration-color:var(--ink)}
+.hint{font-size:11px;color:var(--muted);margin-top:6px}
+.err{font-size:11.5px;color:var(--danger);margin-top:8px}
+
+/* ---------- map ---------- */
+#map{position:absolute;inset:var(--topbar-h) 0 0 0;background:#e9eaef;z-index:0}
+.leaflet-container{font:inherit}
+.leaflet-control-attribution{font-size:10px;color:var(--muted);background:rgba(255,255,255,.8)}
+.leaflet-control-attribution a{color:var(--muted)}
+.leaflet-popup-content-wrapper{border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--line);padding:0;color:var(--ink)}
+.leaflet-popup-content{margin:0;font-size:12.5px;line-height:1.4;min-width:220px}
+.leaflet-popup-tip{box-shadow:none;border:1px solid var(--line);border-top:0;border-left:0}
+.leaflet-popup-close-button{display:none}
+.pp{padding:10px 12px}
+.pp .t{font-weight:600;font-size:13px;display:flex;justify-content:space-between;gap:8px}
+.pp .t .ic2{color:var(--muted);font-weight:500;font-size:11px;letter-spacing:.04em}
+.pp .m{font-size:11px;color:var(--muted);margin-top:2px}
+.pp .plugs{margin-top:8px;border-top:1px solid var(--line);padding-top:8px;font-size:11.5px}
+.pp .plugs div{display:flex;justify-content:space-between;padding:2px 0}
+.pp .acts{display:flex;gap:6px;margin-top:10px}
+.pp .acts button{flex:1;height:28px;border:1px solid var(--line-2);border-radius:var(--r);font-size:11.5px;font-weight:500;background:var(--surface)}
+.pp .acts button:hover{border-color:var(--ink)}
+.leglbl{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:3px 7px;font-size:11px;font-weight:500;color:var(--ink);white-space:nowrap;box-shadow:var(--shadow);transform:translate(-50%,-50%);display:inline-block}
+.asset{width:10px;height:10px;background:var(--ink);border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(50,50,110,.35)}
+.ep{width:11px;height:11px;border-radius:50%;background:var(--ink);border:2px solid #fff;box-shadow:0 0 0 1px rgba(50,50,110,.35)}
+.ep.stop{background:#fff;border-color:var(--ink)}
+
+/* ---------- topbar ---------- */
+.topbar{position:absolute;top:0;left:0;right:0;height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 12px;z-index:20}
+.topbar .brand{display:flex;align-items:center;gap:10px;margin-right:6px}
+.topbar .brand img{height:22px;display:block}
+.topbar .brand .t{font-size:12.5px;font-weight:500;color:var(--muted);white-space:nowrap}
+.topbar .sp{flex:1}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;height:28px}
+.seg button{padding:0 12px;font-size:12px;font-weight:500;border-right:1px solid var(--line-2);display:flex;align-items:center;gap:6px}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--ink);color:#fff}
+.seg.sm{height:var(--field-h)}
+.seg.sm button{flex:1;justify-content:center;padding:0 4px;font-size:11.5px;white-space:nowrap}
+.tb{height:28px;padding:0 9px;border-radius:var(--r);font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px;color:var(--ink);border:1px solid transparent}
+.tb:hover{background:var(--canvas)}
+.tb.icon{width:28px;padding:0;justify-content:center;color:var(--muted)}
+.tb.icon:hover{color:var(--ink)}
+.search{position:relative}
+.search input{height:28px;width:220px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 8px 0 28px;font-size:12px;background:var(--surface);outline:none}
+.search input:focus{border-color:var(--ink)}
+.search svg{position:absolute;left:8px;top:7px;color:var(--muted)}
+.units{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}
+.units .seg{height:24px}.units .seg button{padding:0 8px;font-size:11px}
+
+/* ---------- dropdowns / popovers ---------- */
+.dd{position:absolute;top:calc(100% + 6px);right:0;background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);min-width:200px;padding:6px;z-index:40;display:none}
+.dd.open{display:block}
+.dd .h{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:6px 8px 4px}
+.dd button,.dd label{display:flex;align-items:center;gap:8px;width:100%;height:30px;padding:0 8px;border-radius:var(--r);font-size:12.5px;text-align:left;cursor:pointer}
+.dd button:hover,.dd label:hover{background:var(--canvas)}
+.dd button.on::after{content:"";margin-left:auto;width:6px;height:6px;background:var(--ink)}
+.dd hr{border:0;border-top:1px solid var(--line);margin:6px 0}
+.dd input[type=checkbox]{accent-color:var(--ink)}
+.ac{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);z-index:50;display:none;max-height:260px;overflow:auto}
+.ac.open{display:block}
+.ac button{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:8px;width:100%;padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);font-size:12.5px}
+.ac button:last-child{border-bottom:0}
+.ac button:hover,.ac button.hl{background:var(--canvas)}
+.ac .id{font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--ink)}
+.ac .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ac .nm small{color:var(--muted);margin-left:6px;font-size:11px}
+.ac .ty{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+
+/* ---------- rail ---------- */
+.rail{position:absolute;top:calc(var(--topbar-h) + 12px);left:12px;width:var(--rail-w);max-height:calc(100vh - var(--topbar-h) - 24px - 36px);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);z-index:10;display:flex;flex-direction:column;overflow:hidden}
+.rail.wide{width:520px}
+.rail .body{overflow:auto;flex:1}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:12px var(--pad) 10px;border-bottom:1px solid var(--line);flex:none}
+.ph h3{font-size:var(--fs-lg);font-weight:600;letter-spacing:-.005em}
+.ph .sub{font-size:11px;color:var(--muted);margin-top:1px}
+.ph .tools{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:11.5px}
+.sw{width:26px;height:14px;border:1px solid var(--line-2);border-radius:var(--r);position:relative;background:var(--surface);cursor:pointer;flex:none}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:8px;height:8px;background:var(--line-2);transition:transform .15s var(--ease),background .15s}
+.sw.on{border-color:var(--ink)}
+.sw.on::after{transform:translateX(12px);background:var(--ink)}
+.sec{padding:10px var(--pad) 12px;border-bottom:1px solid var(--line)}
+.lbl{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.row{display:flex;align-items:center;gap:10px}
+.thumb{width:64px;height:42px;object-fit:cover;border-radius:2px;background:#dfe0e8;flex:none}
+.name{font-weight:600}
+.meta{font-size:11px;color:var(--muted);margin-top:2px}
+.bar{height:2px;background:var(--line);margin:8px 0 4px;position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink)}
+.bar i.over{background:var(--danger)}
+.fld{position:relative}
+.fld+.fld{margin-top:6px}
+.fld input{height:var(--field-h);width:100%;border:1px solid var(--line-2);border-radius:var(--r);padding:0 52px 0 10px;background:var(--surface);outline:none}
+.fld input:focus{border-color:var(--ink)}
+.fld input::placeholder{color:var(--faint)}
+.fld .icao{position:absolute;right:10px;top:0;height:var(--field-h);display:flex;align-items:center;font-size:11px;font-weight:500;letter-spacing:.04em;color:var(--muted)}
+.fld .x{position:absolute;right:38px;top:0;height:var(--field-h);width:22px;display:none;align-items:center;justify-content:center;color:var(--faint)}
+.fld.wp .x{display:flex}
+.fld .x:hover{color:var(--ink)}
+.route{margin-top:8px;border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+.route .rh{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px}
+.route .rh b{color:var(--ink);font-weight:600}
+.route .rh.bad b{color:var(--danger)}
+.stop{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:8px;font-size:12px;padding:3px 0;position:relative}
+.stop .n{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.04em}
+.stop .d{font-size:11px;color:var(--muted)}
+.stop+.stop::before{content:"";position:absolute;left:5px;top:-6px;height:8px;border-left:1px solid var(--line-2)}
+.freq{display:flex;align-items:center;gap:8px}
+.freq input{width:56px;height:var(--field-h);border:1px solid var(--line-2);border-radius:var(--r);text-align:center;outline:none;background:var(--surface)}
+.freq input:focus{border-color:var(--ink)}
+.freq .seg{width:110px}
+.freq .t{font-size:12px;color:var(--muted)}
+.chg{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);width:100%;text-align:left}
+.chg:last-child{border-bottom:0}
+.chg img{width:48px;height:32px;object-fit:cover;border-radius:2px;background:#dfe0e8;flex:none}
+.chg .n{font-weight:500;font-size:12.5px;flex:1}
+.chg .kw{font-weight:600;font-size:12.5px}
+.chg:hover .n{text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--line-2)}
+.chg.on{box-shadow:inset 2px 0 0 var(--ink);padding-left:8px}
+.btns{display:flex;gap:6px;padding:12px var(--pad) var(--pad);flex:none;border-top:1px solid var(--line);background:var(--surface)}
+.btn{height:36px;flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;border-radius:var(--r);border:1px solid var(--line-2);background:var(--surface);color:var(--ink);transition:background .12s,border-color .12s}
+.btn:hover{border-color:var(--ink)}
+.btn.p{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.p:hover{background:#c4421f;border-color:#c4421f}
+.btn.i{flex:0 0 36px;padding:0;color:var(--muted)}
+.btn.i:hover{color:var(--ink)}
+.btn.q{border-color:transparent;color:var(--muted);font-weight:500}
+.btn.q:hover{color:var(--danger);border-color:transparent}
+.btn.busy{opacity:.6;pointer-events:none}
+.btn.sm{height:30px;font-size:12px}
+/* picker (aircraft) */
+.pick{border-bottom:1px solid var(--line)}
+.pick button{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;width:100%;padding:8px var(--pad);text-align:left;border-bottom:1px solid var(--line)}
+.pick button:last-child{border-bottom:0}
+.pick button:hover{background:var(--canvas)}
+.pick button.on{box-shadow:inset 2px 0 0 var(--ink)}
+.pick img{width:56px;height:36px;object-fit:cover;border-radius:2px;background:#dfe0e8}
+.pick .n{font-weight:600;font-size:12.5px}
+.pick .m{font-size:11px;color:var(--muted)}
+.pick .r{font-size:12px;font-weight:600;text-align:right}
+.pick .r small{display:block;font-weight:400;color:var(--muted);font-size:10.5px}
+/* result */
+.rh2{display:flex;align-items:flex-start;justify-content:space-between;padding:12px var(--pad) 10px;border-bottom:1px solid var(--line)}
+.rh2 .ttl{font-size:var(--fs-lg);font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rh2 .ttl .ar{color:var(--muted);font-weight:400}
+.rh2 .m{font-size:11px;color:var(--muted);margin-top:2px}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--line)}
+.stats>div{padding:10px var(--pad);border-right:1px solid var(--line)}
+.stats>div:last-child{border-right:0}
+.stats .v{font-size:var(--fs-num);font-weight:600;letter-spacing:-.02em;line-height:1.15;margin-top:4px}
+.stats .v small,.cost .v small{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:2px}
+.stats .s{font-size:11px;color:var(--muted);margin-top:2px}
+.cost{display:flex;align-items:baseline;justify-content:space-between;padding:10px var(--pad);border-bottom:1px solid var(--line)}
+.cost .v{font-size:var(--fs-num);font-weight:600;letter-spacing:-.02em}
+.cost .m{font-size:11px;color:var(--muted)}
+.split{padding:10px var(--pad);border-bottom:1px solid var(--line)}
+.split .b{height:4px;display:flex;gap:2px}
+.split .b i{display:block;height:100%}
+.split .b .f{background:var(--ink)}
+.split .b .c{background:var(--accent)}
+.split .lg{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:6px}
+.split .lg i{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:-1px;background:var(--ink)}
+.split .lg i.c{background:var(--accent)}
+.acc{border-bottom:1px solid var(--line)}
+.acc>button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px var(--pad);font-size:12.5px;font-weight:500;text-align:left}
+.acc>button .sub{font-size:11px;color:var(--muted);font-weight:400;margin-left:8px}
+.acc>button svg{transition:transform .15s var(--ease);color:var(--muted)}
+.acc.open>button svg{transform:rotate(90deg)}
+.acc .pane{display:none;padding:0 var(--pad) 12px}
+.acc.open .pane{display:block}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:left;padding:4px 0;border-bottom:1px solid var(--line)}
+.tbl td{padding:5px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .r,.tbl th.r{text-align:right;white-space:nowrap}
+.tbl .mu{color:var(--muted)}
+.calc{font-size:12px;line-height:1.7}
+.calc b{font-weight:600}
+.calc .mu{color:var(--muted)}
+/* network */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line)}
+.tiles>div{padding:10px 12px;border-right:1px solid var(--line)}
+.tiles>div:last-child{border-right:0}
+.tiles .v{font-size:18px;font-weight:600;letter-spacing:-.02em;margin-top:3px}
+.tiles .v small{font-size:11px;font-weight:500;color:var(--muted);margin-left:2px}
+.ntool{display:flex;align-items:center;gap:8px;padding:8px var(--pad);border-bottom:1px solid var(--line)}
+.ntool select{height:28px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 8px;background:var(--surface);font-size:12px;outline:none}
+.ntool .sp{flex:1}
+.ap{border-bottom:1px solid var(--line)}
+.ap>button{display:grid;grid-template-columns:52px 1fr auto auto auto 18px;gap:10px;align-items:center;width:100%;padding:9px var(--pad);text-align:left;font-size:12.5px}
+.ap>button:hover{background:var(--canvas)}
+.ap .id{font-weight:600;letter-spacing:.03em}
+.ap .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap .nm small{display:block;font-size:11px;color:var(--muted)}
+.ap .st{text-align:right;font-size:12px;font-weight:600;white-space:nowrap}
+.ap .st small{display:block;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ap svg{color:var(--muted);transition:transform .15s var(--ease)}
+.ap.open>button svg{transform:rotate(90deg)}
+.ap .pane{display:none;padding:0 var(--pad) 10px}
+.ap.open .pane{display:block}
+.fl{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:12px}
+.fl .t{font-weight:500}
+.fl .t small{color:var(--muted);font-weight:400;margin-left:6px;font-size:11px}
+.fl .mu{color:var(--muted);white-space:nowrap}
+.fl .rm{color:var(--faint);width:18px;height:18px;display:flex;align-items:center;justify-content:center}
+.fl .rm:hover{color:var(--danger)}
+.fleet{display:flex;gap:6px;flex-wrap:wrap;padding-top:8px}
+.fleet span{border:1px solid var(--line-2);border-radius:var(--r);padding:3px 8px;font-size:11px;font-weight:500}
+.empty{padding:28px var(--pad);text-align:center;color:var(--muted);font-size:12.5px;line-height:1.5}
+.empty b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
+
+/* ---------- drawer (demand timeline) ---------- */
+.drawer{position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:min(1100px,calc(100vw - 24px));background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0;box-shadow:var(--shadow);z-index:15;transition:height .22s var(--ease);height:36px;overflow:hidden}
+.drawer.open{height:260px}
+.drawer .dh{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;cursor:pointer;border-bottom:1px solid var(--line)}
+.drawer .dh .t{font-size:12.5px;font-weight:600;display:flex;gap:10px;align-items:center}
+.drawer .dh .t span{font-weight:400;color:var(--muted);font-size:11.5px}
+.drawer .dh .tools{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted)}
+.drawer .dh svg{color:var(--muted);transition:transform .2s var(--ease)}
+.drawer.open .dh svg{transform:rotate(180deg)}
+.gantt{padding:10px 14px;overflow:auto;height:224px}
+.grow{display:grid;grid-template-columns:160px 1fr;gap:10px;align-items:center;height:28px;border-bottom:1px solid var(--line)}
+.grow.axis{height:22px;border-bottom:1px solid var(--line-2);color:var(--muted);font-size:10px}
+.grow .lab{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grow .lab small{color:var(--muted);font-weight:400;margin-left:6px;font-size:11px}
+.track{position:relative;height:100%}
+.track .tick{position:absolute;top:0;bottom:0;border-left:1px solid var(--line)}
+.track .tick span{position:absolute;top:2px;left:3px}
+.track .blk{position:absolute;top:7px;height:14px;border-radius:1px;font-size:10px;line-height:14px;padding:0 4px;color:#fff;white-space:nowrap;overflow:hidden}
+.track .blk.fly{background:var(--ink)}
+.track .blk.chg{background:var(--accent)}
+.glegend{display:flex;gap:14px;font-size:11px;color:var(--muted);padding:6px 0 0}
+.glegend i{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:-1px;background:var(--ink)}
+.glegend i.c{background:var(--accent)}
+
+/* ---------- toast ---------- */
+.toast{position:absolute;left:50%;bottom:52px;transform:translate(-50%,8px);background:var(--ink);color:#fff;font-size:12.5px;padding:8px 14px;border-radius:var(--r);opacity:0;transition:opacity .18s,transform .18s var(--ease);z-index:60;pointer-events:none;box-shadow:var(--shadow)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.mock{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;position:absolute;right:12px;bottom:24px;z-index:5}
+.mock a{color:inherit;text-decoration:none}.mock a:hover{color:var(--ink)}.mock a.cur{color:var(--ink);font-weight:600}
+/* ---- Editorial overrides ---- */
+.ph{position:relative}
+.ph::after{content:"";position:absolute;left:var(--pad);bottom:-1px;width:28px;height:2px;background:var(--accent)}
+.media{height:96px;background:#dfe0e8 center/cover no-repeat;border-bottom:1px solid var(--line)}
+.media.ch{height:72px;border-top:1px solid var(--line)}
+.sec{padding:12px var(--pad) 14px}
+.lbl{margin-bottom:10px}
+.name{font-size:14.5px}
+.bar{height:3px}
+.btn{height:40px}
+.btn.i{flex:0 0 40px}
+.split .b{height:6px}
+.cost{padding:12px var(--pad);flex-direction:column;align-items:flex-start;gap:2px}
+.cost .v{font-size:32px}
+.tiles .v{font-size:22px}
+.rh2 .ttl{font-size:15px}
+#map{background:#e6e3dc}
+.rail{box-shadow:0 8px 28px rgba(60,50,30,.12), 0 1px 3px rgba(60,50,30,.06)}
+.chg-cur{display:flex;align-items:center;justify-content:space-between}
+/* drawer sits beside the rail, never under it; grows with the airport count */
+.drawer{left:calc(var(--rail-w) + 24px);right:12px;width:auto;transform:none}
+body.net .drawer{left:calc(520px + 24px)}
+.drawer.open{height:var(--drawer-h,260px)}
+.gantt{height:calc(100% - 36px)}
+.grow.load{height:44px}
+.grow.load .lab small{display:block;margin-left:0;line-height:1.2}
+.grow.load .track svg{position:absolute;left:0;right:0;bottom:0;width:100%;height:40px;display:block}
+.grow.load .track path{fill:rgba(50,50,110,.16);stroke:var(--ink);stroke-width:1;vector-effect:non-scaling-stroke}
+/* queueing: waiting blocks + per-charger lanes */
+.blk.wait{background:repeating-linear-gradient(135deg,#e6c149 0 3px,#f6e6a6 3px 6px);color:var(--ink)}
+.blk.wait.over{background:repeating-linear-gradient(135deg,#c33d3d 0 3px,#f0b3b3 3px 6px);color:#fff}
+.grow.sub .lab{padding-left:14px;color:var(--muted);font-weight:400;font-size:11.5px}
+.glegend i.w{background:repeating-linear-gradient(135deg,#e6c149 0 2px,#f6e6a6 2px 4px)}
+.bays{display:flex;align-items:center;gap:10px;padding-top:8px;font-size:12px}
+.step{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r);height:26px;align-items:center}
+.step button{width:26px;height:100%;font-size:15px;color:var(--muted);line-height:1}
+.step button:hover{color:var(--ink)}
+.step b{min-width:22px;text-align:center;font-weight:600;font-size:12.5px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:var(--r);padding:3px 8px;font-size:11.5px;font-weight:500;color:var(--ink);background:var(--surface)}
+.chip:hover{border-color:var(--ink)}
+.grow .lab button{font-weight:500;color:var(--ink)}
+.grow .lab button:hover{text-decoration:underline;text-underline-offset:2px}
+/* ---------- command palette ---------- */
+.cmdk{position:fixed;inset:0;z-index:100}
+.cmdk-dim{position:absolute;inset:0;background:rgba(50,50,110,.22)}
+.cmdk-box{position:absolute;left:50%;top:16vh;transform:translateX(-50%);width:560px;max-width:calc(100vw - 32px);background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 16px 48px rgba(50,50,110,.22), 0 2px 6px rgba(50,50,110,.08);overflow:hidden}
+.cmdk-in{display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+.cmdk-in input{flex:1;height:44px;border:0;outline:none;font-size:14px;background:transparent;color:var(--ink)}
+.cmdk-in input::placeholder{color:var(--faint)}
+.cmdk-list{max-height:min(52vh,420px);overflow:auto;padding:6px 0}
+.cmdk-list .grp{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:8px 14px 3px}
+.cmdk-list .it{display:flex;align-items:center;gap:10px;padding:7px 14px;font-size:13px;cursor:pointer}
+.cmdk-list .it.on{background:var(--canvas);box-shadow:inset 2px 0 0 var(--ink)}
+.cmdk-list .it b{font-weight:600;letter-spacing:.03em}
+.cmdk-list .it .sub{color:var(--muted);font-size:12px}
+.cmdk-list .it .k{margin-left:auto;font-size:10.5px;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 5px;white-space:nowrap}
+.cmdk-list .none{padding:18px 14px;color:var(--muted);font-size:12.5px}
+.cmdk-foot{display:flex;gap:14px;padding:7px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+.kbd{position:absolute;right:8px;top:7px;font-size:10px;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 4px;line-height:13px;cursor:pointer;background:var(--surface)}
+.kbd:hover{color:var(--ink);border-color:var(--ink)}
+/* ---------- scenarios (empty network) ---------- */
+.scen{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:0 var(--pad) 12px}
+.scen .sc{border:1px solid var(--line);border-radius:var(--r);padding:10px;background:var(--surface)}
+.scen .sc b{display:block;font-size:12.5px;font-weight:600}
+.scen .sc small{display:block;color:var(--muted);font-size:11px;margin-top:2px;line-height:1.35}
+.scen .sc .sp{display:flex;align-items:flex-end;gap:1px;height:26px;margin:8px 0}
+.scen .sc .sp i{flex:1;background:var(--ink);opacity:.7}
+/* ---------- state of charge ---------- */
+.soc{padding:10px var(--pad);border-bottom:1px solid var(--line)}
+.soc .lbl{margin-bottom:4px}
+.soc .lbl .r{font-size:11px;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0}
+.soc .lbl .r b{color:var(--ink)}
+.soc .lbl .r b.low{color:var(--danger)}
+.soc svg{width:100%;height:92px;display:block;margin-bottom:2px}
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
+<symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 20h16"/></symbol>
+<symbol id="i-plane" viewBox="0 0 24 24"><path d="M10.5 13.5 3 11l1-2 6 1 5-5 2 1-3 5 4 5-1 2-5-3-4 4-1-1z"/></symbol>
+<symbol id="i-net" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="m7 11 10-4M7 13l10 4"/></symbol>
+<symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.7M12 17h.01"/></symbol>
+</defs></svg>
+
+<header class="topbar">
+  <div class="brand"><img src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2FLY"><span class="t">Charging Network Simulator</span></div>
+  <div class="seg" id="modeSeg"><button data-mode="plan" class="on"><svg class="ic"><use href="#i-plane"/></svg>Plan</button><button data-mode="network"><svg class="ic"><use href="#i-net"/></svg>Network <span id="netCount" class="num"></span></button></div>
+  <span class="sp"></span>
+  <div class="search"><svg class="ic"><use href="#i-search"/></svg><input id="q" placeholder="Find airport — ICAO, IATA or name" autocomplete="off"><span class="kbd" id="kbdHint" title="Command palette">⌘K</span><div class="ac" id="qAc"></div></div>
+  <div style="position:relative"><button class="tb" id="mapBtn"><svg class="ic"><use href="#i-layers"/></svg>Map</button>
+    <div class="dd" id="mapDd"><div class="h">Basemap</div>
+      <button data-base="light" class="on">Light</button><button data-base="street">Street</button><button data-base="sat">Satellite</button>
+      <hr><div class="h">Layers</div>
+      <label><input type="checkbox" id="ckSmall"> Small airfields</label>
+      <label><input type="checkbox" id="ckAssets" checked> NRG2FLY chargers</label>
+      <label><input type="checkbox" id="ckNet" checked> Saved network routes</label>
+    </div></div>
+  <div class="units"><span>Units</span><div class="seg" id="unitSeg"><button data-u="km" class="on">km</button><button data-u="nm">NM</button></div></div>
+  <div style="position:relative"><button class="tb" id="expBtn"><svg class="ic"><use href="#i-dl"/></svg>Export</button>
+    <div class="dd" id="expDd"><button data-exp="pdf">Advisory report (PDF)</button><button data-exp="xlsx">Demand workbook (XLSX)</button><button data-exp="share">Share link</button></div></div>
+  <button class="tb" id="tourBtn"><svg class="ic"><use href="#i-help"/></svg>Tour</button>
+  <div style="position:relative"><button class="tb icon" id="setBtn" title="Model settings"><svg class="ic"><use href="#i-gear"/></svg></button>
+    <div class="dd" id="setDd" style="min-width:240px"><div class="h">Model settings</div>
+      <label>Charge tariff <span style="margin-left:auto" class="num" id="tariffLbl">€0.60 / kWh</span></label>
+      <label>Reserve <span style="margin-left:auto">30 %</span></label>
+      <label>Climb overhead <span style="margin-left:auto">10 % / 15 %</span></label>
+      <hr><div class="hint" style="padding:0 8px 6px">Read-only in the prototype.</div>
+    </div></div>
+</header>
+
+<div id="map"></div>
+<aside class="rail" id="rail"><div class="body" id="railBody"></div><div id="railFoot"></div></aside>
+
+<section class="drawer" id="drawer">
+  <div class="dh" id="drawerHead"><div class="t">Demand timeline <span id="drawerSub">no flights yet</span></div><div class="tools"><button class="chip" id="focChip" data-act="focus" data-ap="" hidden></button><div class="seg" id="laneSeg" style="height:24px"><button data-lanes="airports" class="on" style="padding:0 9px;font-size:11.5px">Airports</button><button data-lanes="fleet" style="padding:0 9px;font-size:11.5px">Fleet</button></div><span class="dep-lbl">Departures</span><button class="sw" id="depSw" title="Show departures on the timeline"></button><svg class="ic"><use href="#i-down"/></svg></div></div>
+  <div class="gantt" id="gantt"></div>
+</section>
+<div class="cmdk" id="cmdk" hidden><div class="cmdk-dim" data-cmdk="close"></div>
+  <div class="cmdk-box"><div class="cmdk-in"><svg class="ic"><use href="#i-search"/></svg><input id="cmdkIn" placeholder="Airports, aircraft, chargers, or an action…" autocomplete="off" spellcheck="false"></div>
+  <div class="cmdk-list" id="cmdkList"></div><div class="cmdk-foot"><span>↑↓ move</span><span>↵ run</span><span>esc close</span><span style="margin-left:auto">⌘K anywhere</span></div></div></div>
+<div class="toast" id="toast"></div>
+<div class="mock">Prototype <a href="instrument.html">A Instrument</a> · <a class="cur" href="editorial.html">C Editorial</a> · engine numbers + climb model 10 % / 15 %</div>
+
+<script>
+/* ======================================================================
+   Data — real catalogs embedded at build time; airports + simulate live
+   ====================================================================== */
+const PLANES = [{"id": "elysian_e9x", "name": "Elysian E9X", "seats": 90, "battery_kwh": 14000, "range_km": 1000, "speed_kmh": 720, "image": "elysian.jpg", "oem": "Elysian", "type": "CTOL", "status": "concept", "propulsion": "fully electric", "regime": "VFR", "profile_label": "Standard"}, {"id": "pipistrel_velis", "name": "Velis Electro", "seats": 2, "battery_kwh": 22, "range_km": 87.5, "speed_kmh": 148, "image": "pipistrel.jpg", "default_charger_id": "dc_22", "oem": "Pipistrel", "type": "CTOL", "status": "certified", "propulsion": "fully electric", "max_charge_kw": 40, "regime": "VFR", "profile_label": "Standard", "training_range_km": 87.5}, {"id": "vaeridion", "name": "Vaeridion Microliner — Max (9 seats)", "seats": 9, "battery_kwh": 600, "range_km": 500, "speed_kmh": 400, "image": "vaeridion.jpg", "default_charger_id": "dc_1000", "oem": "Vaeridion", "type": "CTOL", "status": "under construction", "propulsion": "fully electric", "max_charge_kw": 800, "regime": "VFR", "profile_label": "Max (9 seats)"}, {"id": "vaeridion_light", "name": "Vaeridion Microliner — Light (4 seats)", "seats": 4, "battery_kwh": 600, "range_km": 687.5, "speed_kmh": 400, "image": "vaeridion.jpg", "default_charger_id": "dc_1000", "oem": "Vaeridion", "type": "CTOL", "status": "under construction", "propulsion": "fully electric", "max_charge_kw": 800, "regime": "VFR", "profile_label": "Light (4 seats)"}, {"id": "beta_plane", "name": "Beta Alia CX300", "seats": 6, "battery_kwh": 225, "range_km": 500, "speed_kmh": 250, "image": "beta.png", "default_charger_id": "dc_320", "oem": "Beta", "type": "CTOL", "status": "prototype flying", "propulsion": "fully electric", "max_charge_kw": 400, "regime": "VFR", "profile_label": "Standard"}];
+const CHARGERS = [{"id": "dc_22", "name": "Pipistrel 22 kW", "power_kw": 22, "type": "Pipistrel", "image": "chargers/Pipistrel-22kW.jpg"}, {"id": "dc_40", "name": "NRG2fly 40 kW", "power_kw": 40, "type": "NRG2fly", "image": "chargers/NRG2fly-Charger_40kW.jpg"}, {"id": "dc_mobile_40", "name": "NRG2fly Mobile 40 kW", "power_kw": 40, "type": "NRG2fly Mobile", "image": "chargers/NRG2fly-Mobile_Charger_40kW.jpg"}, {"id": "dc_beta_40", "name": "Beta Mini-Cube 40 kW", "power_kw": 40, "type": "Beta Mini-Cube", "image": "chargers/Beta-Mini-Cube_40kW.jpg"}, {"id": "dc_50", "name": "NRG2fly 50 kW", "power_kw": 50, "type": "NRG2fly", "image": "chargers/NRG2fly-Charger_50kW.jpg"}, {"id": "dc_beta_65", "name": "Beta Mini-Cube 65 kW", "power_kw": 65, "type": "Beta Mini-Cube", "image": "chargers/Beta-Mini-Cube_65kW.jpg"}, {"id": "dc_100", "name": "NRG2fly 100 kW", "power_kw": 100, "type": "NRG2fly", "image": "chargers/NRG2fly-Charger_100kW.jpg"}, {"id": "dc_mobile_100", "name": "NRG2fly Mobile 100 kW", "power_kw": 100, "type": "NRG2fly Mobile", "image": "chargers/NRG2fly-Mobile_Charger_100kW.jpg"}, {"id": "dc_250", "name": "NRG2fly 250 kW", "power_kw": 250, "type": "NRG2fly", "image": "chargers/NRG2fly-Charger_250kW.jpg"}, {"id": "dc_320", "name": "Beta Cube 320 kW", "power_kw": 320, "type": "Beta Cube", "image": "chargers/Beta-Cube_320kW.jpg"}, {"id": "dc_400", "name": "NRG2fly 400 kW", "power_kw": 400, "type": "NRG2fly", "image": "chargers/NRG2fly-Charger_400kW.jpg"}, {"id": "dc_1000", "name": "Vaeridion 1 MW", "power_kw": 1000, "type": "Vaeridion", "image": "chargers/Vaeridion-NRG2fly-1MW.jpg"}, {"id": "dc_2400", "name": "Vaeridion 2.4 MW", "power_kw": 2400, "type": "Vaeridion", "image": "chargers/Vaeridion-NRG2fly-2.4MW.jpg"}, {"id": "dc_3750", "name": "Vaeridion 3.75 MW", "power_kw": 3750, "type": "Vaeridion", "image": "chargers/Vaeridion-NRG2fly-2.4MW.jpg"}];
+const TARIFF = 0.60;
+const SEED = { origin:'EHLE', dest:'EDDF' };
+let AIRPORTS = [], AP_BY_ID = {}, ASSETS = {};
+
+const S = {
+  mode:'plan', rail:'form', planeId:'beta_plane', chargerId:'dc_320',
+  origin:null, dest:null, stops:[], trip:'one-way', freq:1, per:'day',
+  units:'km', estimates:false, result:null, busy:false, err:'',
+  network: JSON.parse(localStorage.getItem('cnsA.network')||'[]'),
+  bays: JSON.parse(localStorage.getItem('cnsA.bays')||'{}'),
+  base:'light', showDep:false, lanes:'airports', showSmall:false, showAssets:true, showNet:true, allChargers:false, picking:false,
+  open:{route:false,charging:false,calc:false}, openAp:{}
+};
+const plane = () => PLANES.find(p=>p.id===S.planeId);
+const charger = () => CHARGERS.find(c=>c.id===S.chargerId);
+const $ = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>[...el.querySelectorAll(s)];
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const km = v => S.units==='nm' ? (v/1.852) : v;
+const ukm = () => S.units==='nm' ? 'NM' : 'km';
+const fmtD = v => Math.round(km(v)).toLocaleString('en')+' '+ukm();
+const fmtH = h => { const m=Math.round(h*60); return Math.floor(m/60)+':'+String(m%60).padStart(2,'0'); };
+const fmtMin = m => m>=60 ? fmtH(m/60)+' h' : Math.round(m)+' min';
+const fmtE = v => v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+const perDay = f => f.per==='day' ? f.freq : f.freq/7;
+const toast = t => { const e=$('#toast'); e.textContent=t; e.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>e.classList.remove('show'),2200); };
+const tripLabel = {'one-way':'One-way',retour:'Return',circular:'Circular',training:'Training'};
+const tripHint = {'one-way':'A to B · charge to full at the destination',retour:'A to B and back · charge at both ends',circular:'A → stops → A · needs at least one stop',training:'Circuits at the departure airport'};
+
+/* ======================================================================
+   Map
+   ====================================================================== */
+const map = L.map('map',{ zoomControl:false, preferCanvas:true, zoomSnap:.25, attributionControl:true }).setView([51.6,6.5],6.25);
+const BASES = {
+  light: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:16,attribution:'Esri, HERE, Garmin, © OSM'}),
+  street:L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'+(window.CARTO_KEY_QS||''),{maxZoom:19,attribution:'© OSM © CARTO'}),
+  sat:   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,attribution:'Esri, Maxar, Earthstar'})
+};
+BASES.light.addTo(map);
+map.createPane('dots').style.zIndex=350; map.createPane('net').style.zIndex=380; map.createPane('rt').style.zIndex=400; map.createPane('pins').style.zIndex=450;
+const dotsBig = L.layerGroup().addTo(map), dotsSmall = L.layerGroup(), assetLayer = L.layerGroup().addTo(map), routeLayer = L.layerGroup().addTo(map), netLayer = L.layerGroup().addTo(map);
+const DOT = { large_airport:{r:3.6,o:.55}, medium_airport:{r:2.6,o:.5}, small_airport:{r:1.8,o:.35} };
+
+function airportPopup(a){
+  const rw = a.rwy_paved_m||a.rwy_grass_m||a.rwy_unknown_m;
+  return `<div class="pp"><div class="t"><span>${esc(a.name)}</span><span class="ic2">${esc(a.ident)}${a.iata_code?' · '+esc(a.iata_code):''}</span></div>
+  <div class="m">${esc(a.municipality||'')}${a.municipality?' · ':''}${esc((a.type||'').replace('_',' '))}${rw?' · runway '+Math.round(rw)+' m':' · no runway data'}</div>
+  <div class="acts"><button data-set="origin" data-id="${esc(a.ident)}">Departure</button><button data-set="dest" data-id="${esc(a.ident)}">Destination</button><button data-set="stop" data-id="${esc(a.ident)}">Stop</button></div></div>`;
+}
+function drawAirports(){
+  dotsBig.clearLayers(); dotsSmall.clearLayers();
+  AIRPORTS.forEach(a=>{
+    const d = DOT[a.type]||DOT.small_airport;
+    const m = L.circleMarker([a.latitude_deg,a.longitude_deg],{pane:'dots',radius:d.r,weight:0,fillColor:'#4a4d6e',fillOpacity:d.o});
+    m.bindPopup(()=>airportPopup(a),{offset:[0,-2]});
+    (a.type==='small_airport'?dotsSmall:dotsBig).addLayer(m);
+  });
+}
+function drawAssets(){
+  assetLayer.clearLayers(); if(!S.showAssets) return;
+  Object.values(ASSETS).forEach(x=>{
+    const a = AP_BY_ID[x.icao]; if(!a) return;
+    const m = L.marker([a.latitude_deg,a.longitude_deg],{pane:'pins',icon:L.divIcon({className:'',html:'<div class="asset"></div>',iconSize:[10,10],iconAnchor:[5,5]})});
+    m.bindPopup(`<div class="pp"><div class="t"><span>${esc(x.name)}</span><span class="ic2">${esc(x.icao)}</span></div><div class="m">${esc(x.network)} charging</div>
+      <div class="plugs">${(x.plugs||[]).map(p=>`<div><span>${esc(p.label)} · ${esc(p.connector)}</span><b class="num">${p.power_kw} kW</b></div>`).join('')}</div></div>`);
+    assetLayer.addLayer(m);
+  });
+}
+const ll = a => [a.latitude_deg ?? a.lat, a.longitude_deg ?? a.lon];
+function chain(){ // origin, stops…, dest (dest=origin for training / circular closes at origin)
+  const st = S.stops.filter(Boolean);
+  if(S.trip==='training') return S.origin?[S.origin]:[];
+  const c=[S.origin,...st,S.dest].filter(Boolean);
+  if(S.trip==='circular'&&S.origin&&S.dest) c.push(S.origin);
+  return c;
+}
+function drawRoute(fit){
+  routeLayer.clearLayers();
+  const c = chain();
+  if(S.trip==='training'&&S.origin){ const r=((plane().training_range_km||60)/2)*1000; routeLayer.addLayer(L.circle(ll(S.origin),{pane:'rt',radius:r,color:'#d84c26',weight:2,fillColor:'#d84c26',fillOpacity:.06,dashArray:'4 6'})); if(fit) map.fitBounds(L.latLng(ll(S.origin)).toBounds(r*2.6),{paddingTopLeft:[360,60]}); return; }
+  if(c.length<2) return;
+  const pts = c.map(ll);
+  const dashed = S.trip==='retour';
+  routeLayer.addLayer(L.polyline(pts,{pane:'rt',color:'#fff',weight:5,opacity:.95,lineCap:'round',lineJoin:'round'}));
+  routeLayer.addLayer(L.polyline(pts,{pane:'rt',color:'#d84c26',weight:2,opacity:1,lineCap:'round',lineJoin:'round'}));
+  if(dashed) routeLayer.addLayer(L.polyline(pts,{pane:'rt',color:'#fff',weight:2,opacity:.9,dashArray:'6 8',lineCap:'butt'}));
+  c.forEach((a,i)=>{ const stop = i>0 && i<c.length-1;
+    routeLayer.addLayer(L.marker(ll(a),{pane:'pins',interactive:false,icon:L.divIcon({className:'',html:`<div class="ep${stop?' stop':''}"></div>`,iconSize:[11,11],iconAnchor:[5.5,5.5]})})); });
+  // leg labels
+  const legs = S.result ? derive(S.result).legs : null;
+  for(let i=0;i<pts.length-1;i++){
+    const mid=[(pts[i][0]+pts[i+1][0])/2,(pts[i][1]+pts[i+1][1])/2];
+    const d = hav(pts[i],pts[i+1]);
+    let txt = fmtD(d);
+    if(legs && legs[i]) txt = `${fmtD(legs[i].distance_km)} · ${fmtH(legs[i].flight_time_h)} h · ${Math.round(legs[i].energy_kwh)} kWh`;
+    routeLayer.addLayer(L.marker(mid,{pane:'pins',interactive:false,icon:L.divIcon({className:'',html:`<div class="leglbl num">${txt}</div>`,iconSize:[0,0]})}));
+  }
+  if(fit) map.fitBounds(L.latLngBounds(pts),{paddingTopLeft:[360,60],paddingBottomRight:[40,80],maxZoom:9,animate:false});
+}
+function drawNet(){
+  netLayer.clearLayers(); if(!S.showNet) return;
+  S.network.forEach(f=>{ const pts=f.chain.map(c=>[c.lat,c.lon]); if(pts.length<2) return; const hit=!S.filter||f.chain.some(c=>c.ident===S.filter);
+    netLayer.addLayer(L.polyline(pts,{pane:'net',color:'#32326E',weight:hit&&S.filter?2:1.5,opacity:S.filter?(hit?.8:.12):.45})); });
+}
+function hav(a,b){ const R=6371,dL=(b[0]-a[0])*Math.PI/180,dN=(b[1]-a[1])*Math.PI/180,x=Math.sin(dL/2)**2+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(dN/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
+map.on('zoomend',()=>{ const z=map.getZoom(); const want = S.showSmall || z>=7.5; if(want && !map.hasLayer(dotsSmall)) dotsSmall.addTo(map); if(!want && map.hasLayer(dotsSmall)) map.removeLayer(dotsSmall); });
+map.on('popupopen',e=>{ $$('[data-set]',e.popup.getElement()).forEach(b=>b.onclick=()=>{ const a=AP_BY_ID[b.dataset.id]; if(b.dataset.set==='stop'){ const i=S.stops.indexOf(null); if(i>=0) S.stops[i]=a; else S.stops.push(a); } else S[b.dataset.set]=a; map.closePopup(); onFormChange(); }); });
+
+/* ======================================================================
+   Airport search (client-side over the live /api/airports list)
+   ====================================================================== */
+const RANK={large_airport:0,medium_airport:1,small_airport:2};
+function search(q){
+  q=(q||'').trim().toLowerCase(); if(q.length<2) return [];
+  const out=[];
+  for(const a of AIRPORTS){ const id=a.ident.toLowerCase(), ia=(a.iata_code||'').toLowerCase(), nm=a.name.toLowerCase(), mu=(a.municipality||'').toLowerCase();
+    let r; if(q===id||q===ia) r=0; else if(nm.startsWith(q)||mu.startsWith(q)) r=1; else if(nm.split(' ').some(w=>w.startsWith(q))) r=2; else if(nm.includes(q)||mu.includes(q)||id.startsWith(q)) r=3; else continue;
+    out.push([r,RANK[a.type]??3,a]); }
+  return out.sort((x,y)=>x[0]-y[0]||x[1]-y[1]||x[2].name.localeCompare(y[2].name)).slice(0,8).map(x=>x[2]);
+}
+function acHtml(list){ return list.map(a=>`<button data-id="${esc(a.ident)}"><span class="id">${esc(a.ident)}</span><span class="nm">${esc(a.name)}<small>${esc(a.municipality||'')}</small></span><span class="ty">${esc((a.type||'').split('_')[0])}</span></button>`).join(''); }
+function bindAc(input, box, onPick){
+  input.addEventListener('input',()=>{ const l=search(input.value); box.innerHTML=acHtml(l); box.classList.toggle('open',l.length>0); });
+  input.addEventListener('focus',()=>{ if(box.innerHTML) box.classList.add('open'); });
+  input.addEventListener('keydown',e=>{ if(e.key==='Escape') box.classList.remove('open'); if(e.key==='Enter'){ const b=$('button',box); if(b){ b.click(); e.preventDefault(); } } });
+  box.addEventListener('mousedown',e=>{ const b=e.target.closest('button'); if(!b) return; e.preventDefault(); onPick(AP_BY_ID[b.dataset.id]); box.classList.remove('open'); });
+  document.addEventListener('mousedown',e=>{ if(!box.contains(e.target)&&e.target!==input) box.classList.remove('open'); });
+}
+
+/* ======================================================================
+   Rail — form
+   ====================================================================== */
+function usable(p){ return Math.round(p.range_km*0.78); } // display-only: 30 % reserve → usable reach, as the app shows it
+function directKm(){ const c=chain(); let d=0; for(let i=0;i<c.length-1;i++) d+=hav(ll(c[i]),ll(c[i+1])); return d; }
+function longestLeg(){ const c=chain(); let m=0; for(let i=0;i<c.length-1;i++) m=Math.max(m,hav(ll(c[i]),ll(c[i+1]))); return m; }
+function renderForm(){
+  const p=plane(), ch=charger(); const c=chain(); const d=directKm(); const fits = longestLeg() <= usable(p);
+  const stopsHtml = S.stops.map((s,i)=>`<div class="fld wp" data-stop="${i}"><input placeholder="Add a charging stop…" value="${esc(s?s.name:'')}" data-ac="stop${i}"><button class="x" data-act="rmStop" data-i="${i}" title="Remove stop"><svg class="ic"><use href="#i-x"/></svg></button><span class="icao">${esc(s?s.ident:'')}</span><div class="ac" id="ac-stop${i}"></div></div>`).join('');
+  const chList = S.allChargers ? [...CHARGERS].sort((a,b)=>b.power_kw-a.power_kw) : [ch, ...CHARGERS.filter(x=>x.id!==ch.id).sort((a,b)=>Math.abs(a.power_kw-ch.power_kw)-Math.abs(b.power_kw-ch.power_kw)).slice(0,2)].sort((a,b)=>b.power_kw-a.power_kw);
+  const pickHtml = S.picking ? `<div class="pick">${PLANES.map(x=>`<button data-act="plane" data-id="${x.id}" class="${x.id===S.planeId?'on':''}"><img src="/pics/${esc(x.image||'')}" onerror="this.onerror=null;this.src='/pics/plane_svgs/${esc(x.svg||'beta.svg')}'" alt=""><span><span class="n">${esc(x.name)}</span><br><span class="m">${esc(x.oem||'')} · ${x.seats} seats · ${x.battery_kwh?x.battery_kwh+' kWh':'no battery'} · ${esc(x.status||'')}</span></span><span class="r num">${x.range_km} km<small>${esc(x.regime||'')} ${x.max_charge_kw?'· '+x.max_charge_kw+' kW max':''}</small></span></button>`).join('')}</div>` : '';
+  $('#railBody').innerHTML = `
+    <div class="ph"><h3>Create a route</h3><div class="tools"><span>Estimates</span><button class="sw ${S.estimates?'on':''}" data-act="estimates" title="Show estimate flags"></button></div></div>
+    <div class="media" style="background-image:url('/pics/${esc(p.image||'')}')"></div>
+    <div class="sec"><div class="lbl"><span class="cap">Aircraft</span><button class="lnk" data-act="pick">${S.picking?'Close':'Change'}</button></div>
+      ${pickHtml}
+      <div class="name">${esc(p.name)}</div><div class="meta">${esc(p.oem||'')} · ${p.seats} seats · ${p.battery_kwh} kWh · ${p.range_km} km · ${esc(p.regime||'')}</div>
+      <div class="bar"><i class="${fits?'':'over'}" style="width:${Math.min(100,Math.round(usable(p)/p.range_km*100))}%"></i></div>
+      <div class="meta num">Usable reach ${usable(p)} of ${p.range_km} km · ${p.speed_kmh} km/h</div>
+    </div>
+    <div class="sec"><div class="lbl"><span class="cap">Route</span><button class="lnk" data-act="addStop">+ Add stop</button></div>
+      <div class="fld"><input placeholder="Departure airport" value="${esc(S.origin?S.origin.name:'')}" data-ac="origin"><span class="icao">${esc(S.origin?S.origin.ident:'')}</span><div class="ac" id="ac-origin"></div></div>
+      ${stopsHtml}
+      ${S.trip==='training'?'':`<div class="fld"><input placeholder="Destination airport" value="${esc(S.dest?S.dest.name:'')}" data-ac="dest"><span class="icao">${esc(S.dest?S.dest.ident:'')}</span><div class="ac" id="ac-dest"></div></div>`}
+      ${c.length>=2?`<div class="route"><div class="rh ${fits?'':'bad'}"><span><b>${c.length>2?(c.length-1)+' legs':'Direct'}</b> · <span class="num">${fmtD(d)}</span></span><span>${fits?'fits the usable reach':'longest leg exceeds reach'}</span></div>
+        ${c.map((a,i)=>`<div class="stop"><span class="n num">${String(i+1).padStart(2,'0')}</span><span>${esc(a.name)}</span><span class="d num">${i===0?esc(a.ident):fmtD(hav(ll(c[i-1]),ll(a)))}</span></div>`).join('')}</div>`:''}
+    </div>
+    <div class="sec"><div class="cap" style="margin-bottom:8px">Trip type</div><div class="seg sm" data-seg="trip">${Object.keys(tripLabel).map(k=>`<button data-v="${k}" class="${S.trip===k?'on':''}">${tripLabel[k]}</button>`).join('')}</div><div class="hint">${tripHint[S.trip]}</div></div>
+    <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="99" value="${S.freq}" data-act="freq" class="num"><span class="t">routes /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per==='day'?'on':''}">day</button><button data-v="week" class="${S.per==='week'?'on':''}">week</button></div></div></div>
+    <div class="media ch" style="background-image:url('/pics/${esc(ch.image||'')}')"></div>
+    <div class="sec"><div class="lbl"><span class="cap">Charger</span><button class="lnk" data-act="allChargers">${S.allChargers?'Close':'Change'}</button></div>
+      ${S.allChargers?'':`<div class="chg-cur"><div><div class="name">${esc(ch.name.replace(/\s*\d+(\.\d+)?\s*(k|M)W$/,''))}</div><div class="meta">${esc(ch.type||'')} · DC${p.max_charge_kw&&ch.power_kw>p.max_charge_kw?' · capped at '+p.max_charge_kw+' kW':''}</div></div><div class="name num">${ch.power_kw>=1000?(ch.power_kw/1000)+' MW':ch.power_kw+' kW'}</div></div>`}
+      ${S.allChargers?chList.map(x=>`<button class="chg ${x.id===S.chargerId?'on':''}" data-act="charger" data-id="${x.id}"><img src="/pics/${esc(x.image||'')}" alt=""><span class="n">${esc(x.name.replace(/\s*\d+(\.\d+)?\s*(k|M)W$/,''))}</span><span class="kw num">${x.power_kw>=1000?(x.power_kw/1000)+' MW':x.power_kw+' kW'}</span></button>`).join(''):''}
+      ${p.max_charge_kw && ch.power_kw>p.max_charge_kw?`<div class="hint num">Aircraft accepts max ${p.max_charge_kw} kW — the charger is capped.</div>`:''}
+    </div>
+    ${S.err?`<div class="sec err">${esc(S.err)}</div>`:''}`;
+  $('#railFoot').innerHTML = `<div class="btns"><button class="btn p ${S.busy?'busy':''}" data-act="simulate">${S.busy?'Simulating…':'Simulate'}</button><button class="btn i" data-act="reset" title="Reset"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
+  // wire autocompletes
+  $$('[data-ac]').forEach(inp=>{ const key=inp.dataset.ac; const box=$('#ac-'+key);
+    bindAc(inp, box, a=>{ if(key==='origin') S.origin=a; else if(key==='dest') S.dest=a; else S.stops[+key.slice(4)]=a; onFormChange(true); }); });
+}
+function onFormChange(fit){ S.result=null; S.err=''; S.rail='form'; renderRail(); drawRoute(fit); }
+
+/* ======================================================================
+   Rail — result
+   ====================================================================== */
+/* The app's climb model (CLIMB_ENERGY_MODEL.md, PR #42): E(leg) = cruisePerKm·d + E_max·min(1, d/d_sat),
+   E_max = 10 % of battery (NET climb minus descent), d_sat = 15 % of catalog range. Wing-borne only; training excluded. */
+const CLIMB = { pct:0.10, sat:0.15, descFrac:0.20, phaseFrac:0.60 };   // descFrac / phaseFrac are DISPLAY knobs for the three-stage draw; the per-leg total never changes
+function climbParams(p){ const batt=p.battery_kwh||0, range=p.range_km||0; const wing=!/vtol|powered/i.test(p.type||''); const eMax=(wing&&batt>0&&range>0)?CLIMB.pct*batt:0; const dSat=CLIMB.sat*range; const cruisePerKm=range>0?(batt-eMax)/range:0;
+  return { applies:eMax>0&&dSat>0, eMax, dSat, cruisePerKm, legE:d=> eMax>0 ? cruisePerKm*d + eMax*Math.min(1,d/dSat) : (range>0?batt/range*d:0) }; }
+function legPhases(l, cp){ // split one leg's energy into climb / cruise / descent for the battery curve — sums to l.energy_kwh exactly
+  const dk=l.distance_km, E=l.energy_kwh; if(!cp.applies||l.training||dk<=0) return [{t:'cruise',km:dk,e:E}];
+  const ph=Math.min(CLIMB.phaseFrac*Math.min(dk,cp.dSat), dk/2); const eDesc=CLIMB.descFrac*cp.cruisePerKm*ph, eCr=cp.cruisePerKm*Math.max(0,dk-2*ph), eCl=Math.max(0,E-eCr-eDesc);
+  return [{t:'climb',km:ph,e:eCl},{t:'cruise',km:Math.max(0,dk-2*ph),e:eCr},{t:'descent',km:ph,e:E-eCl-eCr}].filter(s=>s.km>0); }
+function derive(r){
+  const p=plane(), B=p.battery_kwh||1, RESV=0.30, cp=climbParams(p), training=r.trip_type==='training';
+  const kwEff = Math.min(charger().power_kw, p.max_charge_kw||Infinity);
+  const multi = Array.isArray(r.legs);
+  let legs = multi ? r.legs.map(l=>({...l})) : (r.trip_type==='retour'
+      ? [{distance_km:r.leg_distance_km,energy_kwh:r.leg_energy_kwh,flight_time_h:r.flight_time_h/2,from:r.origin,to:r.destination},{distance_km:r.leg_distance_km,energy_kwh:r.leg_energy_kwh,flight_time_h:r.flight_time_h/2,from:r.destination,to:r.origin}]
+      : [{distance_km:r.leg_distance_km,energy_kwh:r.leg_energy_kwh,flight_time_h:r.flight_time_h,from:r.origin,to:r.destination}]);
+  legs = legs.map(l=>{ const raw=l.energy_kwh; const E=(cp.applies&&!training)?cp.legE(l.distance_km):raw; return {...l, energy_raw:raw, energy_kwh:E, climb_kwh:(cp.applies&&!training)?Math.max(0,E-cp.cruisePerKm*l.distance_km):0, training}; });
+  // charging: top up at stops to arrive with the reserve; charge to full at the end of the trip
+  const c=chain(); let soc=B; const chargesAll=[];
+  legs.forEach((l,i)=>{ soc-=l.energy_kwh; const node=c[i+1]||c[0]; const last=i===legs.length-1;
+    const need = Math.max(0, last ? B-soc : Math.min(B-soc, legs[i+1].energy_kwh + RESV*B - soc));
+    const role = last ? (r.trip_type==='one-way'?'dest':'origin') : 'stop';
+    chargesAll.push({name:node?node.name:'',ident:node?node.ident:'',energy_kwh:need,charge_time_min:need/kwEff*60,role}); soc+=need; });
+  const charges = chargesAll.filter(q=>q.energy_kwh>0.05);
+  const used = legs.reduce((s,l)=>s+l.energy_kwh,0), charged = charges.reduce((s,q)=>s+q.energy_kwh,0), chargeMin = charges.reduce((s,q)=>s+q.charge_time_min,0);
+  const flyH = multi ? r.total_flight_time_h : r.flight_time_h; const enrouteMin = charges.filter(q=>q.role==='stop').reduce((s,q)=>s+q.charge_time_min,0);
+  return { legs, used, charges, chargesAll, charged, chargeMin, flyH, travelH: flyH+enrouteMin/60, dist: r.total_distance_km, kw: kwEff, climb: cp };
+}
+function renderResult(){
+  const r=S.result, d=derive(r), p=plane(), ch=charger(); const c=chain();
+  const fpd = perDay({freq:S.freq,per:S.per}); const costDay = d.charged*fpd*TARIFF;
+  const title = c.map(a=>a.ident).join(' <span class="ar">→</span> ');
+  const lastCharge = d.charges[d.charges.length-1];
+  $('#railBody').innerHTML = `
+    <div class="rh2"><div><div class="ttl">${title}</div><div class="m">${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}${S.estimates?' · <span style="color:var(--accent)">est.</span>':''}</div></div><button class="lnk" data-act="edit">Edit</button></div>
+    <div class="cost"><div class="v num">€${fmtE(costDay)}<small>/ ${S.per==='day'?'day':'day avg'}</small></div><div class="m num">${Math.round(d.charged*fpd)} kWh · €${TARIFF.toFixed(2)} / kWh</div></div>
+    <div class="stats"><div><div class="cap">Energy</div><div class="v num">${Math.round(d.used)}<small>kWh</small></div><div class="s">${d.legs.length>1?d.legs.length+' legs':'per flight'}</div></div>
+      <div><div class="cap">Travel</div><div class="v num">${fmtH(d.travelH)}<small>h</small></div><div class="s">${d.travelH>d.flyH?'incl. charging':'block time'}</div></div>
+      <div><div class="cap">Charge</div><div class="v num">${Math.round(d.chargeMin)}<small>min</small></div><div class="s">${S.trip==='retour'?'at both ends':d.charges.length>1?'over '+d.charges.length+' stops':'at '+(lastCharge?.ident||'destination')}</div></div></div>
+    <div class="split"><div class="b"><i class="f" style="flex:${d.flyH.toFixed(3)}"></i><i class="c" style="flex:${(d.chargeMin/60).toFixed(3)}"></i></div><div class="lg"><span><i></i>Fly ${fmtH(d.flyH)} h</span><span><i class="c"></i>Charge ${fmtMin(d.chargeMin)}</span><span style="margin-left:auto" class="num">${fmtD(d.dist)}</span></div></div>
+    ${(()=>{ const B=p.battery_kwh||1, RES=30, cp=d.climb; let soc=100, x=0; const total=d.legs.reduce((s,l)=>s+l.distance_km,0)||1; const segs=[], zones=[], pts=[{x:0,soc:100,id:c[0]?c[0].ident:''}];
+      d.legs.forEach((l,i)=>{ let x0=x, s0=soc; legPhases(l,cp).forEach(ph=>{ const x1=x0+ph.km/total*100, s1=s0-ph.e/B*100; segs.push({t:'fly',x0,y0:s0,x1,y1:s1}); if(ph.t!=='cruise') zones.push({t:ph.t,x0,x1,first:i===0}); x0=x1; s0=s1; });
+        soc-=l.energy_kwh/B*100; x+=l.distance_km/total*100; const arr=c[i+1]||c[0]; pts.push({x,soc,id:arr?arr.ident:''});
+        const q=d.chargesAll[i]; if(q&&q.energy_kwh>0.05){ const s2=Math.min(100,soc+q.energy_kwh/B*100); segs.push({t:'chg',x0:x,y0:soc,x1:x,y1:s2,min:q.charge_time_min,id:q.ident}); soc=s2; } });
+      const low=pts.reduce((m,q)=>Math.min(m,q.soc),100), lowPt=pts.find(q=>q.soc===low); const X=v=>6+v*3.88, Y=v=>6+(100-Math.max(0,v))*0.72; const ph0=legPhases(d.legs[0],cp);
+      return `<div class="soc"><div class="lbl"><span class="cap">Battery</span><span class="r">lowest <b class="${low<RES?'low':''}">${Math.round(low)} %</b>${lowPt&&lowPt.id?' at '+lowPt.id:''} · reserve ${RES} %</span></div>
+      <svg viewBox="0 0 400 92" preserveAspectRatio="none">${zones.map(z=>`<rect x="${X(z.x0).toFixed(1)}" y="4" width="${(X(z.x1)-X(z.x0)).toFixed(1)}" height="74" fill="${z.t==='climb'?'rgba(216,76,38,.07)':'rgba(50,50,110,.05)'}"/>`).join('')}
+      <line x1="6" y1="${Y(RES).toFixed(1)}" x2="394" y2="${Y(RES).toFixed(1)}" stroke="#cfcfda" stroke-dasharray="3 4"/><line x1="6" y1="${Y(0).toFixed(1)}" x2="394" y2="${Y(0).toFixed(1)}" stroke="#e2e2ea"/>
+      ${segs.map(s=>`<path d="M${X(s.x0).toFixed(1)} ${Y(s.y0).toFixed(1)} L${X(s.x1).toFixed(1)} ${Y(s.y1).toFixed(1)}" stroke="${s.t==='fly'?'#32326E':'#d84c26'}" stroke-width="${s.t==='fly'?2:2.5}" fill="none" stroke-linecap="round"/>`).join('')}
+      ${pts.map((q,i)=>`<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.soc).toFixed(1)}" r="3" fill="${q.soc<RES?'#b3261e':'#32326E'}"/><text x="${X(q.x).toFixed(1)}" y="${(Y(q.soc)+(i===0?-8:14)).toFixed(1)}" font-size="10" font-weight="600" fill="${q.soc<RES?'#b3261e':'#32326E'}" text-anchor="${i===0?'start':i===pts.length-1?'end':'middle'}">${Math.round(q.soc)} %${q.id?' · '+q.id:''}</text>`).join('')}
+      <text x="6" y="${(Y(RES)+11).toFixed(1)}" font-size="9" fill="#6f7290">reserve ${RES} %</text></svg>
+      </div>`; })()}
+    <div class="acc ${S.open.route?'open':''}" data-acc="route"><button><span>Route <span class="sub">${d.legs.length} leg${d.legs.length>1?'s':''} · ${c.length-2>0?(c.length-2)+' stop'+(c.length-2>1?'s':''):'no stops'}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
+      <div class="pane"><table class="tbl"><tr><th>Leg</th><th class="r">${ukm()}</th><th class="r">Time</th><th class="r">kWh</th></tr>
+      ${d.legs.map((l,i)=>`<tr><td><span class="mu num">${String(i+1).padStart(2,'0')}</span> ${esc(shortName(l.from.name))} → ${esc(shortName(l.to.name))}</td><td class="r num">${Math.round(km(l.distance_km))}</td><td class="r num">${fmtH(l.flight_time_h)}</td><td class="r num">${Math.round(l.energy_kwh)}</td></tr>`).join('')}</table>${d.climb.applies&&!d.legs[0].training?`<div class="hint num">Includes up to ${Math.round(d.climb.eMax)} kWh net climb per leg (10 % of battery), saturating at ${Math.round(d.climb.dSat)} km.</div>`:''}</div></div>
+    <div class="acc ${S.open.charging?'open':''}" data-acc="charging"><button><span>Charging <span class="sub">${d.kw} kW · ${Math.round(d.charged)} kWh</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
+      <div class="pane"><table class="tbl"><tr><th>Where</th><th class="r">kWh</th><th class="r">Time</th></tr>
+      ${d.charges.map(x=>`<tr><td>${esc(x.ident||'')} ${esc(shortName(x.name))} <span class="mu">${x.role==='stop'?'en route':x.role==='origin'?'back at base':S.trip==='retour'?'top-up to return':'to full'}</span></td><td class="r num">${Math.round(x.energy_kwh)}</td><td class="r num">${fmtMin(x.charge_time_min)}</td></tr>`).join('')}</table>
+      ${p.max_charge_kw&&ch.power_kw>p.max_charge_kw?`<div class="hint num">Charger ${ch.power_kw} kW capped at the aircraft's ${p.max_charge_kw} kW acceptance.</div>`:''}</div></div>
+    <div class="acc ${S.open.calc?'open':''}" data-acc="calc"><button><span>Calculation</span><svg class="ic"><use href="#i-chev"/></svg></button>
+      <div class="pane calc num"><div><span class="mu">Energy</span> ${d.climb.applies&&!d.legs[0].training?`${d.climb.cruisePerKm.toFixed(3)} kWh/km × ${Math.round(d.dist)} km + climb ${Math.round(d.legs.reduce((s,l)=>s+l.climb_kwh,0))} kWh`:`${r.avg_usage_kwh_per_100km} kWh/100 km × ${Math.round(d.dist)} km`} = <b>${Math.round(d.used)} kWh</b></div>
+      <div><span class="mu">Charge</span> ${Math.round(d.charged)} kWh ÷ ${d.kw} kW = <b>${fmtMin(d.chargeMin)}</b></div>
+      <div><span class="mu">Time</span> ${Math.round(d.dist)} km ÷ ${p.speed_kmh} km/h = <b>${fmtH(d.flyH)} h</b></div>
+      <div><span class="mu">Cost</span> ${Math.round(d.charged)} kWh × ${fpd.toFixed(fpd%1?2:0)} / day × €${TARIFF.toFixed(2)} = <b>€${fmtE(costDay)}</b></div></div></div>`;
+  $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add">Add to network</button><button class="btn i" data-act="share" title="Share this route"><svg class="ic"><use href="#i-share"/></svg></button></div>`;
+}
+const shortName = n => String(n||'').replace(/\s+(International\s+)?Airport$/i,'').replace(/\s+Airfield$/i,'');
+
+/* ======================================================================
+   Rail — network
+   ====================================================================== */
+function aggregate(){
+  const by={};
+  S.network.forEach(f=>{ const fpd=perDay(f);
+    f.charges.forEach(c=>{ if(!c.ident) return; const a=by[c.ident]||(by[c.ident]={ident:c.ident,name:c.name,flights:0,kwh:0,peak:0,kws:new Set(),list:[]});
+      a.flights+=fpd; a.kwh+=c.energy_kwh*fpd; a.peak=Math.max(a.peak,f.kw); a.kws.add(f.kw); if(!a.list.includes(f)) a.list.push(f); });
+    // departures count as movements at the origin too
+    const o=f.chain[0]; if(o){ const a=by[o.ident]||(by[o.ident]={ident:o.ident,name:o.name,flights:0,kwh:0,peak:0,kws:new Set(),list:[]}); if(!a.list.includes(f)) a.list.push(f); }
+  });
+  return Object.values(by).sort((a,b)=>b.kwh-a.kwh);
+}
+function renderNetwork(){
+  const ag=aggregate(); const ses=sessions(); const foc = S.filter && ag.find(a=>a.ident===S.filter) || null; if(foc) S.openAp[foc.ident]=true; const fst = foc ? apStats(foc.ident,ses) : null; const flights=S.network.reduce((s,f)=>s+perDay(f),0); const kwh=ag.reduce((s,a)=>s+a.kwh,0); const peak=loadProfile().peak;
+  $('#railBody').innerHTML = `
+    <div class="ph"><div>${foc?`<h3>${foc.ident} <span style="font-weight:400;color:var(--muted)">${esc(shortName(foc.name))}</span></h3><div class="sub num">${foc.list.length} route${foc.list.length===1?'':'s'} · ${fst.n} session${fst.n===1?'':'s'} / day · ${bays(foc.ident)} charger${bays(foc.ident)===1?'':'s'}</div>`:`<h3>Network</h3><div class="sub num">${ag.length} airport${ag.length===1?'':'s'} · ${S.network.length} route${S.network.length===1?'':'s'} · ${flights%1?flights.toFixed(1):flights} flight${flights===1?'':'s'} / day</div>`}</div><div class="tools">${foc?'<button class="lnk" data-act="focus" data-ap="">← All airports</button>':(S.network.length?'<button class="lnk" data-act="clear">Clear all</button>':'')}</div></div>
+    ${S.network.length?`${foc?`<div class="tiles"><div><div class="cap">Sessions</div><div class="v num">${fst.n}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${foc.kwh>=1000?(foc.kwh/1000).toFixed(1):Math.round(foc.kwh)}<small>${foc.kwh>=1000?'MWh':'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${fst.peak>=1000?(fst.peak/1000).toFixed(1):fst.peak}<small>${fst.peak>=1000?'MW':'kW'}</small></div></div><div><div class="cap">Max wait</div><div class="v num">${fst.waits?fst.maxWait:'0'}<small>${fst.waits?'min · '+fst.waits+' / day':'min · no waiting'}</small></div></div></div>`:`<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${ag.length}</div></div><div><div class="cap">Flights</div><div class="v num">${flights%1?flights.toFixed(1):flights}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${kwh>=1000?(kwh/1000).toFixed(1):Math.round(kwh)}<small>${kwh>=1000?'MWh':'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${peak>=1000?(peak/1000).toFixed(1):peak}<small>${peak>=1000?'MW':'kW'}</small></div></div></div>`}
+    <div class="ntool"><span class="cap">Show</span><select data-act="filter"><option value="">All airports</option>${ag.map(a=>`<option value="${a.ident}" ${S.filter===a.ident?'selected':''}>${a.ident} · ${esc(shortName(a.name))}</option>`).join('')}</select><span class="sp"></span><span class="hint num" style="margin:0">€${fmtE(kwh*TARIFF)} / day</span></div>
+    ${ag.filter(a=>!S.filter||a.ident===S.filter).map(a=>`<div class="ap ${S.openAp[a.ident]?'open':''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(shortName(a.name))}<small>${a.list.length} route${a.list.length===1?'':'s'}${ASSETS[a.ident]?' · NRG2FLY site':''}</small></span>
+      <span class="st num">${a.flights?(a.flights%1?a.flights.toFixed(1):a.flights):"—"}<small>charges / day</small></span><span class="st num">${a.kwh?Math.round(a.kwh):"—"}<small>kWh / day</small></span><span class="st num">${apStats(a.ident,ses).peak||"—"}<small>peak kW</small></span><svg class="ic"><use href="#i-chev"/></svg></button>
+      <div class="pane">${a.list.map(f=>`<div class="fl"><span class="t">${f.chain.map(c=>c.ident).join(' → ')}<small>${esc(f.planeName)} · ${tripLabel[f.trip]}</small></span><span class="mu num">${f.freq} / ${f.per}</span><span class="mu num">${Math.round(f.charged)} kWh</span><button class="rm" data-act="rm" data-id="${f.id}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button></div>`).join('')}
+      ${(st=>`<div class="bays"><span class="cap">Chargers</span><span class="step"><button data-act="bay" data-ap="${a.ident}" data-d="-1" title="Remove a charger">−</button><b class="num">${bays(a.ident)}</b><button data-act="bay" data-ap="${a.ident}" data-d="1" title="Add a charger">+</button></span><span class="hint num" style="margin:0 0 0 auto">${st.n} session${st.n===1?'':'s'} / day · ${st.waits?st.waits+' wait · max '+st.maxWait+' min':'no waiting'}</span>${foc?'':`<button class="lnk" data-act="focus" data-ap="${a.ident}">Isolate</button>`}</div>`)(apStats(a.ident,ses))}<div class="fleet">${[...a.kws].sort((x,y)=>y-x).map(k=>`<span class="num">${k} kW</span>`).join('')}</div></div></div>`).join('')}`
+    :`<div class="cap" style="padding:12px var(--pad) 8px">Empty network · start from a scenario</div><div class="scen">${Object.entries(SCENARIOS).map(([k,s])=>`<div class="sc"><b>${s.title}</b><small>${s.meta}</small><div class="sp">${s.spark.map(v=>`<i style="height:${v}%"></i>`).join('')}</div><button class="lnk" data-act="scenario" data-k="${k}">Load</button></div>`).join('')}</div><div class="hint" style="padding:0 var(--pad) 14px">Or plan a route in Plan mode and add it — each flight contributes charging demand to its departure and arrival airports.</div>`}`;
+  $('#railFoot').innerHTML = S.network.length ? `<div class="btns"><button class="btn p" data-act="exp" data-exp="share">Share build</button><button class="btn" data-act="exp" data-exp="pdf">PDF</button><button class="btn" data-act="exp" data-exp="xlsx">XLSX</button></div>` : '';
+}
+
+/* ======================================================================
+   Drawer — demand timeline (derived from saved flights; mock scheduling)
+   ====================================================================== */
+const bays = ap => S.bays[ap] || ((ASSETS[ap]&&ASSETS[ap].plugs&&ASSETS[ap].plugs.length)||1);
+const planeShort = n => String(n||'').replace(/^Beta /,'').split(' — ')[0].replace(/ \(.*\)$/,'');
+function sessions(){ // departures + charging sessions on the illustrative day (departures spread 08:00–18:00), queued per airport onto its charger bays
+  const raw=[]; S.network.forEach((f,ri)=>{ const n=Math.max(1,Math.round(perDay(f))); const off=((ri*37)%50)/60;
+    for(let k=0;k<n;k++){ let t=8+off+k*(10/n); const inst=f.id+'#'+k;
+      f.legs.forEach((l,i)=>{ const from=f.chain[i], to=f.chain[i+1]||f.chain[0];
+        if(from) raw.push({type:'fly',inst,seq:raw.length,ap:from.ident,start:t,dur:l.flight_time_h,to:to?to.ident:'',plane:f.planeName,training:f.trip==='training'});
+        t+=l.flight_time_h;
+        const ch=to&&f.charges.find(c=>c.ident===to.ident&&(c.role!=='origin'||i===f.legs.length-1));
+        if(to&&ch&&ch.energy_kwh>0){ raw.push({type:'chg',inst,seq:raw.length,ap:to.ident,from:from?from.ident:'',req:t,start:t,dur:Math.max(ch.charge_time_min,3)/60,kw:f.kw,kwh:ch.energy_kwh,plane:f.planeName,wait:0,bay:0}); if(ch.role==='stop') t+=ch.charge_time_min/60; } }); } });
+  const byAp={}; raw.filter(s=>s.type==='chg').forEach(s=>(byAp[s.ap]=byAp[s.ap]||[]).push(s));
+  Object.entries(byAp).forEach(([ap,list])=>{ const free=new Array(bays(ap)).fill(-1);
+    list.sort((a,b)=>a.req-b.req).forEach(s=>{ let b=0; for(let i=1;i<free.length;i++) if(free[i]<free[b]) b=i; s.bay=b; s.start=Math.max(s.req,free[b]); s.wait=s.start-s.req; free[b]=s.start+s.dur; }); });
+  return raw; }
+const H0=6,H1=23,SPAN=H1-H0,SLOTS=SPAN*4;
+function loadProfile(ses, ap){ ses=ses||sessions(); const load=new Array(SLOTS).fill(0);
+  ses.filter(s=>s.type==='chg'&&(!ap||s.ap===ap)).forEach(s=>{ const a=Math.max(0,Math.floor((s.start-H0)*4)), b=Math.min(SLOTS,Math.ceil((s.start+s.dur-H0)*4)); for(let i=a;i<b;i++) load[i]+=s.kw; });
+  return { load, peak: load.reduce((m,v)=>Math.max(m,v),0) }; }
+const fmtKw = v => v>=1000 ? (v/1000).toFixed(1)+' MW' : Math.round(v)+' kW';
+const apStats = (ap, ses) => { const cs=ses.filter(s=>s.type==='chg'&&s.ap===ap); const w=cs.filter(s=>s.wait>0); return { n:cs.length, waits:w.length, maxWait:Math.round(Math.max(0,...cs.map(s=>s.wait))*60), peak:loadProfile(ses,ap).peak }; };
+function fleet(ses){ // rotations chained per flight instance, then assigned to the first free aircraft of that type (20 min turnaround)
+  const inst={}; ses.forEach(s=>{ (inst[s.inst]=inst[s.inst]||{id:s.inst,plane:s.plane,items:[]}).items.push(s); });
+  const list=Object.values(inst).map(o=>{ o.items.sort((a,b)=>a.seq-b.seq); let t=-1; o.items.forEach(s=>{ s.fstart=Math.max(s.start,t); s.fend=s.fstart+s.dur; t=s.fend; }); o.start=o.items[0].fstart; o.end=t; o.aps=new Set(o.items.map(s=>s.ap)); return o; }).sort((a,b)=>a.start-b.start);
+  const tails=[], TURN=20/60;
+  list.forEach(o=>{ let tl=tails.find(x=>x.plane===o.plane&&x.free+TURN<=o.start); if(!tl){ tl={plane:o.plane,idx:tails.filter(x=>x.plane===o.plane).length+1,free:-1,items:[]}; tails.push(tl); } tl.items.push(o); tl.free=o.end; });
+  tails.sort((a,b)=>a.plane.localeCompare(b.plane)||a.idx-b.idx);
+  return tails; }
+function renderDrawer(){
+  const ag=aggregate(); const flights=S.network.reduce((s,f)=>s+perDay(f),0); const ses=sessions(); const {load,peak}=loadProfile(ses);
+  const foc = S.filter && ag.find(a=>a.ident===S.filter) ? S.filter : '';
+  const rowsAg = foc ? ag.filter(a=>a.ident===foc) : (S.showDep ? ag : ag.filter(a=>ses.some(s=>s.ap===a.ident&&s.type==='chg')));
+  const fp = foc ? loadProfile(ses,foc) : null;
+  const chip=$('#focChip'); chip.hidden=!foc; if(foc) chip.innerHTML=`${foc} ${esc(shortName(AP_BY_ID[foc]?AP_BY_ID[foc].name:foc))} <svg class="ic" style="width:12px;height:12px"><use href="#i-x"/></svg>`;
+  $$('#laneSeg button').forEach(b=>b.classList.toggle('on',b.dataset.lanes===S.lanes));
+  $('#depSw').parentElement.querySelector('.dep-lbl').hidden = S.lanes==='fleet'; $('#depSw').hidden = S.lanes==='fleet';
+  const tails = S.lanes==='fleet' ? fleet(ses).map(t=>({...t,items:t.items.filter(o=>!foc||o.aps.has(foc))})).filter(t=>t.items.length) : [];
+  const busy = tails.reduce((s,t)=>s+t.items.reduce((u,o)=>u+o.items.reduce((v,i)=>v+i.dur,0),0),0);
+  $('#drawerSub').textContent = !S.network.length ? 'no flights yet'
+    : S.lanes==='fleet' ? `${tails.length} aircraft needed${foc?' through '+foc:''} · ${flights%1?flights.toFixed(1):flights} flights / day · utilisation ${tails.length?Math.round(busy/(tails.length*12)*100):0} %`
+    : foc ? (st=>`${st.n} sessions / day · ${bays(foc)} charger${bays(foc)===1?'':'s'} · peak ${fmtKw(st.peak)}${st.waits?' · max wait '+st.maxWait+' min':' · no waiting'}`)(apStats(foc,ses))
+    : `${ag.length} airports · ${flights%1?flights.toFixed(1):flights} flights / day · peak load ${fmtKw(peak)}`;
+  $('#netCount').textContent = S.network.length ? S.network.length : '';
+  const pct=h=>Math.max(0,Math.min(100,(h-H0)/SPAN*100)); const w=h=>Math.max(.5,h/SPAN*100);
+  const ticks=[]; for(let h=H0;h<H1;h+=2) ticks.push(`<div class="tick" style="left:${pct(h)}%"><span>${String(h).padStart(2,'0')}:00</span></div>`);
+  const bare=ticks.map(t=>t.replace(/<span>.*?<\/span>/,'')).join('');
+  let rows = `<div class="grow axis"><div class="lab"></div><div class="track">${ticks.join('')}</div></div>`; let lanes=0, anyWait=false;
+  const fly = s => `<div class="blk fly num" style="left:${pct(s.fstart??s.start)}%;width:${w(s.dur)}%" title="${esc(s.plane)} ${s.training?'circuits at '+s.ap:'→ '+s.to}">${s.dur/SPAN*100>6?(s.training?'circuits':'→ '+s.to):''}</div>`;
+  const chg = s => `<div class="blk chg num" style="left:${pct(s.fstart??s.start)}%;width:${w(s.dur)}%" title="${esc(s.plane)} from ${s.from} · ${Math.round(s.kwh)} kWh at ${s.kw} kW${s.wait?' · waited '+Math.round(s.wait*60)+' min':''}">${S.lanes==='fleet'?(s.dur/SPAN*100>4.2?s.ap:''):foc?(s.dur/SPAN*100>4.2?s.from:''):(s.dur/SPAN*100>6.5?fmtKw(s.kw):'')}</div>`;
+  const wait = (s,i,all) => `<div class="blk wait num ${s.wait>=1?'over':''}" style="left:${pct(s.req)}%;width:${w(s.wait)}%" title="${esc(s.plane)} waits ${Math.round(s.wait*60)} min for a charger">${all.length<=3&&s.wait/SPAN*100>6?Math.round(s.wait*60)+' min':''}</div>`;
+  if(!S.network.length) rows += `<div class="empty">Add a route to the network to see its charging sessions on the day.</div>`;
+  else if(S.lanes==='fleet'){
+    const byType={}; tails.forEach(t=>byType[t.plane]=(byType[t.plane]||0)+1);
+    tails.forEach(t=>{ const blocks=t.items.flatMap(o=>o.items).map(s=> s.type==='fly' ? fly(s) : (s.wait>0?`<div class="blk wait" style="left:${pct(s.fstart-s.wait)}%;width:${w(s.wait)}%" title="waits ${Math.round(s.wait*60)} min for a charger"></div>`:'')+chg(s)).join('');
+      if(t.items.some(o=>o.items.some(s=>s.wait>0))) anyWait=true;
+      rows += `<div class="grow"><div class="lab">${esc(planeShort(t.plane))} ${t.idx}<small>${t.items.length} rotation${t.items.length===1?'':'s'}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; });
+    rows += `<div class="hint" style="padding:8px 0 0">Fleet needed: <b style="color:var(--ink)">${tails.length} aircraft</b> — ${Object.entries(byType).map(([p,n])=>`${n} × ${esc(planeShort(p))}`).join(', ')} · 20 min turnaround · utilisation ${tails.length?Math.round(busy/(tails.length*12)*100):0} % of a 12 h day</div>`;
+  } else {
+    const L2 = fp ? fp.load : load, P2 = fp ? fp.peak : peak;
+    const path = L2.map((v,i)=>{ const y=(40-(P2?v/P2*36:0)).toFixed(1); return `L${i} ${y} L${i+1} ${y}`; }).join(' ');
+    rows += `<div class="grow load"><div class="lab">${foc?foc+' load':'Network load'}<small>peak ${fmtKw(P2)}</small></div><div class="track">${bare}<svg viewBox="0 0 ${SLOTS} 40" preserveAspectRatio="none"><path d="M0 40 ${path} L${SLOTS} 40 Z"/></svg></div></div>`;
+    rowsAg.forEach(a=>{ const cs=ses.filter(s=>s.type==='chg'&&s.ap===a.ident); const nb=bays(a.ident); const waits=cs.filter(s=>s.wait>0); if(waits.length) anyWait=true;
+      const flyB = S.showDep ? ses.filter(s=>s.type==='fly'&&s.ap===a.ident).map(fly).join('') : '';
+      const lab = `<div class="lab"><button data-act="focus" data-ap="${a.ident}" title="Isolate ${a.ident}">${a.ident}</button><small>${esc(shortName(a.name))}</small></div>`;
+      if(!foc && nb===1 && !waits.length){ rows += `<div class="grow">${lab}<div class="track">${bare}${flyB}${cs.map(chg).join('')}</div></div>`; lanes++; return; }
+      if(waits.length){ rows += `<div class="grow">${lab}<div class="track">${bare}${waits.map(wait).join('')}</div></div>`; lanes++; }
+      for(let b=0;b<nb;b++){ rows += `<div class="grow ${(waits.length||b>0)?'sub':''}">${(waits.length||b>0)?`<div class="lab">charger ${b+1}</div>`:lab}<div class="track">${bare}${b===0?flyB:''}${cs.filter(s=>s.bay===b).map(chg).join('')}</div></div>`; lanes++; } });
+  }
+  $('#gantt').innerHTML = rows + `<div class="glegend"><span><i class="c"></i>Charging session</span>${anyWait?'<span><i class="w"></i>Waiting for a charger</span>':''}${(S.showDep||S.lanes==='fleet')?'<span><i></i>Flying</span>':''}<span style="margin-left:auto">Departures spread 08:00–18:00 · illustrative scheduling</span></div>`;
+  const want = 36 + 22 + (S.network.length?(S.lanes==='fleet'?30:44):60) + lanes*28 + 44;
+  $('#drawer').style.setProperty('--drawer-h', Math.min(Math.round(window.innerHeight*0.6), want)+'px');
+}
+
+/* ======================================================================
+   Scenarios — the demos behind the empty state and the deep links
+   ====================================================================== */
+const SCENARIOS = {
+  hub:      { title:'Hub base', meta:'1 base · 8 return routes · 18 flights / day', bays:{EHLE:2}, focus:'EHLE', spark:[20,90,70,40,30,95,60,35,20],
+              routes:[['EHLE','EDDF','beta_plane',3,'day','retour'],['EHLE','EDDL','beta_plane',3,'day','retour'],['EHLE','EBBR','beta_plane',2,'day','retour'],['EHLE','EGKB','beta_plane',2,'day','retour'],['EHLE','LFPB','beta_plane',2,'day','retour'],['EHLE','EDDH','vaeridion',2,'day','retour'],['EHLE','EDDV','beta_plane',2,'day','retour'],['EHLE','EDDS','beta_plane',2,'day','retour']] },
+  regional: { title:'Regional network', meta:'13 airports · 12 routes · 26 flights / day', bays:{}, focus:'', spark:[30,60,80,50,40,70,55,45,25],
+              routes:[['EHLE','EDDF','beta_plane',1,'day','one-way'],['EHAM','EDLS','beta_plane',3,'day','one-way'],['EHRD','EBBR','beta_plane',2,'day','one-way'],['EHGG','EDDH','beta_plane',1,'day','retour'],['EHEH','EDDL','vaeridion',2,'day','one-way'],['EDDF','EDDM','beta_plane',2,'day','one-way'],['EHLE','EHTE','pipistrel_velis',4,'day','retour'],['EBBR','LFPB','vaeridion',1,'day','one-way'],['EHBK','EDDL','pipistrel_velis',2,'day','one-way'],['EHAM','EHGG','beta_plane',2,'day','retour'],['EDLS','EDDF','beta_plane',1,'day','one-way'],['EHSE','EHRD','pipistrel_velis',5,'day','one-way']] },
+  training: { title:'Training school', meta:'1 airfield · Velis circuits · 12 sorties / day', bays:{EHTE:3}, focus:'EHTE', spark:[50,50,50,50,50,50,50,50,50],
+              routes:[['EHTE','EHTE','pipistrel_velis',12,'day','training']] }
+};
+async function loadScenario(key, opts={}){
+  const sc=SCENARIOS[key]; if(!sc) return; S.network=[]; S.bays={...sc.bays, ...(opts.bays||{})}; S.openAp={}; S.filter='';
+  toast(`Loading ${sc.title}…`);
+  for(const [o,d,pl,fr,per,tr] of sc.routes){ if(!AP_BY_ID[o]||!AP_BY_ID[d]) continue; S.origin=AP_BY_ID[o]; S.dest=AP_BY_ID[d]; S.stops=[]; S.planeId=pl; const dc=plane().default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; S.freq=fr; S.per=per; S.trip=tr; await simulate(); if(S.result) addToNetwork(); }
+  S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.stops=[]; S.trip='one-way'; S.freq=1; S.planeId='beta_plane'; S.chargerId='dc_320'; S.rail='form'; S.result=null;
+  if(sc.focus) S.openAp[sc.focus]=true;
+  setMode('network'); $('#drawer').classList.add('open'); renderDrawer(); drawNet();
+  toast(`${sc.title} loaded — ${S.network.length} routes`);
+}
+
+/* ======================================================================
+   Actions
+   ====================================================================== */
+function renderRail(){
+  const rail=$('#rail'); rail.classList.toggle('wide', S.mode==='network');
+  if(S.mode==='network') renderNetwork(); else if(S.rail==='result'&&S.result) renderResult(); else renderForm();
+  renderDrawer();
+}
+async function simulate(){
+  const c=chain(); if(S.trip==='training'&&!S.origin){ S.err='Pick a departure airport.'; renderRail(); return; }
+  if(S.trip!=='training'&&(!S.origin||!S.dest)){ S.err='Pick a departure and a destination.'; renderRail(); return; }
+  if(S.trip==='circular'&&!S.stops.filter(Boolean).length){ S.err='A circular trip needs at least one stop.'; renderRail(); return; }
+  const toC=a=>({ident:a.ident,name:a.name,lat:a.latitude_deg,lon:a.longitude_deg});
+  const stops=S.stops.filter(Boolean).map(toC);
+  const payload={origin:toC(S.origin),destination:S.trip==='training'?toC(S.origin):toC(S.dest),plane_id:S.planeId,charger_id:S.chargerId,trip_type:S.trip};
+  if(S.trip==='training') payload.training_range_km=plane().training_range_km||0;
+  if(S.trip==='circular'){ const ring=[...stops,toC(S.dest)]; payload.destination=ring[ring.length-1]; payload.stops=ring.slice(0,-1); if(!payload.stops.length){ payload.stops=[toC(S.dest)]; payload.destination=toC(S.origin); } }
+  else if(stops.length) payload.stops=stops;
+  S.busy=true; S.err=''; renderRail();
+  try{ const r=await fetch('/api/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j=await r.json();
+    if(!r.ok||j.error){ S.err=j.error||('Simulate failed ('+r.status+')'); S.result=null; }
+    else { S.result=j; S.rail='result'; S.open={route:true,charging:false,calc:false}; }
+  }catch(e){ S.err='Simulate failed: '+e.message; }
+  S.busy=false; renderRail(); drawRoute(true);
+}
+function addToNetwork(){
+  const r=S.result; if(!r) return; const d=derive(r); const c=chain();
+  const cc = S.trip==='retour' ? [...c, c[0]] : c;
+  const f={ id:Date.now().toString(36), chain:cc.map(a=>({ident:a.ident,name:a.name,lat:a.latitude_deg,lon:a.longitude_deg})), planeId:S.planeId, planeName:plane().name, chargerId:S.chargerId, kw:d.kw, trip:S.trip, freq:S.freq, per:S.per,
+    legs:d.legs.map(l=>({distance_km:l.distance_km,energy_kwh:l.energy_kwh,flight_time_h:l.flight_time_h})), charges:d.charges.map(x=>({ident:x.ident,name:x.name,energy_kwh:x.energy_kwh,charge_time_min:x.charge_time_min,role:x.role})), charged:d.charged, used:d.used };
+  S.network.push(f); localStorage.setItem('cnsA.network',JSON.stringify(S.network));
+  toast(`Added ${f.chain.map(x=>x.ident).join(' → ')} to the network`); drawNet(); renderRail();
+}
+function fitNet(){ const fs=S.network.filter(f=>!S.filter||f.chain.some(c=>c.ident===S.filter)); if(!fs.length) return; map.fitBounds(L.latLngBounds(fs.flatMap(f=>f.chain.map(c=>[c.lat,c.lon]))),{paddingTopLeft:[560,60],paddingBottomRight:[40,80],maxZoom:8,animate:false}); }
+function setMode(m){ S.mode=m; document.body.classList.toggle('net',m==='network'); if(m==='network') map.removeLayer(routeLayer); else if(!map.hasLayer(routeLayer)) routeLayer.addTo(map); $$('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m)); renderRail(); if(m==='network'){ drawNet(); if(S.network.length){ const pts=S.network.flatMap(f=>f.chain.map(c=>[c.lat,c.lon])); map.fitBounds(L.latLngBounds(pts),{paddingTopLeft:[560,60],paddingBottomRight:[40,80],maxZoom:8,animate:false}); } } }
+function resetForm(){ S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.stops=[]; S.trip='one-way'; S.freq=1; S.per='day'; S.planeId='beta_plane'; S.chargerId='dc_320'; S.picking=false; S.allChargers=false; onFormChange(true); }
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('#laneSeg button,#depSw,#focChip,[data-act],[data-seg] button,[data-acc]>button,[data-ap]>button,#modeSeg button,#unitSeg button,#mapDd [data-base],#expDd [data-exp],#drawerHead');
+  // dropdown toggles
+  const dd={mapBtn:'mapDd',expBtn:'expDd',setBtn:'setDd'}; const tb=e.target.closest('#mapBtn,#expBtn,#setBtn');
+  $$('.dd').forEach(x=>{ if(!(tb&&x.id===dd[tb.id])&&!x.contains(e.target)) x.classList.remove('open'); });
+  if(tb){ $('#'+dd[tb.id]).classList.toggle('open'); return; }
+  if(!t) return;
+  if(t.closest('#laneSeg')){ S.lanes=t.dataset.lanes; renderDrawer(); return; }
+  if(t.id==='focChip'){ S.filter=''; renderRail(); drawNet(); fitNet(); return; }
+  if(t.id==='depSw'){ S.showDep=!S.showDep; t.classList.toggle('on',S.showDep); renderDrawer(); return; }
+  if(t.id==='drawerHead'){ $('#drawer').classList.toggle('open'); return; }
+  if(t.closest('#modeSeg')){ setMode(t.dataset.mode); return; }
+  if(t.closest('#unitSeg')){ S.units=t.dataset.u; $$('#unitSeg button').forEach(b=>b.classList.toggle('on',b===t)); renderRail(); drawRoute(false); return; }
+  if(t.dataset.base){ Object.values(BASES).forEach(b=>map.removeLayer(b)); BASES[t.dataset.base].addTo(map); $$('#mapDd [data-base]').forEach(b=>b.classList.toggle('on',b===t)); return; }
+  if(t.closest('#expDd')||t.dataset.act==='exp'){ toast({pdf:'Advisory report — not wired in the prototype',xlsx:'Demand workbook — not wired in the prototype',share:'Share link copied (mock)'}[t.dataset.exp]); $$('.dd').forEach(x=>x.classList.remove('open')); return; }
+  const seg=t.closest('[data-seg]'); if(seg){ S[seg.dataset.seg]=t.dataset.v; if(seg.dataset.seg==='trip') onFormChange(true); else { renderRail(); } return; }
+  const acc=t.closest('[data-acc]'); if(acc){ S.open[acc.dataset.acc]=!S.open[acc.dataset.acc]; acc.classList.toggle('open'); return; }
+  const ap=t.closest('[data-ap]'); if(ap&&!t.dataset.act){ S.openAp[ap.dataset.ap]=!S.openAp[ap.dataset.ap]; ap.classList.toggle('open'); return; }
+  switch(t.dataset.act){
+    case 'simulate': simulate(); break;
+    case 'reset': resetForm(); toast('Form reset'); break;
+    case 'edit': S.rail='form'; renderRail(); break;
+    case 'add': addToNetwork(); break;
+    case 'share': toast('Share link copied (mock)'); break;
+    case 'pick': S.picking=!S.picking; renderRail(); break;
+    case 'plane': S.planeId=t.dataset.id; S.picking=false; const dc=plane().default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; onFormChange(false); break;
+    case 'charger': S.chargerId=t.dataset.id; S.allChargers=false; onFormChange(false); break;
+    case 'allChargers': S.allChargers=!S.allChargers; renderRail(); break;
+    case 'addStop': S.stops.push(null); renderRail(); setTimeout(()=>{ const i=$$('[data-ac^=stop]').pop(); i&&i.focus(); },0); break;
+    case 'rmStop': S.stops.splice(+t.dataset.i,1); onFormChange(true); break;
+    case 'estimates': S.estimates=!S.estimates; renderRail(); break;
+    case 'focus': S.filter=t.dataset.ap||''; if(S.filter) S.openAp[S.filter]=true; renderRail(); drawNet(); fitNet(); break;
+    case 'scenario': loadScenario(t.dataset.k); break;
+    case 'bay': S.bays[t.dataset.ap]=Math.max(1,bays(t.dataset.ap)+ +t.dataset.d); localStorage.setItem('cnsA.bays',JSON.stringify(S.bays)); renderRail(); break;
+    case 'rm': S.network=S.network.filter(f=>f.id!==t.dataset.id); localStorage.setItem('cnsA.network',JSON.stringify(S.network)); drawNet(); renderRail(); break;
+    case 'clear': if(S.network.length&&confirm('Remove all routes from the network?')){ S.network=[]; localStorage.setItem('cnsA.network','[]'); drawNet(); renderRail(); } break;
+  }
+});
+document.addEventListener('change',e=>{ const t=e.target;
+  if(t.dataset.act==='freq'){ S.freq=Math.max(1,Math.min(99,+t.value||1)); if(S.result) renderRail(); }
+  if(t.dataset.act==='filter'){ S.filter=t.value; if(S.filter) S.openAp[S.filter]=true; renderRail(); drawNet(); fitNet(); }
+  if(t.id==='ckSmall'){ S.showSmall=t.checked; map.fire('zoomend'); }
+  if(t.id==='ckAssets'){ S.showAssets=t.checked; drawAssets(); }
+  if(t.id==='ckNet'){ S.showNet=t.checked; drawNet(); }
+});
+document.addEventListener('input',e=>{ if(e.target.dataset.act==='freq'){ S.freq=Math.max(1,Math.min(99,+e.target.value||1)); } });
+$('#tourBtn').onclick=()=>toast('Guided tour — not wired in the prototype');
+
+/* ======================================================================
+   Command palette — ⌘K / Ctrl-K
+   ====================================================================== */
+const CMD={items:[],hl:0};
+function flyTo(a){ map.flyTo(ll(a), Math.max(map.getZoom(),8)); setTimeout(()=>L.popup({offset:[0,-2]}).setLatLng(ll(a)).setContent(airportPopup(a)).openOn(map),400); }
+function cmdItems(q){
+  const ql=(q||'').trim().toLowerCase(); const L=[]; const add=(g,label,run,k,sub)=>L.push({g,label,run,k,sub});
+  if(ql.length>=2) search(ql).slice(0,4).forEach((a,ai)=>{
+    add('Airports',`<b>${esc(a.ident)}</b> ${esc(a.name)}`,()=>flyTo(a),'fly to',esc(a.municipality||''));
+    if(ai>0) return;
+    add('Airports',`Set <b>${esc(a.ident)}</b> as departure`,()=>{ S.origin=a; setMode('plan'); onFormChange(true); },'D');
+    add('Airports',`Set <b>${esc(a.ident)}</b> as destination`,()=>{ S.dest=a; setMode('plan'); onFormChange(true); },'A');
+    add('Airports',`Add <b>${esc(a.ident)}</b> as a stop`,()=>{ S.stops.push(a); setMode('plan'); onFormChange(true); },'S');
+    if(S.network.some(f=>f.chain.some(c=>c.ident===a.ident))) add('Airports',`Isolate <b>${esc(a.ident)}</b> in the network`,()=>{ setMode('network'); S.filter=a.ident; S.openAp[a.ident]=true; renderRail(); drawNet(); fitNet(); $('#drawer').classList.add('open'); },'I'); });
+  const hit=s=>!ql||s.toLowerCase().includes(ql);
+  PLANES.filter(p=>ql&&hit(p.name)).slice(0,3).forEach(p=>add('Aircraft',`Aircraft: ${esc(p.name)}`,()=>{ S.planeId=p.id; const dc=p.default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; setMode('plan'); onFormChange(false); },'',`${p.range_km} km · ${p.battery_kwh||0} kWh`));
+  CHARGERS.filter(c=>ql&&hit(c.name)).slice(0,3).forEach(c=>add('Chargers',`Charger: ${esc(c.name)}`,()=>{ S.chargerId=c.id; setMode('plan'); onFormChange(false); }));
+  const A=[
+    ['Simulate the current route',()=>{ setMode('plan'); simulate(); },'↵'],
+    S.result?['Add the result to the network',()=>addToNetwork(),'']:null,
+    [S.mode==='network'?'Switch to Plan mode':'Switch to Network mode',()=>setMode(S.mode==='network'?'plan':'network'),'N'],
+    [S.lanes==='fleet'?'Timeline: airport lanes':'Timeline: fleet lanes',()=>{ S.lanes=S.lanes==='fleet'?'airports':'fleet'; $('#drawer').classList.add('open'); renderDrawer(); },'F'],
+    ['Timeline: toggle departures',()=>{ S.showDep=!S.showDep; $('#depSw').classList.toggle('on',S.showDep); renderDrawer(); }],
+    S.filter?['Show all airports',()=>{ S.filter=''; renderRail(); drawNet(); fitNet(); }]:null,
+    ['Load scenario: Hub base',()=>loadScenario('hub')],['Load scenario: Regional network',()=>loadScenario('regional')],['Load scenario: Training school',()=>loadScenario('training')],
+    ['Basemap: Light',()=>$('#mapDd [data-base=light]').click()],['Basemap: Street',()=>$('#mapDd [data-base=street]').click()],['Basemap: Satellite',()=>$('#mapDd [data-base=sat]').click()],
+    ['Units: kilometres',()=>$('#unitSeg [data-u=km]').click()],['Units: nautical miles',()=>$('#unitSeg [data-u=nm]').click()],
+    ['Export advisory report (PDF)',()=>toast('Advisory report — not wired in the prototype'),'⇧P'],['Export demand workbook (XLSX)',()=>toast('Demand workbook — not wired in the prototype'),'⇧X'],['Copy share link',()=>toast('Share link copied (mock)'),'⇧L'],
+    ['Reset the route form',()=>{ setMode('plan'); resetForm(); }],
+    S.network.length?['Clear the network',()=>{ if(confirm('Remove all routes from the network?')){ S.network=[]; localStorage.setItem('cnsA.network','[]'); drawNet(); renderRail(); } }]:null,
+  ].filter(Boolean).filter(([l])=>hit(l));
+  A.slice(0, ql?8:10).forEach(([l,run,k])=>add('Actions',esc(l),run,k||''));
+  return L.slice(0,14);
+}
+function cmdRender(){ const list=$('#cmdkList'); if(!CMD.items.length){ list.innerHTML='<div class="none">Nothing matches. Try an ICAO code, a city, an aircraft or an action.</div>'; return; }
+  let g=''; list.innerHTML=CMD.items.map((it,i)=>{ const h=it.g!==g?`<div class="grp">${it.g}</div>`:''; g=it.g; return `${h}<div class="it ${i===CMD.hl?'on':''}" data-i="${i}"><span>${it.label}${it.sub?` <span class="sub">${it.sub}</span>`:''}</span>${it.k?`<span class="k">${it.k}</span>`:''}</div>`; }).join('');
+  const on=list.querySelector('.it.on'); if(on) on.scrollIntoView({block:'nearest'}); }
+function cmdOpen(q){ const box=$('#cmdk'); box.hidden=false; const inp=$('#cmdkIn'); inp.value=q||''; CMD.items=cmdItems(inp.value); CMD.hl=0; cmdRender(); inp.focus(); }
+function cmdClose(){ $('#cmdk').hidden=true; }
+function cmdRun(i){ const it=CMD.items[i]; if(!it) return; cmdClose(); it.run(); }
+$('#cmdkIn').addEventListener('input',e=>{ CMD.items=cmdItems(e.target.value); CMD.hl=0; cmdRender(); });
+$('#cmdkIn').addEventListener('keydown',e=>{ if(e.key==='ArrowDown'){ CMD.hl=Math.min(CMD.items.length-1,CMD.hl+1); cmdRender(); e.preventDefault(); } else if(e.key==='ArrowUp'){ CMD.hl=Math.max(0,CMD.hl-1); cmdRender(); e.preventDefault(); } else if(e.key==='Enter'){ cmdRun(CMD.hl); e.preventDefault(); } else if(e.key==='Escape'){ cmdClose(); } });
+$('#cmdkList').addEventListener('click',e=>{ const it=e.target.closest('.it'); if(it) cmdRun(+it.dataset.i); });
+$('#cmdkList').addEventListener('mousemove',e=>{ const it=e.target.closest('.it'); if(it&&+it.dataset.i!==CMD.hl){ CMD.hl=+it.dataset.i; cmdRender(); } });
+document.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); $('#cmdk').hidden?cmdOpen(''):cmdClose(); } else if(e.key==='Escape'&&!$('#cmdk').hidden) cmdClose(); });
+document.addEventListener('click',e=>{ if(e.target.closest('[data-cmdk=close]')) cmdClose(); if(e.target.closest('#kbdHint')) cmdOpen(''); });
+
+/* ======================================================================
+   Boot
+   ====================================================================== */
+(async function boot(){
+  bindAc($('#q'), $('#qAc'), a=>{ $('#q').value=''; map.flyTo(ll(a), Math.max(map.getZoom(),8)); setTimeout(()=>L.popup({offset:[0,-2]}).setLatLng(ll(a)).setContent(airportPopup(a)).openOn(map),400); });
+  // Street basemap key: the app injects it server-side; borrow it from the index page so the prototype stays standalone.
+  fetch('/').then(r=>r.text()).then(t=>{ const m=t.match(/CARTO_KEY_QS\s*=\s*"([^"]*)"/); if(m&&m[1]){ window.CARTO_KEY_QS=m[1]; BASES.street.setUrl('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'+m[1]); } }).catch(()=>{});
+  const [aps, assets] = await Promise.all([fetch('/api/airports').then(r=>r.json()), fetch('/api/airport-chargers').then(r=>r.json()).catch(()=>({}))]);
+  AIRPORTS = aps.filter(a=>a.ident&&a.latitude_deg!=null); AIRPORTS.forEach(a=>AP_BY_ID[a.ident]=a); ASSETS = assets||{};
+  drawAirports(); drawAssets(); drawNet();
+  S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest];
+  renderRail(); drawRoute(true);
+  const [h,focusAp,view]=location.hash.replace('#','').split(':');
+  if(h==='big') await loadScenario('regional');
+  if(h==='hub'||h==='hub1') await loadScenario('hub',{bays:{EHLE:h==='hub1'?1:2}});
+  if(h==='training') await loadScenario('training');
+  if(h==='empty'){ S.network=[]; localStorage.setItem('cnsA.network','[]'); setMode('network'); }
+  if(view==='fleet'){ S.lanes='fleet'; renderDrawer(); }
+  if(h==='palette'){ cmdOpen('fra'); }
+  if(h==='multi'){ S.dest=AP_BY_ID['EDDM']; S.stops=[AP_BY_ID['EDDF']]; await simulate(); }
+  if(focusAp&&AP_BY_ID[focusAp]){ S.filter=focusAp; S.openAp[focusAp]=true; renderRail(); drawNet(); fitNet(); }
+  if(h==='result'||h==='network'){ await simulate(); if(h==='network'){ if(!S.network.length){ addToNetwork(); S.origin=AP_BY_ID['EHAM']; S.dest=AP_BY_ID['EDLS']; S.stops=[]; S.freq=3; await simulate(); addToNetwork(); } setMode('network'); $('#drawer').classList.add('open'); } }
+})();
+</script>
+</body></html>
