@@ -24,6 +24,7 @@
   --ease:cubic-bezier(.4,0,.2,1);
 }
 *{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
 html,body{height:100%}
 body{font:var(--fs)/1.4 Inter,system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--canvas);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum","cv11";overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
@@ -296,6 +297,38 @@ body.net .drawer{left:calc(520px + 24px)}
 .chip:hover{border-color:var(--ink)}
 .grow .lab button{font-weight:500;color:var(--ink)}
 .grow .lab button:hover{text-decoration:underline;text-underline-offset:2px}
+/* ---------- command palette ---------- */
+.cmdk{position:fixed;inset:0;z-index:100}
+.cmdk-dim{position:absolute;inset:0;background:rgba(50,50,110,.22)}
+.cmdk-box{position:absolute;left:50%;top:16vh;transform:translateX(-50%);width:560px;max-width:calc(100vw - 32px);background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 16px 48px rgba(50,50,110,.22), 0 2px 6px rgba(50,50,110,.08);overflow:hidden}
+.cmdk-in{display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+.cmdk-in input{flex:1;height:44px;border:0;outline:none;font-size:14px;background:transparent;color:var(--ink)}
+.cmdk-in input::placeholder{color:var(--faint)}
+.cmdk-list{max-height:min(52vh,420px);overflow:auto;padding:6px 0}
+.cmdk-list .grp{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:8px 14px 3px}
+.cmdk-list .it{display:flex;align-items:center;gap:10px;padding:7px 14px;font-size:13px;cursor:pointer}
+.cmdk-list .it.on{background:var(--canvas);box-shadow:inset 2px 0 0 var(--ink)}
+.cmdk-list .it b{font-weight:600;letter-spacing:.03em}
+.cmdk-list .it .sub{color:var(--muted);font-size:12px}
+.cmdk-list .it .k{margin-left:auto;font-size:10.5px;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 5px;white-space:nowrap}
+.cmdk-list .none{padding:18px 14px;color:var(--muted);font-size:12.5px}
+.cmdk-foot{display:flex;gap:14px;padding:7px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+.kbd{position:absolute;right:8px;top:7px;font-size:10px;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 4px;line-height:13px;cursor:pointer;background:var(--surface)}
+.kbd:hover{color:var(--ink);border-color:var(--ink)}
+/* ---------- scenarios (empty network) ---------- */
+.scen{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:0 var(--pad) 12px}
+.scen .sc{border:1px solid var(--line);border-radius:var(--r);padding:10px;background:var(--surface)}
+.scen .sc b{display:block;font-size:12.5px;font-weight:600}
+.scen .sc small{display:block;color:var(--muted);font-size:11px;margin-top:2px;line-height:1.35}
+.scen .sc .sp{display:flex;align-items:flex-end;gap:1px;height:26px;margin:8px 0}
+.scen .sc .sp i{flex:1;background:var(--ink);opacity:.7}
+/* ---------- state of charge ---------- */
+.soc{padding:10px var(--pad);border-bottom:1px solid var(--line)}
+.soc .lbl{margin-bottom:4px}
+.soc .lbl .r{font-size:11px;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0}
+.soc .lbl .r b{color:var(--ink)}
+.soc .lbl .r b.low{color:var(--danger)}
+.soc svg{width:100%;height:92px;display:block}
 </style></head>
 <body>
 <svg width="0" height="0" style="position:absolute"><defs>
@@ -317,7 +350,7 @@ body.net .drawer{left:calc(520px + 24px)}
   <div class="brand"><img src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2FLY"><span class="t">Charging Network Simulator</span></div>
   <div class="seg" id="modeSeg"><button data-mode="plan" class="on"><svg class="ic"><use href="#i-plane"/></svg>Plan</button><button data-mode="network"><svg class="ic"><use href="#i-net"/></svg>Network <span id="netCount" class="num"></span></button></div>
   <span class="sp"></span>
-  <div class="search"><svg class="ic"><use href="#i-search"/></svg><input id="q" placeholder="Find airport — ICAO, IATA or name" autocomplete="off"><div class="ac" id="qAc"></div></div>
+  <div class="search"><svg class="ic"><use href="#i-search"/></svg><input id="q" placeholder="Find airport — ICAO, IATA or name" autocomplete="off"><span class="kbd" id="kbdHint" title="Command palette">⌘K</span><div class="ac" id="qAc"></div></div>
   <div style="position:relative"><button class="tb" id="mapBtn"><svg class="ic"><use href="#i-layers"/></svg>Map</button>
     <div class="dd" id="mapDd"><div class="h">Basemap</div>
       <button data-base="light" class="on">Light</button><button data-base="street">Street</button><button data-base="sat">Satellite</button>
@@ -343,9 +376,12 @@ body.net .drawer{left:calc(520px + 24px)}
 <aside class="rail" id="rail"><div class="body" id="railBody"></div><div id="railFoot"></div></aside>
 
 <section class="drawer" id="drawer">
-  <div class="dh" id="drawerHead"><div class="t">Demand timeline <span id="drawerSub">no flights yet</span></div><div class="tools"><button class="chip" id="focChip" data-act="focus" data-ap="" hidden></button><span>Departures</span><button class="sw" id="depSw" title="Show departures on the timeline"></button><svg class="ic"><use href="#i-down"/></svg></div></div>
+  <div class="dh" id="drawerHead"><div class="t">Demand timeline <span id="drawerSub">no flights yet</span></div><div class="tools"><button class="chip" id="focChip" data-act="focus" data-ap="" hidden></button><div class="seg" id="laneSeg" style="height:24px"><button data-lanes="airports" class="on" style="padding:0 9px;font-size:11.5px">Airports</button><button data-lanes="fleet" style="padding:0 9px;font-size:11.5px">Fleet</button></div><span class="dep-lbl">Departures</span><button class="sw" id="depSw" title="Show departures on the timeline"></button><svg class="ic"><use href="#i-down"/></svg></div></div>
   <div class="gantt" id="gantt"></div>
 </section>
+<div class="cmdk" id="cmdk" hidden><div class="cmdk-dim" data-cmdk="close"></div>
+  <div class="cmdk-box"><div class="cmdk-in"><svg class="ic"><use href="#i-search"/></svg><input id="cmdkIn" placeholder="Airports, aircraft, chargers, or an action…" autocomplete="off" spellcheck="false"></div>
+  <div class="cmdk-list" id="cmdkList"></div><div class="cmdk-foot"><span>↑↓ move</span><span>↵ run</span><span>esc close</span><span style="margin-left:auto">⌘K anywhere</span></div></div></div>
 <div class="toast" id="toast"></div>
 <div class="mock">Prototype <a class="cur" href="instrument.html">A Instrument</a> · <a href="editorial.html">C Editorial</a> · raw Python engine numbers</div>
 
@@ -365,7 +401,7 @@ const S = {
   units:'km', estimates:false, result:null, busy:false, err:'',
   network: JSON.parse(localStorage.getItem('cnsA.network')||'[]'),
   bays: JSON.parse(localStorage.getItem('cnsA.bays')||'{}'),
-  base:'light', showDep:false, showSmall:false, showAssets:true, showNet:true, allChargers:false, picking:false,
+  base:'light', showDep:false, lanes:'airports', showSmall:false, showAssets:true, showNet:true, allChargers:false, picking:false,
   open:{route:false,charging:false,calc:false}, openAp:{}
 };
 const plane = () => PLANES.find(p=>p.id===S.planeId);
@@ -537,6 +573,7 @@ function derive(r){
   const charges = multi ? r.charges : (r.trip_type==='retour'
       ? [{name:r.destination.name,ident:S.dest?.ident,energy_kwh:r.recharge_energy_kwh,charge_time_min:r.charge_time_min,role:'dest'},{name:r.origin.name,ident:S.origin?.ident,energy_kwh:homeKwh,charge_time_min:homeKwh/kwEff*60,role:'origin'}]
       : [{name:r.destination.name,ident:S.dest?.ident||S.origin?.ident,energy_kwh:r.recharge_energy_kwh,charge_time_min:r.charge_time_min,role:'dest'}]);
+  const RESV=0.30, B=plane().battery_kwh||1; if(multi){ let soc=B; legs.forEach((l,i)=>{ soc-=l.energy_kwh; const q=charges.find(x=>x.role==='stop'&&x.name===l.to.name); if(q&&legs[i+1]){ const need=Math.max(0, legs[i+1].energy_kwh + RESV*B - soc); if(need>q.energy_kwh){ q.energy_kwh=Math.min(need, B-soc); q.charge_time_min=q.energy_kwh/kwEff*60; } soc+=q.energy_kwh; } }); }
   const charges2 = charges.filter(c=>c.energy_kwh>0.05);
   const charged = charges2.reduce((s,c)=>s+c.energy_kwh,0);
   const chargeMin = charges2.reduce((s,c)=>s+c.charge_time_min,0);
@@ -556,6 +593,16 @@ function renderResult(){
       <div><div class="cap">Charge</div><div class="v num">${Math.round(d.chargeMin)}<small>min</small></div><div class="s">${S.trip==='retour'?'at both ends':d.charges.length>1?'over '+d.charges.length+' stops':'at '+(lastCharge?.ident||'destination')}</div></div></div>
     <div class="cost"><div class="v num">€${fmtE(costDay)}<small>/ ${S.per==='day'?'day':'day avg'}</small></div><div class="m num">${Math.round(d.charged*fpd)} kWh · €${TARIFF.toFixed(2)} / kWh</div></div>
     <div class="split"><div class="b"><i class="f" style="flex:${d.flyH.toFixed(3)}"></i><i class="c" style="flex:${(d.chargeMin/60).toFixed(3)}"></i></div><div class="lg"><span><i></i>Fly ${fmtH(d.flyH)} h</span><span><i class="c"></i>Charge ${fmtMin(d.chargeMin)}</span><span style="margin-left:auto" class="num">${fmtD(d.dist)}</span></div></div>
+    ${(()=>{ const B=p.battery_kwh||1, RES=30; let soc=100, x=0; const total=d.legs.reduce((s,l)=>s+l.distance_km,0)||1; const used=new Set(); const segs=[], pts=[{x:0,soc:100,id:c[0]?c[0].ident:''}];
+      d.legs.forEach((l,i)=>{ const x1=x+l.distance_km/total*100, s1=soc-l.energy_kwh/B*100; segs.push({t:'fly',x0:x,y0:soc,x1,y1:s1}); soc=s1; x=x1; const arr=c[i+1]||c[0]; pts.push({x,soc,id:arr?arr.ident:''});
+        const j=d.charges.findIndex((q,k)=>!used.has(k)&&q.name===l.to.name); if(j>=0){ used.add(j); const q=d.charges[j], s2=Math.min(100,soc+q.energy_kwh/B*100); segs.push({t:'chg',x0:x,y0:soc,x1:x,y1:s2,min:q.charge_time_min,id:q.ident}); soc=s2; } });
+      const low=pts.reduce((m,q)=>Math.min(m,q.soc),100), lowPt=pts.find(q=>q.soc===low); const X=v=>6+v*3.88, Y=v=>6+(100-Math.max(0,v))*0.72;
+      return `<div class="soc"><div class="lbl"><span class="cap">Battery</span><span class="r">lowest <b class="${low<RES?'low':''}">${Math.round(low)} %</b>${lowPt&&lowPt.id?' at '+lowPt.id:''} · reserve ${RES} %</span></div>
+      <svg viewBox="0 0 400 92" preserveAspectRatio="none"><line x1="6" y1="${Y(RES).toFixed(1)}" x2="394" y2="${Y(RES).toFixed(1)}" stroke="#cfcfda" stroke-dasharray="3 4"/><line x1="6" y1="${Y(0).toFixed(1)}" x2="394" y2="${Y(0).toFixed(1)}" stroke="#e2e2ea"/>
+      ${segs.map(s=>`<path d="M${X(s.x0).toFixed(1)} ${Y(s.y0).toFixed(1)} L${X(s.x1).toFixed(1)} ${Y(s.y1).toFixed(1)}" stroke="${s.t==='fly'?'#32326E':'#d84c26'}" stroke-width="${s.t==='fly'?2:2.5}" fill="none" stroke-linecap="round"/>`).join('')}
+      ${pts.map((q,i)=>`<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.soc).toFixed(1)}" r="3" fill="${q.soc<RES?'#b3261e':'#32326E'}"/><text x="${X(q.x).toFixed(1)}" y="${(Y(q.soc)+(i===0?-8:14)).toFixed(1)}" font-size="10" font-weight="600" fill="${q.soc<RES?'#b3261e':'#32326E'}" text-anchor="${i===0?'start':i===pts.length-1?'end':'middle'}">${Math.round(q.soc)} %${q.id?' · '+q.id:''}</text>`).join('')}
+      <text x="6" y="${(Y(RES)+11).toFixed(1)}" font-size="9" fill="#6f7290">reserve ${RES} %</text></svg>
+      <div class="hint num">${segs.filter(s=>s.t==='chg').map(s=>`<b style="color:var(--accent);font-weight:600">${s.id||''} +${Math.round(s.y1-s.y0)} % · ${fmtMin(s.min)}</b>`).join(' · ')||'No charging on this trip'} · departs at 100 % · stop top-ups sized to arrive with the reserve</div></div>`; })()}
     <div class="acc ${S.open.route?'open':''}" data-acc="route"><button><span>Route <span class="sub">${d.legs.length} leg${d.legs.length>1?'s':''} · ${c.length-2>0?(c.length-2)+' stop'+(c.length-2>1?'s':''):'no stops'}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane"><table class="tbl"><tr><th>Leg</th><th class="r">${ukm()}</th><th class="r">Time</th><th class="r">kWh</th></tr>
       ${d.legs.map((l,i)=>`<tr><td><span class="mu num">${String(i+1).padStart(2,'0')}</span> ${esc(shortName(l.from.name))} → ${esc(shortName(l.to.name))}</td><td class="r num">${Math.round(km(l.distance_km))}</td><td class="r num">${fmtH(l.flight_time_h)}</td><td class="r num">${Math.round(l.energy_kwh)}</td></tr>`).join('')}</table></div></div>
@@ -588,14 +635,14 @@ function aggregate(){
 function renderNetwork(){
   const ag=aggregate(); const ses=sessions(); const foc = S.filter && ag.find(a=>a.ident===S.filter) || null; if(foc) S.openAp[foc.ident]=true; const fst = foc ? apStats(foc.ident,ses) : null; const flights=S.network.reduce((s,f)=>s+perDay(f),0); const kwh=ag.reduce((s,a)=>s+a.kwh,0); const peak=loadProfile().peak;
   $('#railBody').innerHTML = `
-    <div class="ph"><div>${foc?`<h3>${foc.ident} <span style="font-weight:400;color:var(--muted)">${esc(shortName(foc.name))}</span></h3><div class="sub num">${foc.list.length} route${foc.list.length===1?'':'s'} · ${fst.n} session${fst.n===1?'':'s'} / day · ${bays(foc.ident)} charger${bays(foc.ident)===1?'':'s'}</div>`:`<h3>Network</h3><div class="sub num">${ag.length} airport${ag.length===1?'':'s'} · ${S.network.length} route${S.network.length===1?'':'s'} · ${flights%1?flights.toFixed(1):flights} flight${flights===1?'':'s'} / day</div>`}</div><div class="tools">${foc?'<button class="lnk" data-act="focus" data-ap="">← All airports</button>':'<button class="lnk" data-act="clear">Clear all</button>'}</div></div>
+    <div class="ph"><div>${foc?`<h3>${foc.ident} <span style="font-weight:400;color:var(--muted)">${esc(shortName(foc.name))}</span></h3><div class="sub num">${foc.list.length} route${foc.list.length===1?'':'s'} · ${fst.n} session${fst.n===1?'':'s'} / day · ${bays(foc.ident)} charger${bays(foc.ident)===1?'':'s'}</div>`:`<h3>Network</h3><div class="sub num">${ag.length} airport${ag.length===1?'':'s'} · ${S.network.length} route${S.network.length===1?'':'s'} · ${flights%1?flights.toFixed(1):flights} flight${flights===1?'':'s'} / day</div>`}</div><div class="tools">${foc?'<button class="lnk" data-act="focus" data-ap="">← All airports</button>':(S.network.length?'<button class="lnk" data-act="clear">Clear all</button>':'')}</div></div>
     ${S.network.length?`${foc?`<div class="tiles"><div><div class="cap">Sessions</div><div class="v num">${fst.n}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${foc.kwh>=1000?(foc.kwh/1000).toFixed(1):Math.round(foc.kwh)}<small>${foc.kwh>=1000?'MWh':'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${fst.peak>=1000?(fst.peak/1000).toFixed(1):fst.peak}<small>${fst.peak>=1000?'MW':'kW'}</small></div></div><div><div class="cap">Max wait</div><div class="v num">${fst.waits?fst.maxWait:'0'}<small>${fst.waits?'min · '+fst.waits+' / day':'min · no waiting'}</small></div></div></div>`:`<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${ag.length}</div></div><div><div class="cap">Flights</div><div class="v num">${flights%1?flights.toFixed(1):flights}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${kwh>=1000?(kwh/1000).toFixed(1):Math.round(kwh)}<small>${kwh>=1000?'MWh':'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${peak>=1000?(peak/1000).toFixed(1):peak}<small>${peak>=1000?'MW':'kW'}</small></div></div></div>`}
     <div class="ntool"><span class="cap">Show</span><select data-act="filter"><option value="">All airports</option>${ag.map(a=>`<option value="${a.ident}" ${S.filter===a.ident?'selected':''}>${a.ident} · ${esc(shortName(a.name))}</option>`).join('')}</select><span class="sp"></span><span class="hint num" style="margin:0">€${fmtE(kwh*TARIFF)} / day</span></div>
     ${ag.filter(a=>!S.filter||a.ident===S.filter).map(a=>`<div class="ap ${S.openAp[a.ident]?'open':''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(shortName(a.name))}<small>${a.list.length} route${a.list.length===1?'':'s'}${ASSETS[a.ident]?' · NRG2FLY site':''}</small></span>
       <span class="st num">${a.flights?(a.flights%1?a.flights.toFixed(1):a.flights):"—"}<small>charges / day</small></span><span class="st num">${a.kwh?Math.round(a.kwh):"—"}<small>kWh / day</small></span><span class="st num">${apStats(a.ident,ses).peak||"—"}<small>peak kW</small></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane">${a.list.map(f=>`<div class="fl"><span class="t">${f.chain.map(c=>c.ident).join(' → ')}<small>${esc(f.planeName)} · ${tripLabel[f.trip]}</small></span><span class="mu num">${f.freq} / ${f.per}</span><span class="mu num">${Math.round(f.charged)} kWh</span><button class="rm" data-act="rm" data-id="${f.id}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button></div>`).join('')}
       ${(st=>`<div class="bays"><span class="cap">Chargers</span><span class="step"><button data-act="bay" data-ap="${a.ident}" data-d="-1" title="Remove a charger">−</button><b class="num">${bays(a.ident)}</b><button data-act="bay" data-ap="${a.ident}" data-d="1" title="Add a charger">+</button></span><span class="hint num" style="margin:0 0 0 auto">${st.n} session${st.n===1?'':'s'} / day · ${st.waits?st.waits+' wait · max '+st.maxWait+' min':'no waiting'}</span>${foc?'':`<button class="lnk" data-act="focus" data-ap="${a.ident}">Isolate</button>`}</div>`)(apStats(a.ident,ses))}<div class="fleet">${[...a.kws].sort((x,y)=>y-x).map(k=>`<span class="num">${k} kW</span>`).join('')}</div></div></div>`).join('')}`
-    :`<div class="empty"><b>No routes in the network yet</b>Plan a route and add it — each flight contributes charging demand to its departure and arrival airports.</div>`}`;
+    :`<div class="cap" style="padding:12px var(--pad) 8px">Empty network · start from a scenario</div><div class="scen">${Object.entries(SCENARIOS).map(([k,s])=>`<div class="sc"><b>${s.title}</b><small>${s.meta}</small><div class="sp">${s.spark.map(v=>`<i style="height:${v}%"></i>`).join('')}</div><button class="lnk" data-act="scenario" data-k="${k}">Load</button></div>`).join('')}</div><div class="hint" style="padding:0 var(--pad) 14px">Or plan a route in Plan mode and add it — each flight contributes charging demand to its departure and arrival airports.</div>`}`;
   $('#railFoot').innerHTML = S.network.length ? `<div class="btns"><button class="btn p" data-act="exp" data-exp="share">Share build</button><button class="btn" data-act="exp" data-exp="pdf">PDF</button><button class="btn" data-act="exp" data-exp="xlsx">XLSX</button></div>` : '';
 }
 
@@ -603,14 +650,15 @@ function renderNetwork(){
    Drawer — demand timeline (derived from saved flights; mock scheduling)
    ====================================================================== */
 const bays = ap => S.bays[ap] || ((ASSETS[ap]&&ASSETS[ap].plugs&&ASSETS[ap].plugs.length)||1);
-function sessions(){ // departures + charging sessions on the illustrative day (departures spread 08:00–18:00), then queued per airport onto its charger bays
-  const raw=[]; S.network.forEach(f=>{ const n=Math.max(1,Math.round(perDay(f)));
-    for(let k=0;k<n;k++){ let t=8+k*(10/n);
+const planeShort = n => String(n||'').replace(/^Beta /,'').split(' — ')[0].replace(/ \(.*\)$/,'');
+function sessions(){ // departures + charging sessions on the illustrative day (departures spread 08:00–18:00), queued per airport onto its charger bays
+  const raw=[]; S.network.forEach((f,ri)=>{ const n=Math.max(1,Math.round(perDay(f))); const off=((ri*37)%50)/60;
+    for(let k=0;k<n;k++){ let t=8+off+k*(10/n); const inst=f.id+'#'+k;
       f.legs.forEach((l,i)=>{ const from=f.chain[i], to=f.chain[i+1]||f.chain[0];
-        if(from) raw.push({type:'fly',ap:from.ident,start:t,dur:l.flight_time_h,to:to?to.ident:'',plane:f.planeName});
+        if(from) raw.push({type:'fly',inst,seq:raw.length,ap:from.ident,start:t,dur:l.flight_time_h,to:to?to.ident:'',plane:f.planeName,training:f.trip==='training'});
         t+=l.flight_time_h;
         const ch=to&&f.charges.find(c=>c.ident===to.ident&&(c.role!=='origin'||i===f.legs.length-1));
-        if(to&&ch&&ch.energy_kwh>0){ raw.push({type:'chg',ap:to.ident,from:from?from.ident:'',req:t,start:t,dur:Math.max(ch.charge_time_min,3)/60,kw:f.kw,kwh:ch.energy_kwh,plane:f.planeName,wait:0,bay:0}); if(ch.role==='stop') t+=ch.charge_time_min/60; } }); } });
+        if(to&&ch&&ch.energy_kwh>0){ raw.push({type:'chg',inst,seq:raw.length,ap:to.ident,from:from?from.ident:'',req:t,start:t,dur:Math.max(ch.charge_time_min,3)/60,kw:f.kw,kwh:ch.energy_kwh,plane:f.planeName,wait:0,bay:0}); if(ch.role==='stop') t+=ch.charge_time_min/60; } }); } });
   const byAp={}; raw.filter(s=>s.type==='chg').forEach(s=>(byAp[s.ap]=byAp[s.ap]||[]).push(s));
   Object.entries(byAp).forEach(([ap,list])=>{ const free=new Array(bays(ap)).fill(-1);
     list.sort((a,b)=>a.req-b.req).forEach(s=>{ let b=0; for(let i=1;i<free.length;i++) if(free[i]<free[b]) b=i; s.bay=b; s.start=Math.max(s.req,free[b]); s.wait=s.start-s.req; free[b]=s.start+s.dur; }); });
@@ -621,36 +669,77 @@ function loadProfile(ses, ap){ ses=ses||sessions(); const load=new Array(SLOTS).
   return { load, peak: load.reduce((m,v)=>Math.max(m,v),0) }; }
 const fmtKw = v => v>=1000 ? (v/1000).toFixed(1)+' MW' : Math.round(v)+' kW';
 const apStats = (ap, ses) => { const cs=ses.filter(s=>s.type==='chg'&&s.ap===ap); const w=cs.filter(s=>s.wait>0); return { n:cs.length, waits:w.length, maxWait:Math.round(Math.max(0,...cs.map(s=>s.wait))*60), peak:loadProfile(ses,ap).peak }; };
+function fleet(ses){ // rotations chained per flight instance, then assigned to the first free aircraft of that type (20 min turnaround)
+  const inst={}; ses.forEach(s=>{ (inst[s.inst]=inst[s.inst]||{id:s.inst,plane:s.plane,items:[]}).items.push(s); });
+  const list=Object.values(inst).map(o=>{ o.items.sort((a,b)=>a.seq-b.seq); let t=-1; o.items.forEach(s=>{ s.fstart=Math.max(s.start,t); s.fend=s.fstart+s.dur; t=s.fend; }); o.start=o.items[0].fstart; o.end=t; o.aps=new Set(o.items.map(s=>s.ap)); return o; }).sort((a,b)=>a.start-b.start);
+  const tails=[], TURN=20/60;
+  list.forEach(o=>{ let tl=tails.find(x=>x.plane===o.plane&&x.free+TURN<=o.start); if(!tl){ tl={plane:o.plane,idx:tails.filter(x=>x.plane===o.plane).length+1,free:-1,items:[]}; tails.push(tl); } tl.items.push(o); tl.free=o.end; });
+  tails.sort((a,b)=>a.plane.localeCompare(b.plane)||a.idx-b.idx);
+  return tails; }
 function renderDrawer(){
   const ag=aggregate(); const flights=S.network.reduce((s,f)=>s+perDay(f),0); const ses=sessions(); const {load,peak}=loadProfile(ses);
   const foc = S.filter && ag.find(a=>a.ident===S.filter) ? S.filter : '';
   const rowsAg = foc ? ag.filter(a=>a.ident===foc) : (S.showDep ? ag : ag.filter(a=>ses.some(s=>s.ap===a.ident&&s.type==='chg')));
   const fp = foc ? loadProfile(ses,foc) : null;
   const chip=$('#focChip'); chip.hidden=!foc; if(foc) chip.innerHTML=`${foc} ${esc(shortName(AP_BY_ID[foc]?AP_BY_ID[foc].name:foc))} <svg class="ic" style="width:12px;height:12px"><use href="#i-x"/></svg>`;
-  $('#drawerSub').textContent = !S.network.length ? 'no flights yet' : foc ? (st=>`${st.n} sessions / day · ${bays(foc)} charger${bays(foc)===1?'':'s'} · peak ${fmtKw(st.peak)}${st.waits?' · max wait '+st.maxWait+' min':' · no waiting'}`)(apStats(foc,ses)) : `${ag.length} airports · ${flights%1?flights.toFixed(1):flights} flights / day · peak load ${fmtKw(peak)}`;
+  $$('#laneSeg button').forEach(b=>b.classList.toggle('on',b.dataset.lanes===S.lanes));
+  $('#depSw').parentElement.querySelector('.dep-lbl').hidden = S.lanes==='fleet'; $('#depSw').hidden = S.lanes==='fleet';
+  const tails = S.lanes==='fleet' ? fleet(ses).map(t=>({...t,items:t.items.filter(o=>!foc||o.aps.has(foc))})).filter(t=>t.items.length) : [];
+  const busy = tails.reduce((s,t)=>s+t.items.reduce((u,o)=>u+o.items.reduce((v,i)=>v+i.dur,0),0),0);
+  $('#drawerSub').textContent = !S.network.length ? 'no flights yet'
+    : S.lanes==='fleet' ? `${tails.length} aircraft needed${foc?' through '+foc:''} · ${flights%1?flights.toFixed(1):flights} flights / day · utilisation ${tails.length?Math.round(busy/(tails.length*12)*100):0} %`
+    : foc ? (st=>`${st.n} sessions / day · ${bays(foc)} charger${bays(foc)===1?'':'s'} · peak ${fmtKw(st.peak)}${st.waits?' · max wait '+st.maxWait+' min':' · no waiting'}`)(apStats(foc,ses))
+    : `${ag.length} airports · ${flights%1?flights.toFixed(1):flights} flights / day · peak load ${fmtKw(peak)}`;
   $('#netCount').textContent = S.network.length ? S.network.length : '';
   const pct=h=>Math.max(0,Math.min(100,(h-H0)/SPAN*100)); const w=h=>Math.max(.5,h/SPAN*100);
   const ticks=[]; for(let h=H0;h<H1;h+=2) ticks.push(`<div class="tick" style="left:${pct(h)}%"><span>${String(h).padStart(2,'0')}:00</span></div>`);
   const bare=ticks.map(t=>t.replace(/<span>.*?<\/span>/,'')).join('');
   let rows = `<div class="grow axis"><div class="lab"></div><div class="track">${ticks.join('')}</div></div>`; let lanes=0, anyWait=false;
+  const fly = s => `<div class="blk fly num" style="left:${pct(s.fstart??s.start)}%;width:${w(s.dur)}%" title="${esc(s.plane)} ${s.training?'circuits at '+s.ap:'→ '+s.to}">${s.dur/SPAN*100>6?(s.training?'circuits':'→ '+s.to):''}</div>`;
+  const chg = s => `<div class="blk chg num" style="left:${pct(s.fstart??s.start)}%;width:${w(s.dur)}%" title="${esc(s.plane)} from ${s.from} · ${Math.round(s.kwh)} kWh at ${s.kw} kW${s.wait?' · waited '+Math.round(s.wait*60)+' min':''}">${S.lanes==='fleet'?(s.dur/SPAN*100>4.2?s.ap:''):foc?(s.dur/SPAN*100>4.2?s.from:''):(s.dur/SPAN*100>6.5?fmtKw(s.kw):'')}</div>`;
+  const wait = (s,i,all) => `<div class="blk wait num ${s.wait>=1?'over':''}" style="left:${pct(s.req)}%;width:${w(s.wait)}%" title="${esc(s.plane)} waits ${Math.round(s.wait*60)} min for a charger">${all.length<=3&&s.wait/SPAN*100>6?Math.round(s.wait*60)+' min':''}</div>`;
   if(!S.network.length) rows += `<div class="empty">Add a route to the network to see its charging sessions on the day.</div>`;
-  else {
+  else if(S.lanes==='fleet'){
+    const byType={}; tails.forEach(t=>byType[t.plane]=(byType[t.plane]||0)+1);
+    tails.forEach(t=>{ const blocks=t.items.flatMap(o=>o.items).map(s=> s.type==='fly' ? fly(s) : (s.wait>0?`<div class="blk wait" style="left:${pct(s.fstart-s.wait)}%;width:${w(s.wait)}%" title="waits ${Math.round(s.wait*60)} min for a charger"></div>`:'')+chg(s)).join('');
+      if(t.items.some(o=>o.items.some(s=>s.wait>0))) anyWait=true;
+      rows += `<div class="grow"><div class="lab">${esc(planeShort(t.plane))} ${t.idx}<small>${t.items.length} rotation${t.items.length===1?'':'s'}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; });
+    rows += `<div class="hint" style="padding:8px 0 0">Fleet needed: <b style="color:var(--ink)">${tails.length} aircraft</b> — ${Object.entries(byType).map(([p,n])=>`${n} × ${esc(planeShort(p))}`).join(', ')} · 20 min turnaround · utilisation ${tails.length?Math.round(busy/(tails.length*12)*100):0} % of a 12 h day</div>`;
+  } else {
     const L2 = fp ? fp.load : load, P2 = fp ? fp.peak : peak;
     const path = L2.map((v,i)=>{ const y=(40-(P2?v/P2*36:0)).toFixed(1); return `L${i} ${y} L${i+1} ${y}`; }).join(' ');
     rows += `<div class="grow load"><div class="lab">${foc?foc+' load':'Network load'}<small>peak ${fmtKw(P2)}</small></div><div class="track">${bare}<svg viewBox="0 0 ${SLOTS} 40" preserveAspectRatio="none"><path d="M0 40 ${path} L${SLOTS} 40 Z"/></svg></div></div>`;
-    const fly = s => `<div class="blk fly num" style="left:${pct(s.start)}%;width:${w(s.dur)}%" title="${esc(s.plane)} → ${s.to}">${s.dur/SPAN*100>6?'→ '+s.to:''}</div>`;
-    const chg = s => `<div class="blk chg num" style="left:${pct(s.start)}%;width:${w(s.dur)}%" title="${esc(s.plane)} from ${s.from} · ${Math.round(s.kwh)} kWh at ${s.kw} kW${s.wait?' · waited '+Math.round(s.wait*60)+' min':''}">${foc?(s.dur/SPAN*100>4.2?s.from:''):(s.dur/SPAN*100>6.5?fmtKw(s.kw):'')}</div>`;
-    const wait = (s,i,all) => `<div class="blk wait num ${s.wait>=1?'over':''}" style="left:${pct(s.req)}%;width:${w(s.wait)}%" title="${esc(s.plane)} waits ${Math.round(s.wait*60)} min for a charger">${all.length<=3&&s.wait/SPAN*100>6?Math.round(s.wait*60)+' min':''}</div>`;
     rowsAg.forEach(a=>{ const cs=ses.filter(s=>s.type==='chg'&&s.ap===a.ident); const nb=bays(a.ident); const waits=cs.filter(s=>s.wait>0); if(waits.length) anyWait=true;
       const flyB = S.showDep ? ses.filter(s=>s.type==='fly'&&s.ap===a.ident).map(fly).join('') : '';
       const lab = `<div class="lab"><button data-act="focus" data-ap="${a.ident}" title="Isolate ${a.ident}">${a.ident}</button><small>${esc(shortName(a.name))}</small></div>`;
       if(!foc && nb===1 && !waits.length){ rows += `<div class="grow">${lab}<div class="track">${bare}${flyB}${cs.map(chg).join('')}</div></div>`; lanes++; return; }
       if(waits.length){ rows += `<div class="grow">${lab}<div class="track">${bare}${waits.map(wait).join('')}</div></div>`; lanes++; }
-      for(let b=0;b<nb;b++){ rows += `<div class="grow ${(waits.length||b>0)?'sub':''}">${(waits.length||b>0)?`<div class="lab">charger ${b+1}${b===0&&!waits.length?'':''}</div>`:lab}<div class="track">${bare}${b===0?flyB:''}${cs.filter(s=>s.bay===b).map(chg).join('')}</div></div>`; lanes++; } });
+      for(let b=0;b<nb;b++){ rows += `<div class="grow ${(waits.length||b>0)?'sub':''}">${(waits.length||b>0)?`<div class="lab">charger ${b+1}</div>`:lab}<div class="track">${bare}${b===0?flyB:''}${cs.filter(s=>s.bay===b).map(chg).join('')}</div></div>`; lanes++; } });
   }
-  $('#gantt').innerHTML = rows + `<div class="glegend"><span><i class="c"></i>Charging session</span>${anyWait?'<span><i class="w"></i>Waiting for a charger</span>':''}${S.showDep?'<span><i></i>Departure (flight time)</span>':''}<span style="margin-left:auto">Departures spread 08:00–18:00 · illustrative scheduling</span></div>`;
-  const want = 36 + 22 + (S.network.length?44:60) + lanes*28 + 44;
+  $('#gantt').innerHTML = rows + `<div class="glegend"><span><i class="c"></i>Charging session</span>${anyWait?'<span><i class="w"></i>Waiting for a charger</span>':''}${(S.showDep||S.lanes==='fleet')?'<span><i></i>Flying</span>':''}<span style="margin-left:auto">Departures spread 08:00–18:00 · illustrative scheduling</span></div>`;
+  const want = 36 + 22 + (S.network.length?(S.lanes==='fleet'?30:44):60) + lanes*28 + 44;
   $('#drawer').style.setProperty('--drawer-h', Math.min(Math.round(window.innerHeight*0.6), want)+'px');
+}
+
+/* ======================================================================
+   Scenarios — the demos behind the empty state and the deep links
+   ====================================================================== */
+const SCENARIOS = {
+  hub:      { title:'Hub base', meta:'1 base · 8 return routes · 18 flights / day', bays:{EHLE:2}, focus:'EHLE', spark:[20,90,70,40,30,95,60,35,20],
+              routes:[['EHLE','EDDF','beta_plane',3,'day','retour'],['EHLE','EDDL','beta_plane',3,'day','retour'],['EHLE','EBBR','beta_plane',2,'day','retour'],['EHLE','EGKB','beta_plane',2,'day','retour'],['EHLE','LFPB','beta_plane',2,'day','retour'],['EHLE','EDDH','vaeridion',2,'day','retour'],['EHLE','EDDV','beta_plane',2,'day','retour'],['EHLE','EDDS','beta_plane',2,'day','retour']] },
+  regional: { title:'Regional network', meta:'13 airports · 12 routes · 26 flights / day', bays:{}, focus:'', spark:[30,60,80,50,40,70,55,45,25],
+              routes:[['EHLE','EDDF','beta_plane',1,'day','one-way'],['EHAM','EDLS','beta_plane',3,'day','one-way'],['EHRD','EBBR','beta_plane',2,'day','one-way'],['EHGG','EDDH','beta_plane',1,'day','retour'],['EHEH','EDDL','vaeridion',2,'day','one-way'],['EDDF','EDDM','beta_plane',2,'day','one-way'],['EHLE','EHTE','pipistrel_velis',4,'day','retour'],['EBBR','LFPB','vaeridion',1,'day','one-way'],['EHBK','EDDL','pipistrel_velis',2,'day','one-way'],['EHAM','EHGG','beta_plane',2,'day','retour'],['EDLS','EDDF','beta_plane',1,'day','one-way'],['EHSE','EHRD','pipistrel_velis',5,'day','one-way']] },
+  training: { title:'Training school', meta:'1 airfield · Velis circuits · 12 sorties / day', bays:{EHTE:3}, focus:'EHTE', spark:[50,50,50,50,50,50,50,50,50],
+              routes:[['EHTE','EHTE','pipistrel_velis',12,'day','training']] }
+};
+async function loadScenario(key, opts={}){
+  const sc=SCENARIOS[key]; if(!sc) return; S.network=[]; S.bays={...sc.bays, ...(opts.bays||{})}; S.openAp={}; S.filter='';
+  toast(`Loading ${sc.title}…`);
+  for(const [o,d,pl,fr,per,tr] of sc.routes){ if(!AP_BY_ID[o]||!AP_BY_ID[d]) continue; S.origin=AP_BY_ID[o]; S.dest=AP_BY_ID[d]; S.stops=[]; S.planeId=pl; const dc=plane().default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; S.freq=fr; S.per=per; S.trip=tr; await simulate(); if(S.result) addToNetwork(); }
+  S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.stops=[]; S.trip='one-way'; S.freq=1; S.planeId='beta_plane'; S.chargerId='dc_320'; S.rail='form'; S.result=null;
+  if(sc.focus) S.openAp[sc.focus]=true;
+  setMode('network'); $('#drawer').classList.add('open'); renderDrawer(); drawNet();
+  toast(`${sc.title} loaded — ${S.network.length} routes`);
 }
 
 /* ======================================================================
@@ -691,12 +780,13 @@ function setMode(m){ S.mode=m; document.body.classList.toggle('net',m==='network
 function resetForm(){ S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.stops=[]; S.trip='one-way'; S.freq=1; S.per='day'; S.planeId='beta_plane'; S.chargerId='dc_320'; S.picking=false; S.allChargers=false; onFormChange(true); }
 
 document.addEventListener('click',e=>{
-  const t=e.target.closest('#depSw,#focChip,[data-act],[data-seg] button,[data-acc]>button,[data-ap]>button,#modeSeg button,#unitSeg button,#mapDd [data-base],#expDd [data-exp],#drawerHead');
+  const t=e.target.closest('#laneSeg button,#depSw,#focChip,[data-act],[data-seg] button,[data-acc]>button,[data-ap]>button,#modeSeg button,#unitSeg button,#mapDd [data-base],#expDd [data-exp],#drawerHead');
   // dropdown toggles
   const dd={mapBtn:'mapDd',expBtn:'expDd',setBtn:'setDd'}; const tb=e.target.closest('#mapBtn,#expBtn,#setBtn');
   $$('.dd').forEach(x=>{ if(!(tb&&x.id===dd[tb.id])&&!x.contains(e.target)) x.classList.remove('open'); });
   if(tb){ $('#'+dd[tb.id]).classList.toggle('open'); return; }
   if(!t) return;
+  if(t.closest('#laneSeg')){ S.lanes=t.dataset.lanes; renderDrawer(); return; }
   if(t.id==='focChip'){ S.filter=''; renderRail(); drawNet(); fitNet(); return; }
   if(t.id==='depSw'){ S.showDep=!S.showDep; t.classList.toggle('on',S.showDep); renderDrawer(); return; }
   if(t.id==='drawerHead'){ $('#drawer').classList.toggle('open'); return; }
@@ -721,6 +811,7 @@ document.addEventListener('click',e=>{
     case 'rmStop': S.stops.splice(+t.dataset.i,1); onFormChange(true); break;
     case 'estimates': S.estimates=!S.estimates; renderRail(); break;
     case 'focus': S.filter=t.dataset.ap||''; if(S.filter) S.openAp[S.filter]=true; renderRail(); drawNet(); fitNet(); break;
+    case 'scenario': loadScenario(t.dataset.k); break;
     case 'bay': S.bays[t.dataset.ap]=Math.max(1,bays(t.dataset.ap)+ +t.dataset.d); localStorage.setItem('cnsA.bays',JSON.stringify(S.bays)); renderRail(); break;
     case 'rm': S.network=S.network.filter(f=>f.id!==t.dataset.id); localStorage.setItem('cnsA.network',JSON.stringify(S.network)); drawNet(); renderRail(); break;
     case 'clear': if(S.network.length&&confirm('Remove all routes from the network?')){ S.network=[]; localStorage.setItem('cnsA.network','[]'); drawNet(); renderRail(); } break;
@@ -737,6 +828,53 @@ document.addEventListener('input',e=>{ if(e.target.dataset.act==='freq'){ S.freq
 $('#tourBtn').onclick=()=>toast('Guided tour — not wired in the prototype');
 
 /* ======================================================================
+   Command palette — ⌘K / Ctrl-K
+   ====================================================================== */
+const CMD={items:[],hl:0};
+function flyTo(a){ map.flyTo(ll(a), Math.max(map.getZoom(),8)); setTimeout(()=>L.popup({offset:[0,-2]}).setLatLng(ll(a)).setContent(airportPopup(a)).openOn(map),400); }
+function cmdItems(q){
+  const ql=(q||'').trim().toLowerCase(); const L=[]; const add=(g,label,run,k,sub)=>L.push({g,label,run,k,sub});
+  if(ql.length>=2) search(ql).slice(0,4).forEach((a,ai)=>{
+    add('Airports',`<b>${esc(a.ident)}</b> ${esc(a.name)}`,()=>flyTo(a),'fly to',esc(a.municipality||''));
+    if(ai>0) return;
+    add('Airports',`Set <b>${esc(a.ident)}</b> as departure`,()=>{ S.origin=a; setMode('plan'); onFormChange(true); },'D');
+    add('Airports',`Set <b>${esc(a.ident)}</b> as destination`,()=>{ S.dest=a; setMode('plan'); onFormChange(true); },'A');
+    add('Airports',`Add <b>${esc(a.ident)}</b> as a stop`,()=>{ S.stops.push(a); setMode('plan'); onFormChange(true); },'S');
+    if(S.network.some(f=>f.chain.some(c=>c.ident===a.ident))) add('Airports',`Isolate <b>${esc(a.ident)}</b> in the network`,()=>{ setMode('network'); S.filter=a.ident; S.openAp[a.ident]=true; renderRail(); drawNet(); fitNet(); $('#drawer').classList.add('open'); },'I'); });
+  const hit=s=>!ql||s.toLowerCase().includes(ql);
+  PLANES.filter(p=>ql&&hit(p.name)).slice(0,3).forEach(p=>add('Aircraft',`Aircraft: ${esc(p.name)}`,()=>{ S.planeId=p.id; const dc=p.default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; setMode('plan'); onFormChange(false); },'',`${p.range_km} km · ${p.battery_kwh||0} kWh`));
+  CHARGERS.filter(c=>ql&&hit(c.name)).slice(0,3).forEach(c=>add('Chargers',`Charger: ${esc(c.name)}`,()=>{ S.chargerId=c.id; setMode('plan'); onFormChange(false); }));
+  const A=[
+    ['Simulate the current route',()=>{ setMode('plan'); simulate(); },'↵'],
+    S.result?['Add the result to the network',()=>addToNetwork(),'']:null,
+    [S.mode==='network'?'Switch to Plan mode':'Switch to Network mode',()=>setMode(S.mode==='network'?'plan':'network'),'N'],
+    [S.lanes==='fleet'?'Timeline: airport lanes':'Timeline: fleet lanes',()=>{ S.lanes=S.lanes==='fleet'?'airports':'fleet'; $('#drawer').classList.add('open'); renderDrawer(); },'F'],
+    ['Timeline: toggle departures',()=>{ S.showDep=!S.showDep; $('#depSw').classList.toggle('on',S.showDep); renderDrawer(); }],
+    S.filter?['Show all airports',()=>{ S.filter=''; renderRail(); drawNet(); fitNet(); }]:null,
+    ['Load scenario: Hub base',()=>loadScenario('hub')],['Load scenario: Regional network',()=>loadScenario('regional')],['Load scenario: Training school',()=>loadScenario('training')],
+    ['Basemap: Light',()=>$('#mapDd [data-base=light]').click()],['Basemap: Street',()=>$('#mapDd [data-base=street]').click()],['Basemap: Satellite',()=>$('#mapDd [data-base=sat]').click()],
+    ['Units: kilometres',()=>$('#unitSeg [data-u=km]').click()],['Units: nautical miles',()=>$('#unitSeg [data-u=nm]').click()],
+    ['Export advisory report (PDF)',()=>toast('Advisory report — not wired in the prototype'),'⇧P'],['Export demand workbook (XLSX)',()=>toast('Demand workbook — not wired in the prototype'),'⇧X'],['Copy share link',()=>toast('Share link copied (mock)'),'⇧L'],
+    ['Reset the route form',()=>{ setMode('plan'); resetForm(); }],
+    S.network.length?['Clear the network',()=>{ if(confirm('Remove all routes from the network?')){ S.network=[]; localStorage.setItem('cnsA.network','[]'); drawNet(); renderRail(); } }]:null,
+  ].filter(Boolean).filter(([l])=>hit(l));
+  A.slice(0, ql?8:10).forEach(([l,run,k])=>add('Actions',esc(l),run,k||''));
+  return L.slice(0,14);
+}
+function cmdRender(){ const list=$('#cmdkList'); if(!CMD.items.length){ list.innerHTML='<div class="none">Nothing matches. Try an ICAO code, a city, an aircraft or an action.</div>'; return; }
+  let g=''; list.innerHTML=CMD.items.map((it,i)=>{ const h=it.g!==g?`<div class="grp">${it.g}</div>`:''; g=it.g; return `${h}<div class="it ${i===CMD.hl?'on':''}" data-i="${i}"><span>${it.label}${it.sub?` <span class="sub">${it.sub}</span>`:''}</span>${it.k?`<span class="k">${it.k}</span>`:''}</div>`; }).join('');
+  const on=list.querySelector('.it.on'); if(on) on.scrollIntoView({block:'nearest'}); }
+function cmdOpen(q){ const box=$('#cmdk'); box.hidden=false; const inp=$('#cmdkIn'); inp.value=q||''; CMD.items=cmdItems(inp.value); CMD.hl=0; cmdRender(); inp.focus(); }
+function cmdClose(){ $('#cmdk').hidden=true; }
+function cmdRun(i){ const it=CMD.items[i]; if(!it) return; cmdClose(); it.run(); }
+$('#cmdkIn').addEventListener('input',e=>{ CMD.items=cmdItems(e.target.value); CMD.hl=0; cmdRender(); });
+$('#cmdkIn').addEventListener('keydown',e=>{ if(e.key==='ArrowDown'){ CMD.hl=Math.min(CMD.items.length-1,CMD.hl+1); cmdRender(); e.preventDefault(); } else if(e.key==='ArrowUp'){ CMD.hl=Math.max(0,CMD.hl-1); cmdRender(); e.preventDefault(); } else if(e.key==='Enter'){ cmdRun(CMD.hl); e.preventDefault(); } else if(e.key==='Escape'){ cmdClose(); } });
+$('#cmdkList').addEventListener('click',e=>{ const it=e.target.closest('.it'); if(it) cmdRun(+it.dataset.i); });
+$('#cmdkList').addEventListener('mousemove',e=>{ const it=e.target.closest('.it'); if(it&&+it.dataset.i!==CMD.hl){ CMD.hl=+it.dataset.i; cmdRender(); } });
+document.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); $('#cmdk').hidden?cmdOpen(''):cmdClose(); } else if(e.key==='Escape'&&!$('#cmdk').hidden) cmdClose(); });
+document.addEventListener('click',e=>{ if(e.target.closest('[data-cmdk=close]')) cmdClose(); if(e.target.closest('#kbdHint')) cmdOpen(''); });
+
+/* ======================================================================
    Boot
    ====================================================================== */
 (async function boot(){
@@ -748,13 +886,13 @@ $('#tourBtn').onclick=()=>toast('Guided tour — not wired in the prototype');
   drawAirports(); drawAssets(); drawNet();
   S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest];
   renderRail(); drawRoute(true);
-  const [h,focusAp]=location.hash.replace('#','').split(':');
-  if(h==='big'){ S.network=[]; const R=[['EHLE','EDDF','beta_plane',1,'day','one-way'],['EHAM','EDLS','beta_plane',3,'day','one-way'],['EHRD','EBBR','beta_plane',2,'day','one-way'],['EHGG','EDDH','beta_plane',1,'day','retour'],['EHEH','EDDL','vaeridion',2,'day','one-way'],['EDDF','EDDM','beta_plane',2,'day','one-way'],['EHLE','EHTE','pipistrel_velis',4,'day','retour'],['EBBR','LFPB','vaeridion',1,'day','one-way'],['EHBK','EDDL','pipistrel_velis',2,'day','one-way'],['EHAM','EHGG','beta_plane',2,'day','retour'],['EDLS','EDDF','beta_plane',1,'day','one-way'],['EHSE','EHRD','pipistrel_velis',5,'day','one-way']];
-    for(const [o,d,pl,fr,per,tr] of R){ if(!AP_BY_ID[o]||!AP_BY_ID[d]) continue; S.origin=AP_BY_ID[o]; S.dest=AP_BY_ID[d]; S.stops=[]; S.planeId=pl; const dc=plane().default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; S.freq=fr; S.per=per; S.trip=tr; await simulate(); if(S.result) addToNetwork(); }
-    S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.trip='one-way'; S.freq=1; S.planeId='beta_plane'; S.chargerId='dc_320'; S.rail='form'; S.result=null; setMode('network'); $('#drawer').classList.add('open'); renderDrawer(); }
-  if(h==='hub'||h==='hub1'){ S.network=[]; S.bays={EHLE:h==='hub1'?1:2}; S.openAp={EHLE:true}; const R=[['EHLE','EDDF','beta_plane',3,'day','retour'],['EHLE','EDDL','beta_plane',3,'day','retour'],['EHLE','EBBR','beta_plane',2,'day','retour'],['EHLE','EGKB','beta_plane',2,'day','retour'],['EHLE','LFPB','beta_plane',2,'day','retour'],['EHLE','EDDH','vaeridion',2,'day','retour'],['EHLE','EDDV','beta_plane',2,'day','retour'],['EHLE','EDDS','beta_plane',2,'day','retour']];
-    for(const [o,d,pl,fr,per,tr] of R){ if(!AP_BY_ID[o]||!AP_BY_ID[d]) continue; S.origin=AP_BY_ID[o]; S.dest=AP_BY_ID[d]; S.stops=[]; S.planeId=pl; const dc=plane().default_charger_id; if(dc&&CHARGERS.find(c=>c.id===dc)) S.chargerId=dc; S.freq=fr; S.per=per; S.trip=tr; await simulate(); if(S.result) addToNetwork(); }
-    S.origin=AP_BY_ID[SEED.origin]; S.dest=AP_BY_ID[SEED.dest]; S.trip='one-way'; S.freq=1; S.planeId='beta_plane'; S.chargerId='dc_320'; S.rail='form'; S.result=null; setMode('network'); $('#drawer').classList.add('open'); renderDrawer(); }
+  const [h,focusAp,view]=location.hash.replace('#','').split(':');
+  if(h==='big') await loadScenario('regional');
+  if(h==='hub'||h==='hub1') await loadScenario('hub',{bays:{EHLE:h==='hub1'?1:2}});
+  if(h==='training') await loadScenario('training');
+  if(h==='empty'){ S.network=[]; localStorage.setItem('cnsA.network','[]'); setMode('network'); }
+  if(view==='fleet'){ S.lanes='fleet'; renderDrawer(); }
+  if(h==='palette'){ cmdOpen('fra'); }
   if(h==='multi'){ S.dest=AP_BY_ID['EDDM']; S.stops=[AP_BY_ID['EDDF']]; await simulate(); }
   if(focusAp&&AP_BY_ID[focusAp]){ S.filter=focusAp; S.openAp[focusAp]=true; renderRail(); drawNet(); fitNet(); }
   if(h==='result'||h==='network'){ await simulate(); if(h==='network'){ if(!S.network.length){ addToNetwork(); S.origin=AP_BY_ID['EHAM']; S.dest=AP_BY_ID['EDLS']; S.stops=[]; S.freq=3; await simulate(); addToNetwork(); } setMode('network'); $('#drawer').classList.add('open'); } }
