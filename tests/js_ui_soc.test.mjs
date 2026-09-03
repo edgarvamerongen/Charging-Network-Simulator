@@ -23,7 +23,7 @@ test('climb is steeper than cruise, descent shallower; zones are flagged', () =>
   const s = load().series(legs, charges, 225, climb, {});
   const [cl, cr, de] = s.segs.filter(q => q.t === 'fly').slice(0, 3).map(q => (q.y0 - q.y1) / (q.x1 - q.x0));
   assert.ok(cl > cr && cr > de);
-  assert.deepEqual(s.zones.map(z => z.t), ['climb', 'descent', 'climb', 'descent']);
+  assert.deepEqual([...s.zones.map(z => z.t)], ['climb', 'descent', 'climb', 'descent']);
 });
 
 test('charges rise to the depart SoC and the lowest point is reported', () => {

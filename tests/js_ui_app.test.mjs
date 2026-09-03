@@ -29,9 +29,9 @@ test('exports the engine adapter names on window', () => {
 
 test('search ranks exact code, then name prefix, then contains; large before small', () => {
   const w = load(DATA); w.CNSUI._setAirports(APS);
-  assert.deepEqual(w.CNSUI.search('fra').map(a => a.ident), ['EDDF', 'EDFH']);
-  assert.deepEqual(w.CNSUI.search('ley').map(a => a.ident), ['EHLE']);
-  assert.deepEqual(w.CNSUI.search('x'), []);
+  assert.deepEqual([...w.CNSUI.search('fra').map(a => a.ident)], ['EDDF', 'EDFH']);
+  assert.deepEqual([...w.CNSUI.search('ley').map(a => a.ident)], ['EHLE']);
+  assert.equal(w.CNSUI.search('x').length, 0);
 });
 
 test('planeShort and shortName trim catalog names for labels', () => {
