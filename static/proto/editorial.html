@@ -402,7 +402,7 @@ body.net .drawer{left:calc(520px + 24px)}
   <div class="cmdk-box"><div class="cmdk-in"><svg class="ic"><use href="#i-search"/></svg><input id="cmdkIn" placeholder="Airports, aircraft, chargers, or an action…" autocomplete="off" spellcheck="false"></div>
   <div class="cmdk-list" id="cmdkList"></div><div class="cmdk-foot"><span>↑↓ move</span><span>↵ run</span><span>esc close</span><span style="margin-left:auto">⌘K anywhere</span></div></div></div>
 <div class="toast" id="toast"></div>
-<div class="mock">Prototype <a href="instrument.html">A Instrument</a> · <a class="cur" href="editorial.html">C Editorial</a> · raw Python engine numbers</div>
+<div class="mock">Prototype <a href="instrument.html">A Instrument</a> · <a class="cur" href="editorial.html">C Editorial</a> · engine numbers + climb model 10 % / 15 %</div>
 
 <script>
 /* ======================================================================
@@ -499,13 +499,12 @@ function drawRoute(fit){
   c.forEach((a,i)=>{ const stop = i>0 && i<c.length-1;
     routeLayer.addLayer(L.marker(ll(a),{pane:'pins',interactive:false,icon:L.divIcon({className:'',html:`<div class="ep${stop?' stop':''}"></div>`,iconSize:[11,11],iconAnchor:[5.5,5.5]})})); });
   // leg labels
-  const legs = (S.result && S.result.legs && Array.isArray(S.result.legs)) ? S.result.legs : null;
+  const legs = S.result ? derive(S.result).legs : null;
   for(let i=0;i<pts.length-1;i++){
     const mid=[(pts[i][0]+pts[i+1][0])/2,(pts[i][1]+pts[i+1][1])/2];
     const d = hav(pts[i],pts[i+1]);
     let txt = fmtD(d);
     if(legs && legs[i]) txt = `${fmtD(legs[i].distance_km)} · ${fmtH(legs[i].flight_time_h)} h · ${Math.round(legs[i].energy_kwh)} kWh`;
-    else if(S.result && !legs && i===0) txt = `${fmtD(S.result.leg_distance_km)} · ${fmtH(S.result.trip_type==='retour'?S.result.flight_time_h/2:S.result.flight_time_h)} h · ${Math.round(S.result.leg_energy_kwh)} kWh`;
     routeLayer.addLayer(L.marker(mid,{pane:'pins',interactive:false,icon:L.divIcon({className:'',html:`<div class="leglbl num">${txt}</div>`,iconSize:[0,0]})}));
   }
   if(fit) map.fitBounds(L.latLngBounds(pts),{paddingTopLeft:[360,60],paddingBottomRight:[40,80],maxZoom:9,animate:false});
@@ -586,22 +585,33 @@ function onFormChange(fit){ S.result=null; S.err=''; S.rail='form'; renderRail()
 /* ======================================================================
    Rail — result
    ====================================================================== */
+/* The app's climb model (CLIMB_ENERGY_MODEL.md, PR #42): E(leg) = cruisePerKm·d + E_max·min(1, d/d_sat),
+   E_max = 10 % of battery (NET climb minus descent), d_sat = 15 % of catalog range. Wing-borne only; training excluded. */
+const CLIMB = { pct:0.10, sat:0.15, descFrac:0.20, phaseFrac:0.60 };   // descFrac / phaseFrac are DISPLAY knobs for the three-stage draw; the per-leg total never changes
+function climbParams(p){ const batt=p.battery_kwh||0, range=p.range_km||0; const wing=!/vtol|powered/i.test(p.type||''); const eMax=(wing&&batt>0&&range>0)?CLIMB.pct*batt:0; const dSat=CLIMB.sat*range; const cruisePerKm=range>0?(batt-eMax)/range:0;
+  return { applies:eMax>0&&dSat>0, eMax, dSat, cruisePerKm, legE:d=> eMax>0 ? cruisePerKm*d + eMax*Math.min(1,d/dSat) : (range>0?batt/range*d:0) }; }
+function legPhases(l, cp){ // split one leg's energy into climb / cruise / descent for the battery curve — sums to l.energy_kwh exactly
+  const dk=l.distance_km, E=l.energy_kwh; if(!cp.applies||l.training||dk<=0) return [{t:'cruise',km:dk,e:E}];
+  const ph=Math.min(CLIMB.phaseFrac*Math.min(dk,cp.dSat), dk/2); const eDesc=CLIMB.descFrac*cp.cruisePerKm*ph, eCr=cp.cruisePerKm*Math.max(0,dk-2*ph), eCl=Math.max(0,E-eCr-eDesc);
+  return [{t:'climb',km:ph,e:eCl},{t:'cruise',km:Math.max(0,dk-2*ph),e:eCr},{t:'descent',km:ph,e:E-eCl-eCr}].filter(s=>s.km>0); }
 function derive(r){
+  const p=plane(), B=p.battery_kwh||1, RESV=0.30, cp=climbParams(p), training=r.trip_type==='training';
+  const kwEff = Math.min(charger().power_kw, p.max_charge_kw||Infinity);
   const multi = Array.isArray(r.legs);
-  const legs = multi ? r.legs : (r.trip_type==='retour' ? [{distance_km:r.leg_distance_km,energy_kwh:r.leg_energy_kwh,flight_time_h:r.flight_time_h/2,from:r.origin,to:r.destination},{distance_km:r.leg_distance_km,energy_kwh:r.leg_energy_kwh,flight_time_h:r.flight_time_h/2,from:r.destination,to:r.origin}] : [{distance_km:r.leg_distance_km,energy_kwh:r.leg_energy_kwh,flight_time_h:r.flight_time_h,from:r.origin,to:r.destination}]);
-  const used = legs.reduce((s,l)=>s+l.energy_kwh,0);
-  const kwEff = Math.min(charger().power_kw, plane().max_charge_kw||Infinity);
-  const homeKwh = Math.max(0, 2*r.leg_energy_kwh - r.recharge_energy_kwh);
-  const charges = multi ? r.charges : (r.trip_type==='retour'
-      ? [{name:r.destination.name,ident:S.dest?.ident,energy_kwh:r.recharge_energy_kwh,charge_time_min:r.charge_time_min,role:'dest'},{name:r.origin.name,ident:S.origin?.ident,energy_kwh:homeKwh,charge_time_min:homeKwh/kwEff*60,role:'origin'}]
-      : [{name:r.destination.name,ident:S.dest?.ident||S.origin?.ident,energy_kwh:r.recharge_energy_kwh,charge_time_min:r.charge_time_min,role:'dest'}]);
-  const RESV=0.30, B=plane().battery_kwh||1; if(multi){ let soc=B; legs.forEach((l,i)=>{ soc-=l.energy_kwh; const q=charges.find(x=>x.role==='stop'&&x.name===l.to.name); if(q&&legs[i+1]){ const need=Math.max(0, legs[i+1].energy_kwh + RESV*B - soc); if(need>q.energy_kwh){ q.energy_kwh=Math.min(need, B-soc); q.charge_time_min=q.energy_kwh/kwEff*60; } soc+=q.energy_kwh; } }); }
-  const charges2 = charges.filter(c=>c.energy_kwh>0.05);
-  const charged = charges2.reduce((s,c)=>s+c.energy_kwh,0);
-  const chargeMin = charges2.reduce((s,c)=>s+c.charge_time_min,0);
-  const flyH = multi ? r.total_flight_time_h : r.flight_time_h;
-  const enrouteMin = multi ? charges.filter(c=>c.role==='stop').reduce((s,c)=>s+c.charge_time_min,0) : 0;
-  return { legs, used, charges: charges2, charged, chargeMin, flyH, travelH: flyH + enrouteMin/60, dist: r.total_distance_km, kw: r.charger?.power_kw||charger().power_kw };
+  let legs = multi ? r.legs.map(l=>({...l})) : (r.trip_type==='retour'
+      ? [{distance_km:r.leg_distance_km,energy_kwh:r.leg_energy_kwh,flight_time_h:r.flight_time_h/2,from:r.origin,to:r.destination},{distance_km:r.leg_distance_km,energy_kwh:r.leg_energy_kwh,flight_time_h:r.flight_time_h/2,from:r.destination,to:r.origin}]
+      : [{distance_km:r.leg_distance_km,energy_kwh:r.leg_energy_kwh,flight_time_h:r.flight_time_h,from:r.origin,to:r.destination}]);
+  legs = legs.map(l=>{ const raw=l.energy_kwh; const E=(cp.applies&&!training)?cp.legE(l.distance_km):raw; return {...l, energy_raw:raw, energy_kwh:E, climb_kwh:(cp.applies&&!training)?Math.max(0,E-cp.cruisePerKm*l.distance_km):0, training}; });
+  // charging: top up at stops to arrive with the reserve; charge to full at the end of the trip
+  const c=chain(); let soc=B; const chargesAll=[];
+  legs.forEach((l,i)=>{ soc-=l.energy_kwh; const node=c[i+1]||c[0]; const last=i===legs.length-1;
+    const need = Math.max(0, last ? B-soc : Math.min(B-soc, legs[i+1].energy_kwh + RESV*B - soc));
+    const role = last ? (r.trip_type==='one-way'?'dest':'origin') : 'stop';
+    chargesAll.push({name:node?node.name:'',ident:node?node.ident:'',energy_kwh:need,charge_time_min:need/kwEff*60,role}); soc+=need; });
+  const charges = chargesAll.filter(q=>q.energy_kwh>0.05);
+  const used = legs.reduce((s,l)=>s+l.energy_kwh,0), charged = charges.reduce((s,q)=>s+q.energy_kwh,0), chargeMin = charges.reduce((s,q)=>s+q.charge_time_min,0);
+  const flyH = multi ? r.total_flight_time_h : r.flight_time_h; const enrouteMin = charges.filter(q=>q.role==='stop').reduce((s,q)=>s+q.charge_time_min,0);
+  return { legs, used, charges, chargesAll, charged, chargeMin, flyH, travelH: flyH+enrouteMin/60, dist: r.total_distance_km, kw: kwEff, climb: cp };
 }
 function renderResult(){
   const r=S.result, d=derive(r), p=plane(), ch=charger(); const c=chain();
@@ -615,25 +625,27 @@ function renderResult(){
       <div><div class="cap">Travel</div><div class="v num">${fmtH(d.travelH)}<small>h</small></div><div class="s">${d.travelH>d.flyH?'incl. charging':'block time'}</div></div>
       <div><div class="cap">Charge</div><div class="v num">${Math.round(d.chargeMin)}<small>min</small></div><div class="s">${S.trip==='retour'?'at both ends':d.charges.length>1?'over '+d.charges.length+' stops':'at '+(lastCharge?.ident||'destination')}</div></div></div>
     <div class="split"><div class="b"><i class="f" style="flex:${d.flyH.toFixed(3)}"></i><i class="c" style="flex:${(d.chargeMin/60).toFixed(3)}"></i></div><div class="lg"><span><i></i>Fly ${fmtH(d.flyH)} h</span><span><i class="c"></i>Charge ${fmtMin(d.chargeMin)}</span><span style="margin-left:auto" class="num">${fmtD(d.dist)}</span></div></div>
-    ${(()=>{ const B=p.battery_kwh||1, RES=30; let soc=100, x=0; const total=d.legs.reduce((s,l)=>s+l.distance_km,0)||1; const used=new Set(); const segs=[], pts=[{x:0,soc:100,id:c[0]?c[0].ident:''}];
-      d.legs.forEach((l,i)=>{ const x1=x+l.distance_km/total*100, s1=soc-l.energy_kwh/B*100; segs.push({t:'fly',x0:x,y0:soc,x1,y1:s1}); soc=s1; x=x1; const arr=c[i+1]||c[0]; pts.push({x,soc,id:arr?arr.ident:''});
-        const j=d.charges.findIndex((q,k)=>!used.has(k)&&q.name===l.to.name); if(j>=0){ used.add(j); const q=d.charges[j], s2=Math.min(100,soc+q.energy_kwh/B*100); segs.push({t:'chg',x0:x,y0:soc,x1:x,y1:s2,min:q.charge_time_min,id:q.ident}); soc=s2; } });
-      const low=pts.reduce((m,q)=>Math.min(m,q.soc),100), lowPt=pts.find(q=>q.soc===low); const X=v=>6+v*3.88, Y=v=>6+(100-Math.max(0,v))*0.72;
+    ${(()=>{ const B=p.battery_kwh||1, RES=30, cp=d.climb; let soc=100, x=0; const total=d.legs.reduce((s,l)=>s+l.distance_km,0)||1; const segs=[], zones=[], pts=[{x:0,soc:100,id:c[0]?c[0].ident:''}];
+      d.legs.forEach((l,i)=>{ let x0=x, s0=soc; legPhases(l,cp).forEach(ph=>{ const x1=x0+ph.km/total*100, s1=s0-ph.e/B*100; segs.push({t:'fly',x0,y0:s0,x1,y1:s1}); if(ph.t!=='cruise') zones.push({t:ph.t,x0,x1,first:i===0}); x0=x1; s0=s1; });
+        soc-=l.energy_kwh/B*100; x+=l.distance_km/total*100; const arr=c[i+1]||c[0]; pts.push({x,soc,id:arr?arr.ident:''});
+        const q=d.chargesAll[i]; if(q&&q.energy_kwh>0.05){ const s2=Math.min(100,soc+q.energy_kwh/B*100); segs.push({t:'chg',x0:x,y0:soc,x1:x,y1:s2,min:q.charge_time_min,id:q.ident}); soc=s2; } });
+      const low=pts.reduce((m,q)=>Math.min(m,q.soc),100), lowPt=pts.find(q=>q.soc===low); const X=v=>6+v*3.88, Y=v=>6+(100-Math.max(0,v))*0.72; const ph0=legPhases(d.legs[0],cp);
       return `<div class="soc"><div class="lbl"><span class="cap">Battery</span><span class="r">lowest <b class="${low<RES?'low':''}">${Math.round(low)} %</b>${lowPt&&lowPt.id?' at '+lowPt.id:''} · reserve ${RES} %</span></div>
-      <svg viewBox="0 0 400 92" preserveAspectRatio="none"><line x1="6" y1="${Y(RES).toFixed(1)}" x2="394" y2="${Y(RES).toFixed(1)}" stroke="#cfcfda" stroke-dasharray="3 4"/><line x1="6" y1="${Y(0).toFixed(1)}" x2="394" y2="${Y(0).toFixed(1)}" stroke="#e2e2ea"/>
+      <svg viewBox="0 0 400 92" preserveAspectRatio="none">${zones.map(z=>`<rect x="${X(z.x0).toFixed(1)}" y="4" width="${(X(z.x1)-X(z.x0)).toFixed(1)}" height="74" fill="${z.t==='climb'?'rgba(216,76,38,.07)':'rgba(50,50,110,.05)'}"/>${z.first?`<text x="${(X(z.x0)+2).toFixed(1)}" y="86" font-size="8.5" fill="${z.t==='climb'?'#d84c26':'#6f7290'}">${z.t}</text>`:''}`).join('')}
+      <line x1="6" y1="${Y(RES).toFixed(1)}" x2="394" y2="${Y(RES).toFixed(1)}" stroke="#cfcfda" stroke-dasharray="3 4"/><line x1="6" y1="${Y(0).toFixed(1)}" x2="394" y2="${Y(0).toFixed(1)}" stroke="#e2e2ea"/>
       ${segs.map(s=>`<path d="M${X(s.x0).toFixed(1)} ${Y(s.y0).toFixed(1)} L${X(s.x1).toFixed(1)} ${Y(s.y1).toFixed(1)}" stroke="${s.t==='fly'?'#32326E':'#d84c26'}" stroke-width="${s.t==='fly'?2:2.5}" fill="none" stroke-linecap="round"/>`).join('')}
       ${pts.map((q,i)=>`<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.soc).toFixed(1)}" r="3" fill="${q.soc<RES?'#b3261e':'#32326E'}"/><text x="${X(q.x).toFixed(1)}" y="${(Y(q.soc)+(i===0?-8:14)).toFixed(1)}" font-size="10" font-weight="600" fill="${q.soc<RES?'#b3261e':'#32326E'}" text-anchor="${i===0?'start':i===pts.length-1?'end':'middle'}">${Math.round(q.soc)} %${q.id?' · '+q.id:''}</text>`).join('')}
       <text x="6" y="${(Y(RES)+11).toFixed(1)}" font-size="9" fill="#6f7290">reserve ${RES} %</text></svg>
-      <div class="hint num">${segs.filter(s=>s.t==='chg').map(s=>`<b style="color:var(--accent);font-weight:600">${s.id||''} +${Math.round(s.y1-s.y0)} % · ${fmtMin(s.min)}</b>`).join(' · ')||'No charging on this trip'} · departs at 100 % · stop top-ups sized to arrive with the reserve</div></div>`; })()}
+      <div class="hint num">${d.chargesAll.filter(q=>q.energy_kwh>0.05).map(q=>`<b style="color:var(--accent);font-weight:600">${q.ident||''} +${Math.round(q.energy_kwh/B*100)} % · ${fmtMin(q.charge_time_min)}</b>`).join(' · ')||'No charging on this trip'}${cp.applies&&!d.legs[0].training?` · three-stage draw: climb ${Math.round(ph0[0].km)} km at ${(ph0[0].e/ph0[0].km/cp.cruisePerKm).toFixed(1)}× cruise, descent at ${CLIMB.descFrac}× · leg totals per the climb model`:''}</div></div>`; })()}
     <div class="acc ${S.open.route?'open':''}" data-acc="route"><button><span>Route <span class="sub">${d.legs.length} leg${d.legs.length>1?'s':''} · ${c.length-2>0?(c.length-2)+' stop'+(c.length-2>1?'s':''):'no stops'}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane"><table class="tbl"><tr><th>Leg</th><th class="r">${ukm()}</th><th class="r">Time</th><th class="r">kWh</th></tr>
-      ${d.legs.map((l,i)=>`<tr><td><span class="mu num">${String(i+1).padStart(2,'0')}</span> ${esc(shortName(l.from.name))} → ${esc(shortName(l.to.name))}</td><td class="r num">${Math.round(km(l.distance_km))}</td><td class="r num">${fmtH(l.flight_time_h)}</td><td class="r num">${Math.round(l.energy_kwh)}</td></tr>`).join('')}</table></div></div>
+      ${d.legs.map((l,i)=>`<tr><td><span class="mu num">${String(i+1).padStart(2,'0')}</span> ${esc(shortName(l.from.name))} → ${esc(shortName(l.to.name))}</td><td class="r num">${Math.round(km(l.distance_km))}</td><td class="r num">${fmtH(l.flight_time_h)}</td><td class="r num">${Math.round(l.energy_kwh)}</td></tr>`).join('')}</table>${d.climb.applies&&!d.legs[0].training?`<div class="hint num">Includes up to ${Math.round(d.climb.eMax)} kWh net climb per leg (10 % of battery), saturating at ${Math.round(d.climb.dSat)} km.</div>`:''}</div></div>
     <div class="acc ${S.open.charging?'open':''}" data-acc="charging"><button><span>Charging <span class="sub">${d.kw} kW · ${Math.round(d.charged)} kWh</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane"><table class="tbl"><tr><th>Where</th><th class="r">kWh</th><th class="r">Time</th></tr>
       ${d.charges.map(x=>`<tr><td>${esc(x.ident||'')} ${esc(shortName(x.name))} <span class="mu">${x.role==='stop'?'en route':x.role==='origin'?'back at base':S.trip==='retour'?'top-up to return':'to full'}</span></td><td class="r num">${Math.round(x.energy_kwh)}</td><td class="r num">${fmtMin(x.charge_time_min)}</td></tr>`).join('')}</table>
       ${p.max_charge_kw&&ch.power_kw>p.max_charge_kw?`<div class="hint num">Charger ${ch.power_kw} kW capped at the aircraft's ${p.max_charge_kw} kW acceptance.</div>`:''}</div></div>
     <div class="acc ${S.open.calc?'open':''}" data-acc="calc"><button><span>Calculation</span><svg class="ic"><use href="#i-chev"/></svg></button>
-      <div class="pane calc num"><div><span class="mu">Energy</span> ${r.avg_usage_kwh_per_100km} kWh/100 km × ${Math.round(d.dist)} km = <b>${Math.round(d.used)} kWh</b></div>
+      <div class="pane calc num"><div><span class="mu">Energy</span> ${d.climb.applies&&!d.legs[0].training?`${d.climb.cruisePerKm.toFixed(3)} kWh/km × ${Math.round(d.dist)} km + climb ${Math.round(d.legs.reduce((s,l)=>s+l.climb_kwh,0))} kWh`:`${r.avg_usage_kwh_per_100km} kWh/100 km × ${Math.round(d.dist)} km`} = <b>${Math.round(d.used)} kWh</b></div>
       <div><span class="mu">Charge</span> ${Math.round(d.charged)} kWh ÷ ${d.kw} kW = <b>${fmtMin(d.chargeMin)}</b></div>
       <div><span class="mu">Time</span> ${Math.round(d.dist)} km ÷ ${p.speed_kmh} km/h = <b>${fmtH(d.flyH)} h</b></div>
       <div><span class="mu">Cost</span> ${Math.round(d.charged)} kWh × ${fpd.toFixed(fpd%1?2:0)} / day × €${TARIFF.toFixed(2)} = <b>€${fmtE(costDay)}</b></div></div></div>`;
