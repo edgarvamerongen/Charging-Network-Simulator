@@ -12,7 +12,7 @@ window.CNSUI = (function () {
     filter: '', lanes: 'airports', showDep: false,
     base: 'light', showSmall: false, showAssets: true, showNet: true,
     allChargers: false, picking: false, open: { route: true, charging: false, calc: false }, openAp: {},
-    acFilters: { type: null, propulsion: null, status: null }, acFilterOpen: false, availOverride: null, acOverlay: false
+    acFilters: { type: null, propulsion: null, status: null }, acFilterOpen: false, availOverride: null, acOverlay: true
   };
   let AIRPORTS = [], AP_BY_ID = {}, ASSETS = {};
 
