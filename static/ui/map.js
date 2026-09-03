@@ -50,7 +50,7 @@
     c.forEach((a, i) => { const stop = i > 0 && i < c.length - 1; routeLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="ep${stop ? ' stop' : ''}"></div>`, iconSize: [11, 11], iconAnchor: [5.5, 5.5] }) })); });
     const legs = UI.plan && UI.plan.legsForMap ? UI.plan.legsForMap() : null;
     for (let i = 0; i < pts.length - 1; i++) { const mid = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2]; let txt = UI.fmt.dist(hav(pts[i], pts[i + 1]));
-      if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.h(legs[i].flightMin)} h · ${Math.round(legs[i].energyKwh)} kWh`;
+      if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.h(legs[i].flightMin)} h · ${UI.fmt.r(legs[i].energyKwh)} kWh`;
       routeLayer.addLayer(L.marker(mid, { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="leglbl num">${txt}</div>`, iconSize: [0, 0] }) })); }
     if (fit) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [360, 60], paddingBottomRight: [40, 80], maxZoom: 9, animate: false });
   }

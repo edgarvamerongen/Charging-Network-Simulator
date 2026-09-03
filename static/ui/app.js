@@ -24,11 +24,12 @@ window.CNSUI = (function () {
   const nautical = () => !!(U() && U().isNautical && U().isNautical());
   const km = v => nautical() ? v / 1.852 : v;
   const ukm = () => nautical() ? 'NM' : 'km';
+  const r = v => (U() && U().r) ? U().r(v) : (Math.ceil(v - 1e-9) || 0);   // the classic rounds UP everywhere (CNSUnits.r)
   const fmt = {
-    km, ukm,
+    km, ukm, r,
     dist: v => Math.round(km(v)).toLocaleString('en') + ' ' + ukm(),
-    h: min => { const m = Math.round(min); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); },
-    min: m => m >= 60 ? fmt.h(m) + ' h' : Math.round(m) + ' min',
+    h: min => { const m = r(min); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); },
+    min: m => m >= 60 ? fmt.h(m) + ' h' : r(m) + ' min',
     eur: v => v.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     kw: v => v >= 1000 ? (v / 1000).toFixed(1) + ' MW' : Math.round(v) + ' kW',
     kwh: v => v >= 1000 ? (v / 1000).toFixed(1) + ' MWh' : Math.round(v) + ' kWh'
@@ -46,6 +47,7 @@ window.CNSUI = (function () {
     if (S.trip === 'circular' && S.origin && S.dest) c.push(S.origin);
     return c;
   };
+  function folderChanged() { if (window.CNSState && CNSState.notify) CNSState.notify(CNSState.KEYS.folder); if (window.CNSScheduler && CNSScheduler.runGlobal) CNSScheduler.runGlobal(); }
   function toast(t) { if (!hasDoc) return; const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), 2200); }
 
   // ---- airport search (client-side over /api/airports) ---------------------
@@ -117,5 +119,5 @@ window.CNSUI = (function () {
 
   return { S, PLANES, CHARGERS, SEED, D, airports: () => AIRPORTS, byId: () => AP_BY_ID, assets: () => ASSETS,
            $, $$, esc, fmt, perDay, planeShort, shortName, plane, charger, ll, chain, toast, search,
-           render, setMode, boot, rebuildIndexes, _setAirports, _applyDefaults };
+           render, setMode, boot, rebuildIndexes, folderChanged, _setAirports, _applyDefaults };
 })();
