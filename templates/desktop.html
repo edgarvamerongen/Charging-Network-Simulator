@@ -38,10 +38,16 @@
   <div style="position:relative"><button class="tb" id="mapBtn"><svg class="ic"><use href="#i-layers"/></svg>Map</button>
     <div class="dd" id="mapDd"><div class="h">Basemap</div>
       <button data-base="light" class="on">Light</button><button data-base="street">Street</button><button data-base="sat">Satellite</button>
+      <hr><div class="h">Airfields</div>
+      <label><input type="checkbox" class="airport-filter" value="large_airport" checked> Large</label>
+      <label><input type="checkbox" class="airport-filter" value="medium_airport" checked> Medium</label>
+      <label><input type="checkbox" class="airport-filter" value="small_airport"> Small</label>
       <hr><div class="h">Layers</div>
-      <label><input type="checkbox" id="ckSmall"> Small airfields</label>
-      <label><input type="checkbox" id="ckAssets" checked> NRG2FLY chargers</label>
-      <label><input type="checkbox" id="ckNet" checked> Saved network routes</label>
+      <label><input type="checkbox" id="nrgChargerToggle" checked> NRG2FLY chargers</label>
+      <label><input type="checkbox" id="fSavedRoutes" checked> Saved network routes</label>
+      <label><input type="checkbox" id="fAlternates"> Alternates (diverts)</label>
+      <label><input type="checkbox" id="fReachGraph"> Reachable in one hop</label>
+      <label><input type="checkbox" id="flightLabelToggle" checked> Leg labels</label>
     </div></div>
   <div class="units"><span>Units</span><div class="seg" id="unitSeg"><button data-u="km" class="on">km</button><button data-u="nm">NM</button></div></div>
   <div style="position:relative"><button class="tb" id="expBtn"><svg class="ic"><use href="#i-dl"/></svg>Export</button>
@@ -61,6 +67,7 @@
 <div class="cmdk" id="cmdk" hidden><div class="cmdk-dim" data-cmdk="close"></div>
   <div class="cmdk-box"><div class="cmdk-in"><svg class="ic"><use href="#i-search"/></svg><input id="cmdkIn" placeholder="Airports, aircraft, chargers, or an action…" autocomplete="off" spellcheck="false"></div>
   <div class="cmdk-list" id="cmdkList"></div><div class="cmdk-foot"><span>↑↓ move</span><span>↵ run</span><span>esc close</span><span style="margin-left:auto">⌘K anywhere</span></div></div></div>
+<div class="modal-v2" id="modal" hidden><div class="modal-dim"></div><div class="modal-box" id="modalBox"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -95,7 +102,9 @@ window.CNS_DATA = {
 <script src="/static/ui/app.js?v={{ asset_version }}"></script>
 <script src="/static/ui/soc.js?v={{ asset_version }}"></script>
 <script src="/static/ui/map.js?v={{ asset_version }}"></script>
+<script src="/static/ui/planner.js?v={{ asset_version }}"></script>
 <script src="/static/ui/plan.js?v={{ asset_version }}"></script>
+<script src="/static/ui/share.js?v={{ asset_version }}"></script>
 <script src="/static/ui/network.js?v={{ asset_version }}"></script>
 <script src="/static/ui/timeline.js?v={{ asset_version }}"></script>
 <script src="/static/ui/palette.js?v={{ asset_version }}"></script>

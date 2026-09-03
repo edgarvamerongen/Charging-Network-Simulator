@@ -4,12 +4,14 @@
   const tripLabel = { 'one-way': 'One-way', retour: 'Return', circular: 'Circular', training: 'Training' };
   const tripHint = { 'one-way': 'A to B · charge to full at the destination', retour: 'A to B and back · charge at both ends', circular: 'A → stops → A · needs at least one stop', training: 'Circuits at the departure airport' };
   const hav = (a, b) => { const R = 6371, dL = (b[0] - a[0]) * Math.PI / 180, dN = (b[1] - a[1]) * Math.PI / 180, x = Math.sin(dL / 2) ** 2 + Math.cos(a[0] * Math.PI / 180) * Math.cos(b[0] * Math.PI / 180) * Math.sin(dN / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
-  const usableKm = p => { const f = (window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7; return (window.CNSFlight && CNSFlight.maxFlownLegKm) ? Math.round(CNSFlight.maxFlownLegKm(p)) : Math.round(p.range_km * f); };
+  const usableKm = p => { if (UI.planner) { const a = UI.planner.availRangeShownKm(p); if (a != null) return Math.round(a); } const f = (window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7; return (window.CNSFlight && CNSFlight.maxFlownLegKm) ? Math.round(CNSFlight.maxFlownLegKm(p)) : Math.round(p.range_km * f); };
+  const TYPE_TAG = { small_airport: 'S', medium_airport: 'M', large_airport: 'L' };
+  const BIAS = [['medium-large-small', 'Medium → Large → Small'], ['large-medium-small', 'Large → Medium → Small'], ['small-medium-large', 'Small → Medium → Large'], ['none', 'No preference']];
   const directKm = () => { const c = UI.chain(); let d = 0; for (let i = 0; i < c.length - 1; i++) d += hav(UI.ll(c[i]), UI.ll(c[i + 1])); return d; };
   const longestLeg = () => { const c = UI.chain(); let m = 0; for (let i = 0; i < c.length - 1; i++) m = Math.max(m, hav(UI.ll(c[i]), UI.ll(c[i + 1]))); return m; };
   const kwLabel = c => c.power_kw >= 1000 ? (c.power_kw / 1000) + ' MW' : c.power_kw + ' kW';
   const cap1 = s => { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); };
-  const reachKm = p => S.availOverride != null ? S.availOverride : usableKm(p);
+  const reachKm = p => usableKm(p);
   function selectPlane(id) { S.planeId = id; S.picking = false; S.availOverride = null; const dc = UI.plane().default_charger_id; if (dc && UI.CHARGERS.find(c => c.id === dc)) S.chargerId = dc; onFormChange(false); }
   function prefsOf(p) { return { label: String(p.profile_label || ''), regime: String(p.regime || ''), propulsion: String(p.propulsion || '') }; }
   // Option 3 · Instrument (static/proto/aircraft-options.html): full-bleed stage with prev/next,
@@ -49,7 +51,7 @@
   }
 
   function renderForm() {
-    const p = UI.plane(), ch = UI.charger(); const c = UI.chain(); const d = directKm(); const reach = reachKm(p); const fits = longestLeg() <= reach;
+    const p = UI.plane(), ch = UI.charger(); const c = UI.chain(); const d = directKm(); const reach = reachKm(p); const P = S.planned; const fits = !P.legIssues.length && !P.error;
     const stopsHtml = S.stops.map((s, i) => `<div class="fld wp" data-stop="${i}"><input placeholder="Add a charging stop…" value="${esc(s ? s.name : '')}" data-ac="stop${i}"><button class="x" data-act="rmStop" data-i="${i}" title="Remove stop"><svg class="ic"><use href="#i-x"/></svg></button><span class="icao">${esc(s ? s.ident : '')}</span><div class="ac" id="ac-stop${i}"></div></div>`).join('');
     const chList = S.allChargers ? UI.CHARGERS.slice().sort((a, b) => b.power_kw - a.power_kw) : [ch, ...UI.CHARGERS.filter(x => x.id !== ch.id).sort((a, b) => Math.abs(a.power_kw - ch.power_kw) - Math.abs(b.power_kw - ch.power_kw)).slice(0, 2)].sort((a, b) => b.power_kw - a.power_kw);
     const pickHtml = S.picking ? `<div class="pick">${UI.PLANES.map(x => `<button data-act="plane" data-id="${x.id}" class="${x.id === S.planeId ? 'on' : ''}"><img src="/pics/${esc(x.image || '')}" onerror="this.onerror=null;this.src='/pics/plane_svgs/${esc(x.svg || 'beta.svg')}'" alt=""><span><span class="n">${esc(x.name)}</span><br><span class="m">${esc(x.oem || '')} · ${x.seats} seats · ${x.battery_kwh ? x.battery_kwh + ' kWh' : 'no battery'} · ${esc(x.status || '')}</span></span><span class="r num">${x.range_km} km<small>${esc(x.regime || '')}${x.max_charge_kw ? ' · ' + x.max_charge_kw + ' kW max' : ''}</small></span></button>`).join('')}</div>` : '';
@@ -60,18 +62,29 @@
       <div class="fld"><input placeholder="Departure airport" value="${esc(S.origin ? S.origin.name : '')}" data-ac="origin"><span class="icao">${esc(S.origin ? S.origin.ident : '')}</span><div class="ac" id="ac-origin"></div></div>
       ${stopsHtml}
       ${S.trip === 'training' ? '' : `<div class="fld"><input placeholder="Destination airport" value="${esc(S.dest ? S.dest.name : '')}" data-ac="dest"><span class="icao">${esc(S.dest ? S.dest.ident : '')}</span><div class="ac" id="ac-dest"></div></div>`}
-      ${c.length >= 2 ? `<div class="route"><div class="rh ${fits ? '' : 'bad'}"><span><b>${c.length > 2 ? (c.length - 1) + ' legs' : 'Direct'}</b> · <span class="num">${fmt.dist(d)}</span></span><span>${fits ? 'fits the usable reach' : 'longest leg exceeds reach'}</span></div>
-        ${c.map((a, i) => `<div class="stop"><span class="n num">${String(i + 1).padStart(2, '0')}</span><span>${esc(a.name)}</span><span class="d num">${i === 0 ? esc(a.ident) : fmt.dist(hav(UI.ll(c[i - 1]), UI.ll(a)))}</span></div>`).join('')}</div>` : ''}</div>
+      ${c.length >= 2 ? routeBlock(c, d, fits) : ''}</div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Trip type</div><div class="seg sm" data-seg="trip">${Object.keys(tripLabel).map(k => `<button data-v="${k}" class="${S.trip === k ? 'on' : ''}">${tripLabel[k]}</button>`).join('')}</div><div class="hint">${tripHint[S.trip]}</div></div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="2000" value="${S.freq}" data-act="freq" class="num"><span class="t">routes /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per === 'day' ? 'on' : ''}">day</button><button data-v="week" class="${S.per === 'week' ? 'on' : ''}">week</button></div></div></div>
-    <div class="sec"><div class="lbl"><span class="cap">Charger</span><button class="lnk" data-act="allChargers">${S.allChargers ? 'Fewer' : 'All chargers'}</button></div>
+    <div class="sec"><div class="lbl"><span class="cap">Charger</span><span style="display:flex;gap:10px"><button class="lnk" data-act="ccOpen">Custom</button><button class="lnk" data-act="allChargers">${S.allChargers ? 'Fewer' : 'All chargers'}</button></span></div>
       ${chList.map(x => `<button class="chg ${x.id === S.chargerId ? 'on' : ''}" data-act="charger" data-id="${x.id}"><img src="/pics/${esc(x.image || '')}" alt=""><span class="n">${esc(cName(x))}</span><span class="kw num">${kwLabel(x)}</span></button>`).join('')}
       ${p.max_charge_kw && ch.power_kw > p.max_charge_kw ? `<div class="hint num">Aircraft accepts max ${p.max_charge_kw} kW — the charger is capped.</div>` : ''}</div>
     ${S.err ? `<div class="sec err">${esc(S.err)}</div>` : ''}`;
-    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p ${S.busy ? 'busy' : ''}" data-act="simulate">${S.busy ? 'Simulating…' : 'Simulate'}</button><button class="btn i" data-act="reset" title="Reset"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
+    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p ${S.busy ? 'busy' : ''}" data-act="simulate">${S.busy ? 'Simulating…' : 'Simulate'}</button><button class="btn i" id="planReset" data-act="reset" title="Reset"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
     $$('[data-ac]').forEach(inp => { const key = inp.dataset.ac; bindAc(inp, $('#ac-' + key), a => { if (key === 'origin') S.origin = a; else if (key === 'dest') S.dest = a; else S.stops[+key.slice(4)] = a; onFormChange(true); }); });
   }
-  function onFormChange(fit) { S.result = null; S.profile = null; S.err = ''; S.rail = 'form'; UI.render(); UI.map.drawRoute(fit); }
+  function routeBlock(c, d, fits) {
+    const P = S.planned, PL = UI.planner; const remedy = P.error ? PL.noRouteRemedy() : null;
+    const autoIdents = new Set([...P.stops, ...P.closing].filter(s => s && !S.stops.some(m => m && m.ident === s.ident)).map(s => s.ident));
+    const title = P.error ? 'No route' : P.stops.length || P.closing.length ? (P.source === 'user' ? 'Edited route' : 'Suggested route') : 'Direct';
+    const legs = c.length - 1;
+    const rows = c.map((a, i) => { const bad = i > 0 && P.legIssues.includes(i - 1); const isAuto = i > 0 && i < c.length - 1 && autoIdents.has(a.ident); const ov = S.divertOverrides[a.ident];
+      return `<div class="stop ${bad ? 'bad' : ''}"><span class="n num">${String(i + 1).padStart(2, '0')}</span><span>${esc(a.name)}${TYPE_TAG[a.type] ? ` <i class="tt">${TYPE_TAG[a.type]}</i>` : ''}${S.showAlternates && i > 0 ? (ov ? ` <span class="alt">ALT ${esc(ov)} <button class="lnk" data-act="altReset" data-ident="${esc(a.ident)}">reset</button></span>` : ` <button class="lnk alt" data-act="altPick" data-ident="${esc(a.ident)}">divert…</button>`) : ''}</span><span class="d num">${i === 0 ? esc(a.ident) : fmt.dist(hav(UI.ll(c[i - 1]), UI.ll(a)))}${bad ? ' <b style="color:var(--danger)">⚠</b>' : ''}</span>${isAuto ? `<button class="x" data-act="rmPlanned" data-ident="${esc(a.ident)}" title="Remove this stop and plan around it"><svg class="ic"><use href="#i-x"/></svg></button>` : '<span></span>'}</div>`; }).join('');
+    const remedyBtn = remedy === 'types' ? `<button class="lnk" data-act="remedyTypes">Enable all airfield sizes</button>` : remedy === 'network' ? `<button class="lnk" data-act="remedyNet">Show charger sites</button>` : remedy === 'both' ? `<button class="lnk" data-act="remedyBoth">Enable all sizes + network</button>` : '';
+    return `<div class="route"><div class="rh ${fits ? '' : 'bad'}"><span><b>${title}</b> · ${legs} leg${legs === 1 ? '' : 's'} · <span class="num">${fmt.dist(d)}</span></span><span>${P.error ? '' : fits ? 'fits the usable reach' : 'longest leg exceeds reach'}</span></div>
+      ${rows}${P.error ? `<div class="err" style="margin-top:6px">${esc(P.error)} ${remedyBtn} <button class="lnk" data-act="retry">Retry</button></div>` : ''}
+      <div class="row" style="margin-top:8px;gap:8px"><span class="hint" style="margin:0">Prefer</span><select class="sel" data-act="bias">${BIAS.map(([k, l]) => `<option value="${k}" ${S.bias === k ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="sp" style="flex:1"></span>${S.blacklist.size ? `<button class="lnk" data-act="resuggest">Re-suggest</button>` : ''}</div></div>`;
+  }
+  function onFormChange(fit) { S.result = null; S.profile = null; S.err = ''; S.rail = 'form'; if (UI.planner) UI.planner.replan(); UI.render(); UI.map.drawRoute(fit); UI.map.drawAlternates(); if (window.CNSRangeGraph && CNSRangeGraph.refresh) CNSRangeGraph.refresh(); }
 
   // ---- simulate: the classic payload + the engine profile ---------------------
   const toC = a => ({ ident: a.ident, name: a.name, lat: a.latitude_deg, lon: a.longitude_deg });
@@ -84,11 +97,13 @@
     if (S.trip === 'training' && !S.origin) { S.err = 'Pick a departure airport.'; UI.render(); return; }
     if (S.trip !== 'training' && (!S.origin || !S.dest)) { S.err = 'Pick a departure and a destination.'; UI.render(); return; }
     if (S.trip === 'circular' && !S.stops.filter(Boolean).length) { S.err = 'A circular trip needs at least one stop.'; UI.render(); return; }
-    const stops = S.stops.filter(Boolean).map(toC); const p = UI.plane(), ch = UI.charger();
+    if (UI.planner) { UI.planner.replan(); if (S.planned.error) { S.err = S.planned.error; UI.render(); return; } }
+    const stopShape = s => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type });
+    const stops = (UI.planner ? S.planned.stops : S.stops.filter(Boolean).map(toC)).map(stopShape); const p = UI.plane(), ch = UI.charger();
     const payload = { origin: toC(S.origin), destination: S.trip === 'training' ? toC(S.origin) : toC(S.dest), plane_id: S.planeId, charger_id: S.chargerId, trip_type: S.trip };
     if (S.trip === 'training') payload.training_range_km = p.training_range_km || 0;
     if (window.CNSChargers && CNSChargers.get && CNSChargers.get(S.chargerId)) payload.charger = CNSChargers.get(S.chargerId);
-    if (S.trip === 'circular') { const ring = [...stops, toC(S.dest)]; payload.destination = ring[ring.length - 1]; payload.stops = ring.slice(0, -1); }
+    if (S.trip === 'circular') { const ring = [...stops, stopShape(toC(S.dest)), ...(UI.planner ? S.planned.closing.map(stopShape) : [])]; payload.destination = ring[ring.length - 1]; payload.stops = ring.slice(0, -1); }
     else if (stops.length) payload.stops = stops;
     S.busy = true; S.err = ''; UI.render();
     try { const r = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const j = await r.json();
@@ -152,7 +167,7 @@
     const folder = CNSDemand.loadFolder(); folder.push(entry); CNSDemand.saveFolder(folder); UI.folderChanged();
     UI.toast(`Added ${UI.chain().map(a => a.ident).join(' → ')} to the network`); UI.map.drawNet(); UI.render();
   }
-  function resetForm() { UI._applyDefaults(); S.stops = []; S.trip = 'one-way'; S.freq = 1; S.per = 'day'; S.picking = false; S.allChargers = false; onFormChange(true); }
+  function resetForm() { UI._applyDefaults(); S.stops = []; S.trip = 'one-way'; S.freq = 1; S.per = 'day'; S.picking = false; S.allChargers = false; S.availOverride = null; S.blacklist.clear(); S.divertOverrides = {}; onFormChange(true); }
   function render() { if (S.rail === 'result' && S.profile) renderResult(); else renderForm(); }
 
   document.addEventListener('click', e => {
@@ -165,7 +180,7 @@
       case 'reset': resetForm(); UI.toast('Form reset'); break;
       case 'edit': S.rail = 'form'; UI.render(); break;
       case 'add': addToNetwork(); break;
-      case 'share': if (window.CNSShare && CNSShare.copyLink) CNSShare.copyLink(); else UI.toast('Share link — phase 2'); break;
+      case 'share': UI.share.copyRouteLink(); break;
       case 'pick': S.picking = !S.picking; UI.render(); break;
       case 'plane': selectPlane(t.dataset.id); break;
       case 'acFilters': S.acFilterOpen = !S.acFilterOpen; UI.render(); break;
@@ -178,9 +193,17 @@
       case 'allChargers': S.allChargers = !S.allChargers; UI.render(); break;
       case 'addStop': S.stops.push(null); UI.render(); setTimeout(() => { const i = $$('[data-ac^=stop]').pop(); i && i.focus(); }, 0); break;
       case 'rmStop': S.stops.splice(+t.dataset.i, 1); onFormChange(true); break;
+      case 'rmPlanned': S.blacklist.add(t.dataset.ident); onFormChange(true); break;
+      case 'resuggest': S.blacklist.clear(); onFormChange(true); break;
+      case 'retry': onFormChange(true); break;
+      case 'remedyTypes': S.allowedTypes = ['large_airport', 'medium_airport', 'small_airport']; UI.palette.syncControls(); UI.map.applyVisibility(); onFormChange(true); break;
+      case 'remedyNet': S.showAssets = true; UI.palette.syncControls(); UI.map.drawAssets(); onFormChange(true); break;
+      case 'remedyBoth': S.allowedTypes = ['large_airport', 'medium_airport', 'small_airport']; S.showAssets = true; UI.palette.syncControls(); UI.map.applyVisibility(); UI.map.drawAssets(); onFormChange(true); break;
+      case 'altPick': UI.planner.altPick(t.dataset.ident); break;
+      case 'altReset': UI.planner.altReset(t.dataset.ident); break;
     }
   });
-  document.addEventListener('change', e => { const t = e.target; if (t.dataset.act === 'freq') { S.freq = Math.max(1, Math.min(2000, +t.value || 1)); if (S.result) UI.render(); } if (t.dataset.act === 'acOverride') { S.availOverride = Math.max(1, +t.value || 1); onFormChange(false); } });
+  document.addEventListener('change', e => { const t = e.target; if (t.dataset.act === 'bias') { S.bias = t.value; onFormChange(false); } if (t.dataset.act === 'freq') { S.freq = Math.max(1, Math.min(2000, +t.value || 1)); if (S.result) UI.render(); } if (t.dataset.act === 'acOverride') { S.availOverride = Math.max(1, +t.value || 1); onFormChange(false); } });
   document.addEventListener('mousedown', e => { if (S.acFilterOpen && !e.target.closest('.ac-pop,[data-act=acFilters]')) { S.acFilterOpen = false; UI.render(); } });
   document.addEventListener('input', e => { if (e.target.dataset.act === 'freq') S.freq = Math.max(1, Math.min(2000, +e.target.value || 1)); });
 

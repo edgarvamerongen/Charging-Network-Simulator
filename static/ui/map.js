@@ -1,12 +1,14 @@
 /* CNS v2 — ui/map.js: Leaflet map + furniture in the Instrument language. */
 (function () {
   const UI = window.CNSUI, S = UI.S;
-  let map, BASES, dotsBig, dotsSmall, assetLayer, routeLayer, netLayer;
+  let map, BASES, dots = {}, assetLayer, routeLayer, netLayer;
   const DOT = { large_airport: { r: 3.6, o: .55 }, medium_airport: { r: 2.6, o: .5 }, small_airport: { r: 1.8, o: .35 } };
   function popupHtml(a) {
-    const rw = a.rwy_paved_m || a.rwy_grass_m || a.rwy_unknown_m;
-    return `<div class="pp"><div class="t"><span>${UI.esc(a.name)}</span><span class="ic2">${UI.esc(a.ident)}${a.iata_code ? ' · ' + UI.esc(a.iata_code) : ''}</span></div>
-      <div class="m">${UI.esc(a.municipality || '')}${a.municipality ? ' · ' : ''}${UI.esc((a.type || '').replace('_', ' '))}${rw ? ' · runway ' + Math.round(rw) + ' m' : ' · no runway data'}</div>
+    const rw = a.rwy_paved_m || a.rwy_grass_m || a.rwy_unknown_m; const p = UI.plane();
+    const fit = (window.CNSRunway && CNSRunway.suitability && p) ? CNSRunway.suitability(p, a) : null;
+    const fitHtml = fit ? `<div class="m ${fit.state === 'ok' ? '' : fit.state === 'unknown' ? '' : 'bad'}">${UI.esc(UI.planeShort(p.name))}: ${UI.esc(fit.label || fit.state)}</div>` : '';
+    return `<div class="pp"><img class="pp-photo" src="/api/airport-photo/${encodeURIComponent(a.ident)}" alt="" onerror="this.remove()"><div class="t"><span>${UI.esc(a.name)}</span><span class="ic2">${UI.esc(a.ident)}${a.iata_code ? ' · ' + UI.esc(a.iata_code) : ''}</span></div>
+      <div class="m">${UI.esc(a.municipality || '')}${a.municipality ? ' · ' : ''}${UI.esc((a.type || '').replace('_', ' '))}${rw ? ' · runway ' + Math.round(rw) + ' m' : ' · no runway data'}</div>${fitHtml}
       <div class="acts"><button onclick="setOrigin(airportByIdent['${UI.esc(a.ident)}'])">Departure</button><button onclick="setDest(airportByIdent['${UI.esc(a.ident)}'])">Destination</button><button onclick="setStop(airportByIdent['${UI.esc(a.ident)}'])">Stop</button></div></div>`;
   }
   function init() {
@@ -19,17 +21,26 @@
     };
     BASES[S.base] ? BASES[S.base].addTo(map) : BASES.light.addTo(map);
     map.createPane('dots').style.zIndex = 350; map.createPane('net').style.zIndex = 380; map.createPane('rt').style.zIndex = 400; map.createPane('pins').style.zIndex = 450;
-    dotsBig = L.layerGroup().addTo(map); dotsSmall = L.layerGroup(); assetLayer = L.layerGroup().addTo(map); routeLayer = L.layerGroup().addTo(map); netLayer = L.layerGroup().addTo(map);
-    map.on('zoomend', () => { const want = S.showSmall || map.getZoom() >= 7.5; if (want && !map.hasLayer(dotsSmall)) dotsSmall.addTo(map); if (!want && map.hasLayer(dotsSmall)) map.removeLayer(dotsSmall); });
+    ['large_airport', 'medium_airport', 'small_airport'].forEach(t => dots[t] = L.layerGroup()); assetLayer = L.layerGroup().addTo(map); routeLayer = L.layerGroup().addTo(map); netLayer = L.layerGroup().addTo(map);
+    map.on('zoomend', applyVisibility);
     drawAirports(); drawAssets();
   }
   function drawAirports() {
-    dotsBig.clearLayers(); dotsSmall.clearLayers();
+    Object.values(dots).forEach(g => g.clearLayers());
     UI.airports().forEach(a => { const d = DOT[a.type] || DOT.small_airport;
       const m = L.circleMarker(UI.ll(a), { pane: 'dots', radius: d.r, weight: 0, fillColor: '#4a4d6e', fillOpacity: d.o });
       m.bindPopup(() => popupHtml(a), { offset: [0, -2] });
-      (a.type === 'small_airport' ? dotsSmall : dotsBig).addLayer(m); });
+      m.on('click', () => { if (UI.planner && UI.planner.pickPending()) { UI.planner.notifyAirportPick(a); map.closePopup(); } });
+      (dots[a.type] || dots.small_airport).addLayer(m); });
+    applyVisibility();
   }
+  // Size filters drive both the dots and the planner's stop pool (as in the classic); small
+  // airfields additionally wait for zoom ≥ 7.5 so 6,000 canvas dots don't blanket the continent.
+  function applyVisibility() {
+    const z = map.getZoom();
+    Object.entries(dots).forEach(([t, g]) => { const want = S.allowedTypes.includes(t) && (t !== 'small_airport' || z >= 7.5); if (want && !map.hasLayer(g)) g.addTo(map); if (!want && map.hasLayer(g)) map.removeLayer(g); });
+  }
+  function drawAlternates() { if (!window.CNSDivertEdit || !UI.planner) return; if (S.showAlternates && S.mode === 'plan') CNSDivertEdit.render(UI.planner.alternatesChain()); else CNSDivertEdit.clear(); }
   function drawAssets() {
     assetLayer.clearLayers(); if (!S.showAssets) return;
     Object.values(UI.assets()).forEach(x => { const a = UI.byId()[x.icao]; if (!a) return;
@@ -50,7 +61,7 @@
     if (S.trip === 'retour') routeLayer.addLayer(L.polyline(pts, { pane: 'rt', color: '#fff', weight: 2, opacity: .9, dashArray: '6 8', lineCap: 'butt' }));
     c.forEach((a, i) => { const stop = i > 0 && i < c.length - 1; routeLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="ep${stop ? ' stop' : ''}"></div>`, iconSize: [11, 11], iconAnchor: [5.5, 5.5] }) })); });
     const legs = UI.plan && UI.plan.legsForMap ? UI.plan.legsForMap() : null;
-    for (let i = 0; i < pts.length - 1; i++) { const mid = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2]; let txt = UI.fmt.dist(hav(pts[i], pts[i + 1]));
+    for (let i = 0; S.showLabels && i < pts.length - 1; i++) { const mid = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2]; let txt = UI.fmt.dist(hav(pts[i], pts[i + 1]));
       if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.h(legs[i].flightMin)} h · ${UI.fmt.r(legs[i].energyKwh)} kWh`;
       routeLayer.addLayer(L.marker(mid, { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="leglbl num">${txt}</div>`, iconSize: [0, 0] }) })); }
     if (fit) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [360, 60], paddingBottomRight: [40, 80], maxZoom: 9, animate: false });
@@ -66,6 +77,6 @@
   function fitNet() { const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs) pts.push(...l.getLatLngs()); }); if (pts.length) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [560, 60], paddingBottomRight: [40, 80], maxZoom: 8, animate: false }); }
   function setBase(n) { Object.values(BASES).forEach(b => map.removeLayer(b)); (BASES[n] || BASES.light).addTo(map); S.base = n; }
   function flyTo(a) { map.flyTo(UI.ll(a), Math.max(map.getZoom(), 8)); setTimeout(() => L.popup({ offset: [0, -2] }).setLatLng(UI.ll(a)).setContent(popupHtml(a)).openOn(map), 400); }
-  UI.map = { init, drawAirports, drawAssets, drawRoute, drawNet, fitNet, setBase, flyTo, showSmall: v => { S.showSmall = v; map.fire('zoomend'); },
+  UI.map = { init, drawAirports, drawAssets, drawRoute, drawNet, fitNet, setBase, flyTo, applyVisibility, drawAlternates,
              hideRoute: () => map.hasLayer(routeLayer) && map.removeLayer(routeLayer), showRoute: () => !map.hasLayer(routeLayer) && routeLayer.addTo(map), get map() { return map; } };
 })();

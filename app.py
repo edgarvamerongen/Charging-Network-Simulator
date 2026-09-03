@@ -460,6 +460,16 @@ def index_v2():
     return render_template('desktop.html', planes=simulator.planes,
                            chargers=simulator.chargers, asset_version=ASSET_VERSION)
 
+
+@app.route('/v2/s/<slug>')
+def share_open_v2(slug):
+    """Open a shared route or build in the v2 shell (same blob store as /s/<slug>)."""
+    state = shares.load_state(slug)
+    return make_response(render_template(
+        'desktop.html', planes=simulator.planes, chargers=simulator.chargers,
+        asset_version=ASSET_VERSION, share_state=state,
+    ))
+
 @app.route('/s/<slug>')
 def share_open(slug):
     """Open a shared route: serve the planner with the saved state injected so

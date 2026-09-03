@@ -360,3 +360,58 @@ body.net .drawer{left:calc(520px + 24px)}
 .ac-ov .nm{font-weight:700;font-size:14px;letter-spacing:-.005em;line-height:1.2}
 .ac-ov .nm .mk{font-weight:400;color:rgba(255,255,255,.78)}
 .ac-ov .sp{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.78);margin-top:3px;white-space:nowrap}
+
+/* ---- planner: stop rows with actions, type tags, diverts, bias select ---- */
+.stop{grid-template-columns:18px 1fr auto 18px}
+.stop.bad .d{color:var(--danger)}
+.stop .x{width:18px;height:18px;display:flex;align-items:center;justify-content:center;color:var(--faint)}
+.stop .x:hover{color:var(--danger)}
+.stop .tt{font-style:normal;font-size:9px;font-weight:600;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 3px;margin-left:4px;vertical-align:1px}
+.stop .alt{font-size:10.5px;color:var(--muted);margin-left:6px}
+.route .err{font-size:11.5px;color:var(--danger)}
+.route .err .lnk{color:var(--ink)}
+.sel{height:24px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 6px;background:var(--surface);font-size:11.5px;color:var(--ink)}
+.pp .m.bad{color:var(--danger)}
+.pp-photo{display:block;width:calc(100% + 24px);margin:-10px -12px 8px;height:96px;object-fit:cover}
+/* divert editor furniture from static/divert-edit.js (it injects its own markers) */
+.alt-dist-label{font:11px Inter,system-ui,sans-serif;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px;box-shadow:var(--shadow)}
+
+/* ---- modal (one surface for every dialog) ---- */
+.modal-v2{position:fixed;inset:0;z-index:90}
+.modal-dim{position:absolute;inset:0;background:rgba(50,50,110,.28)}
+.modal-box{position:absolute;left:50%;top:14vh;transform:translateX(-50%);width:520px;max-width:calc(100vw - 32px);max-height:76vh;overflow:auto;background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 16px 48px rgba(50,50,110,.22)}
+.modal-box .mh{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+.modal-box .mh h3{font-size:14px;font-weight:600}
+.modal-box .mb{padding:14px 16px}
+.modal-box .btns{border-top:1px solid var(--line);padding:12px 16px}
+.modal-box .fld input{height:32px;width:100%;border:1px solid var(--line-2);border-radius:var(--r);padding:0 10px;background:var(--surface);outline:none}
+.modal-box .fld input:focus{border-color:var(--ink)}
+
+/* ---- network ledger: pane tiles, chargers, charge target, flights ---- */
+.ap .pane .tiles3{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:var(--r);margin-top:4px}
+.ap .pane .tiles3>div{padding:8px 10px;border-right:1px solid var(--line)}.ap .pane .tiles3>div:last-child{border-right:0}
+.ap .pane .tiles3 .v{font-size:16px;font-weight:600;letter-spacing:-.02em;margin-top:2px}.ap .pane .tiles3 .v small{font-size:10.5px;font-weight:500;color:var(--muted);margin-left:2px}
+.ap .pane .tiles3 .s{font-size:10.5px;color:var(--muted);margin-top:1px}
+.seg.xs{height:18px;margin-left:6px;vertical-align:middle}.seg.xs button{padding:0 6px;font-size:10px}
+.alert{margin-top:8px;padding:8px 10px;border:1px solid var(--danger);border-radius:var(--r);color:var(--danger);font-size:12px}
+.fleet .slot{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line-2);border-radius:var(--r);padding:2px 4px 2px 6px}
+.fleet .slot .sel{border:0;height:20px;padding:0 2px;font-size:11.5px}
+.fleet .slot .rm{width:16px;height:16px}
+.socp{border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;font-size:12px;display:grid;gap:6px}
+.socp input[type=range]{width:100%;accent-color:var(--ink)}
+.fl{grid-template-columns:1fr auto auto 18px}
+.fl.bad .t{color:var(--danger)}
+.fl .tag{display:inline-block;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 4px;margin-right:4px;vertical-align:1px}
+.fl .freq{display:inline-flex;gap:4px;align-items:center}
+.fl .freq input{width:52px;height:24px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 6px;text-align:right;background:var(--surface)}
+.fl .freq .sel{height:24px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.grid2 label{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.grid2 .sel{height:30px;font-size:12.5px}
+/* ---- timeline kinds ---- */
+.track .blk.chg.away{background:rgba(216,76,38,.28);color:var(--ink)}
+.track .blk.wait.away{background:repeating-linear-gradient(135deg,#d6d9e4 0 3px,#eceef4 3px 6px);color:var(--ink)}
+.grow.grp{height:26px;background:var(--canvas)}
+.grow.grp .lab{font-weight:600}
+.glegend i.a{background:rgba(216,76,38,.28)}
+.blk[data-drag]{cursor:grab}.blk[data-drag]:active{cursor:grabbing}

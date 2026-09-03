@@ -42,6 +42,7 @@ window.CNSUI = (function () {
   const charger = () => CHARGERS.find(c => c.id === S.chargerId) || CHARGERS[0];
   const ll = a => [a.latitude_deg ?? a.lat, a.longitude_deg ?? a.lon];
   const chain = () => {
+    if (CNSUI.planner) return CNSUI.planner.chain();
     const st = S.stops.filter(Boolean);
     if (S.trip === 'training') return S.origin ? [S.origin] : [];
     const c = [S.origin, ...st, S.dest].filter(Boolean);
@@ -49,6 +50,10 @@ window.CNSUI = (function () {
     return c;
   };
   function folderChanged() { if (window.CNSState && CNSState.notify) CNSState.notify(CNSState.KEYS.folder); if (window.CNSScheduler && CNSScheduler.runGlobal) CNSScheduler.runGlobal(); }
+  // ---- one modal surface for every dialog (v2 language, no Bootstrap) ----
+  const modal = { open(html) { const m = $('#modal'); $('#modalBox').innerHTML = html; m.hidden = false; const f = $('#modalBox input,#modalBox select'); if (f) setTimeout(() => f.focus(), 30); }, close() { $('#modal').hidden = true; $('#modalBox').innerHTML = ''; }, isOpen() { return !$('#modal').hidden; } };
+  if (hasDoc) document.addEventListener('click', e => { if (e.target.closest('[data-modal=close]') || e.target.classList.contains('modal-dim')) modal.close(); });
+  if (hasDoc) document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.isOpen()) modal.close(); });
   function toast(t) { if (!hasDoc) return; const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), 2200); }
 
   // ---- aircraft catalog model: airframe groups (profile rows), filters, knobs ----
@@ -91,6 +96,7 @@ window.CNSUI = (function () {
   }
   window.escHtml = esc;
   window.folderMap = null;                  // tour.js reads it; the replay map sets it in phase 3
+  window.renderFolder = () => { if (CNSUI.render) CNSUI.render(); };   // buildshare.js calls it after a restore
   window.setOrigin = ap => { S.origin = ap; CNSUI.plan && CNSUI.plan.onFormChange(true); };
   window.setDest = ap => { S.dest = ap; CNSUI.plan && CNSUI.plan.onFormChange(true); };
   window.setStop = ap => { S.stops.push(ap); CNSUI.plan && CNSUI.plan.onFormChange(true); };
@@ -124,21 +130,27 @@ window.CNSUI = (function () {
     _setAirports(aps); ASSETS = assets || {};
     if (window.CNSScheduler) CNSScheduler.init({ chargers: window.CHARGERS_BY_ID, onChange: () => render() });
     if (window.CNSAnimation) CNSAnimation.init();
-    CNSUI.map.init();
-    _applyDefaults();
-    render(); CNSUI.map.drawRoute(true); CNSUI.map.drawNet();
+    CNSUI.map.init(); if (CNSUI.planner) CNSUI.planner.initMap();
+    _applyDefaults(); if (CNSUI.planner) CNSUI.planner.replan();
+    render(); CNSUI.map.drawRoute(true); CNSUI.map.drawNet(); CNSUI.map.drawAlternates();
     if (window.CNSUnits && CNSUnits.onChange) CNSUnits.onChange(() => { render(); CNSUI.map.drawRoute(false); });
-    if (window.CNSSettings && CNSSettings.subscribe) CNSSettings.subscribe(() => { if (S.result) CNSUI.plan.resimulate(); render(); });
+    if (window.CNSSettings && CNSSettings.subscribe) CNSSettings.subscribe(() => { if (CNSUI.planner) CNSUI.planner.replan(); if (S.result) CNSUI.plan.resimulate(); render(); CNSUI.map.drawRoute(false); if (CNSUI.network) CNSUI.network.recomputeAllDebounced(); });
+    if (D.shareState) { try { await CNSUI.share.applyState(D.shareState); } catch (e) { console.warn('[v2] share restore failed', e); toast('This share link could not be opened'); } }
     // deep links kept from the prototype: #result #multi #network (+ :ICAO isolation later)
-    const [h] = location.hash.replace('#', '').split(':');
+    const [h, focusAp, view] = location.hash.replace('#', '').split(':');
     if (h === 'multi') { S.dest = AP_BY_ID['EDDM'] || S.dest; S.stops = [AP_BY_ID['EDDF']].filter(Boolean); await CNSUI.plan.simulate(); }
     if (h === 'result') await CNSUI.plan.simulate();
     if (h === 'network') setMode('network');
+    if (h === 'big') await CNSUI.network.loadScenario('regional');
+    if (h === 'hub') await CNSUI.network.loadScenario('hub');
+    if (h === 'training') await CNSUI.network.loadScenario('training');
+    if (focusAp && AP_BY_ID[focusAp]) { S.filter = focusAp; S.openAp[focusAp] = true; setMode('network'); }
+    if (view === 'fleet') { S.lanes = 'fleet'; $('#drawer').classList.add('open'); CNSUI.timeline.render(); }
     if (h === 'filters') { S.acFilterOpen = true; render(); }
     document.addEventListener('click', e => { const b = e.target.closest('#modeSeg button'); if (b) setMode(b.dataset.mode); });
   }
 
   return { S, PLANES, CHARGERS, SEED, D, airports: () => AIRPORTS, byId: () => AP_BY_ID, assets: () => ASSETS,
            $, $$, esc, fmt, perDay, planeShort, shortName, plane, charger, ll, chain, toast, search, aircraft,
-           render, setMode, boot, rebuildIndexes, folderChanged, _setAirports, _applyDefaults };
+           render, setMode, boot, rebuildIndexes, folderChanged, modal, _setAirports, _applyDefaults };
 })();

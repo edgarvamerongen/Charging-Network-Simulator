@@ -2,9 +2,9 @@
 (function () {
   const UI = window.CNSUI, S = UI.S, $ = UI.$, $$ = UI.$$, esc = UI.esc;
   const KEY = 'cns_map_options';
-  function loadOpts() { try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); if (o.basemap === 'street' || o.basemap === 'sat' || o.basemap === 'light') S.base = o.basemap; if ('fSmall' in o) S.showSmall = !!o.fSmall; if ('nrgChargerToggle' in o) S.showAssets = !!o.nrgChargerToggle; if ('fSavedRoutes' in o) S.showNet = !!o.fSavedRoutes; } catch (e) {} }
-  function saveOpts() { try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); Object.assign(o, { basemap: S.base, fSmall: S.showSmall, nrgChargerToggle: S.showAssets, fSavedRoutes: S.showNet }); localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} }
-  loadOpts();
+  function loadOpts() { try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); if (o.basemap === 'street' || o.basemap === 'sat' || o.basemap === 'light') S.base = o.basemap; const T = []; if (o.fLarge !== false) T.push('large_airport'); if (o.fMedium !== false) T.push('medium_airport'); if (o.fSmall === true) T.push('small_airport'); S.allowedTypes = T; if ('nrgChargerToggle' in o) S.showAssets = !!o.nrgChargerToggle; if ('fSavedRoutes' in o) S.showNet = !!o.fSavedRoutes; if ('fAlternates' in o) S.showAlternates = !!o.fAlternates; if ('flightLabelToggle' in o) S.showLabels = o.flightLabelToggle !== false; } catch (e) {} }
+  function saveOpts() { try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); Object.assign(o, { basemap: S.base, fLarge: S.allowedTypes.includes('large_airport'), fMedium: S.allowedTypes.includes('medium_airport'), fSmall: S.allowedTypes.includes('small_airport'), nrgChargerToggle: S.showAssets, fSavedRoutes: S.showNet, fAlternates: S.showAlternates, flightLabelToggle: S.showLabels }); localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} }
+  document.addEventListener('DOMContentLoaded', loadOpts);
   // ---- topbar ----------------------------------------------------------------
   document.addEventListener('click', e => {
     const dd = { mapBtn: 'mapDd', expBtn: 'expDd', setBtn: 'setDd' }; const tb = e.target.closest('#mapBtn,#expBtn,#setBtn');
@@ -17,17 +17,19 @@
     if (e.target.closest('[data-cmdk=close]')) close();
   });
   document.addEventListener('change', e => { const t = e.target;
-    if (t.id === 'ckSmall') { UI.map.showSmall(t.checked); saveOpts(); }
-    if (t.id === 'ckAssets') { S.showAssets = t.checked; UI.map.drawAssets(); saveOpts(); }
-    if (t.id === 'ckNet') { S.showNet = t.checked; UI.map.drawNet(); saveOpts(); } });
+    if (t.classList && t.classList.contains('airport-filter')) { S.allowedTypes = $$('.airport-filter').filter(c => c.checked).map(c => c.value); UI.map.applyVisibility(); saveOpts(); UI.plan.onFormChange(false); }
+    if (t.id === 'nrgChargerToggle') { S.showAssets = t.checked; UI.map.drawAssets(); saveOpts(); UI.plan.onFormChange(false); }
+    if (t.id === 'fSavedRoutes') { S.showNet = t.checked; UI.map.drawNet(); saveOpts(); }
+    if (t.id === 'fAlternates') { S.showAlternates = t.checked; saveOpts(); UI.render(); UI.map.drawAlternates(); }
+    if (t.id === 'flightLabelToggle') { S.showLabels = t.checked; saveOpts(); UI.map.drawRoute(false); } });
   function runExport(kind, btn) {
     if (kind === 'xlsx' && window.CNSSpreadsheet) return CNSSpreadsheet.export(btn);
-    if (kind === 'share' && window.CNSShare) return CNSShare.copyLink();
-    if (kind === 'build' && window.CNSBuildShare) return CNSBuildShare.copyBuildLink({});
+    if (kind === 'share') return UI.share.copyRouteLink();
+    if (kind === 'build') return UI.share.copyBuildLink();
     if (kind === 'pdf') return UI.toast('PDF report needs the airport picker — phase 4. Use the classic version for now.');
   }
   // sync the topbar controls to persisted state
-  function syncControls() { $$('#mapDd [data-base]').forEach(x => x.classList.toggle('on', x.dataset.base === S.base)); $('#ckSmall').checked = S.showSmall; $('#ckAssets').checked = S.showAssets; $('#ckNet').checked = S.showNet;
+  function syncControls() { $$('#mapDd [data-base]').forEach(x => x.classList.toggle('on', x.dataset.base === S.base)); $$('.airport-filter').forEach(c => c.checked = S.allowedTypes.includes(c.value)); $('#nrgChargerToggle').checked = S.showAssets; $('#fSavedRoutes').checked = S.showNet; $('#fAlternates').checked = S.showAlternates; $('#flightLabelToggle').checked = S.showLabels;
     const nm = window.CNSUnits && CNSUnits.isNautical && CNSUnits.isNautical(); $$('#unitSeg button').forEach(x => x.classList.toggle('on', (x.dataset.u === 'nm') === !!nm)); }
   document.addEventListener('DOMContentLoaded', syncControls);
   // ---- header search: fly to ----------------------------------------------------
@@ -74,5 +76,5 @@
     $('#cmdkList').addEventListener('click', e => { const it = e.target.closest('.it'); if (it) run(+it.dataset.i); });
     $('#cmdkList').addEventListener('mousemove', e => { const it = e.target.closest('.it'); if (it && +it.dataset.i !== CMD.hl) { CMD.hl = +it.dataset.i; renderList(); } }); });
   document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#cmdk').hidden ? open('') : close(); } else if (e.key === 'Escape' && !$('#cmdk').hidden) close(); });
-  UI.palette = { open, close, items };
+  UI.palette = { open, close, items, syncControls };
 })();
