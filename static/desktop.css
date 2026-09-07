@@ -431,3 +431,18 @@ body.net .drawer{left:calc(520px + 24px)}
 .driver-popover.cns-tour button{border-radius:var(--r);border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font-family:inherit;font-size:12px;font-weight:600;text-shadow:none;padding:5px 10px}
 .driver-popover.cns-tour .driver-popover-next-btn{background:var(--accent);border-color:var(--accent);color:#fff}
 .driver-popover.cns-tour .driver-popover-close-btn{border:0;background:transparent;color:var(--muted)}
+
+/* ---- ported from the classic shell (templates/index.html) ---- */
+/* divert / alternate handles — index.html:1667-1669 */
+.divert-marker-wrap{background:none;border:none}
+.divert-marker{width:12px;height:12px;border-radius:50%;background:#7c3aed;border:2px solid #fff;box-shadow:0 0 0 1px rgba(124,58,237,.5);cursor:grab}
+.divert-marker.manual{background:#5b21b6;box-shadow:0 0 0 2px rgba(124,58,237,.6)}
+.divert-marker:active{cursor:grabbing}
+/* reach-graph labels — index.html:150-151 */
+.leaflet-div-icon.rg-lbl{background:none;border:none;width:auto!important;height:auto!important}
+.rg-lbl span{display:inline-block;transform:translate(8px,-50%);font:600 10px/1 Inter,system-ui,sans-serif;color:var(--ink);white-space:nowrap;text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 3px #fff}
+/* share / build-share toast — index.html:588-589 */
+.cns-share-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(8px);background:var(--ink);color:#fff;padding:8px 14px;border-radius:var(--r);font-size:12px;font-weight:600;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .18s var(--ease),transform .18s var(--ease);z-index:9999}
+.cns-share-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* airport field typed over without picking — index.html:710 */
+.ac-input.ac-unset,input.ac-unset{border-color:var(--accent)}

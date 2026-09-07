@@ -28,7 +28,8 @@ window.CNSUI = (function () {
   const r = v => (U() && U().r) ? U().r(v) : (Math.ceil(v - 1e-9) || 0);   // the classic rounds UP everywhere (CNSUnits.r)
   const fmt = {
     km, ukm, r,
-    dist: v => Math.round(km(v)).toLocaleString('en') + ' ' + ukm(),
+    // Distances round UP everywhere, like the classic's CNSUnits.fmtDist (static/units.js:30-33).
+    dist: v => r(km(v)).toLocaleString('en') + ' ' + ukm(),
     h: min => { const m = r(min); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); },
     min: m => m >= 60 ? fmt.h(m) + ' h' : r(m) + ' min',
     eur: v => v.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -38,9 +39,39 @@ window.CNSUI = (function () {
   const perDay = f => f.per === 'day' || f.freqUnit === 'day' ? +(f.freq ?? f.freqN ?? 1) : +(f.freq ?? f.freqN ?? 1) / 7;
   const planeShort = n => String(n || '').replace(/^Beta /, '').split(' — ')[0].replace(/ \(.*\)$/, '');
   const shortName = n => String(n || '').replace(/\s+(International\s+)?Airport$/i, '').replace(/\s+Airfield$/i, '');
-  const plane = () => PLANES.find(p => p.id === S.planeId) || PLANES[0];
+  // Photo precedence, verbatim from the classic's _planeImg (index.html:3645): the Notion-synced
+  // photo wins over the committed pics/ file; NEITHER means no <img> at all (a bare /pics/ 404s).
+  const planeImg = p => (p && p.image_url) ? p.image_url : (p && p.image ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '');
+  // Legacy / scenario / share-link plane ids that are not catalog row ids (the prototype catalog's).
+  const PLANE_ALIAS = { beta_plane: 'beta_alia', vaeridion: 'vaeridion_microliner', vaeridion_light: 'vaeridion_microliner_9_seats' };
+  /** id → a REAL catalog row id: exact row · airframe (aircraft_id) · alias map · name match. null when nothing matches. */
+  function resolvePlaneId(id) {
+    const k = String(id == null ? '' : id).trim(); if (!k) return null;
+    if (PLANES.some(p => p.id === k)) return k;
+    const byGroup = PLANES.find(p => String(p.aircraft_id || '') === k); if (byGroup) return byGroup.id;
+    const alias = PLANE_ALIAS[k];
+    if (alias) { if (PLANES.some(p => p.id === alias)) return alias; const g = PLANES.find(p => String(p.aircraft_id || '') === alias); if (g) return g.id; }
+    const words = k.split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    if (!words.length) return null;
+    const re = new RegExp(words.join('.*'), 'i');
+    const byName = PLANES.find(p => re.test(String(p.name || ''))); return byName ? byName.id : null;
+  }
+  // An unknown id resolves through the alias map rather than silently becoming PLANES[0] — the range
+  // gate must never evaluate a different aircraft than the one the caller named (TIMELINE-9/SHELL-1).
+  const plane = () => PLANES.find(p => p.id === S.planeId) || (S.planeId ? PLANES.find(p => p.id === resolvePlaneId(S.planeId)) : null) || PLANES[0];
   const charger = () => CHARGERS.find(c => c.id === S.chargerId) || CHARGERS[0];
   const ll = a => [a.latitude_deg ?? a.lat, a.longitude_deg ?? a.lon];
+  // The distance to SHOW in every planning aid: the classic's _dispKm (index.html:4596-4601) —
+  // routed (great-circle × airways padding) + the fixed SID/STAR pad, i.e. the engine's per-leg distKm.
+  function dispKm(a, b) {
+    const P = x => ({ lat: +(x.latitude_deg ?? x.lat), lon: +(x.longitude_deg ?? x.lon) });
+    const A = P(a), B = P(b), p = plane();
+    const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(p) : 0;
+    if (window.CNSRouting && CNSRouting.routedKm) return CNSRouting.routedKm(A, B, p) + sid;
+    const R = 6371, dL = (B.lat - A.lat) * Math.PI / 180, dN = (B.lon - A.lon) * Math.PI / 180;
+    const x = Math.sin(dL / 2) ** 2 + Math.cos(A.lat * Math.PI / 180) * Math.cos(B.lat * Math.PI / 180) * Math.sin(dN / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x)) + sid;
+  }
   const chain = () => {
     if (CNSUI.planner) return CNSUI.planner.chain();
     const st = S.stops.filter(Boolean);
@@ -49,9 +80,16 @@ window.CNSUI = (function () {
     if (S.trip === 'circular' && S.origin && S.dest) c.push(S.origin);
     return c;
   };
-  function folderChanged() { if (window.CNSState && CNSState.notify) CNSState.notify(CNSState.KEYS.folder); if (window.CNSScheduler && CNSScheduler.runGlobal) CNSScheduler.runGlobal(); }
+  // The topbar count belongs to the FOLDER, not to the Network render: Plan-mode adds and removals
+  // must move it too (the classic's drawer subtitle updates on every folder notify).
+  function netCount() { if (!hasDoc) return; const e = $('#netCount'); if (!e) return; const n = (window.CNSDemand && CNSDemand.loadFolder) ? CNSDemand.loadFolder().length : 0; e.textContent = n || ''; }
+  function folderChanged() { netCount(); if (window.CNSState && CNSState.notify) CNSState.notify(CNSState.KEYS.folder); if (window.CNSScheduler && CNSScheduler.runGlobal) CNSScheduler.runGlobal(); }
   // ---- one modal surface for every dialog (v2 language, no Bootstrap) ----
-  const modal = { open(html) { const m = $('#modal'); $('#modalBox').innerHTML = html; m.hidden = false; const f = $('#modalBox input,#modalBox select'); if (f) setTimeout(() => f.focus(), 30); }, close() { $('#modal').hidden = true; $('#modalBox').innerHTML = ''; }, isOpen() { return !$('#modal').hidden; } };
+  // Autofocus only fields whose keyboard default action is typing: a range slider or a select
+  // would silently CHANGE a persisted model value on the first arrow key (the classic focuses the
+  // dialog container instead). Nothing typable → focus the box itself so Escape/Tab still work.
+  const TYPABLE = '#modalBox input[type=text],#modalBox input[type=number],#modalBox input[type=search],#modalBox input:not([type]),#modalBox textarea';
+  const modal = { open(html) { const m = $('#modal'); const box = $('#modalBox'); box.innerHTML = html; m.hidden = false; const f = $(TYPABLE); setTimeout(() => { if (f) f.focus(); else { box.setAttribute('tabindex', '-1'); box.focus(); } }, 30); }, close() { $('#modal').hidden = true; $('#modalBox').innerHTML = ''; }, isOpen() { return !$('#modal').hidden; } };
   if (hasDoc) document.addEventListener('click', e => { if (e.target.closest('[data-modal=close]') || e.target.classList.contains('modal-dim')) modal.close(); });
   if (hasDoc) document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.isOpen()) modal.close(); });
   function toast(t) { if (!hasDoc) return; const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), 2200); }
@@ -89,17 +127,29 @@ window.CNSUI = (function () {
   }
 
   // ---- engine adapter: names the engines read off `window` -----------------
+  // Mutate the index objects IN PLACE: CNSScheduler.init captures window.CHARGERS_BY_ID by
+  // reference, so reassigning it after a custom charger loads leaves the scheduler holding the
+  // old object and every custom charger reads as unpowered in the timeline (SHELL-7).
+  function syncIndex(obj, list) { Object.keys(obj).forEach(k => { if (!list.some(x => x.id === k)) delete obj[k]; }); list.forEach(x => { obj[x.id] = x; }); return obj; }
   function rebuildIndexes() {
-    window.PLANES_BY_ID = Object.fromEntries(PLANES.map(p => [p.id, p]));
-    window.CHARGERS_BY_ID = Object.fromEntries(CHARGERS.map(c => [c.id, c]));
+    window.PLANES_BY_ID = syncIndex(window.PLANES_BY_ID || {}, PLANES);
+    window.CHARGERS_BY_ID = syncIndex(window.CHARGERS_BY_ID || {}, CHARGERS);
     window.airportByIdent = AP_BY_ID;       // report.js reads window.airportByIdent — dangling in the classic shell
   }
   window.escHtml = esc;
   window.folderMap = null;                  // tour.js reads it; the replay map sets it in phase 3
   window.renderFolder = () => { if (CNSUI.render) CNSUI.render(); };   // buildshare.js calls it after a restore
-  window.setOrigin = ap => { S.origin = ap; CNSUI.plan && CNSUI.plan.onFormChange(true); };
-  window.setDest = ap => { S.dest = ap; CNSUI.plan && CNSUI.plan.onFormChange(true); };
-  window.setStop = ap => { S.stops.push(ap); CNSUI.plan && CNSUI.plan.onFormChange(true); };
+  // The classic closes the airport card and starts the reach graph from the picked endpoint in
+  // exactly these three setters (index.html:2714, 2716-2720, 2740, 2748) — do the same in one place,
+  // so the dot popup, the fly-to popup and the palette all behave alike. A double close is harmless.
+  function afterPick(ap) {
+    if (CNSUI.map && CNSUI.map.closePopup) { try { CNSUI.map.closePopup(); } catch (e) {} }
+    CNSUI.plan && CNSUI.plan.onFormChange(true);
+    if (ap && ap.ident && window.CNSRangeGraph && CNSRangeGraph.show) CNSRangeGraph.show(ap.ident);
+  }
+  window.setOrigin = ap => { S.origin = ap; afterPick(ap); };
+  window.setDest = ap => { S.dest = ap; afterPick(ap); };
+  window.setStop = ap => { S.stops.push(ap); afterPick(ap); };
   rebuildIndexes();
 
   function _setAirports(list) { AIRPORTS = list.filter(a => a.ident && a.latitude_deg != null); AP_BY_ID = {}; AIRPORTS.forEach(a => AP_BY_ID[a.ident] = a); rebuildIndexes(); }
@@ -115,16 +165,30 @@ window.CNSUI = (function () {
     if (!hasDoc) return;
     $('#rail').classList.toggle('wide', S.mode === 'network');
     if (S.mode === 'network') CNSUI.network.render(); else CNSUI.plan.render();
-    CNSUI.timeline.render();
+    CNSUI.timeline.render(); netCount();
     $$('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));
   }
   function setMode(m) {
     S.mode = m; document.body.classList.toggle('net', m === 'network');
     if (m === 'network') CNSUI.map.hideRoute(); else CNSUI.map.showRoute();
+    CNSUI.map.drawAlternates();               // the divert overlay follows the route it belongs to
     render(); if (m === 'network') { CNSUI.map.drawNet(); CNSUI.map.fitNet(); }
+  }
+  // A failed catalog/airport fetch used to leave the rail blank forever with an unhandled
+  // rejection; the operator must always see WHY (the classic's form is server-rendered).
+  function bootFailed(e) {
+    console.error('[v2] boot failed', e);
+    try {
+      const b = $('#railBody'); if (b) b.innerHTML = `<div class="sec err">The airport database could not be loaded (${esc(e && e.message || e)}). Check the connection and reload.</div>`;
+      const f = $('#railFoot'); if (f) f.innerHTML = `<div class="btns"><button class="btn p" onclick="location.reload()">Reload</button></div>`;
+      toast('Could not load the airport database');
+    } catch (e2) { /* the DOM itself is gone — nothing left to say it in */ }
   }
   async function boot() {
     if (!hasDoc) return;
+    try { await _boot(); } catch (e) { bootFailed(e); }
+  }
+  async function _boot() {
     if (window.CNSChargers) { try { await CNSChargers.load(); (CNSChargers.list() || []).forEach(c => { if (!CHARGERS.find(x => x.id === c.id)) CHARGERS.push(Object.assign({ type: 'Custom', image: '' }, c)); }); } catch (e) { console.warn('[v2] custom chargers unavailable', e); } }
     const [aps, assets] = await Promise.all([fetch('/api/airports').then(r => r.json()), fetch('/api/airport-chargers').then(r => r.json()).catch(() => ({}))]);
     _setAirports(aps); ASSETS = assets || {};
@@ -156,5 +220,6 @@ window.CNSUI = (function () {
 
   return { S, PLANES, CHARGERS, SEED, D, airports: () => AIRPORTS, byId: () => AP_BY_ID, assets: () => ASSETS,
            $, $$, esc, fmt, perDay, planeShort, shortName, plane, charger, ll, chain, toast, search, aircraft,
+           planeImg, resolvePlaneId, dispKm, netCount,
            render, setMode, boot, rebuildIndexes, folderChanged, modal, _setAirports, _applyDefaults };
 })();

@@ -9,6 +9,9 @@
   const D = () => window.CNSDemand, SC = () => window.CNSScheduler, ST = () => window.CNSSettings;
   const cat = id => (window.PLANES_BY_ID || {})[id] || {};
   const rate = () => (ST() && ST().chargeRate) ? ST().chargeRate() : 0.6;
+  const gridMul = () => (ST() && ST().gridDemandFactor) ? ST().gridDemandFactor() : 1;
+  // Clock times round to the nearest minute (CNSUnits.fmtClock, units.js:45) — fmt.h is a DURATION formatter (ceil).
+  const clockOf = m => { if (window.CNSUnits && CNSUnits.fmtClock) return CNSUnits.fmtClock(m); const c = Math.max(0, Math.round(m || 0)); return String(Math.floor(c / 60)).padStart(2, '0') + ':' + String(c % 60).padStart(2, '0'); };
 
   // ---- recompute (classic _recomputeCtx / recomputeAllFlights) ----
   function recomputeCtx() {
@@ -20,38 +23,53 @@
   let _rt = null; const recomputeAllDebounced = () => { clearTimeout(_rt); _rt = setTimeout(() => { recomputeAll(); UI.render(); UI.map.drawNet(); }, 250); };
 
   // ---- per-airport numbers, exactly like the classic card ----
+  // Charger-fleet plan peak — the classic's fallback (index.html:5656) for airports the DES gives no charge
+  // phase (multi-leg-only traffic): a sensible upper bound so the card stays meaningful instead of reading 0.
+  function planPeak(fleet, contribs, energyOf) {
+    if (!window.CNSCharging || !CNSCharging.planCharging || !fleet.length || !contribs.length) return 0;
+    const list = contribs.map(c => ({ name: c.t.planeName, energy: c.t.feasible === false ? 0 : energyOf(c), size: c.t.battery ?? c.t.legEnergy * 2,
+      forcedChargerId: c.t.chargerOverride, nChargers: (window.CNSFlight && CNSFlight.nChargers) ? CNSFlight.nChargers(cat(c.t.planeId) || c.t) : 1 }));
+    try { return CNSCharging.planCharging(fleet, list).peakPower || 0; } catch (e) { return 0; }
+  }
   function rows() {
     if (!D()) return [];
     const aps = D().computeAirports(); const cfgs = D().loadCfg ? D().loadCfg() : {};
-    const gridMul = (ST() && ST().gridDemandFactor) ? ST().gridDemandFactor() : 1;
+    const gm = gridMul();
     const getTargetSoc = id => (D().resolveTargetSoc ? D().resolveTargetSoc(cfgs[id]) : null);
     const cache = {};
-    const energyOf = c => { if (c.t.feasible === false) return 0; const pr = (c.t.id in cache) ? cache[c.t.id] : (cache[c.t.id] = (window.CNSFlight && CNSFlight.profileForTrip) ? CNSFlight.profileForTrip(c.t, { getTargetSoc }) : null); return (pr && CNSFlight.chargeEnergyAt) ? (CNSFlight.chargeEnergyAt(pr, c) ?? 0) : (D().energyAt(c.t, c.ident, false) || 0); };
+    // Classic renderFolder (index.html:5610-5613): the engine profile is the only source — no profile ⇒ 0 kWh
+    // (`_engEnergyAt(c) ?? 0`). The old CNSDemand.energyAt fallback was called with an undefined ident and double-counted.
+    const energyOf = c => { if (c.t.feasible === false) return 0; const pr = (c.t.id in cache) ? cache[c.t.id] : (cache[c.t.id] = (window.CNSFlight && CNSFlight.profileForTrip) ? CNSFlight.profileForTrip(c.t, { getTargetSoc }) : null); return (pr && CNSFlight.chargeEnergyAt) ? (CNSFlight.chargeEnergyAt(pr, c) ?? 0) : 0; };
     return Object.values(aps).map(a => {
       const cfg = cfgs[a.ident] || {};
       const trips = []; a.contribs.forEach(c => { if (!trips.includes(c.t)) trips.push(c.t); });
       const flights = a.contribs.reduce((s, c) => s + D().flightsPerDay(c.t), 0);
-      const kwh = a.contribs.reduce((s, c) => s + energyOf(c) * D().flightsPerDay(c.t), 0);
+      const kwhAircraft = a.contribs.reduce((s, c) => s + energyOf(c) * D().flightsPerDay(c.t), 0);
       const fleetIds = (cfg.chargers && cfg.chargers.length) ? cfg.chargers : (D().defaultChargerFleet ? D().defaultChargerFleet(a.contribs) : []);
       const fleet = fleetIds.map(id => window.CHARGERS_BY_ID[id]).filter(Boolean);
       const sum = (SC() && SC().summary) ? SC().summary(a.ident) : {};
-      return { ident: a.ident, name: a.name, contribs: a.contribs, trips, flights, kwh, fleetIds, fleet, cfg, targetSoc: D().targetSocFromCfg ? D().targetSocFromCfg(cfg) : null, peak: (sum.peakKw || 0) * gridMul, overflow: !!sum.overflow, chargeMin: sum.chargeMin || 0, latestEnd: sum.latestEnd || 0 };
-    }).sort((x, y) => y.kwh - x.kwh);
+      const peakKw = sum.peakKw || planPeak(fleet, a.contribs, energyOf);
+      // Grid side (charger losses included) is what the classic card prints for energy AND peak; revenue is
+      // priced on the CHARGED (aircraft-side) kWh, so both figures travel with the row.
+      return { ident: a.ident, name: a.name, contribs: a.contribs, trips, flights, kwh: kwhAircraft * gm, kwhAircraft, gridMul: gm, fleetIds, fleet, cfg, targetSoc: D().targetSocFromCfg ? D().targetSocFromCfg(cfg) : null, peakKw, peak: peakKw * gm, overflow: !!sum.overflow, chargeMin: sum.chargeMin || 0, latestEnd: sum.latestEnd || 0 };
+    }).sort((x, y) => y.flights - x.flights || y.kwh - x.kwh);   // busiest first by daily flights, like the classic (index.html:5537)
   }
   const infeasibleCount = R => R.reduce((s, a) => s + a.trips.filter(t => t.feasible === false).length, 0);
 
   // ---- render ----
   function airportPane(a) {
-    const rev = a.kwh * rate() * (S.revYear ? 365 : 1);
+    // Revenue is priced per CHARGED kWh (aircraft side, classic index.html:5708); energy is grid side.
+    const rev = a.kwhAircraft * rate() * (S.revYear ? 365 : 1);
+    const grid = a.gridMul > 1 ? ' (grid)' : '';
     const opts = UI.CHARGERS.slice().sort((x, y) => y.power_kw - x.power_kw);
     const socPct = a.targetSoc != null ? Math.round(a.targetSoc * 100) : null;
     return `<div class="pane">
       <div class="tiles3"><div><div class="cap">Revenue <span class="seg xs" data-rev><button data-act="revDay" class="${S.revYear ? '' : 'on'}">day</button><button data-act="revYear" class="${S.revYear ? 'on' : ''}">year</button></span></div><div class="v num">€${Math.round(rev).toLocaleString('en')}</div><div class="s num">€${rate().toFixed(2)} / kWh</div></div>
-        <div><div class="cap">Energy</div><div class="v num">${fmt.kwh(a.kwh * 30)}<small>/ month</small></div><div class="s num">${fmt.kwh(a.kwh * 365)} / year</div></div>
-        <div><div class="cap">Charging</div><div class="v num">${fmt.min(a.chargeMin)}<small>/ day</small></div><div class="s">${a.overflow ? '<span style="color:var(--danger)">runs past 23:00</span>' : 'ends ' + fmt.h(a.latestEnd)}</div></div></div>
+        <div><div class="cap">Energy${grid}</div><div class="v num">${fmt.kwh(a.kwh * 30.44)}<small>/ month</small></div><div class="s num">${fmt.kwh(a.kwh * 365)} / year</div></div>
+        <div><div class="cap">Charging</div><div class="v num">${fmt.min(a.chargeMin)}<small>/ day</small></div><div class="s">${a.overflow ? '<span style="color:var(--danger)">runs past 23:00</span>' : 'ends ' + clockOf(a.latestEnd)}</div></div></div>
       ${a.overflow ? `<div class="alert">Rotations run past 23:00 at this airport — add a charger or spread the flights.</div>` : ''}
       <div class="lbl" style="margin-top:10px"><span class="cap">Chargers</span><button class="lnk" data-act="fleetAdd" data-ap="${a.ident}">+ Add charger</button></div>
-      <div class="fleet">${a.fleetIds.map((id, i) => `<span class="slot"><select class="sel" data-act="fleetSel" data-ap="${a.ident}" data-i="${i}">${opts.map(c => `<option value="${c.id}" ${c.id === id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><button class="rm" data-act="fleetRm" data-ap="${a.ident}" data-i="${i}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button></span>`).join('')}</div>
+      <div class="fleet">${a.fleetIds.map((id, i) => `<span class="slot"><select class="sel" data-act="fleetSel" data-ap="${a.ident}" data-i="${i}">${opts.map(c => `<option value="${c.id}" ${c.id === id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>${a.fleetIds.length > 1 ? `<button class="rm" data-act="fleetRm" data-ap="${a.ident}" data-i="${i}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button>` : ''}</span>`).join('')}</div>
       <div class="lbl" style="margin-top:10px"><span class="cap">Charge target</span><button class="chip" data-act="socToggle" data-ap="${a.ident}">${socPct == null ? 'auto' : 'at least ' + socPct + ' %'}</button></div>
       ${S.socOpen[a.ident] ? `<div class="socp"><label><input type="radio" name="soc-${a.ident}" value="auto" data-act="socMode" data-ap="${a.ident}" ${socPct == null ? 'checked' : ''}> Auto — the global charge target</label><label><input type="radio" name="soc-${a.ident}" value="target" data-act="socMode" data-ap="${a.ident}" ${socPct != null ? 'checked' : ''}> Charge to at least <b class="num">${socPct != null ? socPct : 80} %</b></label><input type="range" min="20" max="100" step="5" value="${socPct != null ? socPct : 80}" data-act="socSlider" data-ap="${a.ident}" ${socPct == null ? 'disabled' : ''}></div>` : ''}
       <div class="lbl" style="margin-top:12px"><span class="cap">Flights</span><button class="lnk" data-act="replay" data-ap="${a.ident}">View flights on map</button></div>
@@ -63,15 +81,16 @@
   function render() {
     const R = rows(); const folder = D() ? D().loadFolder() : [];
     const foc = S.filter && R.find(a => a.ident === S.filter) || null; if (foc) S.openAp[foc.ident] = true;
-    const flights = folder.reduce((s, t) => s + D().flightsPerDay(t), 0); const kwh = R.reduce((s, a) => s + a.kwh, 0); const peak = R.reduce((s, a) => s + a.peak, 0); const bad = infeasibleCount(R);
+    const flights = folder.reduce((s, t) => s + D().flightsPerDay(t), 0); const kwh = R.reduce((s, a) => s + a.kwh, 0); const kwhAc = R.reduce((s, a) => s + a.kwhAircraft, 0); const peak = R.reduce((s, a) => s + a.peak, 0); const bad = infeasibleCount(R);
+    const grid = gridMul() > 1 ? ' (grid)' : '';
     const head = foc
       ? `<div><h3>${foc.ident} <span style="font-weight:400;color:var(--muted)">${esc(UI.shortName(foc.name))}</span></h3><div class="sub num">${foc.trips.length} route${foc.trips.length === 1 ? '' : 's'} · ${foc.flights % 1 ? foc.flights.toFixed(1) : foc.flights} flights / day · ${foc.fleet.length} charger${foc.fleet.length === 1 ? '' : 's'}</div></div><div class="tools"><button class="lnk" data-act="focus" data-ap="">← All airports</button></div>`
       : `<div><h3>Network</h3><div class="sub num">${R.length} airport${R.length === 1 ? '' : 's'} · ${folder.length} route${folder.length === 1 ? '' : 's'} · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day${bad ? ' · <span style="color:var(--danger)">' + bad + ' without a route</span>' : ''}</div></div><div class="tools">${folder.length ? '<button class="lnk" data-act="clear">Clear all</button>' : ''}</div>`;
     const tiles = foc
-      ? `<div class="tiles"><div><div class="cap">Energy</div><div class="v num">${foc.kwh >= 1000 ? (foc.kwh / 1000).toFixed(1) : fmt.r(foc.kwh)}<small>${foc.kwh >= 1000 ? 'MWh' : 'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${foc.peak >= 1000 ? (foc.peak / 1000).toFixed(1) : fmt.r(foc.peak)}<small>${foc.peak >= 1000 ? 'MW' : 'kW'}</small></div></div><div><div class="cap">Charging</div><div class="v num">${fmt.r(foc.chargeMin)}<small>min / day</small></div></div><div><div class="cap">Revenue</div><div class="v num">€${Math.round(foc.kwh * rate() * (S.revYear ? 365 : 1)).toLocaleString('en')}<small>/ ${S.revYear ? 'year' : 'day'}</small></div></div></div>`
-      : folder.length ? `<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${R.length}</div></div><div><div class="cap">Flights</div><div class="v num">${flights % 1 ? flights.toFixed(1) : flights}<small>/ day</small></div></div><div><div class="cap">Energy</div><div class="v num">${kwh >= 1000 ? (kwh / 1000).toFixed(1) : fmt.r(kwh)}<small>${kwh >= 1000 ? 'MWh' : 'kWh'} / day</small></div></div><div><div class="cap">Peak load</div><div class="v num">${peak >= 1000 ? (peak / 1000).toFixed(1) : fmt.r(peak)}<small>${peak >= 1000 ? 'MW' : 'kW'} · summed</small></div></div></div>` : '';
+      ? `<div class="tiles"><div><div class="cap">Energy${grid}</div><div class="v num">${foc.kwh >= 1000 ? (foc.kwh / 1000).toFixed(1) : fmt.r(foc.kwh)}<small>${foc.kwh >= 1000 ? 'MWh' : 'kWh'} / day</small></div></div><div><div class="cap">Peak load${grid}</div><div class="v num">${foc.peak >= 1000 ? (foc.peak / 1000).toFixed(1) : fmt.r(foc.peak)}<small>${foc.peak >= 1000 ? 'MW' : 'kW'}</small></div></div><div><div class="cap">Charging</div><div class="v num">${fmt.r(foc.chargeMin)}<small>min / day</small></div></div><div><div class="cap">Revenue</div><div class="v num">€${Math.round(foc.kwhAircraft * rate() * (S.revYear ? 365 : 1)).toLocaleString('en')}<small>/ ${S.revYear ? 'year' : 'day'}</small></div></div></div>`
+      : folder.length ? `<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${R.length}</div></div><div><div class="cap">Flights</div><div class="v num">${flights % 1 ? flights.toFixed(1) : flights}<small>/ day</small></div></div><div><div class="cap">Energy${grid}</div><div class="v num">${kwh >= 1000 ? (kwh / 1000).toFixed(1) : fmt.r(kwh)}<small>${kwh >= 1000 ? 'MWh' : 'kWh'} / day</small></div></div><div><div class="cap">Peak load${grid}</div><div class="v num">${peak >= 1000 ? (peak / 1000).toFixed(1) : fmt.r(peak)}<small>${peak >= 1000 ? 'MW' : 'kW'} · summed</small></div></div></div>` : '';
     $('#railBody').innerHTML = `<div class="ph">${head}</div>${tiles}
-    ${folder.length ? `<div class="ntool"><span class="cap">Show</span><select class="sel" data-act="filter">${['<option value="">All airports</option>', ...R.map(a => `<option value="${a.ident}" ${S.filter === a.ident ? 'selected' : ''}>${a.ident} · ${esc(UI.shortName(a.name))}</option>`)].join('')}</select><span class="sp"></span><span class="hint num" style="margin:0">€${fmt.eur(kwh * rate())} / day</span></div>
+    ${folder.length ? `<div class="ntool"><span class="cap">Show</span><select class="sel" data-act="filter">${['<option value="">All airports</option>', ...R.map(a => `<option value="${a.ident}" ${S.filter === a.ident ? 'selected' : ''}>${a.ident} · ${esc(UI.shortName(a.name))}</option>`)].join('')}</select><span class="sp"></span><span class="hint num" style="margin:0">€${fmt.eur(kwhAc * rate())} / day</span></div>
     ${R.filter(a => !S.filter || a.ident === S.filter).map(a => `<div class="ap ${S.openAp[a.ident] ? 'open' : ''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(UI.shortName(a.name))}<small>${a.trips.length} route${a.trips.length === 1 ? '' : 's'}${a.overflow ? ' · <span style="color:var(--danger)">overflow</span>' : ''}${UI.assets()[a.ident] ? ' · NRG2FLY site' : ''}</small></span>
       <span class="st num">${a.flights % 1 ? a.flights.toFixed(1) : a.flights}<small>flights / day</small></span><span class="st num">${a.kwh ? fmt.r(a.kwh) : '—'}<small>kWh / day</small></span><span class="st num">${a.peak ? fmt.r(a.peak) : '—'}<small>peak kW</small></span><svg class="ic"><use href="#i-chev"/></svg></button>${airportPane(a)}</div>`).join('')}`
     : `<div class="cap" style="padding:12px var(--pad) 8px">Empty network · start from a scenario</div><div class="scen">${Object.entries(SCENARIOS).map(([k, s]) => `<div class="sc"><b>${s.title}</b><small>${s.meta}</small><div class="sp">${s.spark.map(v => `<i style="height:${v}%"></i>`).join('')}</div><button class="lnk" data-act="scenario" data-k="${k}">Load</button></div>`).join('')}</div><div class="hint" style="padding:0 var(--pad) 14px">Or plan a route in Plan mode and add it — each flight contributes charging demand to its departure and arrival airports.</div>`}`;
@@ -98,13 +117,18 @@
   }
   function openEdit(id, ap) {
     const t = D().loadFolder().find(x => x.id === id); if (!t) return;
-    const fleet = fleetOf(ap).map(cid => window.CHARGERS_BY_ID[cid]).filter(Boolean);
+    // Charger options: the airport's fleet, deduped, plus the current pin even when it is no longer in the
+    // fleet — labelled '(not in fleet)' and selected, so the choice stays visible (classic index.html:6046-6060).
+    const seen = new Set(); const chOpts = [];
+    fleetOf(ap).forEach(cid => { const c = window.CHARGERS_BY_ID[cid]; if (!c || seen.has(c.id)) return; seen.add(c.id); chOpts.push({ id: c.id, label: c.name }); });
+    if (t.chargerOverride && !seen.has(t.chargerOverride) && window.CHARGERS_BY_ID[t.chargerOverride]) { seen.add(t.chargerOverride); chOpts.push({ id: t.chargerOverride, label: window.CHARGERS_BY_ID[t.chargerOverride].name + ' (not in fleet)' }); }
+    const chSel = (t.chargerOverride && seen.has(t.chargerOverride)) ? t.chargerOverride : '';
     const fm = t.fleetMode || (t.tripType === 'training' ? 'shared' : 'separate');
     UI.modal.open(`<div class="mh"><h3>Edit flight · ${esc(t.originIdent)} → ${esc(t.destIdent)}</h3><button class="tb icon" data-modal="close"><svg class="ic"><use href="#i-x"/></svg></button></div>
       <div class="mb" id="efBox" data-id="${esc(t.id)}" data-ap="${esc(ap)}">
         <div class="grid2"><label><span class="cap">Trip type</span><select class="sel" id="efTripType">${Object.keys(tripLabel).map(k => `<option value="${k}" ${t.tripType === k ? 'selected' : ''}>${tripLabel[k]}</option>`).join('')}</select></label>
           <label><span class="cap">Aircraft</span><select class="sel" id="efPlane">${UI.PLANES.map(p => `<option value="${p.id}" ${p.id === t.planeId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
-          <label><span class="cap">Charger at ${esc(ap)}</span><select class="sel" id="efCharger"><option value="">Automatic (biggest with biggest)</option>${fleet.map(c => `<option value="${c.id}" ${t.chargerOverride === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+          <label><span class="cap">Charger at ${esc(ap)}</span><select class="sel" id="efCharger"><option value="" ${chSel ? '' : 'selected'}>Automatic (biggest with biggest)</option>${chOpts.map(c => `<option value="${esc(c.id)}" ${chSel === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></label>
           <label><span class="cap">Frequency</span><span class="row" style="gap:6px"><input type="number" min="1" max="2000" id="efFreqN" value="${t.freqN || 1}" class="num sel" style="width:80px"><select class="sel" id="efFreqUnit"><option value="day" ${t.freqUnit !== 'week' ? 'selected' : ''}>/ day</option><option value="week" ${t.freqUnit === 'week' ? 'selected' : ''}>/ week</option></select></span></label></div>
         <div id="efFleetRow" style="margin-top:12px" ${t.tripType === 'training' ? 'hidden' : ''}><span class="cap">Aircraft for repeated flights</span><div class="row" style="gap:14px;margin-top:6px"><label><input type="radio" name="efFleetMode" value="separate" ${fm === 'separate' ? 'checked' : ''}> One aircraft per flight (fleet)</label><label><input type="radio" name="efFleetMode" value="shared" ${fm === 'shared' ? 'checked' : ''}> One aircraft, sequential rotations</label></div></div>
         <div class="err" id="efError" hidden></div></div>
@@ -114,10 +138,20 @@
     const box = $('#efBox'); const id = box.dataset.id; const trips = D().loadFolder(); const idx = trips.findIndex(t => t.id === id); if (idx < 0) return; const prev = trips[idx];
     const tripType = $('#efTripType').value, planeId = $('#efPlane').value, freqN = Math.min(2000, Math.max(1, parseInt($('#efFreqN').value || '1', 10))), freqUnit = $('#efFreqUnit').value === 'week' ? 'week' : 'day';
     const fleetMode = ($('input[name=efFleetMode]:checked') || {}).value || prev.fleetMode || 'separate'; const chargerOverride = $('#efCharger').value || '';
-    if (tripType === prev.tripType && planeId === prev.planeId) { trips[idx] = Object.assign({}, prev, { freqN, freqUnit, fleetMode, chargerOverride: chargerOverride || undefined }); D().saveFolder(trips); UI.modal.close(); recomputeAll(); UI.render(); UI.map.drawNet(); return; }
-    const err = $('#efError'); const btn = $('[data-act=efSave]'); btn.classList.add('busy');
+    const err = $('#efError');
+    // A training flight has no separate destination — it cannot become a routed trip (classic index.html:6135).
+    if (tripType !== 'training' && (!prev.destIdent || prev.destIdent === prev.originIdent)) {
+      err.textContent = 'This flight loops around a single airport (no destination). Add a new flight to give it a route.'; err.hidden = false; return;
+    }
+    // Metadata-only (frequency / fleet mode / charger pin): save + re-render, no recompute, no backend round-trip
+    // (classic index.html:6141-6147).
+    if (tripType === prev.tripType && planeId === prev.planeId) { err.hidden = true; trips[idx] = Object.assign({}, prev, { freqN, freqUnit, fleetMode, chargerOverride: chargerOverride || undefined }); D().saveFolder(trips); UI.modal.close(); UI.folderChanged(); UI.render(); UI.map.drawNet(); return; }
+    const btn = $('[data-act=efSave]'); btn.classList.add('busy');
     const o = { ident: prev.originIdent, name: prev.originName, lat: prev.originLat, lon: prev.originLon }, dd = { ident: prev.destIdent, name: prev.destName, lat: prev.destLat, lon: prev.destLon };
     const payload = { origin: o, destination: tripType === 'training' ? o : dd, plane_id: planeId, charger_id: prev.chargerId, trip_type: tripType };
+    // A custom charger only exists client-side: send the object so the backend can size the charge (classic index.html:6161).
+    const custom = (window.CNSChargers && CNSChargers.get) ? CNSChargers.get(prev.chargerId) : null;
+    if (custom) payload.charger = custom; else if (window.CHARGERS_BY_ID && window.CHARGERS_BY_ID[prev.chargerId]) payload.charger = window.CHARGERS_BY_ID[prev.chargerId];
     if (tripType === 'training') payload.training_range_km = cat(planeId).training_range_km || 0;
     const manual = (prev.stops || []).filter(s => s && s._manual).map(s => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type }));
     if (tripType === 'circular') { const ring = [...manual, dd]; payload.destination = ring[ring.length - 1]; payload.stops = ring.slice(0, -1); } else if (manual.length && tripType !== 'training') payload.stops = manual;
@@ -128,19 +162,27 @@
   }
 
   // ---- replay map (classic flightsMapModal + CNSAnimation) ----
-  let replayMap = null;
+  let replayMap = null, _replayT = null;
   function openReplay(ap) {
     const a = rows().find(x => x.ident === ap);
     UI.modal.open(`<div class="mh"><h3>Flights at ${esc(a ? UI.shortName(a.name) : ap)} <span class="hint" style="margin-left:8px" id="animClock"></span></h3><button class="tb icon" data-modal="close"><svg class="ic"><use href="#i-x"/></svg></button></div>
       <div id="folderMap" style="height:420px"></div>
       <div class="btns" style="align-items:center;gap:12px"><span class="cap">Speed</span><input type="range" id="animSpeed" min="2" max="60" step="2" value="20" style="flex:1"><span class="hint num" id="animSpeedLbl" style="margin:0">20 s / hour</span></div>`);
     $('#modalBox').style.width = '760px';
-    replayMap = L.map('folderMap').setView([50, 10], 4);
+    // No zoom/fade animation: CNSAnimation's fitBounds (60 ms after open) would otherwise still be animating when the
+    // dialog is closed, and Leaflet's 250 ms transition fallback then runs against a removed map (_leaflet_pos TypeError).
+    // The classic dodges this by never removing #folderMap (index.html:6404-6407); v2 rebuilds the dialog each time.
+    replayMap = L.map('folderMap', { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false }).setView([50, 10], 4);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png' + ((UI.D && UI.D.cartoKeyQs) || ''), { attribution: '© OSM © CARTO', subdomains: 'abcd', maxZoom: 19 }).addTo(replayMap);
     window.folderMap = replayMap;
-    setTimeout(() => { replayMap.invalidateSize(); if (window.CNSAnimation) CNSAnimation.start(replayMap, ap, { clockEl: $('#animClock'), speed: 20 }); }, 60);
+    _replayT = setTimeout(() => { _replayT = null; if (!replayMap) return; replayMap.invalidateSize(); if (window.CNSAnimation) CNSAnimation.start(replayMap, ap, { clockEl: $('#animClock'), speed: 20 }); }, 60);
   }
-  function closeReplay() { if (window.CNSAnimation) CNSAnimation.stop(); if (replayMap) { replayMap.remove(); replayMap = null; window.folderMap = null; } $('#modalBox').style.width = ''; }
+  function closeReplay() {
+    clearTimeout(_replayT); _replayT = null;
+    if (window.CNSAnimation) { try { CNSAnimation.stop(); } catch (e) { /* animation already torn down */ } }
+    if (replayMap) { const m = replayMap; replayMap = null; window.folderMap = null; try { m.stop(); } catch (e) {} try { m.remove(); } catch (e) { console.warn('[v2] replay map teardown', e); } }
+    $('#modalBox').style.width = '';
+  }
   document.addEventListener('input', e => { if (e.target.id === 'animSpeed') { const v = +e.target.value; if (window.CNSAnimation) CNSAnimation.setSpeed(v); $('#animSpeedLbl').textContent = v + ' s / hour'; } });
   const _close = UI.modal.close; UI.modal.close = function () { if (replayMap) closeReplay(); _close(); };
 
@@ -148,23 +190,62 @@
   const SCENARIOS = {
     hub: { title: 'Hub base', meta: '1 base · 8 return routes · 18 flights / day', chargers: { EHLE: ['dc_320', 'dc_320'] }, focus: 'EHLE', spark: [20, 90, 70, 40, 30, 95, 60, 35, 20],
       routes: [['EHLE', 'EDDF', 'beta_plane', 3, 'day', 'retour'], ['EHLE', 'EDDL', 'beta_plane', 3, 'day', 'retour'], ['EHLE', 'EBBR', 'beta_plane', 2, 'day', 'retour'], ['EHLE', 'EGKB', 'beta_plane', 2, 'day', 'retour'], ['EHLE', 'LFPB', 'beta_plane', 2, 'day', 'retour'], ['EHLE', 'EDDH', 'vaeridion', 2, 'day', 'retour'], ['EHLE', 'EDDV', 'beta_plane', 2, 'day', 'retour'], ['EHLE', 'EDDS', 'beta_plane', 2, 'day', 'retour']] },
-    regional: { title: 'Regional network', meta: '13 airports · 12 routes · 26 flights / day', chargers: {}, focus: '', spark: [30, 60, 80, 50, 40, 70, 55, 45, 25],
-      routes: [['EHLE', 'EDDF', 'beta_plane', 1, 'day', 'one-way'], ['EHAM', 'EDLS', 'beta_plane', 3, 'day', 'one-way'], ['EHRD', 'EBBR', 'beta_plane', 2, 'day', 'one-way'], ['EHGG', 'EDDH', 'beta_plane', 1, 'day', 'retour'], ['EHEH', 'EDDL', 'vaeridion', 2, 'day', 'one-way'], ['EDDF', 'EDDM', 'beta_plane', 2, 'day', 'one-way'], ['EHLE', 'EHTE', 'pipistrel_velis', 4, 'day', 'retour'], ['EBBR', 'LFPB', 'vaeridion', 1, 'day', 'one-way'], ['EHBK', 'EDDL', 'pipistrel_velis', 2, 'day', 'one-way'], ['EHAM', 'EHGG', 'beta_plane', 2, 'day', 'retour'], ['EDLS', 'EDDF', 'beta_plane', 1, 'day', 'one-way'], ['EHSE', 'EHRD', 'pipistrel_velis', 5, 'day', 'one-way']] },
+    regional: { title: 'Regional network', meta: '15 airports · 12 routes · 26 flights / day', chargers: {}, focus: '', spark: [30, 60, 80, 50, 40, 70, 55, 45, 25],
+      routes: [['EHLE', 'EDDF', 'beta_plane', 1, 'day', 'one-way'], ['EHAM', 'EDLS', 'beta_plane', 3, 'day', 'one-way'], ['EHRD', 'EBBR', 'beta_plane', 2, 'day', 'one-way'], ['EHGG', 'EDDH', 'beta_plane', 1, 'day', 'retour'], ['EHEH', 'EDDL', 'vaeridion', 2, 'day', 'one-way'], ['EDDF', 'EDDM', 'beta_plane', 2, 'day', 'one-way'], ['EHLE', 'EHHV', 'pipistrel_velis', 4, 'day', 'retour'], ['EBBR', 'LFPB', 'vaeridion', 1, 'day', 'one-way'], ['EHBK', 'EDDL', 'pipistrel_velis', 2, 'day', 'one-way'], ['EHAM', 'EHGG', 'beta_plane', 2, 'day', 'retour'], ['EDLS', 'EDDF', 'beta_plane', 1, 'day', 'one-way'], ['EHBD', 'EHEH', 'pipistrel_velis', 5, 'day', 'one-way']] },
     training: { title: 'Training school', meta: '1 airfield · Velis circuits · 12 sorties / day', chargers: { EHTE: ['dc_22', 'dc_22', 'dc_22'] }, focus: 'EHTE', spark: [50, 50, 50, 50, 50, 50, 50, 50, 50], routes: [['EHTE', 'EHTE', 'pipistrel_velis', 12, 'day', 'training']] }
   };
+  // Scenario plane ids are prototype names; the live catalog may spell them differently (production: beta_alia,
+  // vaeridion_microliner). app.js owns the mapping — consume it defensively so a shell without it still loads.
+  const PLANE_ALIAS = { beta_plane: 'beta_alia', vaeridion: 'vaeridion_microliner', vaeridion_light: 'vaeridion_microliner_9_seats' };
+  const knownPlane = id => !!id && UI.PLANES.some(p => p.id === id);
+  function resolvePlane(id) {
+    if (knownPlane(id)) return id;
+    const viaApp = (typeof UI.resolvePlaneId === 'function') ? UI.resolvePlaneId(id) : null; if (knownPlane(viaApp)) return viaApp;
+    if (knownPlane(PLANE_ALIAS[id])) return PLANE_ALIAS[id];
+    const byAirframe = UI.PLANES.find(p => p.aircraft_id === id); if (byAirframe) return byAirframe.id;
+    const byPrefix = UI.PLANES.find(p => String(p.id).indexOf(String(id)) === 0); if (byPrefix) return byPrefix.id;
+    return id;
+  }
   async function loadScenario(key) {
     const sc = SCENARIOS[key]; if (!sc) return; const by = UI.byId();
-    D().saveFolder([]); const cfg = D().loadCfg(); Object.entries(sc.chargers).forEach(([ap, ch]) => { cfg[ap] = Object.assign({}, cfg[ap] || {}, { chargers: ch }); }); D().saveCfg(cfg); S.filter = ''; S.openAp = {};
+    // A scenario is a fresh network: the previous one's per-airport chargers and hand-placed take-offs must not survive it.
+    D().saveFolder([]); const cfg = {}; Object.entries(sc.chargers).forEach(([ap, ch]) => { cfg[ap] = { chargers: ch.slice() }; }); D().saveCfg(cfg);
+    try { localStorage.removeItem('cns_schedule'); } catch (e) { /* private mode */ }
+    S.filter = ''; S.openAp = {};
     UI.setMode('plan'); UI.toast(`Loading ${sc.title}…`);
-    for (const [o, d, pl, fr, per, tr] of sc.routes) { if (!by[o] || !by[d]) continue; S.origin = by[o]; S.dest = by[d]; S.stops = []; S.planeId = pl; const dc = UI.plane().default_charger_id; if (dc && UI.CHARGERS.find(c => c.id === dc)) S.chargerId = dc; S.freq = fr; S.per = per; S.trip = tr; S.blacklist.clear(); await UI.plan.simulate(); if (S.result) UI.plan.addToNetwork(); }
-    UI.plan.resetForm(); if (sc.focus) S.openAp[sc.focus] = true; UI.setMode('network'); $('#drawer').classList.add('open'); UI.timeline.render(); UI.toast(`${sc.title} loaded — ${D().loadFolder().length} routes`);
+    // One render + one fit for the whole batch, not one per route (each simulate/add re-renders the shell).
+    const _render = UI.render, _fit = UI.map.fitNet, _drawNet = UI.map.drawNet, _drawRoute = UI.map.drawRoute;
+    const fails = [];
+    try {
+      UI.render = () => {}; UI.map.fitNet = () => {}; UI.map.drawNet = () => {}; UI.map.drawRoute = () => {};
+      for (const [o, d, pl, fr, per, tr] of sc.routes) {
+        if (!by[o] || !by[d]) { fails.push(`${o}→${d}: airport not in the catalog`); continue; }
+        const planeId = resolvePlane(pl);
+        if (!UI.PLANES.some(p => p.id === planeId)) { fails.push(`${o}→${d}: aircraft "${pl}" is not in the catalog`); continue; }
+        S.origin = by[o]; S.dest = by[d]; S.stops = []; S.planeId = planeId;
+        const dc = UI.plane().default_charger_id; if (dc && UI.CHARGERS.find(c => c.id === dc)) S.chargerId = dc;
+        S.freq = fr; S.per = per; S.trip = tr; S.blacklist.clear(); S.result = null; S.err = '';
+        await UI.plan.simulate();
+        if (S.result) UI.plan.addToNetwork(); else fails.push(`${o}→${d} ${planeId}: ${S.err || 'no result'}`);
+      }
+    } finally { UI.render = _render; UI.map.fitNet = _fit; UI.map.drawNet = _drawNet; UI.map.drawRoute = _drawRoute; }
+    UI.plan.resetForm(); if (sc.focus) S.openAp[sc.focus] = true;
+    UI.setMode('network'); $('#drawer').classList.add('open'); UI.timeline.render();
+    const n = D().loadFolder().length;
+    if (fails.length) console.warn('[v2] scenario ' + key + ': ' + fails.length + ' route(s) failed —', fails);
+    UI.toast(`${sc.title} loaded — ${n} route${n === 1 ? '' : 's'}` + (fails.length ? ` · ${fails.length} failed: ${fails[0]}` : ''));
   }
 
   // ---- events ----
   document.addEventListener('click', e => {
     const t = e.target.closest('[data-act],[data-ap]>button'); if (!t) return;
     if (t.dataset.act === 'efSave') { saveEdit(); return; }
-    if (S.mode !== 'network' && !['scenario'].includes(t.dataset.act)) return;
+    // #focChip carries data-act="focus" in the markup but is owned by timeline.js — handling it here as well would
+    // run two full renders and two map fits per click.
+    if (t.id === 'focChip') return;
+    // The demand drawer renders in BOTH modes, so its 'Isolate <ICAO>' buttons must work in Plan mode too — they
+    // switch to Network mode, where the isolation lives. Everything else stays Network-only.
+    if (S.mode !== 'network' && !['scenario', 'focus'].includes(t.dataset.act)) return;
     const ap = t.closest('[data-ap]'); if (ap && !t.dataset.act && t.tagName === 'BUTTON' && t.parentElement === ap) { S.openAp[ap.dataset.ap] = !S.openAp[ap.dataset.ap]; ap.classList.toggle('open'); return; }
     switch (t.dataset.act) {
       case 'rm': remove(t.dataset.id); break;
@@ -172,7 +253,8 @@
       case 'build': UI.share.copyBuildLink(); break;
       case 'xlsx': if (window.CNSSpreadsheet) CNSSpreadsheet.export(t); break;
       case 'pdf': UI.report && UI.report.pick(); break;
-      case 'focus': S.filter = t.dataset.ap || ''; if (S.filter) S.openAp[S.filter] = true; UI.render(); UI.map.drawNet(); UI.map.fitNet(); break;
+      case 'focus': S.filter = t.dataset.ap || ''; if (S.filter) S.openAp[S.filter] = true;
+        if (S.mode !== 'network') { UI.setMode('network'); } else { UI.render(); UI.map.drawNet(); UI.map.fitNet(); } break;
       case 'revDay': case 'revYear': S.revYear = t.dataset.act === 'revYear'; UI.render(); break;
       case 'fleetAdd': { const ids = fleetOf(t.dataset.ap); ids.push(ids[ids.length - 1] || (UI.CHARGERS[0] && UI.CHARGERS[0].id)); cfgPatch(t.dataset.ap, { chargers: ids }); break; }
       case 'fleetRm': { const ids = fleetOf(t.dataset.ap); ids.splice(+t.dataset.i, 1); cfgPatch(t.dataset.ap, { chargers: ids }); break; }

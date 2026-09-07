@@ -76,7 +76,10 @@
     P.source = manual.length ? 'user' : 'auto';
     stampDiverts([t.origin, t.dest, ...manual]);
     const chainRes = R().planChain({ origin: t.origin, dest: t.dest, manualStops: manual, plane: p, allowedTypes: allowedTypes(), allAirports: UI.airports(), allowedIdents: plannerAllowedIdents(), blacklist: S.blacklist, maxLegKm: availableRangeKm(p), options: routingOptions() });
-    if (chainRes.error && manual.length === 0) { P.error = chainRes.error; validateRoute(); if (!P.error) P.error = chainRes.error; return; }
+    // The ROUTER's message is the truthful one when it could not chain the route at all — the
+    // classic shows plannedError (with a remedy) or its hard-fail copy, never the leg-gate line
+    // ('add or change a stop' is meaningless when no stop exists that would fix it).
+    if (chainRes.error && manual.length === 0) { validateRoute(); P.error = chainRes.error; return; }
     P.stops = chainRes.stops || []; stampDiverts(P.stops);
     if (isCircular()) {
       const used = new Set([t.origin.ident, t.dest.ident, ...P.stops.map(s => s && s.ident)].filter(Boolean));
@@ -103,7 +106,10 @@
   // ---- map hooks: divert editor + reach graph ----
   function onDivertChange(node, ident) { if (ident) S.divertOverrides[node.ident] = ident; else delete S.divertOverrides[node.ident]; replan(); UI.render(); UI.map.drawRoute(false); UI.map.drawAlternates(); }
   function initMap() {
-    if (window.CNSDivertEdit) CNSDivertEdit.init({ map: UI.map.map, airportByIdent: UI.byId(), airports: UI.airports(), isSuitable: ap => divertSuitable()(ap), onChange: onDivertChange, onDragFeedback: () => {} });
+    // divert-edit.js calls these as THUNKS (static/divert-edit.js:88, 95, 154) — the classic passes
+    // `airports: () => allAirports, isSuitable: () => _divertSuitable()` (index.html:6616-6620).
+    // Passing values instead threw on every drag and made an ALT pick impossible.
+    if (window.CNSDivertEdit) CNSDivertEdit.init({ map: UI.map.map, airportByIdent: UI.byId(), airports: () => UI.airports(), isSuitable: () => divertSuitable(), onChange: onDivertChange, onDragFeedback: () => {} });
     if (window.CNSRangeGraph) CNSRangeGraph.init({ map: UI.map.map, getReachKm: () => availableRangeKm(plane()) || 0, airports: () => UI.airports(), allowedFor: () => { const types = allowedTypes(); const ids = plannerAllowedIdents(); return ap => types.includes(ap.type) || ids.has(ap.ident); } });
   }
   function altPick(ident) { const full = UI.byId()[ident]; if (!full || !window.CNSDivertEdit) return; CNSDivertEdit.startAltPick({ ident, lat: +full.latitude_deg, lon: +full.longitude_deg }); UI.toast('Click an airport on the map to use it as the divert for ' + ident); }
