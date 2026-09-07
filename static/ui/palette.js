@@ -2,8 +2,13 @@
 (function () {
   const UI = window.CNSUI, S = UI.S, $ = UI.$, $$ = UI.$$, esc = UI.esc;
   const KEY = 'cns_map_options';
-  function loadOpts() { try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); if (o.basemap === 'street' || o.basemap === 'sat' || o.basemap === 'light') S.base = o.basemap; const T = []; if (o.fLarge !== false) T.push('large_airport'); if (o.fMedium !== false) T.push('medium_airport'); if (o.fSmall === true) T.push('small_airport'); S.allowedTypes = T; if ('nrgChargerToggle' in o) S.showAssets = !!o.nrgChargerToggle; if ('fSavedRoutes' in o) S.showNet = !!o.fSavedRoutes; if ('fAlternates' in o) S.showAlternates = !!o.fAlternates; if ('flightLabelToggle' in o) S.showLabels = o.flightLabelToggle !== false; } catch (e) {} }
-  function saveOpts() { try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); Object.assign(o, { basemap: S.base, fLarge: S.allowedTypes.includes('large_airport'), fMedium: S.allowedTypes.includes('medium_airport'), fSmall: S.allowedTypes.includes('small_airport'), nrgChargerToggle: S.showAssets, fSavedRoutes: S.showNet, fAlternates: S.showAlternates, flightLabelToggle: S.showLabels }); localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} }
+  const RG_KEY = 'cns_v2_reach_graph';   // v2-only: the classic rewrites KEY wholesale and would drop this flag
+  // the classic writes satellite|voyager on this shared key; v2 speaks light|street|sat — translate both ways
+  const BM_FROM = { satellite: 'sat', voyager: 'street', sat: 'sat', street: 'street', light: 'light' };
+  const BM_TO = { sat: 'satellite', street: 'voyager', light: 'light' };
+  function loadOpts() { try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); const bm = BM_FROM[o.basemap]; if (bm) S.base = bm; const T = []; if (o.fLarge !== false) T.push('large_airport'); if (o.fMedium !== false) T.push('medium_airport'); if (o.fSmall === true) T.push('small_airport'); S.allowedTypes = T; if ('nrgChargerToggle' in o) S.showAssets = !!o.nrgChargerToggle; if ('fSavedRoutes' in o) S.showNet = !!o.fSavedRoutes; if ('fAlternates' in o) S.showAlternates = !!o.fAlternates; if ('flightLabelToggle' in o) S.showLabels = o.flightLabelToggle !== false; const rg0 = document.getElementById('fReachGraph');
+      if (rg0) { const mirror = localStorage.getItem(RG_KEY); rg0.checked = ('fReachGraph' in o) ? !!o.fReachGraph : (mirror === '1'); } } catch (e) {} }
+  function saveOpts() { try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); const rg = document.getElementById('fReachGraph'); try { localStorage.setItem(RG_KEY, rg && rg.checked ? '1' : '0'); } catch (e) {} Object.assign(o, { basemap: BM_TO[S.base] || S.base, fReachGraph: !!(rg && rg.checked), fLarge: S.allowedTypes.includes('large_airport'), fMedium: S.allowedTypes.includes('medium_airport'), fSmall: S.allowedTypes.includes('small_airport'), nrgChargerToggle: S.showAssets, fSavedRoutes: S.showNet, fAlternates: S.showAlternates, flightLabelToggle: S.showLabels }); localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} }
   document.addEventListener('DOMContentLoaded', loadOpts);
   // ---- topbar ----------------------------------------------------------------
   document.addEventListener('click', e => {
@@ -21,7 +26,8 @@
     if (t.id === 'nrgChargerToggle') { S.showAssets = t.checked; UI.map.drawAssets(); saveOpts(); UI.plan.onFormChange(false); }
     if (t.id === 'fSavedRoutes') { S.showNet = t.checked; UI.map.drawNet(); saveOpts(); }
     if (t.id === 'fAlternates') { S.showAlternates = t.checked; saveOpts(); UI.render(); UI.map.drawAlternates(); }
-    if (t.id === 'flightLabelToggle') { S.showLabels = t.checked; saveOpts(); UI.map.drawRoute(false); } });
+    if (t.id === 'flightLabelToggle') { S.showLabels = t.checked; saveOpts(); UI.map.drawRoute(false); }
+    if (t.id === 'fReachGraph') saveOpts(); });
   function runExport(kind, btn) {
     if (kind === 'xlsx' && window.CNSSpreadsheet) return CNSSpreadsheet.export(btn);
     if (kind === 'share') return UI.share.copyRouteLink();
@@ -36,7 +42,17 @@
   document.addEventListener('DOMContentLoaded', () => { const inp = $('#q'), box = $('#qAc');
     inp.addEventListener('input', () => { const l = UI.search(inp.value); box.innerHTML = l.map(a => `<button data-id="${esc(a.ident)}"><span class="id">${esc(a.ident)}</span><span class="nm">${esc(a.name)}<small>${esc(a.municipality || '')}</small></span><span class="ty">${esc((a.type || '').split('_')[0])}</span></button>`).join(''); box.classList.toggle('open', l.length > 0); });
     box.addEventListener('mousedown', e => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); inp.value = ''; box.classList.remove('open'); UI.map.flyTo(UI.byId()[b.dataset.id]); });
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = $('button', box); if (b) b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); } if (e.key === 'Escape') box.classList.remove('open'); });
+    inp.addEventListener('keydown', e => {
+      const btns = Array.from(box.querySelectorAll('button'));
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && btns.length) {
+        e.preventDefault(); const cur = btns.findIndex(b => b.classList.contains('active'));
+        const next = e.key === 'ArrowDown' ? Math.min(btns.length - 1, cur + 1) : Math.max(0, (cur < 0 ? 0 : cur) - 1);
+        btns.forEach((b, i) => { b.classList.toggle('hl', i === next); b.classList.toggle('active', i === next); }); btns[next].scrollIntoView({ block: 'nearest' }); return;
+      }
+      if (e.key === 'Enter') { const b = box.querySelector('button.hl') || btns[0]; if (b) b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); }
+      if (e.key === 'Escape') box.classList.remove('open');
+    });
+    inp.addEventListener('blur', () => setTimeout(() => box.classList.remove('open'), 150));
     document.addEventListener('mousedown', e => { if (!box.contains(e.target) && e.target !== inp) box.classList.remove('open'); }); });
   // ---- command palette ------------------------------------------------------------
   const CMD = { items: [], hl: 0 };
@@ -50,7 +66,7 @@
       add('Airports', `Add <b>${esc(a.ident)}</b> as a stop`, () => { S.stops.push(a); UI.setMode('plan'); UI.plan.onFormChange(true); }, 'S');
       if (window.CNSDemand && CNSDemand.computeAirports()[a.ident]) add('Airports', `Isolate <b>${esc(a.ident)}</b> in the network`, () => { UI.setMode('network'); S.filter = a.ident; S.openAp[a.ident] = true; UI.render(); UI.map.drawNet(); UI.map.fitNet(); $('#drawer').classList.add('open'); }, 'I'); });
     const hit = s => !ql || s.toLowerCase().includes(ql);
-    UI.PLANES.filter(p => ql && hit(p.name)).slice(0, 3).forEach(p => add('Aircraft', `Aircraft: ${esc(p.name)}`, () => { S.planeId = p.id; const dc = p.default_charger_id; if (dc && UI.CHARGERS.find(c => c.id === dc)) S.chargerId = dc; UI.setMode('plan'); UI.plan.onFormChange(false); }, '', `${p.range_km} km · ${p.battery_kwh || 0} kWh`));
+    UI.PLANES.filter(p => ql && hit(`${p.oem || ''} ${p.name} ${p.id || ''}`)).slice(0, 3).forEach(p => add('Aircraft', `Aircraft: ${esc(p.name)}`, () => { S.planeId = p.id; const dc = p.default_charger_id; if (dc && UI.CHARGERS.find(c => c.id === dc)) S.chargerId = dc; UI.setMode('plan'); UI.plan.onFormChange(false); }, '', `${UI.fmt.dist(p.range_km)} · ${p.battery_kwh > 0 ? UI.fmt.kwh(p.battery_kwh) : 'no charge'}`));
     UI.CHARGERS.filter(c => ql && hit(c.name)).slice(0, 3).forEach(c => add('Chargers', `Charger: ${esc(c.name)}`, () => { S.chargerId = c.id; UI.setMode('plan'); UI.plan.onFormChange(false); }));
     const A = [
       ['Simulate the current route', () => { UI.setMode('plan'); UI.plan.simulate(); }, '↵'],

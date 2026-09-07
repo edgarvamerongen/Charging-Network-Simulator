@@ -42,6 +42,13 @@ node tests/sched_snapshot.mjs || rc=1
 echo
 
 echo "=================================================================="
+echo "V2 UI UNIT (pure helpers of the /v2 shell — no browser needed):"
+echo "=================================================================="
+echo "--- node --test tests/js_ui_*.test.mjs ---"
+node --test tests/js_ui_*.test.mjs || rc=1
+echo
+
+echo "=================================================================="
 if [ "$rc" -eq 0 ]; then echo "ALL LAYERS PASSED"; else echo "SOME TESTS FAILED (rc=$rc) — see output above"; fi
 echo "=================================================================="
 exit "$rc"

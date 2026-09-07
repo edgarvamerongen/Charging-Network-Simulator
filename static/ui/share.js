@@ -16,7 +16,7 @@
   }
   async function copyBuildLink() {
     if (!window.CNSBuildShare) return;
-    try { await CNSBuildShare.copyBuildLink({ createShortLink: async st => v2Url(await CNSShare.createShortLink(st)), writeText: async t => { await navigator.clipboard.writeText(t); UI.toast('Build link copied'); } }); }
+    try { await CNSBuildShare.copyBuildLink({ createShortLink: async st => v2Url(await CNSShare.createShortLink(st)), writeText: async t => { await navigator.clipboard.writeText(t); }   /* CNSBuildShare shows its own .cns-share-toast; a second toast here would double up */ }); }
     catch (e) { UI.toast('Build link failed — ' + e.message); }
   }
   async function applyState(st) {
