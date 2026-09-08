@@ -105,7 +105,8 @@
 
   function renderForm() {
     const p = UI.plane(), ch = UI.charger(); const c = UI.chain(); const d = directKm(); const reach = reachKm(p); const P = S.planned; const fits = !P.legIssues.length && !P.error;
-    const stopsHtml = S.stops.map((s, i) => `<div class="fld wp" data-stop="${i}"><input placeholder="Add a charging stop…" class="${acUnset('stop' + i) ? 'ac-unset' : ''}" value="${esc(acValue('stop' + i))}" data-ac="stop${i}"><button class="x" data-act="rmStop" data-i="${i}" title="Remove stop"><svg class="ic"><use href="#i-x"/></svg></button><span class="icao">${esc(s ? s.ident : '')}</span><div class="ac" id="ac-stop${i}"></div></div>`).join('');
+    const grip = k => `<span class="grip" data-grip="${k}" title="Drag to reorder"><svg class="ic" style="width:12px;height:12px"><use href="#i-grip"/></svg></span>`;
+    const stopsHtml = S.stops.map((s, i) => `<div class="fld wp dr" draggable="true" data-slot="stop${i}" data-stop="${i}">${grip('stop' + i)}<input placeholder="Add a charging stop…" class="${acUnset('stop' + i) ? 'ac-unset' : ''}" value="${esc(acValue('stop' + i))}" data-ac="stop${i}"><button class="x" data-act="rmStop" data-i="${i}" title="Remove stop"><svg class="ic"><use href="#i-x"/></svg></button><span class="icao">${esc(s ? s.ident : '')}</span><div class="ac" id="ac-stop${i}"></div></div>`).join('');
     const chList = S.allChargers ? UI.CHARGERS.slice().sort((a, b) => b.power_kw - a.power_kw) : [ch, ...UI.CHARGERS.filter(x => x.id !== ch.id).sort((a, b) => Math.abs(a.power_kw - ch.power_kw) - Math.abs(b.power_kw - ch.power_kw)).slice(0, 2)].sort((a, b) => b.power_kw - a.power_kw);
     // Photo precedence + no photo = no <img> (a bare /pics/ is a 404 per row per render); ranges
     // follow the unit toggle like the card does; a battery-less hybrid reads 'no charge'.
@@ -115,9 +116,9 @@
     <div class="ph"><h3>Create a route</h3><div class="tools"><span class="hint" style="margin:0">${esc(regShort(p.regime || ''))}${p.range_incl_reserves ? ' · range incl. reserves' : ''}</span></div></div>
     ${aircraftHtml(p, reach, fits, pickHtml)}
     <div class="sec"><div class="lbl"><span class="cap">Route</span><button class="lnk" data-act="addStop">+ Add stop</button></div>
-      <div class="fld"><input placeholder="Departure airport" class="${acUnset('origin') ? 'ac-unset' : ''}" value="${esc(acValue('origin'))}" data-ac="origin"><span class="icao">${esc(S.origin ? S.origin.ident : '')}</span><div class="ac" id="ac-origin"></div></div>
+      <div class="fld dr" draggable="true" data-slot="origin">${grip('origin')}<input placeholder="Departure airport" class="${acUnset('origin') ? 'ac-unset' : ''}" value="${esc(acValue('origin'))}" data-ac="origin"><span class="icao">${esc(S.origin ? S.origin.ident : '')}</span><div class="ac" id="ac-origin"></div></div>
       ${stopsHtml}
-      ${S.trip === 'training' ? '' : `<div class="fld"><input placeholder="Destination airport" class="${acUnset('dest') ? 'ac-unset' : ''}" value="${esc(acValue('dest'))}" data-ac="dest"><span class="icao">${esc(S.dest ? S.dest.ident : '')}</span><div class="ac" id="ac-dest"></div></div>`}
+      ${S.trip === 'training' ? '' : `<div class="fld dr" draggable="true" data-slot="dest">${grip('dest')}<input placeholder="Destination airport" class="${acUnset('dest') ? 'ac-unset' : ''}" value="${esc(acValue('dest'))}" data-ac="dest"><span class="icao">${esc(S.dest ? S.dest.ident : '')}</span><div class="ac" id="ac-dest"></div></div>`}
       ${c.length >= 2 ? routeBlock(c, d, fits) : ''}</div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Trip type</div><div class="seg sm" data-seg="trip">${Object.keys(tripLabel).map(k => `<button data-v="${k}" class="${S.trip === k ? 'on' : ''}">${tripLabel[k]}</button>`).join('')}</div><div class="hint">${tripHint[S.trip]}</div></div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="2000" value="${S.freq}" data-act="freq" class="num"><span class="t">routes /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per === 'day' ? 'on' : ''}">day</button><button data-v="week" class="${S.per === 'week' ? 'on' : ''}">week</button></div></div></div>
@@ -210,18 +211,20 @@
     const batt = hasBatt(p);
     const soc = batt ? UI.soc.series(d.legs, d.charges, p.battery_kwh, climb, { training: d.training }) : null;
     const RES = Math.round((1 - ((window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7)) * 100);
-    const X = v => 6 + v * 3.88, Y = v => 6 + (100 - Math.max(0, v)) * 0.72;
+    const railW = Math.max(240, (($('#railBody') || {}).clientWidth || 320) - 28);
+    const CW = Math.max(railW, d.legs.length * 150);   // px = viewBox units, so labels never stretch
+    const X = v => 6 + v * (CW - 12) / 100, Y = v => 8 + (100 - Math.max(0, v)) * 0.74;
     // No battery = nothing to chart: a non-charging hybrid draws nothing from the network, so the
     // classic prints the fact instead of a 0 %-to-0 % curve (index.html:5153, 5190).
     const socSvg = !batt ? `<div class="sec"><div class="hint" style="margin:0">Non-charging aircraft: no battery in the catalog, so this flight draws nothing from the charging network — the grid supplies 0 kWh.</div></div>` : `<div class="soc"><div class="lbl"><span class="cap">Battery</span><span class="r">lowest <b class="${soc.low < RES ? 'low' : ''}">${Math.round(soc.low)} %</b>${(soc.pts.find(q => q.soc === soc.low) || {}).id ? ' at ' + esc(soc.pts.find(q => q.soc === soc.low).id) : ''} · reserve ${RES} %</span></div>
-      <svg viewBox="0 0 400 92" preserveAspectRatio="none">${soc.zones.map(z => `<rect x="${X(z.x0).toFixed(1)}" y="4" width="${(X(z.x1) - X(z.x0)).toFixed(1)}" height="74" fill="${z.t === 'climb' ? 'rgba(216,76,38,.07)' : 'rgba(50,50,110,.05)'}"/>`).join('')}
-      <line x1="6" y1="${Y(RES).toFixed(1)}" x2="394" y2="${Y(RES).toFixed(1)}" stroke="#cfcfda" stroke-dasharray="3 4"/><line x1="6" y1="${Y(0).toFixed(1)}" x2="394" y2="${Y(0).toFixed(1)}" stroke="#e2e2ea"/>
+      <div class="scroll"><svg viewBox="0 0 ${CW} 96" preserveAspectRatio="none" style="width:${CW}px">${soc.zones.map(z => `<rect x="${X(z.x0).toFixed(1)}" y="4" width="${(X(z.x1) - X(z.x0)).toFixed(1)}" height="74" fill="${z.t === 'climb' ? 'rgba(216,76,38,.07)' : 'rgba(50,50,110,.05)'}"/>`).join('')}
+      <line x1="6" y1="${Y(RES).toFixed(1)}" x2="${CW - 6}" y2="${Y(RES).toFixed(1)}" stroke="#cfcfda" stroke-dasharray="3 4"/><line x1="6" y1="${Y(0).toFixed(1)}" x2="${CW - 6}" y2="${Y(0).toFixed(1)}" stroke="#e2e2ea"/>
       ${soc.segs.map(s => `<path d="M${X(s.x0).toFixed(1)} ${Y(s.y0).toFixed(1)} L${X(s.x1).toFixed(1)} ${Y(s.y1).toFixed(1)}" stroke="${s.t === 'fly' ? '#32326E' : '#d84c26'}" stroke-width="${s.t === 'fly' ? 2 : 2.5}" fill="none" stroke-linecap="round"/>`).join('')}
-      ${soc.pts.map((q, i) => `<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.soc).toFixed(1)}" r="3" fill="${q.soc < RES ? '#b3261e' : '#32326E'}"/><text x="${X(q.x).toFixed(1)}" y="${(Y(q.soc) + (i === 0 ? -8 : 14)).toFixed(1)}" font-size="10" font-weight="600" fill="${q.soc < RES ? '#b3261e' : '#32326E'}" text-anchor="${i === 0 ? 'start' : i === soc.pts.length - 1 ? 'end' : 'middle'}">${Math.round(q.soc)} %${q.id ? ' · ' + esc(q.id) : ''}</text>`).join('')}
-      <text x="6" y="${(Y(RES) + 11).toFixed(1)}" font-size="9" fill="#6f7290">reserve ${RES} %</text></svg></div>`;
+      ${soc.pts.map((q, i) => `<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.soc).toFixed(1)}" r="3" fill="${q.soc < RES ? '#b3261e' : '#32326E'}"/><text x="${X(q.x).toFixed(1)}" y="${(Y(q.soc) + (i === 0 ? -9 : 15)).toFixed(1)}" font-size="11.5" font-weight="600" fill="${q.soc < RES ? '#b3261e' : '#32326E'}" text-anchor="${i === 0 ? 'start' : i === soc.pts.length - 1 ? 'end' : 'middle'}">${Math.round(q.soc)} %${q.id ? ' · ' + esc(q.id) : ''}</text>`).join('')}
+      <text x="6" y="${(Y(RES) + 11).toFixed(1)}" font-size="9.5" fill="#6f7290">reserve ${RES} %</text></svg></div></div>`;
     $('#railBody').innerHTML = `
     <div class="rh2"><div><div class="ttl">${c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}</div></div><button class="lnk" data-act="edit">Edit</button></div>
-    <div class="stats"><div><div class="cap">Energy</div><div class="v num">${fmt.r(d.used)}<small>kWh</small></div><div class="s">${d.legs.length > 1 ? d.legs.length + ' legs' : 'per flight'}</div></div>
+    <div class="stats"><div><div class="cap">Energy</div><div class="v num">${fmt.parts(d.used, 'Wh').n}<small>${fmt.parts(d.used, 'Wh').u}</small></div><div class="s">${d.legs.length > 1 ? d.legs.length + ' legs' : 'per flight'}</div></div>
       <div><div class="cap">Travel</div><div class="v num">${fmt.h(d.travelMin)}<small>h</small></div><div class="s">${d.travelMin > d.flyMin + 0.5 ? 'incl. charging' : 'block time'}</div></div>
       <div><div class="cap">Charge</div><div class="v num">${fmt.r(d.chargeMin)}<small>min</small></div><div class="s">${d.charges.length > 1 ? 'over ' + d.charges.length + ' stops' : 'at ' + esc(d.terminal.ident || 'destination')}</div></div></div>
     <div class="cost"><div class="v num">€${fmt.eur(costDay)}<small>/ day</small></div><div class="m num">${chargedR} kWh · €${rate.toFixed(2)} / kWh${fpd === 1 ? '' : ` · ${S.freq} / ${S.per}`}</div></div>
@@ -230,8 +233,8 @@
     <div class="acc ${S.open.route ? 'open' : ''}" data-acc="route"><button><span>Route <span class="sub">${d.legs.length} leg${d.legs.length > 1 ? 's' : ''} · ${c.length - 2 > 0 ? (c.length - 2) + ' stop' + (c.length - 2 > 1 ? 's' : '') : 'no stops'}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane"><table class="tbl"><tr><th>Leg</th><th class="r">${fmt.ukm()}</th><th class="r">Time</th><th class="r">kWh</th></tr>
       ${d.legs.map((l, i) => `<tr><td><span class="mu num">${String(i + 1).padStart(2, '0')}</span> ${esc(UI.shortName(l.fromName))} → ${esc(UI.shortName(l.toName))}${l.overRange ? ' <span class="mu" style="color:var(--danger)">over range</span>' : ''}</td><td class="r num">${fmt.r(fmt.km(l.distKm))}</td><td class="r num">${fmt.h(l.flightMin)}</td><td class="r num">${fmt.r(l.energyKwh)}</td></tr>`).join('')}</table>
-      ${climb.applies && !d.training ? `<div class="hint num">Includes up to ${Math.round(climb.eMaxKwh)} kWh net climb per leg, saturating at ${Math.round(climb.dSatKm)} km.</div>` : ''}</div></div>
-    <div class="acc ${S.open.charging ? 'open' : ''}" data-acc="charging"><button><span>Charging <span class="sub">${esc(ch.name)} · ${fmt.r(d.charged)} kWh</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
+      ${climb.applies && !d.training ? `<div class="hint num">Includes up to ${Math.round(climb.eMaxKwh)} kWh net climb per leg.</div>` : ''}</div></div>
+    <div class="acc alt ${S.open.charging ? 'open' : ''}" data-acc="charging"><button><span>Charging <span class="sub">${esc(ch.name)} · ${fmt.kwh(d.charged)}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane"><table class="tbl"><tr><th>Where</th><th class="r">Arrive</th><th class="r">To</th><th class="r">kWh</th><th class="r">Time</th></tr>
       ${d.charges.map(x => `<tr><td>${esc(x.ident || '')} ${esc(UI.shortName(x.name))} <span class="mu">${x.isTerminal ? 'terminal' : 'en route'}</span></td><td class="r num">${Math.round((x.arrivalSocFrac || 0) * 100)} %</td><td class="r num">${Math.round((x.targetSocFrac || 0) * 100)} %</td><td class="r num">${fmt.r(x.energyKwh)}</td><td class="r num">${fmt.min(x.chargeMin)}</td></tr>`).join('')}</table></div></div>
     <div class="acc ${S.open.calc ? 'open' : ''}" data-acc="calc"><button><span>Calculation</span><svg class="ic"><use href="#i-chev"/></svg></button>
@@ -272,8 +275,23 @@
     if (network) { const t = $('#nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change', { bubbles: true })); hit = true; } }
     if (!hit) onFormChange(false);   // nothing to tick (no menu in the DOM) — still re-plan
   }
-  function resetForm() { UI._applyDefaults(); S.stops = []; S.trip = 'one-way'; S.freq = 1; S.per = 'day'; S.picking = false; S.allChargers = false; S.availOverride = null; S.blacklist.clear(); S.divertOverrides = {}; onFormChange(true); }
+  function resetForm() { UI._applyDefaults({ seedRoute: false }); S.stops = []; S.acText = {}; S.trip = 'one-way'; S.freq = 1; S.per = 'day'; S.picking = false; S.allChargers = false; S.availOverride = null; S.blacklist.clear(); S.divertOverrides = {}; onFormChange(false); }
   function render() { if (S.rail === 'result' && S.profile) renderResult(); else renderForm(); }
+
+  // Any field can be dragged to a new place in the chain. The sequence [origin, ...stops, dest] is
+  // rebuilt from the drop, so the top field always departs and the bottom one always arrives; empty
+  // stop fields travel with the order. A training pattern has no destination and reorders the rest.
+  const chainSeq = () => S.trip === 'training' ? [S.origin, ...S.stops] : [S.origin, ...S.stops, S.dest];
+  const applySeq = seq => { if (S.trip === 'training') { S.origin = seq[0] || null; S.stops = seq.slice(1); } else { S.origin = seq[0] || null; S.dest = seq[seq.length - 1] || null; S.stops = seq.slice(1, -1); } S.acText = {}; onFormChange(false); };
+  const slotIdx = k => k === 'origin' ? 0 : k === 'dest' ? chainSeq().length - 1 : 1 + (+k.slice(4));
+  let dragSlot = null;
+  document.addEventListener('dragstart', e => { const f = e.target.closest && e.target.closest('.fld.dr[data-slot]'); if (!f || !$('#railBody').contains(f)) return; dragSlot = f.dataset.slot; f.classList.add('dragging'); try { e.dataTransfer.setData('text/plain', dragSlot); e.dataTransfer.effectAllowed = 'move'; } catch (x) {} });
+  document.addEventListener('dragover', e => { if (!dragSlot) return; const f = e.target.closest && e.target.closest('.fld.dr[data-slot]'); if (!f) return; e.preventDefault(); const r = f.getBoundingClientRect(); const below = e.clientY > r.top + r.height / 2; $$('.fld.dr').forEach(x => x.classList.remove('over-top', 'over-bottom')); if (f.dataset.slot !== dragSlot) f.classList.add(below ? 'over-bottom' : 'over-top'); });
+  document.addEventListener('drop', e => { if (!dragSlot) return; const f = e.target.closest && e.target.closest('.fld.dr[data-slot]'); if (!f) return; e.preventDefault();
+    const from = slotIdx(dragSlot), r = f.getBoundingClientRect(); let to = slotIdx(f.dataset.slot) + (e.clientY > r.top + r.height / 2 ? 1 : 0);
+    const seq = chainSeq(); const [item] = seq.splice(from, 1); if (to > from) to--; seq.splice(to, 0, item); dragSlot = null; applySeq(seq); });
+  document.addEventListener('dragend', () => { dragSlot = null; $$('.fld.dr').forEach(x => x.classList.remove('dragging', 'over-top', 'over-bottom')); });
+  const reorder = (from, to) => { const seq = chainSeq(); const [item] = seq.splice(from, 1); seq.splice(to, 0, item); applySeq(seq); };   // programmatic / test hook for the drag
 
   document.addEventListener('click', e => {
     if (S.mode !== 'plan') return;
@@ -319,5 +337,5 @@
   document.addEventListener('mousedown', e => { if (S.acFilterOpen && !e.target.closest('.ac-pop,[data-act=acFilters]')) { S.acFilterOpen = false; UI.render(); } });
   document.addEventListener('input', e => { if (e.target.dataset.act === 'freq') S.freq = Math.max(1, Math.min(2000, +e.target.value || 1)); });
 
-  UI.plan = { render, simulate, resimulate, addToNetwork, derive, legsForMap, onFormChange, resetForm };
+  UI.plan = { render, simulate, resimulate, addToNetwork, derive, legsForMap, onFormChange, resetForm, reorder };
 })();

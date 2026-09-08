@@ -158,8 +158,9 @@ export default async function run(ctx) {
     for (const [k, a, b] of cmp) if (!ctx.close(a, b, 1e-6)) problems.push(`engine ${k}: classic ${a} v2 ${b}`);
     const ca = ctx.stripApi(cr.api), va = ctx.stripApi(vr.api);
     if (J(ca) !== J(va)) { const diff = Object.keys(Object.assign({}, ca, va)).filter(k => J(ca[k]) !== J(va[k])); problems.push('API result differs in ' + J(diff)); }
-    const shownUsed = ctx.num(cr.shown.hlUsed), v2Used = ctx.num(vr.shown.stats[0]);
-    if (shownUsed !== v2Used) problems.push(`shown energy classic ${cr.shown.hlUsed} v2 ${vr.shown.stats[0]}`);
+    const shownUsed = ctx.num(cr.shown.hlUsed), v2Used = /MWh/.test(String(vr.shown.stats[0])) ? ctx.num(vr.shown.stats[0]) * 1000 : ctx.num(vr.shown.stats[0]);
+    const mwTol = /MWh/.test(String(vr.shown.stats[0])) ? (v2Used >= 1000 ? 50 : 5) : 0;   // v2's megawatt rule: 2 dp below 1 MWh, 1 dp above
+    if (Math.abs(shownUsed - v2Used) > mwTol) problems.push(`shown energy classic ${cr.shown.hlUsed} v2 ${vr.shown.stats[0]}`);
     if (problems.length) throw new Error(problems.join('; ') + ` (classic warnings ${J(cs.warnings)})`);
     return { detail: `stops ${J(cStops)}; energy ${E.energyUsedKwh.toFixed(3)} dist ${E.distKm.toFixed(3)} flight ${E.flightMin.toFixed(3)} charge ${E.chargeMin.toFixed(3)} equal; shown ${cr.shown.hlUsed} / ${vr.shown.stats[0]}`, repro: 'node tests/ui/run.mjs planner --only multi-leg-parity', evidence: [ctx.shot('parity-v2'), ctx.shot('parity-classic')] };
   }, { retry: 0 });
