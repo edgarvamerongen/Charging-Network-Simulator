@@ -28,7 +28,7 @@ const sameNum = (cls, v2) => cls.approx ? Math.abs(cls.v - v2) <= 10 : cls.v ===
 // ---- in-page snippets (v2) --------------------------------------------------------------
 const V2_ROWS = `CNSUI.network.rows().map(a => ({ ident: a.ident, flights: a.flights, kwh: a.kwh, peak: a.peak, chargeMin: a.chargeMin, latestEnd: a.latestEnd, fleetIds: a.fleetIds, contribs: a.contribs.length, trips: a.trips.length, targetSoc: a.targetSoc, rKwh: CNSUI.fmt.r(a.kwh), rPeak: CNSUI.fmt.r(a.peak) }))`;
 const V2_HEAD = `(function(){ const sub = document.querySelector('#railBody .ph .sub'); const body = document.querySelector('#railBody'); return { sub: sub ? sub.textContent.trim() : null, aps: [...document.querySelectorAll('#railBody .ap')].map(e => e.dataset.ap), text: body ? body.textContent : '', netCount: (document.querySelector('#netCount') || {}).textContent, mode: CNSUI.S.mode, tiles: [...document.querySelectorAll('#railBody .tiles > div')].map(d => ({ cap: (d.querySelector('.cap') || {}).textContent, v: (d.querySelector('.v') || {}).textContent })) }; })()`;
-const V2_STATS = ap => `(function(){ const el = document.querySelector('.ap[data-ap=${J(ap)}]'); if (!el) return null; return { st: [...el.querySelectorAll(':scope > button .st')].map(s => s.firstChild ? s.firstChild.textContent.trim() : s.textContent.trim()), open: el.classList.contains('open'), paneDisplay: getComputedStyle(el.querySelector('.pane')).display, tiles3: [...el.querySelectorAll('.pane .tiles3 > div')].map(d => ({ cap: (d.querySelector('.cap') || {}).textContent.trim(), v: (d.querySelector('.v') || {}).textContent.trim(), s: (d.querySelector('.s') || {}).textContent.trim() })), fleetSel: el.querySelectorAll('[data-act=fleetSel]').length, fleetRm: el.querySelectorAll('[data-act=fleetRm]').length, socChip: (el.querySelector('[data-act=socToggle]') || {}).textContent, socp: !!el.querySelector('.socp') }; })()`;
+const V2_STATS = ap => `(function(){ const el = document.querySelector('.ap[data-ap=${J(ap)}]'); if (!el) return null; return { st: [...el.querySelectorAll(':scope > button .st')].map(s => s.firstChild ? s.firstChild.textContent.trim() : s.textContent.trim()), stFull: [...el.querySelectorAll(':scope > button .st')].map(s => s.textContent.replace(/\\s+/g, ' ').trim()), tileKwh: (function(){ const t = el.querySelector('.pane .tiles3 > div:nth-child(2) .v'); return t ? t.textContent.replace(/\\s+/g, ' ').trim() : ''; })(), open: el.classList.contains('open'), paneDisplay: getComputedStyle(el.querySelector('.pane')).display, tiles3: [...el.querySelectorAll('.pane .tiles3 > div')].map(d => ({ cap: (d.querySelector('.cap') || {}).textContent.trim(), v: (d.querySelector('.v') || {}).textContent.trim(), s: (d.querySelector('.s') || {}).textContent.trim() })), fleetSel: el.querySelectorAll('[data-act=fleetSel]').length, fleetRm: el.querySelectorAll('[data-act=fleetRm]').length, socChip: (el.querySelector('[data-act=socToggle]') || {}).textContent, socp: !!el.querySelector('.socp') }; })()`;
 const FOLDER = `CNSDemand.loadFolder().map(t => ({ id: t.id, o: t.originIdent, d: t.destIdent, plane: t.planeId, planeName: t.planeName, charger: t.chargerId, trip: t.tripType, freqN: t.freqN, freqUnit: t.freqUnit, stops: (t.stops || []).map(s => s.ident), multi: !!t.multiLeg, battery: t.battery, recharge: t.rechargeEnergy, legEnergy: t.legEnergy, feasible: t.feasible, override: t.chargerOverride || null }))`;
 const CFG = `CNSDemand.loadCfg()`;
 const MODAL_OPEN = sel => `!document.querySelector('#modal').hidden && !!document.querySelector(${J(sel)})`;
@@ -207,9 +207,11 @@ export default async function run(ctx) {
       det.push(`${r.ident}: classic peak ${c.heroes[0]} / energy ${c.heroes[1]} · v2 row ${st.st.join('|')} · fmt.r(peak)=${r.rPeak} fmt.r(kwh)=${r.rKwh}`);
       if (!sameNum(peakC, r.rPeak)) probs.push(`${r.ident} peak: classic ${c.heroes[0]} vs v2 fmt.r ${r.rPeak}`);
       if (!sameNum(kwhC, r.rKwh)) probs.push(`${r.ident} energy: classic ${c.heroes[1]} vs v2 fmt.r ${r.rKwh}`);
-      const shownKwh = ctx.num(st.st[1]), shownPeak = ctx.num(st.st[2]);
-      if (r.kwh && shownKwh !== r.rKwh) probs.push(`${r.ident} row shows kWh ${st.st[1]} ≠ fmt.r ${r.rKwh}`);
-      if (r.peak && shownPeak !== r.rPeak) probs.push(`${r.ident} row shows peak ${st.st[2]} ≠ fmt.r ${r.rPeak}`);
+      // v2's megawatt rule: over 99 the figure reads in MW/MWh — two decimals below 1 MW (±5), one above (±50)
+      const mwVal = txt => { const s = String(txt || ''); const m = s.replace(/,/g, '').match(/-?\d+(\.\d+)?/); if (!m) return { v: NaN, tol: 0 }; const v = parseFloat(m[0]); return /M(W|Wh)\b/.test(s) ? { v: v * 1000, tol: v >= 1 ? 50 : 5 } : { v, tol: 0 }; };
+      const shownKwh = mwVal(st.tileKwh), shownPeak = mwVal(st.stFull[1]);
+      if (r.kwh && Math.abs(shownKwh.v - r.rKwh) > shownKwh.tol) probs.push(`${r.ident} energy tile shows ${st.tileKwh} ≠ fmt.r ${r.rKwh}`);
+      if (r.peak && Math.abs(shownPeak.v - r.rPeak) > shownPeak.tol) probs.push(`${r.ident} row shows peak ${st.stFull[1]} ≠ fmt.r ${r.rPeak}`);
     }
     if (probs.length) throw new Error(probs.join('; '));
     return { detail: det.join(' || '), repro: 'compare #folder [data-dest] .agg-hero-num[0..1] with v2 .ap .st (kWh/day, peak kW) and CNSUI.fmt.r(rows().peak|kwh)' };
@@ -265,9 +267,11 @@ export default async function run(ctx) {
       if (!sameNum(kwhC, r.rKwh)) probs.push(`${r.ident} energy: classic grid ${c.heroes[1]} ("${c.heroLbls[1]}") vs v2 ${r.rKwh} (aircraft-side was ${o.rKwh}; ×${mul.toFixed(3)} = ${Math.ceil(o.kwh * mul)})`);
       if (!sameNum(peakC, r.rPeak)) probs.push(`${r.ident} peak: classic ${c.heroes[0]} vs v2 ${r.rPeak}`);
     }
-    const monthly = st.tiles3[1] && st.tiles3[1].v; const cl = cards.find(x => x.ident === 'EHLE');
-    const clMonthly = cl && classicVal(cl.small[0]); const v2Monthly = monthly && classicVal(monthly);
-    if (cl && v2Monthly && clMonthly && Math.abs(clMonthly.v - v2Monthly.v) > Math.max(10, clMonthly.v * 0.005)) probs.push(`EHLE monthly: classic ${cl.small[0]} (×30.44, grid) vs v2 tile ${J(monthly)} (network.js:50 uses ×30 and no grid factor)`);
+    const daily = st.tiles3[1] && st.tiles3[1].v; const cl = cards.find(x => x.ident === 'EHLE');
+    // v2's tile is the per-DAY grid energy; the classic card's small line is that × 30.44 — compare per day,
+    // within the megawatt rule's rounding (2 dp below 1 MWh → ±5 kWh, 1 dp above → ±50) plus 0.5 %
+    const clMonthly = cl && classicVal(cl.small[0]); const v2Daily = daily && classicVal(daily);
+    if (cl && v2Daily && clMonthly && Math.abs(clMonthly.v / 30.44 - v2Daily.v) > Math.max(v2Daily.v >= 1000 ? 50 : 5, clMonthly.v / 30.44 * 0.005)) probs.push(`EHLE per day: classic ${cl.small[0]} / 30.44 = ${(clMonthly.v / 30.44).toFixed(0)} (grid) vs v2 tile ${J(daily)}`);
     await shotV2('energy-grid-factor'); await shotCl('energy-grid-factor.classic');
     await v2.eval(`(function(){ CNSSettings.save({ chargerEfficiency: { enabled: false } }); return true; })()`); await v2.sleep(700); await v2Settle();
     await classicSync(`(function(){ const c = document.querySelector('#folder [data-dest=EHLE] .agg-hero-lbl'); return !!c && !/grid/.test(c.textContent); })()`);

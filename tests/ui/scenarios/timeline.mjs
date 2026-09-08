@@ -366,13 +366,13 @@ export default async function run(ctx) {
   /** Per airport: the drawer's group-row "peak", the rail row's "peak kW", rows().peak, the engine's event peak, the drawer's
       15-min binned peak, the classic card's peak (summary × gridMul) and the installed charger power (the physical ceiling). */
   const readPeaks = async () => { const dr = await v2.eval(DRAWER), st = await v2.eval(ENGINE);
-    const rail = await v2.eval(`Object.fromEntries([...document.querySelectorAll('#railBody .ap[data-ap]')].map(ap => [ap.dataset.ap, (ap.querySelectorAll('button > .st')[2] || { textContent: '' }).textContent.trim()]))`);
+    const rail = await v2.eval(`Object.fromEntries([...document.querySelectorAll('#railBody .ap[data-ap]')].map(ap => [ap.dataset.ap, (ap.querySelectorAll('button > .st')[1] || { textContent: '' }).textContent.trim()]))`);
     const installed = await v2.eval(`Object.fromEntries(CNSUI.network.rows().map(r => [r.ident, r.fleet.reduce((s, c) => s + c.power_kw, 0)]))`);
     const classicPeak = await classic.eval(`(function(){ const g = CNSSettings.gridDemandFactor(); return Object.fromEntries(${j(['EHLE', 'EDDF', 'EHAM', 'EDDL'])}.map(id => [id, { peak: CNSScheduler.summary(id).peakKw * g, text: (document.querySelector('#folder .sched-toggle[data-ident="' + id + '"] .sched-card-summary') || { textContent: '' }).textContent.trim() }])); })()`);
-    const per = {}; dr.grp.forEach((id, i) => { per[id] = { drawer: parseKw(dr.grpPeak[i]), drawerText: dr.grpPeak[i].replace(/^.*· /, ''), railText: rail[id], rail: ctx.num(rail[id]), rows: st.peaks[id] && st.peaks[id].rail, engine: st.peaks[id] && st.peaks[id].engine, binned: st.peaks[id] && st.peaks[id].binned, classic: classicPeak[id] && classicPeak[id].peak, classicText: classicPeak[id] && classicPeak[id].text, installed: installed[id] }; });
+    const per = {}; dr.grp.forEach((id, i) => { per[id] = { drawer: parseKw(dr.grpPeak[i]), drawerText: dr.grpPeak[i].replace(/^.*· /, ''), railText: rail[id], rail: /MW/i.test(rail[id]) ? ctx.num(rail[id]) * 1000 : ctx.num(rail[id]), rows: st.peaks[id] && st.peaks[id].rail, engine: st.peaks[id] && st.peaks[id].engine, binned: st.peaks[id] && st.peaks[id].binned, classic: classicPeak[id] && classicPeak[id].peak, classicText: classicPeak[id] && classicPeak[id].text, installed: installed[id] }; });
     return { per, gridMul: st.gridMul, effOn: st.effOn, sub: dr.sub }; };
   const fmtPer = (id, p) => `${id}: drawer "${p.drawerText}" rail "${p.railText}" | rows().peak ${p.rows.toFixed(1)}, engine peakKw ${p.engine.toFixed(1)}, drawer 15-min binned ${p.binned.toFixed(1)}, classic card ${p.classic.toFixed(1)} ("${p.classicText}"), installed ${p.installed} kW`;
-  const tolOf = p => (/MW/i.test(p.drawerText) || p.rail >= 1000) ? 50 : 1;   // the drawer prints MW with one decimal
+  const tolOf = p => (/MW/i.test(p.drawerText) || p.rail >= 1000) ? 50 : (/MW/i.test(p.railText || '') ? 5 : 1);   // MW: one decimal from 1 MW, two below
   ctx.cleanup(async () => { try { await v2.eval(`CNSSettings.save({ chargerEfficiency: { enabled: false } }); true`); } catch (e) {} });
 
   await ctx.check('peak-consistency-eff-off', async () => {

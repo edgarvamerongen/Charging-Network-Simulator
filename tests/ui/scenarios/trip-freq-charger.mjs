@@ -31,7 +31,11 @@ async function resetForm(page) {
   if (await page.eval(`CNSUI.S.mode !== 'plan'`)) { await page.click('#modeSeg button[data-mode="plan"]'); await page.waitFor(`CNSUI.S.mode === 'plan'`, 3000); }
   if (await page.eval(`CNSUI.S.rail === 'result'`)) { await page.click('[data-act=edit]'); await page.waitFor(`CNSUI.S.rail === 'form'`, 3000); }
   await page.click('[data-act=reset]');
-  await page.waitFor(`CNSUI.S.rail === 'form' && CNSUI.S.trip === 'one-way' && CNSUI.S.planeId === 'beta_alia' && CNSUI.S.chargerId === 'dc_320' && CNSUI.S.origin && CNSUI.S.origin.ident === 'EHLE' && CNSUI.S.dest && CNSUI.S.dest.ident === 'EDDF' && !CNSUI.S.allChargers && CNSUI.S.freq === 1 && CNSUI.S.per === 'day'`, 3000);
+  // Reset empties the route (the demo route seeds only when the shell opens); put the demo route back
+  // explicitly so every check keeps its EHLE → EDDF starting point.
+  await page.waitFor(`CNSUI.S.rail === 'form' && CNSUI.S.trip === 'one-way' && CNSUI.S.planeId === 'beta_alia' && CNSUI.S.chargerId === 'dc_320' && !CNSUI.S.origin && !CNSUI.S.dest && !CNSUI.S.allChargers && CNSUI.S.freq === 1 && CNSUI.S.per === 'day'`, 3000);
+  await page.eval(`(function(){ const by = CNSUI.byId(); CNSUI.S.origin = by.EHLE; CNSUI.S.dest = by.EDDF; CNSUI.plan.onFormChange(false); return true; })()`);
+  await page.waitFor(`CNSUI.S.origin && CNSUI.S.origin.ident === 'EHLE' && CNSUI.S.dest && CNSUI.S.dest.ident === 'EDDF'`, 3000);
 }
 /** Pick an aircraft through the rail's Change picker with real clicks (selectPlane applies the default charger). */
 async function pickPlane(page, id) {

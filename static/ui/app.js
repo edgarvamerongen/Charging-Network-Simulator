@@ -33,8 +33,12 @@ window.CNSUI = (function () {
     h: min => { const m = r(min); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); },
     min: m => m >= 60 ? fmt.h(m) + ' h' : r(m) + ' min',
     eur: v => v.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    kw: v => v >= 1000 ? (v / 1000).toFixed(1) + ' MW' : Math.round(v) + ' kW',
-    kwh: v => v >= 1000 ? (v / 1000).toFixed(1) + ' MWh' : Math.round(v) + ' kWh'
+    // Operator's rule: over 99 kW / 99 kWh the figure reads in MW / MWh — two decimals below 1 MW,
+    // one decimal from 1 MW up (320 kW → 0.32 MW, 1,403 kWh → 1.40 MWh, 1,320 kW → 1.3 MW).
+    // `parts` splits number and unit for the big tiles; `kw`/`kwh` join them for running text.
+    parts: (v, u) => { const n = +v || 0; if (n > 99) return n >= 1000 ? { n: (+(n / 1000).toFixed(1)).toLocaleString('en', { minimumFractionDigits: 1, maximumFractionDigits: 1 }), u: 'M' + u } : { n: (n / 1000).toFixed(2), u: 'M' + u }; return { n: String(r(n)), u: 'k' + u }; },
+    kw: v => { const q = fmt.parts(v, 'W'); return q.n + ' ' + q.u; },
+    kwh: v => { const q = fmt.parts(v, 'Wh'); return q.n + ' ' + q.u; }
   };
   const perDay = f => f.per === 'day' || f.freqUnit === 'day' ? +(f.freq ?? f.freqN ?? 1) : +(f.freq ?? f.freqN ?? 1) / 7;
   const planeShort = n => String(n || '').replace(/^Beta /, '').split(' — ')[0].replace(/ \(.*\)$/, '');
@@ -144,6 +148,7 @@ window.CNSUI = (function () {
   // so the dot popup, the fly-to popup and the palette all behave alike. A double close is harmless.
   function afterPick(ap) {
     if (CNSUI.map && CNSUI.map.closePopup) { try { CNSUI.map.closePopup(); } catch (e) {} }
+    if (S.mode === 'network') setMode('plan');   // planning starts in the planner; setMode('plan') never re-frames the map
     CNSUI.plan && CNSUI.plan.onFormChange(false);   // picking an airport must not re-frame the map (Simulate does that)
     if (ap && ap.ident && window.CNSRangeGraph && CNSRangeGraph.show) CNSRangeGraph.show(ap.ident);
   }
@@ -153,17 +158,21 @@ window.CNSUI = (function () {
   rebuildIndexes();
 
   function _setAirports(list) { AIRPORTS = list.filter(a => a.ident && a.latitude_deg != null); AP_BY_ID = {}; AIRPORTS.forEach(a => AP_BY_ID[a.ident] = a); rebuildIndexes(); }
-  function _applyDefaults() {
+  function _applyDefaults(opts) {
     const beta = PLANES.find(p => /^beta/i.test(p.id)) || PLANES[0];
     S.planeId = beta ? beta.id : null;
     const dc = beta && beta.default_charger_id; S.chargerId = (dc && CHARGERS.find(c => c.id === dc)) ? dc : (CHARGERS[0] && CHARGERS[0].id);
-    S.origin = AP_BY_ID[SEED.origin] || null; S.dest = AP_BY_ID[SEED.dest] || null;
+    // The Lelystad → Frankfurt demo route seeds ONLY when the shell opens; a Reset empties the route
+    // (and with it the map) instead of putting the demo back.
+    const seed = !opts || opts.seedRoute !== false;
+    S.origin = seed ? (AP_BY_ID[SEED.origin] || null) : null; S.dest = seed ? (AP_BY_ID[SEED.dest] || null) : null;
   }
 
   // ---- render + boot -------------------------------------------------------
   function render() {
     if (!hasDoc) return;
-    $('#rail').classList.toggle('wide', S.mode === 'network');
+    const wide = S.mode === 'network' || (S.rail === 'result' && !!S.profile);
+    $('#rail').classList.toggle('wide', wide); document.body.classList.toggle('wide-rail', wide);
     if (S.mode === 'network') CNSUI.network.render(); else CNSUI.plan.render();
     CNSUI.timeline.render(); netCount();
     $$('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));

@@ -88,7 +88,9 @@ export default async function run(ctx) {
       ev.chargedVsUsed = { charged: v.engine.charged, used: v.engine.used };
       const shown = { energyKwh: [kwhShown(c.shown.hlUsed), kwhShown(v.shown.stats[0])], travelMin: [toMin(c.shown.hlFlight), toMin(v.shown.stats[1])], chargeMin: [toMin(c.shown.hlTime), toMin(v.shown.stats[2])] };
       ev.shown = shown;
-      for (const [k, [a, b]] of Object.entries(shown)) if (!(Number.isFinite(a) && a === b)) fails.push(`shown ${k}: classic ${a} vs v2 ${b}`);
+      // energy: v2 prints the megawatt rule (0.14 MWh for 138 kWh) — equal within that rounding (2 dp → ±5, 1 dp → ±50)
+      const tolFor = k => (k === 'energyKwh' && /MWh/.test(String(v.shown.stats[0]))) ? (shown.energyKwh[1] >= 1000 ? 50 : 5) : 0;
+      for (const [k, [a, b]] of Object.entries(shown)) if (!(Number.isFinite(a) && Math.abs(a - b) <= tolFor(k))) fails.push(`shown ${k}: classic ${a} vs v2 ${b}`);
       const cRevDay = ctx.num(c.shown.hlRevenue) / (/week/.test(c.shown.hlRevenue) ? 7 : 1), vRevDay = ctx.num(v.shown.cost);
       ev.revenueDay = { classic: cRevDay, v2: vRevDay, classicText: c.shown.hlRevenue, v2Text: v.shown.cost };
       if (!ctx.close(cRevDay, vRevDay, 0.01)) fails.push(`revenue/day: classic ${cRevDay} ("${c.shown.hlRevenue}") vs v2 ${vRevDay} ("${v.shown.cost}")`);
@@ -209,7 +211,7 @@ export default async function run(ctx) {
     if (!(a1.used < b1.used - 1e-6)) fails.push(`v2 energy did not drop: ${b1.used} → ${a1.used}`);
     if (!(a2.used < b2.used - 1e-6)) fails.push(`classic energy did not drop: ${b2.used} → ${a2.used}`);
     if (!ctx.close(a1.used, a2.used, 1e-6)) fails.push(`after: v2 ${a1.used} vs classic ${a2.used}`);
-    if (kwhShown(a1.shown) !== kwhShown(a2.shown)) fails.push(`shown after: v2 "${a1.shown}" vs classic "${a2.shown}"`);
+    if (Math.abs(kwhShown(a1.shown) - kwhShown(a2.shown)) > (/MWh/.test(String(a1.shown)) ? (kwhShown(a1.shown) >= 1000 ? 50 : 5) : 0)) fails.push(`shown after: v2 "${a1.shown}" vs classic "${a2.shown}"`);
     if (a1.rail !== 'result') fails.push('v2 left the result rail: ' + a1.rail);
     if (!a1.badge) fails.push('settings badge not shown while a non-default flag is active');
     if (!ctx.close(r1.used, b1.used, 1e-6) || !ctx.close(r2.used, b2.used, 1e-6)) fails.push(`restore: v2 ${r1.used} (was ${b1.used}) classic ${r2.used} (was ${b2.used})`);

@@ -548,15 +548,15 @@ export default async function run(ctx) {
     const dirty = await v2s(v2);
     const st = await query(v2, 'reset');
     await runItem(v2, st, /^Reset the route form$/);
-    await v2.waitFor(`CNSUI.S.origin && CNSUI.S.origin.ident === 'EHLE' && CNSUI.S.stops.length === 0`, 3000, 30); await v2.sleep(150);
+    await v2.waitFor(`!CNSUI.S.origin && !CNSUI.S.dest && CNSUI.S.stops.length === 0`, 3000, 30); await v2.sleep(150);   // v2's Reset EMPTIES the route by design
     const s = await v2s(v2);
     await ctx.screenshot(v2, 'actions-reset-form');
     const c = await reloadClassic();
-    const want = { o: 'EHLE', d: 'EDDF', stops: [], plane: 'beta_alia', charger: 'dc_320', trip: 'one-way', freq: 1, per: 'day', mode: 'plan', rail: 'form' };
+    const want = { o: null, d: null, stops: [], plane: 'beta_alia', charger: 'dc_320', trip: 'one-way', freq: 1, per: 'day', mode: 'plan', rail: 'form' };
     const diff = Object.keys(want).filter(k => j(s[k]) !== j(want[k])).map(k => `${k}=${j(s[k])} (want ${j(want[k])})`);
     const classicDefaults = `classic fresh defaults: ${c.o}→${c.d} stops=${j(c.stops)} plane=${c.plane} charger=${c.charger} trip=${c.trip} freq=${c.freqN}/${c.freqUnit}`;
     const parity = [];
-    if (c.o !== s.o || c.d !== s.d) parity.push(`route ${c.o}→${c.d} vs v2 ${s.o}→${s.d}`);
+    // route parity is not expected here: the classic's reset restores its demo route, v2's empties the route on purpose
     if (c.plane !== s.plane) parity.push(`plane ${c.plane} vs v2 ${s.plane}`);
     if (c.charger !== s.charger) parity.push(`charger ${c.charger} vs v2 ${s.charger}`);
     if (String(c.freqN) !== String(s.freq) || c.freqUnit !== s.per) parity.push(`freq ${c.freqN}/${c.freqUnit} vs v2 ${s.freq}/${s.per}`);
@@ -607,7 +607,8 @@ export default async function run(ctx) {
   // "Simulate the current route" (↵) then "Add the result to the network" (offered only once S.result exists) — with the classic
   // running the same route as the numbers control and its folder card as the network control.
   await check('actions-simulate-and-add', async () => {
-    await v2.eval(`(function(){ CNSDemand.saveFolder([]); CNSUI.folderChanged(); CNSUI.setMode('plan'); CNSUI.plan.resetForm(); return true; })()`);
+    // Reset empties the route by design — put the demo route back so the simulate action has one
+    await v2.eval(`(function(){ CNSDemand.saveFolder([]); CNSUI.folderChanged(); CNSUI.setMode('plan'); CNSUI.plan.resetForm(); const by = CNSUI.byId(); CNSUI.S.origin = by.EHLE; CNSUI.S.dest = by.EDDF; CNSUI.plan.onFormChange(false); return true; })()`);
     await openPal(v2); const pre = await pal(v2); const preLabels = pre.items.map(x => x.label);
     await closePal(v2);
     let st = await query(v2, 'simulate');
@@ -706,7 +707,7 @@ export default async function run(ctx) {
 
   // "Share this route" → POST /api/share (content-addressed, append-only) → a /v2/s/<slug> link on the clipboard that both shells serve.
   await check('actions-share-route', async () => {
-    await v2.eval(`(function(){ CNSUI.setMode('plan'); CNSUI.plan.resetForm(); return true; })()`);
+    await v2.eval(`(function(){ CNSUI.setMode('plan'); CNSUI.plan.resetForm(); const by = CNSUI.byId(); CNSUI.S.origin = by.EHLE; CNSUI.S.dest = by.EDDF; CNSUI.plan.onFormChange(false); return true; })()`);   // reset empties the route; share needs one
     const since = v2.responses.length; const clip0 = (await v2s(v2)).clipN;
     const st = await query(v2, 'share this');
     const it = await runItem(v2, st, /^Share this route$/);
