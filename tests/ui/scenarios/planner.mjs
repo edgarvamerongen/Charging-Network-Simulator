@@ -38,6 +38,7 @@ export default async function run(ctx) {
   const setRoute = f => v2.eval(`(function(){ const S = CNSUI.S, by = CNSUI.byId(); const F = ${J(f)}; const need = i => { if (!by[i]) throw new Error('unknown airport ' + i); return by[i]; };
     if (F.o) S.origin = need(F.o); if (F.d) S.dest = need(F.d); if (F.stops) S.stops = F.stops.map(need); if (F.plane) { S.planeId = F.plane; S.availOverride = null; } if (F.charger) S.chargerId = F.charger; if (F.trip) S.trip = F.trip;
     if (F.bias) S.bias = F.bias; if (F.clearBlacklist) S.blacklist.clear(); if (F.clearDiverts) S.divertOverrides = {}; if (F.override !== undefined) S.availOverride = F.override;
+    if (CNSUI.S.mode !== 'plan') CNSUI.setMode('plan');
     S.rail = 'form'; CNSUI.plan.onFormChange(true); return true; })()`);
   const exceptionsSince = (page, t0) => page.errors.filter(e => e.type === 'exception' && e.t >= t0 && !ctx.isKnownClassic(e)).map(e => e.text.split('\n')[0].slice(0, 200));
   const attributed = [];   // exception texts already reported by a failing check (so the final gate reports only the rest)

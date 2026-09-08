@@ -127,7 +127,7 @@
       ${p.max_charge_kw && ch.power_kw > p.max_charge_kw ? `<div class="hint num">Aircraft accepts max ${p.max_charge_kw} kW — the charger is capped.</div>` : ''}</div>
     ${S.err ? `<div class="sec err">${esc(S.err)}</div>` : ''}`;
     $('#railFoot').innerHTML = `<div class="btns"><button class="btn p ${S.busy ? 'busy' : ''}" data-act="simulate">${S.busy ? 'Simulating…' : 'Simulate'}</button><button class="btn i" id="planReset" data-act="reset" title="Reset"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
-    $$('[data-ac]').forEach(inp => { const key = inp.dataset.ac; bindAc(inp, $('#ac-' + key), a => { setSlot(key, a); onFormChange(true); refocusAc(key); }); });
+    $$('[data-ac]').forEach(inp => { const key = inp.dataset.ac; bindAc(inp, $('#ac-' + key), a => { setSlot(key, a); onFormChange(false); refocusAc(key); }); });
   }
   function routeBlock(c, d, fits) {
     const P = S.planned, PL = UI.planner; const remedy = P.error ? PL.noRouteRemedy() : null;
@@ -259,7 +259,10 @@
       entry.stops = CNSRecompute.mergeManualFlags(entry.stops, ref);
     }
     const folder = CNSDemand.loadFolder(); folder.push(entry); CNSDemand.saveFolder(folder); UI.folderChanged();
-    UI.toast(`Added ${UI.chain().map(a => a.ident).join(' → ')} to the network`); UI.map.drawNet(); UI.render();
+    UI.toast(`Added ${UI.chain().map(a => a.ident).join(' → ')} to the network`);
+    // Adding is the hand-off from planning to the network: follow the flight into Network mode, where
+    // setMode() draws and frames the network for us. Simulating alone stays in the Plan rail.
+    if (S.mode !== 'network') UI.setMode('network'); else { UI.map.drawNet(); UI.render(); }
   }
   /** One-click no-route remedy: tick the Map-menu controls (the classic's `change` dispatch), so the
       menu's own listener sets the state, redraws AND snapshots cns_map_options. */
@@ -267,7 +270,7 @@
     let hit = false;
     if (types) $$('.airport-filter').forEach(cb => { if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); hit = true; } });
     if (network) { const t = $('#nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change', { bubbles: true })); hit = true; } }
-    if (!hit) onFormChange(true);   // nothing to tick (no menu in the DOM) — still re-plan
+    if (!hit) onFormChange(false);   // nothing to tick (no menu in the DOM) — still re-plan
   }
   function resetForm() { UI._applyDefaults(); S.stops = []; S.trip = 'one-way'; S.freq = 1; S.per = 'day'; S.picking = false; S.allChargers = false; S.availOverride = null; S.blacklist.clear(); S.divertOverrides = {}; onFormChange(true); }
   function render() { if (S.rail === 'result' && S.profile) renderResult(); else renderForm(); }
@@ -275,7 +278,7 @@
   document.addEventListener('click', e => {
     if (S.mode !== 'plan') return;
     const t = e.target.closest('[data-act],[data-seg] button,[data-acc]>button'); if (!t) return;
-    const seg = t.closest('[data-seg]'); if (seg) { S[seg.dataset.seg] = t.dataset.v; if (seg.dataset.seg === 'trip') onFormChange(true); else UI.render(); return; }
+    const seg = t.closest('[data-seg]'); if (seg) { S[seg.dataset.seg] = t.dataset.v; if (seg.dataset.seg === 'trip') onFormChange(false); else UI.render(); return; }
     const acc = t.closest('[data-acc]'); if (acc) { S.open[acc.dataset.acc] = !S.open[acc.dataset.acc]; acc.classList.toggle('open'); return; }
     switch (t.dataset.act) {
       case 'simulate': simulate(); break;
@@ -298,10 +301,10 @@
       case 'charger': S.chargerId = t.dataset.id; onFormChange(false); break;
       case 'allChargers': S.allChargers = !S.allChargers; UI.render(); break;
       case 'addStop': S.stops.push(null); UI.render(); setTimeout(() => { const i = $$('[data-ac^=stop]').pop(); i && i.focus(); }, 0); break;
-      case 'rmStop': S.stops.splice(+t.dataset.i, 1); onFormChange(true); break;
-      case 'rmPlanned': S.blacklist.add(t.dataset.ident); onFormChange(true); break;
-      case 'resuggest': S.blacklist.clear(); onFormChange(true); break;
-      case 'retry': onFormChange(true); break;
+      case 'rmStop': S.stops.splice(+t.dataset.i, 1); onFormChange(false); break;
+      case 'rmPlanned': S.blacklist.add(t.dataset.ident); onFormChange(false); break;
+      case 'resuggest': S.blacklist.clear(); onFormChange(false); break;
+      case 'retry': onFormChange(false); break;
       // Drive the Map-menu checkboxes and let their own change listener apply + PERSIST the pools,
       // exactly as the classic's remedy buttons do (index.html:3132, 3207) — reaching past them
       // leaves cns_map_options stale, so the change is lost on reload and invisible to the classic.

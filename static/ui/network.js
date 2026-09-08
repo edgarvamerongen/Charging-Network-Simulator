@@ -91,12 +91,17 @@
       : folder.length ? `<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${R.length}</div></div><div><div class="cap">Flights</div><div class="v num">${flights % 1 ? flights.toFixed(1) : flights}<small>/ day</small></div></div><div><div class="cap">Energy${grid}</div><div class="v num">${kwh >= 1000 ? (kwh / 1000).toFixed(1) : fmt.r(kwh)}<small>${kwh >= 1000 ? 'MWh' : 'kWh'} / day</small></div></div><div><div class="cap">Peak load${grid}</div><div class="v num">${peak >= 1000 ? (peak / 1000).toFixed(1) : fmt.r(peak)}<small>${peak >= 1000 ? 'MW' : 'kW'} · summed</small></div></div></div>` : '';
     $('#railBody').innerHTML = `<div class="ph">${head}</div>${tiles}
     ${folder.length ? `<div class="ntool"><span class="cap">Show</span><select class="sel" data-act="filter">${['<option value="">All airports</option>', ...R.map(a => `<option value="${a.ident}" ${S.filter === a.ident ? 'selected' : ''}>${a.ident} · ${esc(UI.shortName(a.name))}</option>`)].join('')}</select><span class="sp"></span><span class="hint num" style="margin:0">€${fmt.eur(kwhAc * rate())} / day</span></div>
-    ${R.filter(a => !S.filter || a.ident === S.filter).map(a => `<div class="ap ${S.openAp[a.ident] ? 'open' : ''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(UI.shortName(a.name))}<small>${a.trips.length} route${a.trips.length === 1 ? '' : 's'}${a.overflow ? ' · <span style="color:var(--danger)">overflow</span>' : ''}${UI.assets()[a.ident] ? ' · NRG2FLY site' : ''}</small></span>
+    ${R.filter(a => !S.filter || a.ident === S.filter).map((a, i) => `<div class="ap ${S.openAp[a.ident] ? 'open' : ''}${i % 2 ? ' alt' : ''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(UI.shortName(a.name))}<small>${a.trips.length} route${a.trips.length === 1 ? '' : 's'}${a.overflow ? ' · <span style="color:var(--danger)">overflow</span>' : ''}${UI.assets()[a.ident] ? ' · NRG2FLY site' : ''}</small></span>
       <span class="st num">${a.flights % 1 ? a.flights.toFixed(1) : a.flights}<small>flights / day</small></span><span class="st num">${a.kwh ? fmt.r(a.kwh) : '—'}<small>kWh / day</small></span><span class="st num">${a.peak ? fmt.r(a.peak) : '—'}<small>peak kW</small></span><svg class="ic"><use href="#i-chev"/></svg></button>${airportPane(a)}</div>`).join('')}`
     : `<div class="cap" style="padding:12px var(--pad) 8px">Empty network · start from a scenario</div><div class="scen">${Object.entries(SCENARIOS).map(([k, s]) => `<div class="sc"><b>${s.title}</b><small>${s.meta}</small><div class="sp">${s.spark.map(v => `<i style="height:${v}%"></i>`).join('')}</div><button class="lnk" data-act="scenario" data-k="${k}">Load</button></div>`).join('')}</div><div class="hint" style="padding:0 var(--pad) 14px">Or plan a route in Plan mode and add it — each flight contributes charging demand to its departure and arrival airports.</div>`}`;
     $('#railFoot').innerHTML = folder.length ? `<div class="btns"><button class="btn p" data-act="build">Share build</button><button class="btn" data-act="pdf">PDF</button><button class="btn" data-act="xlsx">XLSX</button></div>` : '';
     $('#netCount').textContent = folder.length || '';
+    // Tie the expanded row to the map: ring the airports whose pane is open.
+    syncHighlight();
   }
+
+  /** Ring the open airports on the map so the expanded ledger row is findable in the view. */
+  function syncHighlight() { if (UI.map && UI.map.highlightAirports) UI.map.highlightAirports(Object.keys(S.openAp).filter(k => S.openAp[k])); }
 
   // ---- cfg + folder edits ----
   const cfgPatch = (ap, patch) => { const c = D().loadCfg(); c[ap] = Object.assign({}, c[ap] || {}, patch); D().saveCfg(c); UI.folderChanged(); UI.render(); };
@@ -246,7 +251,7 @@
     // The demand drawer renders in BOTH modes, so its 'Isolate <ICAO>' buttons must work in Plan mode too — they
     // switch to Network mode, where the isolation lives. Everything else stays Network-only.
     if (S.mode !== 'network' && !['scenario', 'focus'].includes(t.dataset.act)) return;
-    const ap = t.closest('[data-ap]'); if (ap && !t.dataset.act && t.tagName === 'BUTTON' && t.parentElement === ap) { S.openAp[ap.dataset.ap] = !S.openAp[ap.dataset.ap]; ap.classList.toggle('open'); return; }
+    const ap = t.closest('[data-ap]'); if (ap && !t.dataset.act && t.tagName === 'BUTTON' && t.parentElement === ap) { S.openAp[ap.dataset.ap] = !S.openAp[ap.dataset.ap]; ap.classList.toggle('open'); syncHighlight(); return; }
     switch (t.dataset.act) {
       case 'rm': remove(t.dataset.id); break;
       case 'clear': if (confirm('Remove all routes from the network?')) { D().saveFolder([]); UI.folderChanged(); UI.map.drawNet(); UI.render(); } break;

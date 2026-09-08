@@ -446,3 +446,13 @@ body.net .drawer{left:calc(520px + 24px)}
 .cns-share-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 /* airport field typed over without picking — index.html:710 */
 .ac-input.ac-unset,input.ac-unset{border-color:var(--accent)}
+
+/* ---- reading a wide network: banded lanes + the open airport ---- */
+/* Translucent navy so it sits on the paper without becoming a second surface colour. */
+.grow.alt{background:rgba(50,50,110,.045)}
+.ap.alt{background:rgba(50,50,110,.035)}
+/* The expanded airport: a touch stronger than the band, with an ink edge, so it stays
+   findable while scrolling a long ledger. Its dot is ringed on the map to match. */
+.ap.open{background:rgba(50,50,110,.07);box-shadow:inset 3px 0 0 var(--ink)}
+.ap.open>button:hover{background:transparent}
+.ap.open .id{color:var(--ink)}
