@@ -142,8 +142,12 @@ export function makeCtx({ component, module = '', base = DEFAULTS.base, only = n
         return { err: S.err || null, api: S.result, engine: CNSUI.plan.derive(), shown: { stats: txt('#railBody .stats .v'), cost: (document.querySelector('#railBody .cost .v') || {}).textContent || null, costSub: (document.querySelector('#railBody .cost .m') || {}).textContent || null } }; })()`);
     },
     /** Seed the network via the v2 plan path: per flight {o, d, stops, plane, charger, trip, freq, per} → S.*, simulate, addToNetwork. */
+    /** Populate the folder. Adding a flight now follows it into Network mode (that is the app's
+        behaviour), but this is a FIXTURE: it restores whatever mode the caller was in, so a check
+        that seeds a network and then inspects the Plan rail still sees what it expects. */
     async seedNetwork(page, flights) {
       const out = [];
+      const mode0 = await page.eval(`CNSUI.S.mode`);
       for (const f of flights) {
         const r = await page.evalAsync(`const S = CNSUI.S, by = CNSUI.byId(); const F = ${JSON.stringify(f)};
           if (F.o) S.origin = by[F.o] || null; if (F.d) S.dest = by[F.d] || null; S.stops = (F.stops || []).map(i => by[i]).filter(Boolean);
@@ -154,6 +158,7 @@ export function makeCtx({ component, module = '', base = DEFAULTS.base, only = n
           return { err: null, flight: F, added: folder.length - before, count: folder.length, id: (folder[folder.length - 1] || {}).id };`);
         out.push(r);
       }
+      if (await page.eval(`CNSUI.S.mode`) !== mode0) { await page.eval(`(function(){ CNSUI.setMode(${JSON.stringify(mode0)}); return 1; })()`); await page.sleep(150); }
       return out;
     }
   };

@@ -39,6 +39,7 @@
     const ticks = []; for (let m = H0; m < H1; m += 120) ticks.push(`<div class="tick" style="left:${pct(m)}%"><span>${clock(m)}</span></div>`);
     const bare = ticks.map(t => t.replace(/<span>.*?<\/span>/, '')).join('');
     let rows = `<div class="grow axis"><div class="lab"></div><div class="track">${ticks.join('')}</div></div>`, lanes = 0, anyWait = false;
+    let laneN = 0; const zebra = () => (laneN++ % 2) ? ' alt' : '';   // banded lanes: a wide network is unreadable without them
     if (!folder.length || !SC()) { rows += `<div class="empty">Add a route to the network to see its charging sessions on the day.</div>`; $('#drawerSub').textContent = 'no flights yet'; }
     else {
       const g = SC().runGlobal(); const prof = loadProfile(g.lanes, foc); const netPeak = peakKw(g.lanes, foc); const flights = folder.reduce((s, t) => s + D().flightsPerDay(t), 0);
@@ -46,7 +47,7 @@
       rows += `<div class="grow load"><div class="lab">${foc ? foc + ' load' : 'Network load'}<small>peak ${UI.fmt.kw(netPeak)}</small></div><div class="track">${bare}<svg viewBox="0 0 ${prof.N} 40" preserveAspectRatio="none"><path d="M0 40 ${path} L${prof.N} 40 Z"/></svg></div></div>`;
       if (S.lanes === 'fleet') {
         g.lanes.forEach((L, li) => { const t = L.trip; const blocks = L.rotations.map((rot, k) => rot.phases.map(ph => { if (ph.kind === 'charge' && ph.wait > 0) { anyWait = true; } return (ph.kind === 'charge' && ph.wait > 0 ? blk('wait', ph.start - ph.wait, ph.wait, '', `Waits ${Math.round(ph.wait)} min for a charger at ${ph.ident}`) : '') + blk(ph.kind === 'fly' ? 'fly' : 'chg', ph.start, ph.dur, ph.kind === 'fly' ? (ph.label || '').replace(/^Fly (to|back to) /, '→ ') : (ph.ident || ''), `${ph.label || ph.kind} · ${clock(ph.start)}–${clock(ph.start + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`, ph === rot.phases[0] ? `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}"` : ''); }).join('')).join('');
-          rows += `<div class="grow"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; });
+          rows += `<div class="grow${zebra()}"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; });
         $('#drawerSub').textContent = `${g.lanes.length} aircraft · ${flights % 1 ? flights.toFixed(1) : flights} flights / day · peak load ${UI.fmt.kw(netPeak)}`;
       } else {
         const aps = R.filter(a => (!foc || a.ident === foc) && a.contribs.some(c => c.role));
@@ -59,7 +60,7 @@
               if (ph.kind === 'waitElsewhere') return blk('wait away', st, ph.dur, '', ph.label, handle());
               if (ph.kind === 'fly') return S.showDep ? blk('fly', st, ph.dur, (ph.label || '').replace(/^Fly (to|back to) /, '→ '), `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}`, handle()) : '';
               return blk(ph.atX ? 'chg' : 'chg away', st, ph.dur, ph.atX ? (ph.power ? ph.power + ' kW' : '') : '', `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`, handle()); }).join(''); }).join('');
-            rows += `<div class="grow sub"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; }); });
+            rows += `<div class="grow sub${zebra()}"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; }); });
         $('#drawerSub').textContent = foc ? `${(R.find(a => a.ident === foc) || {}).fleet?.length || 0} chargers · peak ${UI.fmt.kw(netPeak)}` : `${R.length} airports · ${flights % 1 ? flights.toFixed(1) : flights} flights / day · peak load ${UI.fmt.kw(netPeak)}`;
       }
     }

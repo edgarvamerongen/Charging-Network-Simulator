@@ -144,7 +144,7 @@ window.CNSUI = (function () {
   // so the dot popup, the fly-to popup and the palette all behave alike. A double close is harmless.
   function afterPick(ap) {
     if (CNSUI.map && CNSUI.map.closePopup) { try { CNSUI.map.closePopup(); } catch (e) {} }
-    CNSUI.plan && CNSUI.plan.onFormChange(true);
+    CNSUI.plan && CNSUI.plan.onFormChange(false);   // picking an airport must not re-frame the map (Simulate does that)
     if (ap && ap.ident && window.CNSRangeGraph && CNSRangeGraph.show) CNSRangeGraph.show(ap.ident);
   }
   window.setOrigin = ap => { S.origin = ap; afterPick(ap); };
@@ -173,6 +173,7 @@ window.CNSUI = (function () {
     if (m === 'network') CNSUI.map.hideRoute(); else CNSUI.map.showRoute();
     CNSUI.map.drawAlternates();               // the divert overlay follows the route it belongs to
     render(); if (m === 'network') { CNSUI.map.drawNet(); CNSUI.map.fitNet(); }
+    else if (CNSUI.map.highlightAirports) CNSUI.map.highlightAirports([]);   // the open-airport ring belongs to the ledger
   }
   // A failed catalog/airport fetch used to leave the rail blank forever with an unhandled
   // rejection; the operator must always see WHY (the classic's form is server-rendered).

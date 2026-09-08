@@ -248,7 +248,10 @@ export default async function run(ctx) {
     await ctx.screenshot(classic, 'add-to-network-classic');
     const fails = []; const e = post.entry;
     if (!/added/i.test(toast)) fails.push('no "Added …" toast (got "' + toast + '")');
-    if (post.mode !== 'plan') fails.push('mode switched to ' + post.mode);
+    // Adding follows the flight into Network mode by design (the classic has one mode, so there is
+    // no parity constraint here); simulating alone must still leave you in the Plan rail.
+    if (post.mode !== 'network') fails.push('add did not switch to Network mode (got ' + post.mode + ')');
+    if (pre.mode !== 'plan') fails.push('simulate should leave Plan mode alone (was ' + pre.mode + ')');
     if (post.folderLen !== pre.folder + 1 || post.folderLen !== 1) fails.push(`folder length ${pre.folder} → ${post.folderLen}`);
     if (!e) fails.push('no folder entry'); else {
       if (!e.id) fails.push('entry has no id');

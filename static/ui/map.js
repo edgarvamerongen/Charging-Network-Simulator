@@ -1,7 +1,7 @@
 /* CNS v2 — ui/map.js: Leaflet map + furniture in the Instrument language. */
 (function () {
   const UI = window.CNSUI, S = UI.S;
-  let map, BASES, dots = {}, assetLayer, routeLayer, netLayer, dotRenderer;
+  let map, BASES, dots = {}, assetLayer, routeLayer, netLayer, dotRenderer, hiLayer;
   // Dot geometry mirrors the classic (index.html:4318-4335): the size encodes the airport
   // class and the radii are the CLICK targets — halving them halves the hit test.
   const DOT = { large_airport: { r: 6.5, o: .55 }, medium_airport: { r: 4.2, o: .5 }, small_airport: { r: 3.1, o: .35 } };
@@ -36,6 +36,7 @@
     // way the classic's white stroke does (Leaflet adds weight/2 + renderer tolerance).
     dotRenderer = L.canvas({ pane: 'dots', padding: 0.4, tolerance: 3 });
     ['large_airport', 'medium_airport', 'small_airport'].forEach(t => dots[t] = L.layerGroup()); assetLayer = L.layerGroup().addTo(map); routeLayer = L.layerGroup().addTo(map); netLayer = L.layerGroup().addTo(map);
+    hiLayer = L.layerGroup().addTo(map);   // the open airport's ring — ties the expanded ledger row to the map
     map.on('zoomend', () => { rescaleDots(); applyVisibility(); });
     drawAirports(); drawAssets();
   }
@@ -102,6 +103,14 @@
       const hit = !S.filter || idents.includes(S.filter);
       netLayer.addLayer(L.polyline(pts, { pane: 'net', interactive: false, color: '#32326E', weight: hit && S.filter ? 2 : 1.5, opacity: S.filter ? (hit ? .8 : .12) : .45 })); });
   }
+  function highlightAirports(idents) {
+    if (!hiLayer) return;
+    hiLayer.clearLayers();
+    const by = UI.byId(); const s = dotScale();
+    (idents || []).forEach(id => { const a = by[id]; if (!a) return;
+      hiLayer.addLayer(L.circleMarker(UI.ll(a), { pane: 'rt', interactive: false, radius: Math.max(11, 12 * s), fillColor: '#32326E', fillOpacity: .10, color: '#32326E', weight: 2, opacity: .95 }));
+    });
+  }
   function fitNet() { const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs) pts.push(...l.getLatLngs()); }); if (pts.length) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [560, 60], paddingBottomRight: [40, 80], maxZoom: 8, animate: false }); }
   function setBase(n) { Object.values(BASES).forEach(b => map.removeLayer(b)); (BASES[n] || BASES.light).addTo(map); S.base = n; }
   function flyTo(a) { map.flyTo(UI.ll(a), Math.max(map.getZoom(), 8)); setTimeout(() => L.popup({ offset: [0, -2] }).setLatLng(UI.ll(a)).setContent(popupHtml(a)).openOn(map), 400); }
@@ -110,6 +119,6 @@
   // which setMode has already flipped by the time it hides/shows the route layer).
   function hideRoute() { if (map.hasLayer(routeLayer)) map.removeLayer(routeLayer); drawAlternates(); }
   function showRoute() { if (!map.hasLayer(routeLayer)) routeLayer.addTo(map); drawAlternates(); }
-  UI.map = { init, drawAirports, drawAssets, drawRoute, drawNet, fitNet, setBase, flyTo, applyVisibility, drawAlternates,
+  UI.map = { init, drawAirports, drawAssets, drawRoute, drawNet, fitNet, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
              closePopup: () => map.closePopup(), hideRoute, showRoute, get map() { return map; } };
 })();
