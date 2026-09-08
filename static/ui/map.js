@@ -80,20 +80,43 @@
     if (window.CNSRouting && CNSRouting.routedKm) return CNSRouting.routedKm(A, B, p) + sid;
     return hav(a, b) + sid;
   }
+  /** Great-circle arc between two [lat, lon] points (spherical interpolation, n+1 points). */
+  function arc(a, b, n) {
+    const R = Math.PI / 180, la1 = a[0] * R, lo1 = a[1] * R, la2 = b[0] * R, lo2 = b[1] * R;
+    const d = 2 * Math.asin(Math.sqrt(Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin((lo2 - lo1) / 2) ** 2));
+    if (!(d > 1e-9)) return [a, b];
+    n = n || Math.max(8, Math.min(64, Math.round(d * 6371 / 25)));   // one point per ~25 km, 8..64
+    const out = [];
+    for (let i = 0; i <= n; i++) { const f = i / n, A = Math.sin((1 - f) * d) / Math.sin(d), B = Math.sin(f * d) / Math.sin(d);
+      const x = A * Math.cos(la1) * Math.cos(lo1) + B * Math.cos(la2) * Math.cos(lo2), y = A * Math.cos(la1) * Math.sin(lo1) + B * Math.cos(la2) * Math.sin(lo2), z = A * Math.sin(la1) + B * Math.sin(la2);
+      out.push([Math.atan2(z, Math.sqrt(x * x + y * y)) / R, Math.atan2(y, x) / R]); }
+    return out;
+  }
+  const arcPath = pts => { const o = []; for (let i = 0; i < pts.length - 1; i++) { const seg = arc(pts[i], pts[i + 1]); o.push(...(i ? seg.slice(1) : seg)); } return o; };
+  const arcMid = (a, b) => arc(a, b, 2)[1];
+  /** Bottom padding so a fit never hides behind the timeline drawer (open: its height; closed: its bar). */
+  function drawerPad() {
+    const d = document.getElementById('drawer'); if (!d) return 80;
+    /* While the drawer is still sliding open its rect lags; --drawer-h is the height the timeline set,
+       so a fit that follows an open never lands a network behind the drawer. */
+    const r = d.getBoundingClientRect(); let h = window.innerHeight - r.top;
+    if (d.classList.contains('open')) { const t = parseFloat(getComputedStyle(d).getPropertyValue('--drawer-h')); if (t > h) h = t + Math.max(0, window.innerHeight - r.bottom); }
+    return Math.max(80, Math.round(h) + 24);
+  }
   function drawRoute(fit) {
     routeLayer.clearLayers(); const c = UI.chain();
     if (S.trip === 'training' && S.origin) { const p = UI.plane(); const r = ((p.training_range_km || 60) / 2) * 1000; routeLayer.addLayer(L.circle(UI.ll(S.origin), { pane: 'rt', interactive: false, radius: r, color: '#d84c26', weight: 2, fillColor: '#d84c26', fillOpacity: .06, dashArray: '4 6' })); if (fit) map.fitBounds(L.latLng(UI.ll(S.origin)).toBounds(r * 2.6), { paddingTopLeft: [360, 60], animate: false }); return; }
     if (c.length < 2) return;
-    const pts = c.map(UI.ll);
-    routeLayer.addLayer(L.polyline(pts, { pane: 'rt', interactive: false, color: '#fff', weight: 5, opacity: .95, lineCap: 'round', lineJoin: 'round' }));
-    routeLayer.addLayer(L.polyline(pts, { pane: 'rt', interactive: false, color: '#d84c26', weight: 2, opacity: 1, lineCap: 'round', lineJoin: 'round' }));
-    if (S.trip === 'retour') routeLayer.addLayer(L.polyline(pts, { pane: 'rt', interactive: false, color: '#fff', weight: 2, opacity: .9, dashArray: '6 8', lineCap: 'butt' }));
+    const pts = c.map(UI.ll); const path = arcPath(pts);
+    routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#fff', weight: 5, opacity: .95, lineCap: 'round', lineJoin: 'round' }));
+    routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#d84c26', weight: 2, opacity: 1, lineCap: 'round', lineJoin: 'round' }));
+    if (S.trip === 'retour') routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#fff', weight: 2, opacity: .9, dashArray: '6 8', lineCap: 'butt' }));
     c.forEach((a, i) => { const stop = i > 0 && i < c.length - 1; routeLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="ep${stop ? ' stop' : ''}"></div>`, iconSize: [11, 11], iconAnchor: [5.5, 5.5] }) })); });
     const legs = UI.plan && UI.plan.legsForMap ? UI.plan.legsForMap() : null;
-    for (let i = 0; S.showLabels && i < pts.length - 1; i++) { const mid = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2]; let txt = UI.fmt.dist(dispKm(pts[i], pts[i + 1]));
+    for (let i = 0; S.showLabels && i < pts.length - 1; i++) { const mid = arcMid(pts[i], pts[i + 1]); /* on the arc, not the chord */ let txt = UI.fmt.dist(dispKm(pts[i], pts[i + 1]));
       if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.h(legs[i].flightMin)} h · ${UI.fmt.r(legs[i].energyKwh)} kWh`;
       routeLayer.addLayer(L.marker(mid, { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="leglbl num">${txt}</div>`, iconSize: [0, 0] }) })); }
-    if (fit) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [360, 60], paddingBottomRight: [40, 80], maxZoom: 9, animate: false });
+    if (fit) map.fitBounds(L.latLngBounds(path), { paddingTopLeft: [460, 60], paddingBottomRight: [40, drawerPad()], maxZoom: 9, animate: false });
   }
   function drawNet() {
     netLayer.clearLayers(); if (!S.showNet || !window.CNSDemand) return;
@@ -101,7 +124,7 @@
       if (t.tripType === 'retour' || t.tripType === 'circular') pts.push([t.originLat, t.originLon]);
       if (pts.length < 2) return; const idents = [t.originIdent, ...(t.stops || []).map(s => s.ident), t.destIdent];
       const hit = !S.filter || idents.includes(S.filter);
-      netLayer.addLayer(L.polyline(pts, { pane: 'net', interactive: false, color: '#32326E', weight: hit && S.filter ? 2 : 1.5, opacity: S.filter ? (hit ? .8 : .12) : .45 })); });
+      netLayer.addLayer(L.polyline(arcPath(pts), { pane: 'net', interactive: false, color: '#32326E', weight: hit && S.filter ? 2 : 1.5, opacity: S.filter ? (hit ? .8 : .12) : .45 })); });
   }
   function highlightAirports(idents) {
     if (!hiLayer) return;
@@ -111,7 +134,8 @@
       hiLayer.addLayer(L.circleMarker(UI.ll(a), { pane: 'rt', interactive: false, radius: Math.max(11, 12 * s), fillColor: '#32326E', fillOpacity: .10, color: '#32326E', weight: 2, opacity: .95 }));
     });
   }
-  function fitNet() { const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs) pts.push(...l.getLatLngs()); }); if (pts.length) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [560, 60], paddingBottomRight: [40, 80], maxZoom: 8, animate: false }); }
+  // The rail (420 px + margins) on the left and the timeline drawer at the bottom are both kept clear.
+  function fitNet() { const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs) pts.push(...l.getLatLngs()); }); if (pts.length) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [460, 60], paddingBottomRight: [40, drawerPad()], maxZoom: 8, animate: false }); }
   function setBase(n) { Object.values(BASES).forEach(b => map.removeLayer(b)); (BASES[n] || BASES.light).addTo(map); S.base = n; }
   function flyTo(a) { map.flyTo(UI.ll(a), Math.max(map.getZoom(), 8)); setTimeout(() => L.popup({ offset: [0, -2] }).setLatLng(UI.ll(a)).setContent(popupHtml(a)).openOn(map), 400); }
   // The divert overlay belongs to the route: it hides and returns WITH it, so Network mode

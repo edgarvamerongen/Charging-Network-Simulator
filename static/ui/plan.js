@@ -193,7 +193,7 @@
         j._chargerId = S.chargerId; j._freqN = Math.max(1, Math.min(2000, S.freq)); j._freqUnit = S.per; if (!j.charger) j.charger = { id: ch.id, name: ch.name, power_kw: ch.power_kw };
         S.result = j; S.profile = engineProfile(j); S.rail = 'result'; S.open = { route: true, charging: false, calc: false }; }
     } catch (e) { S.err = 'Simulate failed: ' + e.message; S.result = null; S.profile = null; S.rail = 'form'; }
-    S.busy = false; UI.render(); UI.map.drawRoute(true);
+    S.busy = false; UI.render(); UI.map.drawRoute(false);   // Simulate draws the route but never re-frames the map
   }
   function resimulate() { if (S.result) { S.profile = engineProfile(S.result); UI.map.drawRoute(false); } }
 
@@ -212,15 +212,15 @@
     const soc = batt ? UI.soc.series(d.legs, d.charges, p.battery_kwh, climb, { training: d.training }) : null;
     const RES = Math.round((1 - ((window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7)) * 100);
     const railW = Math.max(240, (($('#railBody') || {}).clientWidth || 320) - 28);
-    const CW = Math.max(railW, d.legs.length * 150);   // px = viewBox units, so labels never stretch
-    const X = v => 6 + v * (CW - 12) / 100, Y = v => 8 + (100 - Math.max(0, v)) * 0.74;
+    const CW = Math.max(railW, d.legs.length * 120);   // px = viewBox units, so labels never stretch
+    const X = v => 6 + v * (CW - 12) / 100, Y = v => 8 + (100 - Math.max(0, v)) * 0.62;
     // No battery = nothing to chart: a non-charging hybrid draws nothing from the network, so the
     // classic prints the fact instead of a 0 %-to-0 % curve (index.html:5153, 5190).
     const socSvg = !batt ? `<div class="sec"><div class="hint" style="margin:0">Non-charging aircraft: no battery in the catalog, so this flight draws nothing from the charging network — the grid supplies 0 kWh.</div></div>` : `<div class="soc"><div class="lbl"><span class="cap">Battery</span><span class="r">lowest <b class="${soc.low < RES ? 'low' : ''}">${Math.round(soc.low)} %</b>${(soc.pts.find(q => q.soc === soc.low) || {}).id ? ' at ' + esc(soc.pts.find(q => q.soc === soc.low).id) : ''} · reserve ${RES} %</span></div>
-      <div class="scroll"><svg viewBox="0 0 ${CW} 96" preserveAspectRatio="none" style="width:${CW}px">${soc.zones.map(z => `<rect x="${X(z.x0).toFixed(1)}" y="4" width="${(X(z.x1) - X(z.x0)).toFixed(1)}" height="74" fill="${z.t === 'climb' ? 'rgba(216,76,38,.07)' : 'rgba(50,50,110,.05)'}"/>`).join('')}
+      <div class="scroll"><svg viewBox="0 0 ${CW} 84" preserveAspectRatio="none" style="width:${CW}px">${soc.zones.map(z => `<rect x="${X(z.x0).toFixed(1)}" y="4" width="${(X(z.x1) - X(z.x0)).toFixed(1)}" height="74" fill="${z.t === 'climb' ? 'rgba(216,76,38,.07)' : 'rgba(50,50,110,.05)'}"/>`).join('')}
       <line x1="6" y1="${Y(RES).toFixed(1)}" x2="${CW - 6}" y2="${Y(RES).toFixed(1)}" stroke="#cfcfda" stroke-dasharray="3 4"/><line x1="6" y1="${Y(0).toFixed(1)}" x2="${CW - 6}" y2="${Y(0).toFixed(1)}" stroke="#e2e2ea"/>
       ${soc.segs.map(s => `<path d="M${X(s.x0).toFixed(1)} ${Y(s.y0).toFixed(1)} L${X(s.x1).toFixed(1)} ${Y(s.y1).toFixed(1)}" stroke="${s.t === 'fly' ? '#32326E' : '#d84c26'}" stroke-width="${s.t === 'fly' ? 2 : 2.5}" fill="none" stroke-linecap="round"/>`).join('')}
-      ${soc.pts.map((q, i) => `<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.soc).toFixed(1)}" r="3" fill="${q.soc < RES ? '#b3261e' : '#32326E'}"/><text x="${X(q.x).toFixed(1)}" y="${(Y(q.soc) + (i === 0 ? -9 : 15)).toFixed(1)}" font-size="11.5" font-weight="600" fill="${q.soc < RES ? '#b3261e' : '#32326E'}" text-anchor="${i === 0 ? 'start' : i === soc.pts.length - 1 ? 'end' : 'middle'}">${Math.round(q.soc)} %${q.id ? ' · ' + esc(q.id) : ''}</text>`).join('')}
+      ${soc.pts.map((q, i) => `<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.soc).toFixed(1)}" r="3" fill="${q.soc < RES ? '#b3261e' : '#32326E'}"/><text x="${X(q.x).toFixed(1)}" y="${(Y(q.soc) + (i === 0 ? -8 : 14)).toFixed(1)}" font-size="10.5" font-weight="600" fill="${q.soc < RES ? '#b3261e' : '#32326E'}" text-anchor="${i === 0 ? 'start' : i === soc.pts.length - 1 ? 'end' : 'middle'}">${Math.round(q.soc)} %${q.id ? ' · ' + esc(q.id) : ''}</text>`).join('')}
       <text x="6" y="${(Y(RES) + 11).toFixed(1)}" font-size="9.5" fill="#6f7290">reserve ${RES} %</text></svg></div></div>`;
     $('#railBody').innerHTML = `
     <div class="rh2"><div><div class="ttl">${c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}</div></div><button class="lnk" data-act="edit">Edit</button></div>

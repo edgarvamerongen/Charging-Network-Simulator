@@ -148,7 +148,11 @@ window.CNSUI = (function () {
   // so the dot popup, the fly-to popup and the palette all behave alike. A double close is harmless.
   function afterPick(ap) {
     if (CNSUI.map && CNSUI.map.closePopup) { try { CNSUI.map.closePopup(); } catch (e) {} }
-    if (S.mode === 'network') setMode('plan');   // planning starts in the planner; setMode('plan') never re-frames the map
+    if (S.mode === 'network') {   // planning starts in the planner; setMode('plan') never re-frames the map
+      S.stops = []; if (S.blacklist && S.blacklist.clear) S.blacklist.clear(); S.divertOverrides = {}; S.acText = {};   // the previous session's stops do not ride along
+      const dr = $('#drawer'); if (dr) dr.classList.remove('open');                                                   // the timeline gets out of the way
+      setMode('plan');
+    }
     CNSUI.plan && CNSUI.plan.onFormChange(false);   // picking an airport must not re-frame the map (Simulate does that)
     if (ap && ap.ident && window.CNSRangeGraph && CNSRangeGraph.show) CNSRangeGraph.show(ap.ident);
   }

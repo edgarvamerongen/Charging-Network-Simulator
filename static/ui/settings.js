@@ -37,15 +37,15 @@
     const live = f => { const i = $(`input[data-ms=slider][data-key=chargeTaper][data-f=${f}]`); return i ? +i.value / 100 : null; };
     const st = (ST().loadAll().chargeTaper) || {};
     const thr = Math.max(0.05, Math.min(0.95, live('threshold') ?? st.threshold ?? 0.75)), floor = Math.max(0.02, Math.min(0.95, live('taperPower') ?? st.taperPower ?? 0.30));
-    const W = 320, H = 72, mL = 28, mR = 8, mT = 14, mB = 14; const px = x => mL + x * (W - mL - mR), py = y => (H - mB) - y * (H - mT - mB);
+    const W = 360, H = 104, mL = 40, mR = 12, mT = 24, mB = 20; const px = x => mL + x * (W - mL - mR), py = y => (H - mB) - y * (H - mT - mB);
     const pts = []; for (let i = 0; i <= 100; i++) { const soc = i / 100; const P = soc < thr ? 1 : Math.pow(floor, (soc - thr) / Math.max(1e-6, 1 - thr)); pts.push(px(soc).toFixed(1) + ',' + py(P).toFixed(1)); }
     let g = '';
-    [0, 0.5, 1].forEach(v => { g += `<line x1="${mL}" y1="${py(v)}" x2="${W - mR}" y2="${py(v)}" stroke="#e2e2ea"/><text x="${mL - 4}" y="${(py(v) + 3).toFixed(1)}" font-size="8" text-anchor="end" fill="#6f7290">${v * 100}%</text>`; });
-    [0, 0.5, 1].forEach(v => { g += `<text x="${px(v)}" y="${H - 4}" font-size="8" text-anchor="middle" fill="#6f7290">${v * 100}%</text>`; });
-    g += `<line x1="${px(thr).toFixed(1)}" y1="${py(0)}" x2="${px(thr).toFixed(1)}" y2="${py(1)}" stroke="#d84c26" stroke-dasharray="3 3"/><text x="${px(thr).toFixed(1)}" y="${mT - 4}" font-size="8" text-anchor="middle" fill="#d84c26">knee ${Math.round(thr * 100)}%</text>`;
+    [0, 0.5, 1].forEach(v => { g += `<line x1="${mL}" y1="${py(v)}" x2="${W - mR}" y2="${py(v)}" stroke="#e2e2ea"/><text x="${mL - 6}" y="${(py(v) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="#6f7290">${v * 100} %</text>`; });
+    [[0, '0 %', 'start'], [0.5, '50 % SoC', 'middle'], [1, '100 %', 'end']].forEach(([v, t, an]) => { g += `<text x="${px(v)}" y="${H - 6}" font-size="9" text-anchor="${an}" fill="#6f7290">${t}</text>`; });
+    g += `<line x1="${px(thr).toFixed(1)}" y1="${py(0)}" x2="${px(thr).toFixed(1)}" y2="${py(1)}" stroke="#d84c26" stroke-dasharray="3 3"/><text x="${px(thr).toFixed(1)}" y="${mT - 8}" font-size="9" font-weight="600" text-anchor="${thr > 0.85 ? 'end' : 'middle'}" fill="#d84c26">knee ${Math.round(thr * 100)} %</text>`;
     g += `<path d="M${px(0)},${py(0)} L${pts.join(' L')} L${px(1)},${py(0)} Z" fill="rgba(50,50,110,.10)"/><polyline fill="none" stroke="#32326E" stroke-width="1.5" points="${pts.join(' ')}"/>`;
-    g += `<text x="2" y="${mT - 4}" font-size="8" fill="#6f7290">power</text><text x="${W - mR}" y="${H - 4}" font-size="8" text-anchor="end" fill="#6f7290">SoC</text>`;
-    svg.innerHTML = g;
+    g += `<text x="${mL - 6}" y="${mT - 8}" font-size="9" text-anchor="end" fill="#6f7290">power</text>`;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = g;
   }
   function open() { UI.modal.open(body()); drawTaper(); }
   function refresh() { if (!UI.modal.isOpen() || !$('#modalBox .ms')) return; const box = $('#modalBox'); const top = box.scrollTop; box.innerHTML = body(); box.scrollTop = top; drawTaper(); }

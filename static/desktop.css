@@ -12,7 +12,7 @@
   --r:3px;
   --fs-cap:11px; --fs:13px; --fs-lg:14px; --fs-num:22px;
   --pad:14px; --field-h:32px;
-  --topbar-h:44px; --rail-w:320px;
+  --topbar-h:44px; --rail-w:420px;
   --shadow:0 4px 16px rgba(50,50,110,.12), 0 1px 3px rgba(50,50,110,.08);
   --ease:cubic-bezier(.4,0,.2,1);
 }
@@ -98,7 +98,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 
 /* ---------- rail ---------- */
 .rail{position:absolute;top:calc(var(--topbar-h) + 12px);left:12px;width:var(--rail-w);max-height:calc(100vh - var(--topbar-h) - 24px - 36px);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);z-index:10;display:flex;flex-direction:column;overflow:hidden}
-.rail.wide{width:520px}
+.rail.wide{width:var(--rail-w)}   /* one width for form, result and ledger */
 .rail .body{overflow:auto;flex:1}
 .ph{display:flex;align-items:center;justify-content:space-between;padding:12px var(--pad) 10px;border-bottom:1px solid var(--line);flex:none}
 .ph h3{font-size:var(--fs-lg);font-weight:600;letter-spacing:-.005em}
@@ -211,7 +211,8 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .tiles>div{padding:10px 12px;border-right:1px solid var(--line)}
 .tiles>div:last-child{border-right:0}
 .tiles .v{font-size:18px;font-weight:600;letter-spacing:-.02em;margin-top:3px}
-.tiles .v small{font-size:11px;font-weight:500;color:var(--muted);margin-left:2px}
+.tiles .v small{font-size:11px;font-weight:500;color:var(--muted);margin-left:2px;white-space:nowrap}
+.tiles .cap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ntool{display:flex;align-items:center;gap:8px;padding:8px var(--pad);border-bottom:1px solid var(--line)}
 .ntool select{height:28px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 8px;background:var(--surface);font-size:12px;outline:none}
 .ntool .sp{flex:1}
@@ -269,7 +270,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .mock a{color:inherit;text-decoration:none}.mock a:hover{color:var(--ink)}.mock a.cur{color:var(--ink);font-weight:600}
 /* drawer sits beside the rail, never under it; grows with the airport count */
 .drawer{left:calc(var(--rail-w) + 24px);right:12px;width:auto;transform:none}
-body.wide-rail .drawer{left:calc(520px + 24px)}   /* the rail is wide for the ledger and for a result */
+body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .drawer.open{height:var(--drawer-h,260px)}
 .gantt{height:calc(100% - 36px)}
 .grow.load{height:44px}
@@ -466,7 +467,7 @@ body.wide-rail .drawer{left:calc(520px + 24px)}   /* the rail is wide for the le
 .acc.alt{background:rgba(50,50,110,.035)}
 /* battery chart: one lane per leg, scrolls sideways when the route is long */
 .soc .scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
-.soc .scroll svg{height:96px;display:block}
+.soc .scroll svg{height:84px;display:block}
 .soc .scroll::-webkit-scrollbar{height:6px}.soc .scroll::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px}
 /* route order: every field carries a grip and can be dragged into a new place in the chain */
 .fld.dr input{padding-left:26px}
@@ -476,4 +477,4 @@ body.wide-rail .drawer{left:calc(520px + 24px)}   /* the rail is wide for the le
 .fld.over-top{box-shadow:0 -2px 0 0 var(--ink)}
 .fld.over-bottom{box-shadow:0 2px 0 0 var(--ink)}
 /* charge-taper curve in Model settings */
-.ms .taper{display:block;width:100%;height:72px;margin-top:8px;border:1px solid var(--line);border-radius:var(--r);background:var(--canvas)}
+.ms .taper{display:block;width:100%;height:104px;margin-top:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--canvas)}
