@@ -64,7 +64,7 @@ class SharesStoreTest(unittest.TestCase):
     def test_unknown_slug_returns_none(self):
         self.assertIsNone(shares.load_state('zzzzzzz'))
 
-    def test_max_state_bytes_is_16kib(self):
+    def test_max_state_bytes_is_64k(self):
         # Updated to 64 KiB to accommodate multi-route build blobs (Task 1)
         self.assertEqual(shares.MAX_STATE_BYTES, 64 * 1024)
 
@@ -81,9 +81,6 @@ class SharesStoreTest(unittest.TestCase):
         }
         slug = shares.save_state(build)
         self.assertEqual(shares.load_state(slug), build)
-
-    def test_cap_is_64k(self):
-        self.assertEqual(shares.MAX_STATE_BYTES, 64 * 1024)
 
 
 if __name__ == '__main__':

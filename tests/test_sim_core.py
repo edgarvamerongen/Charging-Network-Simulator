@@ -13,7 +13,7 @@ import math
 import unittest
 
 from _helpers import (make_sim, ref_haversine, dist, coord, AIRPORTS,
-                      VELIS, BETA, VAERIDION, CHARGER_172, CHARGER_22, CHARGER_400)
+                      VELIS, BETA, VAERIDION, CHARGER_172)
 
 
 class TestHaversine(unittest.TestCase):
@@ -23,16 +23,6 @@ class TestHaversine(unittest.TestCase):
         d = haversine(*AIRPORTS["EHAM"], *AIRPORTS["LFPG"])
         self.assertAlmostEqual(d, dist("EHAM", "LFPG"), places=3)
         self.assertAlmostEqual(d, 398.55, delta=1.0)
-
-    def test_symmetric(self):
-        from sim import haversine
-        ab = haversine(*AIRPORTS["EHAM"], *AIRPORTS["EGLL"])
-        ba = haversine(*AIRPORTS["EGLL"], *AIRPORTS["EHAM"])
-        self.assertAlmostEqual(ab, ba, places=9)
-
-    def test_zero_distance(self):
-        from sim import haversine
-        self.assertAlmostEqual(haversine(*AIRPORTS["EHAM"], *AIRPORTS["EHAM"]), 0.0, places=9)
 
     def test_matches_independent_reference(self):
         from sim import haversine
@@ -62,10 +52,6 @@ class TestOneWay(unittest.TestCase):
         self.assertAlmostEqual(r["total_distance_km"], d, places=2)
         self.assertAlmostEqual(r["flight_time_h"], d / BETA["speed_kmh"], places=2)
         self.assertAlmostEqual(r["charge_time_h"], leg / CHARGER_172["power_kw"], places=3)
-
-    def test_charge_time_min_consistency(self):
-        r = self.sim.calculate_flight_by_distance("beta_plane", 200.0, "aircraft_charger", "one-way")
-        self.assertAlmostEqual(r["charge_time_min"], r["charge_time_h"] * 60, delta=0.1)
 
 
 class TestRetourDeficitBranch(unittest.TestCase):
@@ -223,6 +209,23 @@ class TestSimulateByCoords(unittest.TestCase):
         avg = BETA["battery_kwh"] / BETA["range_km"] * 100
         self.assertAlmostEqual(r["leg_distance_km"], d, delta=0.05)
         self.assertAlmostEqual(r["leg_energy_kwh"], avg * d / 100, delta=0.05)
+
+
+class TestAirportCsvParsing(unittest.TestCase):
+    """Task 3 swapped pandas for csv.DictReader in Simulator.__init__ — pin
+    ident/substring lookup and the per-row float coercion (_AIRPORT_FLOAT_COLS)
+    still work on the real european_airports.csv."""
+    def setUp(self):
+        self.sim = make_sim()
+
+    def test_get_airport_and_float_coercion(self):
+        self.assertEqual(self.sim.get_airport("EHAM")["ident"], "EHAM")
+        self.assertEqual(self.sim.get_airport("Antwerp")["name"],
+                         "Antwerp International Airport (Deurne)")
+        self.assertIsNone(self.sim.get_airport(""))
+        eham = next(r for r in self.sim.get_all_airports() if r["ident"] == "EHAM")
+        self.assertIsInstance(eham["latitude_deg"], float)
+        self.assertEqual(eham["rwy_water_m"], "")
 
 
 class TestReferenceCatalogSync(unittest.TestCase):

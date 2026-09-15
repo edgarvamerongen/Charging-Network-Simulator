@@ -19,46 +19,27 @@ _AIRPORTS = [
 
 class TestResolveAirport(unittest.TestCase):
 
-    def test_exact_icao(self):
-        r = cns_app.resolve_airport('EHAM', _AIRPORTS)
-        self.assertEqual(r['ident'], 'EHAM')
-
-    def test_icao_case_insensitive(self):
-        r = cns_app.resolve_airport('eham', _AIRPORTS)
-        self.assertEqual(r['ident'], 'EHAM')
-
-    def test_exact_iata(self):
-        r = cns_app.resolve_airport('AMS', _AIRPORTS)
-        self.assertEqual(r['ident'], 'EHAM')
-
-    def test_iata_case_insensitive(self):
-        r = cns_app.resolve_airport('fra', _AIRPORTS)
-        self.assertEqual(r['ident'], 'EDDF')
-
-    def test_exact_municipality(self):
-        r = cns_app.resolve_airport('Den Helder', _AIRPORTS)
-        self.assertEqual(r['ident'], 'EHKD')
-
-    def test_substring_name_prefers_larger_airport(self):
-        """'frankfurt' matches both EDDF and EDFH by name; EDDF is large_airport."""
-        r = cns_app.resolve_airport('frankfurt', _AIRPORTS)
-        self.assertEqual(r['ident'], 'EDDF')
-
-    def test_substring_municipality(self):
-        r = cns_app.resolve_airport('Lelystad', _AIRPORTS)
-        self.assertEqual(r['ident'], 'EHLE')
-
-    def test_no_match_returns_none(self):
-        r = cns_app.resolve_airport('nonexistent', _AIRPORTS)
-        self.assertIsNone(r)
-
-    def test_empty_query_returns_none(self):
-        r = cns_app.resolve_airport('', _AIRPORTS)
-        self.assertIsNone(r)
-
-    def test_whitespace_query_returns_none(self):
-        r = cns_app.resolve_airport('   ', _AIRPORTS)
-        self.assertIsNone(r)
+    def test_resolve_airport_cases(self):
+        cases = [
+            ('exact_icao', 'EHAM', 'EHAM'),
+            ('icao_case_insensitive', 'eham', 'EHAM'),
+            ('exact_iata', 'AMS', 'EHAM'),
+            ('iata_case_insensitive', 'fra', 'EDDF'),
+            ('exact_municipality', 'Den Helder', 'EHKD'),
+            # 'frankfurt' matches both EDDF and EDFH by name; EDDF is large_airport.
+            ('substring_name_prefers_larger_airport', 'frankfurt', 'EDDF'),
+            ('substring_municipality', 'Lelystad', 'EHLE'),
+            ('no_match_returns_none', 'nonexistent', None),
+            ('empty_query_returns_none', '', None),
+            ('whitespace_query_returns_none', '   ', None),
+        ]
+        for name, query, expected_ident in cases:
+            with self.subTest(name):
+                r = cns_app.resolve_airport(query, _AIRPORTS)
+                if expected_ident is None:
+                    self.assertIsNone(r)
+                else:
+                    self.assertEqual(r['ident'], expected_ident)
 
 
 class TestEncodeShareState(unittest.TestCase):

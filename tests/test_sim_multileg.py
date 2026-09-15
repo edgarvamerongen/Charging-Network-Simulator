@@ -16,12 +16,7 @@ arrival SoC is computed as if the plane had topped to full at every stop.
 """
 import unittest
 
-from _helpers import make_sim, ref_haversine, AIRPORTS, BETA, CHARGER_172, CHARGER_400
-
-
-def _coord(code, name=None):
-    lat, lon = AIRPORTS[code]
-    return {"name": name or code, "lat": lat, "lon": lon, "ident": code}
+from _helpers import make_sim, ref_haversine, AIRPORTS, BETA, CHARGER_172, coord as _coord
 
 
 def _true_forward_walk_charges(batt, leg_energies):
@@ -53,7 +48,27 @@ def _colinear(start, bearing_pts):
     return out
 
 
-class TestMultiLegBeta(unittest.TestCase):
+class _ForwardWalkMixin:
+    """The per-stop charge energies must equal a physically-grounded forward
+    walk (charge the deficit needed for the next leg; top to full at the
+    terminal). sim.py uses a compact `cur = max(cur, leg) - leg` recurrence
+    whose intermediate `arrivals` array is a fly-through-without-charging
+    quantity, not the literal arrival SoC — so we verify the OUTPUT charge
+    energies, which are the contract, against the explicit walk. Mixed into
+    every multi-leg TestCase below so each route (beta / forced / circular)
+    gets its own run of this check against its own self.r."""
+
+    def test_charges_match_true_forward_walk(self):
+        batt = BETA["battery_kwh"]
+        leg_e = [l["energy_kwh"] for l in self.r["legs"]]
+        expected = _true_forward_walk_charges(batt, leg_e)
+        got = [c["energy_kwh"] for c in self.r["charges"]]
+        self.assertEqual(len(got), len(expected))
+        for i, (g, e) in enumerate(zip(got, expected)):
+            self.assertAlmostEqual(g, round(e, 2), delta=0.02, msg=f"charge[{i}]")
+
+
+class TestMultiLegBeta(_ForwardWalkMixin, unittest.TestCase):
     """Beta (225 kWh / 600 km / 250 km/h): 37.5 kWh/100km.
     Route EHAM -> EHRD (stop) -> LFPG, one-way. EHRD (Rotterdam) is genuinely
     on the great-circle south to Paris, so each leg stays inside the 600 km
@@ -98,46 +113,10 @@ class TestMultiLegBeta(unittest.TestCase):
             self.assertAlmostEqual(c["charge_time_min"],
                                    c["energy_kwh"] / CHARGER_172["power_kw"] * 60, delta=0.1)
 
-    def test_propagation_reproduces_recurrence(self):
-        # Recompute the documented recurrence and compare per-stop charge energy.
-        legs = self.r["legs"]
-        batt = BETA["battery_kwh"]
-        cur = batt
-        arrivals = [batt]
-        for leg in legs:
-            cur = max(cur, leg["energy_kwh"]) - leg["energy_kwh"]
-            arrivals.append(round(cur, 4))
-        charges = self.r["charges"]
-        n_chain = len(legs) + 1  # origin + stops + dest = legs+1 waypoints
-        for idx, c in enumerate(charges, start=1):
-            arrival = arrivals[idx]
-            if idx == n_chain - 1:           # terminal
-                expected = batt - arrival
-            else:
-                expected = max(0.0, legs[idx]["energy_kwh"] - arrival)
-            self.assertAlmostEqual(c["energy_kwh"], round(expected, 2), delta=0.02,
-                                   msg=f"charge[{idx}] {c['name']}")
-
     def test_terminal_role_is_dest(self):
         self.assertEqual(self.r["charges"][-1]["role"], "dest")
         # intermediate is a stop
         self.assertEqual(self.r["charges"][0]["role"], "stop")
-
-    def test_charges_match_true_forward_walk(self):
-        """The per-stop charge energies must equal a physically-grounded forward
-        walk (charge the deficit needed for the next leg; top to full at the
-        terminal). sim.py uses a compact `cur = max(cur, leg) - leg` recurrence
-        whose intermediate `arrivals` array is a fly-through-without-charging
-        quantity, not the literal arrival SoC — so we verify the OUTPUT charge
-        energies, which are the contract, against the explicit walk."""
-        legs = self.r["legs"]
-        batt = BETA["battery_kwh"]
-        leg_e = [l["energy_kwh"] for l in legs]
-        expected = _true_forward_walk_charges(batt, leg_e)
-        got = [c["energy_kwh"] for c in self.r["charges"]]
-        self.assertEqual(len(got), len(expected))
-        for i, (g, e) in enumerate(zip(got, expected)):
-            self.assertAlmostEqual(g, round(e, 2), delta=0.02, msg=f"charge[{i}]")
 
 
 class TestMultiLegRetourMirror(unittest.TestCase):
@@ -172,7 +151,7 @@ class TestMultiLegRetourMirror(unittest.TestCase):
                                round(sum(l["distance_km"] for l in self.r["legs"]), 2), delta=0.02)
 
 
-class TestMultiLegForcedCharging(unittest.TestCase):
+class TestMultiLegForcedCharging(_ForwardWalkMixin, unittest.TestCase):
     """Synthetic 3-leg route of ~400 km legs for the Beta (range 600, battery
     225, 37.5 kWh/100km). Each leg burns ~150 kWh > half the battery, so the
     plane MUST charge at every intermediate stop — exercising the deficit path
@@ -196,14 +175,6 @@ class TestMultiLegForcedCharging(unittest.TestCase):
         self.assertTrue(all(e > 0 for e in stop_charges),
                         f"expected nonzero charge at every stop, got {stop_charges}")
 
-    def test_charges_match_true_forward_walk(self):
-        batt = BETA["battery_kwh"]
-        leg_e = [l["energy_kwh"] for l in self.r["legs"]]
-        expected = _true_forward_walk_charges(batt, leg_e)
-        got = [c["energy_kwh"] for c in self.r["charges"]]
-        for i, (g, e) in enumerate(zip(got, expected)):
-            self.assertAlmostEqual(g, round(e, 2), delta=0.02, msg=f"charge[{i}]")
-
     def test_energy_conservation(self):
         # Departs full, ends full -> total charged == total burned.
         total_leg = sum(l["energy_kwh"] for l in self.r["legs"])
@@ -224,7 +195,7 @@ class TestMultiLegOverRange(unittest.TestCase):
         self.assertIn("error", r)
 
 
-class TestMultiLegCircular(unittest.TestCase):
+class TestMultiLegCircular(_ForwardWalkMixin, unittest.TestCase):
     """Circular closes the ring without mirroring: chain = O,S,D,O.
     EHAM -> EHRD (stop) -> LFPG -> back to EHAM; every leg (45/354/398 km)
     stays inside Beta's 600 km range."""
@@ -258,15 +229,6 @@ class TestMultiLegCircular(unittest.TestCase):
         total_leg = sum(l["energy_kwh"] for l in self.r["legs"])
         total_charge = sum(c["energy_kwh"] for c in self.r["charges"])
         self.assertAlmostEqual(total_charge, total_leg, delta=0.05)
-
-    def test_charges_match_true_forward_walk(self):
-        batt = BETA["battery_kwh"]
-        leg_e = [l["energy_kwh"] for l in self.r["legs"]]
-        expected = _true_forward_walk_charges(batt, leg_e)
-        got = [c["energy_kwh"] for c in self.r["charges"]]
-        self.assertEqual(len(got), len(expected))
-        for i, (g, e) in enumerate(zip(got, expected)):
-            self.assertAlmostEqual(g, round(e, 2), delta=0.02, msg=f"charge[{i}]")
 
     def test_no_mirrored_stops(self):
         # Unlike retour, the stop is visited exactly once.

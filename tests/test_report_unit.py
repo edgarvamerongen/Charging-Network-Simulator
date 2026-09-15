@@ -91,38 +91,40 @@ class TestFetchHostAllowList(unittest.TestCase):
             report._http_get('https://evil.example.com/x')
 
 
-class TestSafePicsPath(unittest.TestCase):
-    """Path-traversal guard for client-supplied plane image/svg paths."""
+class TestPathTraversalGuards(unittest.TestCase):
+    """Both _safe_pics_path (client-supplied plane image/svg paths) and
+    _safe_plane_image_path (Notion-synced photo urls, mirrors the former but
+    rooted at data/plane_images) must reject traversal/absolute input, keep
+    a benign relative path inside their root dir, and treat empty/None as
+    blank. Table over the two functions so both get the same three checks."""
+
+    _FUNCS = [
+        (report._safe_pics_path, report.PICS_DIR,
+         ('../app.py', '../../etc/passwd', '/etc/passwd', 'plane_svgs/../../app.py'),
+         'plane_svgs/beta.svg'),
+        (report._safe_plane_image_path, report.PLANE_IMG_DIR,
+         ('/plane-images/../sync_report.json', '../../etc/passwd',
+          '/etc/passwd', '/plane-images/../../app.py'),
+         '/plane-images/beta_alia__x.png'),
+    ]
 
     def test_traversal_and_absolute_rejected(self):
-        for bad in ('../app.py', '../../etc/passwd', '/etc/passwd', 'plane_svgs/../../app.py'):
-            self.assertEqual(report._safe_pics_path(bad), '', bad)
+        for fn, _root, bads, _good in self._FUNCS:
+            for bad in bads:
+                with self.subTest(fn=fn.__name__, bad=bad):
+                    self.assertEqual(fn(bad), '', bad)
 
-    def test_benign_relative_stays_inside_pics(self):
-        p = report._safe_pics_path('plane_svgs/beta.svg')
-        self.assertTrue(p.startswith(os.path.realpath(report.PICS_DIR) + os.sep), p)
-
-    def test_empty_is_blank(self):
-        self.assertEqual(report._safe_pics_path(''), '')
-        self.assertEqual(report._safe_pics_path(None), '')
-
-
-class TestSafePlaneImagePath(unittest.TestCase):
-    """Path-traversal guard for Notion-synced photo urls (image_url) embedded
-    into the PDF — mirrors _safe_pics_path but rooted at data/plane_images."""
-
-    def test_traversal_and_absolute_rejected(self):
-        for bad in ('/plane-images/../sync_report.json', '../../etc/passwd',
-                    '/etc/passwd', '/plane-images/../../app.py'):
-            self.assertEqual(report._safe_plane_image_path(bad), '', bad)
-
-    def test_benign_url_stays_inside_dir(self):
-        p = report._safe_plane_image_path('/plane-images/beta_alia__x.png')
-        self.assertTrue(p.startswith(os.path.realpath(report.PLANE_IMG_DIR) + os.sep), p)
+    def test_benign_relative_stays_inside_root(self):
+        for fn, root, _bads, good in self._FUNCS:
+            with self.subTest(fn=fn.__name__):
+                p = fn(good)
+                self.assertTrue(p.startswith(os.path.realpath(root) + os.sep), p)
 
     def test_empty_is_blank(self):
-        self.assertEqual(report._safe_plane_image_path(''), '')
-        self.assertEqual(report._safe_plane_image_path(None), '')
+        for fn, _root, _bads, _good in self._FUNCS:
+            with self.subTest(fn=fn.__name__):
+                self.assertEqual(fn(''), '')
+                self.assertEqual(fn(None), '')
 
 
 if __name__ == '__main__':

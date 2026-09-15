@@ -23,31 +23,28 @@ class AirportResolverTest(unittest.TestCase):
         os.environ['CNS_AIRPORTS_CSV'] = _CSV
         airport_resolver._reset()
 
-    def test_resolves_iata(self):
-        r = airport_resolver.resolve('AMS')
-        self.assertEqual(r['ident'], 'EHAM')
-        self.assertAlmostEqual(r['lat'], 52.3086, places=3)
-        self.assertAlmostEqual(r['lon'], 4.7639, places=3)
-        self.assertEqual(r['name'], 'Amsterdam Schiphol')
-
-    def test_resolves_icao_passthrough(self):
-        self.assertEqual(airport_resolver.resolve('EHAM')['ident'], 'EHAM')
-
-    def test_case_insensitive(self):
-        self.assertEqual(airport_resolver.resolve('ams')['ident'], 'EHAM')
-
-    def test_intercontinental_iata(self):
-        self.assertEqual(airport_resolver.resolve('JFK')['ident'], 'KJFK')
-
-    def test_unknown_returns_none(self):
-        self.assertIsNone(airport_resolver.resolve('ZZZ'))
-
-    def test_blank_returns_none(self):
-        self.assertIsNone(airport_resolver.resolve(''))
-        self.assertIsNone(airport_resolver.resolve('   '))
-
-    def test_row_without_coords_is_skipped(self):
-        self.assertIsNone(airport_resolver.resolve('NOC'))
+    def test_resolve_cases(self):
+        cases = [
+            ('AMS', {'ident': 'EHAM', 'lat': 52.3086, 'lon': 4.7639, 'name': 'Amsterdam Schiphol'}),
+            ('EHAM', {'ident': 'EHAM'}),                 # ICAO passthrough
+            ('ams', {'ident': 'EHAM'}),                  # case insensitive
+            ('JFK', {'ident': 'KJFK'}),                  # intercontinental IATA
+            ('ZZZ', None),                               # unknown
+            ('', None),                                  # blank
+            ('   ', None),                               # whitespace
+            ('NOC', None),                               # row without coords is skipped
+        ]
+        for query, expected in cases:
+            with self.subTest(query=query):
+                r = airport_resolver.resolve(query)
+                if expected is None:
+                    self.assertIsNone(r)
+                    continue
+                for key, val in expected.items():
+                    if key in ('lat', 'lon'):
+                        self.assertAlmostEqual(r[key], val, places=3)
+                    else:
+                        self.assertEqual(r[key], val)
 
 
 def tearDownModule():

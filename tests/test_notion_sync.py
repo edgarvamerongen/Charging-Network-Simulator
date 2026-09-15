@@ -242,68 +242,69 @@ class TransformTest(unittest.TestCase):
         pr = [profile("P1", "A", emit="rwy", rng=rng, props=props)]
         return ns.transform(ac, pr, KNOWN_CHARGERS, {})
 
-    def test_runway_positional_pairs(self):
-        entries, report = self._rwy(["grass", "paved"], "1250, 1000")
-        self.assertEqual(report["ok"], ["rwy"])
-        self.assertEqual(entries[0]["runway_req"], {"grass": 1250, "paved": 1000})
-
-    def test_runway_grass_only_implies_paved_same_min(self):
-        entries, _ = self._rwy(["grass"], 1250)
-        self.assertEqual(entries[0]["runway_req"], {"grass": 1250, "paved": 1250})
-
-    def test_runway_explicit_paved_beats_implied(self):
-        # mirrored order relative to the pairs test — order carries the pairing
-        entries, _ = self._rwy(["paved", "grass"], "1000, 1250")
-        self.assertEqual(entries[0]["runway_req"], {"paved": 1000, "grass": 1250})
-
-    def test_runway_any_expands_to_all_categories(self):
-        entries, _ = self._rwy(["any"], 46)
-        rr = entries[0]["runway_req"]
-        self.assertEqual(set(rr), {"paved", "grass", "gravel", "dirt", "water", "unknown"})
-        self.assertTrue(all(v == 46 for v in rr.values()))
-
-    def test_runway_single_min_applies_to_all_listed(self):
-        entries, _ = self._rwy(["paved", "grass"], 800)
-        self.assertEqual(entries[0]["runway_req"], {"paved": 800, "grass": 800})
-
-    def test_runway_min_without_surface_means_any(self):
-        entries, _ = self._rwy(None, 800)
-        self.assertEqual(entries[0]["runway_req"]["gravel"], 800)
-
-    def test_runway_surface_without_min_is_surface_only(self):
-        entries, _ = self._rwy(["paved"], None)
-        self.assertEqual(entries[0]["runway_req"], {"paved": None})
-
-    def test_runway_no_columns_no_key_and_old_keys_gone(self):
-        entries, _ = self._rwy(None, None)
-        self.assertNotIn("runway_req", entries[0])
-        self.assertNotIn("surface", entries[0])          # old single-value keys retired
-        self.assertNotIn("min_runway_m", entries[0])
-
-    def test_runway_zero_min_is_evtol_no_runway_needed(self):
-        # eHang-style row: Surface 'any', Min runway 0 — an eVTOL that needs no
-        # runway. 0 must NOT quarantine the aircraft; it emits as a 0 minimum
-        # (any present runway, whatever its length, satisfies it).
-        entries, report = self._rwy(["any"], 0)
-        self.assertEqual(report["ok"], ["rwy"])
-        rr = entries[0]["runway_req"]
-        self.assertEqual(set(rr), {"paved", "grass", "gravel", "dirt", "water", "unknown"})
-        self.assertTrue(all(v == 0 for v in rr.values()))
-
-    def test_runway_ambiguous_count_mismatch_skips(self):
-        _, report = self._rwy(["paved", "grass"], "1000, 1250, 46")
-        self.assertEqual(report["skipped"][0]["slug"], "rwy")
-        self.assertTrue(any("count mismatch" in e for e in report["skipped"][0]["errors"]))
-
-    def test_runway_bad_token_skips(self):
-        _, report = self._rwy(["paved"], "1000, twelve")
-        self.assertTrue(any("unparseable" in e for e in report["skipped"][0]["errors"]))
-
-    def test_runway_unknown_tag_and_mixed_any_skip(self):
-        _, report = self._rwy(["tarmac"], 800)
-        self.assertTrue(any("unknown Surface" in e for e in report["skipped"][0]["errors"]))
-        _, report = self._rwy(["any", "grass"], 800)
-        self.assertTrue(any("cannot combine" in e for e in report["skipped"][0]["errors"]))
+    def test_runway_requirements(self):
+        """Table over the Surface/Min runway (m) column-pairing logic: each row
+        builds one aircraft via self._rwy(surface, min_rwy) and checks the
+        resulting runway_req, or the report's ok/skip outcome for a
+        quarantine case."""
+        cases = [
+            ("positional_pairs", ["grass", "paved"], "1250, 1000",
+             {"ok": ["rwy"], "runway_req": {"grass": 1250, "paved": 1000}}),
+            ("grass_only_implies_paved_same_min", ["grass"], 1250,
+             {"runway_req": {"grass": 1250, "paved": 1250}}),
+            # mirrored order relative to positional_pairs — order carries the pairing
+            ("explicit_paved_beats_implied", ["paved", "grass"], "1000, 1250",
+             {"runway_req": {"paved": 1000, "grass": 1250}}),
+            ("any_expands_to_all_categories", ["any"], 46,
+             {"runway_req_keys": {"paved", "grass", "gravel", "dirt", "water", "unknown"},
+              "runway_req_uniform": 46}),
+            ("single_min_applies_to_all_listed", ["paved", "grass"], 800,
+             {"runway_req": {"paved": 800, "grass": 800}}),
+            ("min_without_surface_means_any", None, 800,
+             {"runway_req_item": ("gravel", 800)}),
+            ("surface_without_min_is_surface_only", ["paved"], None,
+             {"runway_req": {"paved": None}}),
+            ("no_columns_no_key_and_old_keys_gone", None, None,
+             # old single-value keys retired
+             {"missing_keys": ["runway_req", "surface", "min_runway_m"]}),
+            # eHang-style row: Surface 'any', Min runway 0 — an eVTOL that needs
+            # no runway. 0 must NOT quarantine the aircraft; it emits as a 0
+            # minimum (any present runway, whatever its length, satisfies it).
+            ("zero_min_is_evtol_no_runway_needed", ["any"], 0,
+             {"ok": ["rwy"],
+              "runway_req_keys": {"paved", "grass", "gravel", "dirt", "water", "unknown"},
+              "runway_req_uniform": 0}),
+            ("ambiguous_count_mismatch_skips", ["paved", "grass"], "1000, 1250, 46",
+             {"skip_slug": "rwy", "error_substr": "count mismatch"}),
+            ("bad_token_skips", ["paved"], "1000, twelve",
+             {"error_substr": "unparseable"}),
+            ("unknown_tag_skips", ["tarmac"], 800,
+             {"error_substr": "unknown Surface"}),
+            ("mixed_any_skip", ["any", "grass"], 800,
+             {"error_substr": "cannot combine"}),
+        ]
+        for name, surface, min_rwy, expect in cases:
+            with self.subTest(name):
+                entries, report = self._rwy(surface, min_rwy)
+                if "ok" in expect:
+                    self.assertEqual(report["ok"], expect["ok"])
+                if "runway_req" in expect:
+                    self.assertEqual(entries[0]["runway_req"], expect["runway_req"])
+                if "runway_req_keys" in expect:
+                    rr = entries[0]["runway_req"]
+                    self.assertEqual(set(rr), expect["runway_req_keys"])
+                    self.assertTrue(all(v == expect["runway_req_uniform"] for v in rr.values()))
+                if "runway_req_item" in expect:
+                    key, val = expect["runway_req_item"]
+                    self.assertEqual(entries[0]["runway_req"][key], val)
+                if "missing_keys" in expect:
+                    for key in expect["missing_keys"]:
+                        self.assertNotIn(key, entries[0])
+                if "skip_slug" in expect:
+                    self.assertEqual(report["skipped"][0]["slug"], expect["skip_slug"])
+                if "error_substr" in expect:
+                    self.assertTrue(any(expect["error_substr"] in e
+                                        for e in report["skipped"][0]["errors"]))
 
     def test_hybrid_without_battery_emits_as_non_charging(self):
         ac = [aircraft("A", name="HyBird", slug="hybird", battery=None,

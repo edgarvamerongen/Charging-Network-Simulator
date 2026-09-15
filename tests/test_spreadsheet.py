@@ -1,7 +1,8 @@
 """Unit tests for spreadsheet.py — build a small workbook from a representative
 payload and assert the sheet structure, formulas and tab-name sanitisation.
-Skipped cleanly if openpyxl isn't installed (it's a pinned requirement, so in a
-provisioned env these always run)."""
+openpyxl is a pinned requirement; spreadsheet.py imports it at module level,
+so a missing install fails these tests honestly at import time rather than
+skipping."""
 import io
 import os
 import sys
@@ -9,11 +10,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    import openpyxl
-    HAVE_OPENPYXL = True
-except ImportError:
-    HAVE_OPENPYXL = False
+import openpyxl
 
 from spreadsheet import generate_xlsx, SpreadsheetBuilder, _num, _clock, _safe_text
 
@@ -50,7 +47,6 @@ PAYLOAD = {
 }
 
 
-@unittest.skipUnless(HAVE_OPENPYXL, 'openpyxl not installed')
 class TestSpreadsheet(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -106,7 +102,6 @@ class TestSpreadsheet(unittest.TestCase):
         self.assertEqual(b._tab('eham'), 'eham (3)')   # uniqueness is case-insensitive
 
 
-@unittest.skipUnless(HAVE_OPENPYXL, 'openpyxl not installed')
 class TestFormulaInjection(unittest.TestCase):
     """A user-named plane/charger/airport must never become a live formula in
     the exported workbook (spreadsheet/CSV injection)."""

@@ -47,9 +47,9 @@ def dist(a, b):
 
 
 def coord(code, name=None):
-    """Build the {name, lat, lon} dict the coords API path expects."""
+    """Build the {name, lat, lon, ident} dict the coords API path expects."""
     lat, lon = AIRPORTS[code]
-    return {"name": name or code, "lat": lat, "lon": lon}
+    return {"name": name or code, "lat": lat, "lon": lon, "ident": code}
 
 
 # Reference catalog entries — an explicit mirror of planes.json. These are the
@@ -66,18 +66,22 @@ VAERIDION = {"id": "vaeridion", "name": "Vaeridion", "seats": 9, "load_kg": 1000
              "battery_kwh": 600, "range_km": 500, "speed_kmh": 400}
 
 CHARGER_172 = {"id": "aircraft_charger", "name": "Aircraft Charger", "power_kw": 172}
-CHARGER_22 = {"id": "mobile_aircraft", "name": "Mobile Aircraft Charger (GB/T)", "power_kw": 22}
-CHARGER_400 = {"id": "ccs", "name": "CCS", "power_kw": 400}
+CHARGER_22 = {"id": "dc_22", "name": "Pipistrel 22 kW", "power_kw": 22}
+CHARGER_400 = {"id": "dc_400", "name": "NRG2fly 400 kW", "power_kw": 400}
 
 
 def make_sim():
     from sim import Simulator
     s = Simulator(base_dir=REPO_ROOT)
-    # The DC-charger catalog rework (chargers.json) dropped the legacy 172 kW
-    # "aircraft_charger" that these tests pin their charge-time assertions to.
-    # Re-inject it as a TEST fixture so the suite stays charger-stable; the
-    # production catalog is untouched.
-    for ref in (CHARGER_172, CHARGER_22, CHARGER_400):
-        if not any(c.get('id') == ref['id'] for c in s.chargers):
-            s.chargers.append(dict(ref))
+    # dc_22/dc_400 are real chargers.json entries at the same power as the old
+    # CHARGER_22/CHARGER_400 fixtures, so those two need no injection any more.
+    # The legacy 172 kW "aircraft_charger" has no catalogue equivalent, AND
+    # tests/test_hybrid_planes.py (a different task's file) hard-codes that
+    # exact id for its battery-less-hybrid checks; sim.py rejects an unknown
+    # charger before it ever looks at the plane's battery, so dropping this
+    # fixture would break that file even though every in-scope use of
+    # CHARGER_172 is symbolic (CHARGER_172['power_kw']). Keep the single
+    # injection.
+    if not any(c.get('id') == CHARGER_172['id'] for c in s.chargers):
+        s.chargers.append(dict(CHARGER_172))
     return s

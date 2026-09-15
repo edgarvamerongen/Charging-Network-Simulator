@@ -53,24 +53,23 @@ test('v5 defaults: reserve/taper/SID-STAR/alternate ON, routing/efficiency OFF',
 });
 
 // ---- identity when a toggle is explicitly OFF (accessor returns the no-op) ---
-test('identity: usableFraction == 1.0 when reserve off', () => {
-  const { S } = loadSettings();
-  S.save({ landingReserve: { enabled: false } });
-  assert.equal(S.usableFraction({}), 1.0);
-});
-test('identity: gridDemandFactor == 1.0 when efficiency off', () => {
-  const { S } = loadSettings();
-  assert.equal(S.gridDemandFactor(), 1.0);
-});
-test('identity: routingFactor == 1.0 when padding off', () => {
-  const { S } = loadSettings();
-  S.save({ routingPadding: { enabled: false } });
-  assert.equal(S.routingFactor(), 1.0);
-});
-test('identity: chargeTimeMin linear when taper off (100kWh/100kW -> 60min)', () => {
-  const { S } = loadSettings();
-  S.save({ chargeTaper: { enabled: false } });
-  assert.ok(approx(S.chargeTimeMin(100, 100, 225), 60));
+test('identity: toggled-off accessors return their no-op value', () => {
+  const cases = [
+    ['usableFraction == 1.0 when reserve off',
+      { landingReserve: { enabled: false } }, S => S.usableFraction({}), 1.0],
+    ['gridDemandFactor == 1.0 when efficiency off',
+      null, S => S.gridDemandFactor(), 1.0],
+    ['routingFactor == 1.0 when padding off',
+      { routingPadding: { enabled: false } }, S => S.routingFactor(), 1.0],
+    ['chargeTimeMin linear when taper off (100kWh/100kW -> 60min)',
+      { chargeTaper: { enabled: false } }, S => S.chargeTimeMin(100, 100, 225), 60],
+  ];
+  for (const [name, save, run, expected] of cases) {
+    const { S } = loadSettings();
+    if (save) S.save(save);
+    const got = run(S);
+    assert.ok(approx(got, expected), `${name}: got ${got}`);
+  }
 });
 
 // ---- landingReserve / usableFraction ---------------------------------------
@@ -108,32 +107,20 @@ test('routingFactor == 1.05 default when on', () => {
 });
 
 // ---- sidStarPadding (additive per-leg SID/STAR km) -------------------------
-test('sidStarPaddingKm == 0 when switched off', () => {
-  const { S } = loadSettings();
-  S.save({ sidStarPadding: { enabled: false } });
-  assert.equal(S.sidStarPaddingKm(), 0);
-});
-test('sidStarPaddingKm returns the set km when on', () => {
-  const { S } = loadSettings();
-  S.save({ sidStarPadding: { enabled: true, km: 25 } });
-  assert.equal(S.sidStarPaddingKm(), 25);
-});
-test('sidStarPaddingKm clamps to the slider range [5,50] when on', () => {
-  const { S } = loadSettings();
-  S.save({ sidStarPadding: { enabled: true, km: 2 } });
-  assert.equal(S.sidStarPaddingKm(), 5, 'below 5 clamps up to 5');
-  S.save({ sidStarPadding: { enabled: true, km: 99 } });
-  assert.equal(S.sidStarPaddingKm(), 50, 'above 50 clamps down to 50');
-});
-test('sidStarPaddingKm falls back to 10 for non-numeric km', () => {
-  const { S } = loadSettings();
-  S.save({ sidStarPadding: { enabled: true, km: 'oops' } });
-  assert.equal(S.sidStarPaddingKm(), 10);
-});
-test('sidStarPaddingKm == 0 when explicitly off regardless of km', () => {
-  const { S } = loadSettings();
-  S.save({ sidStarPadding: { enabled: false, km: 25 } });
-  assert.equal(S.sidStarPaddingKm(), 0);
+test('sidStarPaddingKm over enabled/km cases', () => {
+  const cases = [
+    ['switched off', false, undefined, 0],
+    ['returns the set km when on', true, 25, 25],
+    ['below 5 clamps up to 5', true, 2, 5],
+    ['above 50 clamps down to 50', true, 99, 50],
+    ['falls back to 10 for non-numeric km', true, 'oops', 10],
+    ['off regardless of km', false, 25, 0],
+  ];
+  for (const [name, enabled, km, expected] of cases) {
+    const { S } = loadSettings();
+    S.save({ sidStarPadding: { enabled, km } });
+    assert.equal(S.sidStarPaddingKm(), expected, name);
+  }
 });
 
 // ---- chargeTaper (EXPONENTIAL CV-phase roll-off) ---------------------------

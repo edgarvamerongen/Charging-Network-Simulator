@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _helpers import (AIRPORTS, BETA, VELIS, CHARGER_172, dist, coord)  # noqa: E402
+from _helpers import (BETA, VELIS, dist, coord)  # noqa: E402
 
 # app.py reads its auth configuration at import time; set it the way
 # test_auth.py does so it makes no difference which module imports app first.

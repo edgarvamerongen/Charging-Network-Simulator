@@ -6,12 +6,7 @@ rounding sanity.
 """
 import unittest
 
-from _helpers import make_sim, AIRPORTS, BETA, VAERIDION, CHARGER_172, CHARGER_400
-
-
-def _coord(code, name=None):
-    lat, lon = AIRPORTS[code]
-    return {"name": name or code, "lat": lat, "lon": lon, "ident": code}
+from _helpers import make_sim, coord as _coord
 
 
 class TestMonotonicity(unittest.TestCase):
@@ -36,8 +31,8 @@ class TestMonotonicity(unittest.TestCase):
     def test_charge_time_inversely_scales_with_power(self):
         # Same energy, more power -> strictly less time.
         d = 300.0
-        slow = self.sim.calculate_flight_by_distance("vaeridion", d, "mobile_aircraft", "one-way")  # 22 kW
-        fast = self.sim.calculate_flight_by_distance("vaeridion", d, "ccs", "one-way")              # 400 kW
+        slow = self.sim.calculate_flight_by_distance("vaeridion", d, "dc_22", "one-way")   # 22 kW
+        fast = self.sim.calculate_flight_by_distance("vaeridion", d, "dc_400", "one-way")  # 400 kW
         self.assertGreater(slow["charge_time_h"], fast["charge_time_h"])
         # ratio should equal inverse power ratio
         self.assertAlmostEqual(slow["charge_time_h"] / fast["charge_time_h"], 400 / 22, delta=0.05)
@@ -64,8 +59,8 @@ class TestChargeTimeConsistency(unittest.TestCase):
         cases = [
             ("beta_plane", 200.0, "aircraft_charger", "one-way"),
             ("beta_plane", 400.0, "aircraft_charger", "retour"),
-            ("vaeridion", 123.4, "ccs", "one-way"),
-            ("pipistrel_velis", 0, "mobile_aircraft", "training"),
+            ("vaeridion", 123.4, "dc_400", "one-way"),
+            ("pipistrel_velis", 0, "dc_22", "training"),
         ]
         for plane, d, ch, tt in cases:
             r = self.sim.calculate_flight_by_distance(plane, d, ch, tt)
@@ -103,14 +98,14 @@ class TestRounding(unittest.TestCase):
 
     def test_rounding_keeps_values_nonnegative(self):
         for d in (0.01, 0.5, 1.0, 7.7, 99.99):
-            r = self.sim.calculate_flight_by_distance("vaeridion", float(d), "ccs", "one-way")
+            r = self.sim.calculate_flight_by_distance("vaeridion", float(d), "dc_400", "one-way")
             self.assertGreaterEqual(r["leg_energy_kwh"], 0.0)
             self.assertGreaterEqual(r["charge_time_h"], 0.0)
             self.assertGreaterEqual(r["charge_time_min"], 0.0)
 
     def test_reported_avg_usage_stable_across_trip_types(self):
-        a = self.sim.calculate_flight_by_distance("beta_plane", 100.0, "ccs", "one-way")
-        b = self.sim.calculate_flight_by_distance("beta_plane", 100.0, "ccs", "retour")
+        a = self.sim.calculate_flight_by_distance("beta_plane", 100.0, "dc_400", "one-way")
+        b = self.sim.calculate_flight_by_distance("beta_plane", 100.0, "dc_400", "retour")
         self.assertAlmostEqual(a["avg_usage_kwh_per_100km"], b["avg_usage_kwh_per_100km"], places=2)
 
 
