@@ -130,7 +130,6 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .route .rh{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px}
 .route .rh b{color:var(--ink);font-weight:600}
 .route .rh.bad b{color:var(--danger)}
-.stop{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:8px;font-size:12px;padding:3px 0;position:relative}
 .stop .n{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.04em}
 .stop .d{font-size:11px;color:var(--muted)}
 .stop+.stop::before{content:"";position:absolute;left:5px;top:-6px;height:8px;border-left:1px solid var(--line-2)}
@@ -198,7 +197,6 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .acc .pane{display:none;padding:0 var(--pad) 12px}
 .acc.open .pane{display:block}
 .tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:left;padding:4px 0;border-bottom:1px solid var(--line)}
 .tbl td{padding:5px 0;border-bottom:1px solid var(--line);vertical-align:top}
 .tbl tr:last-child td{border-bottom:0}
 .tbl .r,.tbl th.r{text-align:right;white-space:nowrap}
@@ -228,7 +226,6 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .ap.open>button svg{transform:rotate(90deg)}
 .ap .pane{display:none;padding:0 var(--pad) 10px}
 .ap.open .pane{display:block}
-.fl{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:12px}
 .fl .t{font-weight:500}
 .fl .t small{color:var(--muted);font-weight:400;margin-left:6px;font-size:11px}
 .fl .mu{color:var(--muted);white-space:nowrap}
@@ -240,15 +237,12 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .empty b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
 
 /* ---------- drawer (demand timeline) ---------- */
-.drawer{position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:min(1100px,calc(100vw - 24px));background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0;box-shadow:var(--shadow);z-index:15;transition:height .22s var(--ease);height:36px;overflow:hidden}
-.drawer.open{height:260px}
 .drawer .dh{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;cursor:pointer;border-bottom:1px solid var(--line)}
 .drawer .dh .t{font-size:12.5px;font-weight:600;display:flex;gap:10px;align-items:center}
 .drawer .dh .t span{font-weight:400;color:var(--muted);font-size:11.5px}
 .drawer .dh .tools{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted)}
 .drawer .dh svg{color:var(--muted);transition:transform .2s var(--ease)}
 .drawer.open .dh svg{transform:rotate(180deg)}
-.gantt{padding:10px 14px;overflow:auto;height:224px}
 .grow{display:grid;grid-template-columns:200px 1fr;gap:10px;align-items:center;height:28px;border-bottom:1px solid var(--line)}
 .grow.axis{height:22px;border-bottom:1px solid var(--line-2);color:var(--muted);font-size:10px}
 .grow .lab{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -266,13 +260,11 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 /* ---------- toast ---------- */
 .toast{position:absolute;left:50%;bottom:52px;transform:translate(-50%,8px);background:var(--ink);color:#fff;font-size:12.5px;padding:8px 14px;border-radius:var(--r);opacity:0;transition:opacity .18s,transform .18s var(--ease);z-index:60;pointer-events:none;box-shadow:var(--shadow)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
-.mock-unused{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;position:absolute;right:12px;bottom:24px;z-index:5}
-.mock a{color:inherit;text-decoration:none}.mock a:hover{color:var(--ink)}.mock a.cur{color:var(--ink);font-weight:600}
 /* drawer sits beside the rail, never under it; grows with the airport count */
-.drawer{left:calc(var(--rail-w) + 24px);right:12px;width:auto;transform:none}
+.drawer{position:absolute;left:calc(var(--rail-w) + 24px);right:12px;transform:none;bottom:0;width:auto;background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0;box-shadow:var(--shadow);z-index:15;transition:height .22s var(--ease);height:36px;overflow:hidden}
 body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .drawer.open{height:var(--drawer-h,260px)}
-.gantt{height:calc(100% - 36px)}
+.gantt{padding:10px 14px;overflow:auto;height:calc(100% - 36px)}
 .grow.load{height:44px}
 .grow.load .lab small{display:block;margin-left:0;line-height:1.2}
 .grow.load .track svg{position:absolute;left:0;right:0;bottom:0;width:100%;height:40px;display:block}
@@ -282,7 +274,6 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .blk.wait.over{background:repeating-linear-gradient(135deg,#c33d3d 0 3px,#f0b3b3 3px 6px);color:#fff}
 .grow.sub .lab{padding-left:14px;color:var(--muted);font-weight:400;font-size:11.5px}
 .glegend i.w{background:repeating-linear-gradient(135deg,#e6c149 0 2px,#f6e6a6 2px 4px)}
-.bays{display:flex;align-items:center;gap:10px;padding-top:8px;font-size:12px}
 .step{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r);height:26px;align-items:center}
 .step button{width:26px;height:100%;font-size:15px;color:var(--muted);line-height:1}
 .step button:hover{color:var(--ink)}
@@ -363,7 +354,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .ac-ov .sp{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.78);margin-top:3px;white-space:nowrap}
 
 /* ---- planner: stop rows with actions, type tags, diverts, bias select ---- */
-.stop{grid-template-columns:18px 1fr auto 18px}
+.stop{display:grid;grid-template-columns:18px 1fr auto 18px;align-items:center;gap:8px;font-size:12px;padding:3px 0;position:relative}
 .stop.bad .d{color:var(--danger)}
 .stop .x{width:18px;height:18px;display:flex;align-items:center;justify-content:center;color:var(--faint)}
 .stop .x:hover{color:var(--danger)}
@@ -400,7 +391,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .fleet .slot .rm{width:16px;height:16px}
 .socp{border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;font-size:12px;display:grid;gap:6px}
 .socp input[type=range]{width:100%;accent-color:var(--ink)}
-.fl{grid-template-columns:1fr auto auto 18px}
+.fl{display:grid;grid-template-columns:1fr auto auto 18px;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:12px}
 .fl.bad .t{color:var(--danger)}
 .fl .tag{display:inline-block;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 4px;margin-right:4px;vertical-align:1px}
 .fl .freq{display:inline-flex;gap:4px;align-items:center}
@@ -463,7 +454,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .tbl th:first-child,.tbl td:first-child{padding-left:0}
 .tbl th:last-child,.tbl td:last-child{padding-right:0}
 .tbl td.r,.tbl th.r{font-variant-numeric:tabular-nums}
-.tbl th{letter-spacing:.06em}
+.tbl th{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;border-bottom:1px solid var(--line)}
 .acc.alt{background:rgba(50,50,110,.035)}
 /* battery chart: one lane per leg, scrolls sideways when the route is long */
 .soc .scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}

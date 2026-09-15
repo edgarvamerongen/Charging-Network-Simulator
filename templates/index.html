@@ -120,7 +120,6 @@
         #map { position: fixed; inset: 0; z-index: 0; }
         #folderMap { height: 520px; width: 100%; border-radius: var(--radius-sm); }
         .leaflet-container { font-family: inherit; background: #e9eef7; }
-        .popup-btn { font-size: .78rem; padding: .25rem .5rem; margin-top: 5px; width: 100%; border-radius: 6px; }
         /* Airport hover-popup photo (Wikipedia/Wikidata or Esri satellite — /api/airport-photo). */
         /* Airport CLICK card (Eindhoven-style): full-bleed photo banner + name +
            ICAO·IATA·municipality + Divert + Origin/Destination/Add stop. Opens on dot
@@ -318,10 +317,6 @@
         }
         .cns-tour-popover .driver-popover-description p { margin: 0 0 .7em 0; }
         .cns-tour-popover .driver-popover-description p:last-child { margin-bottom: 0; }
-        .cns-tour-popover .driver-popover-description .tour-foot {
-            font-size: .76rem; color: var(--muted); margin-top: 1em;
-            padding-top: .7em; border-top: 1px dashed var(--panel-border);
-        }
         .cns-tour-popover .driver-popover-description .role {
             display: inline-block; font-size: .65rem; font-weight: 700; letter-spacing: .06em;
             padding: 0 5px; border-radius: 3px; color: #fff; vertical-align: middle;
@@ -359,8 +354,6 @@
         }
         /* Leadership cards (nrg2fly.com/about.html style) embedded in the welcome slide. */
         .tour-lead { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--panel-border); }
-        .tour-lead-overline { font-size: .64rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
-        .tour-lead-head { font-size: 1.3rem; font-weight: 700; color: var(--brand-ink); margin: 2px 0 12px; letter-spacing: -.01em; }
         .tour-lead-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
         .tour-lead-card {
             background: #fff; border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
@@ -369,10 +362,6 @@
         .tlc-photo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; border: 3px solid var(--brand-ink); margin-bottom: 10px; }
         .tlc-name { font-weight: 700; color: var(--ink); font-size: .95rem; }
         .tlc-role { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 10px; }
-        .tlc-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 10px; }
-        .tlc-tag { font-size: .62rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
-                   color: var(--brand-ink); background: rgba(43,47,90,.06); border: 1px solid var(--panel-border);
-                   border-radius: 999px; padding: 2px 9px; }
         .tlc-links { font-size: .72rem; color: var(--muted); margin-top: auto; }
         .tlc-links a { color: var(--brand-ink); text-decoration: none; }
         .tlc-links a:hover { text-decoration: underline; }
@@ -621,8 +610,6 @@
         .input-group .form-control:focus, .input-group .form-select:focus {
             border-color: var(--primary); box-shadow: 0 0 0 3px rgba(229,120,80,.22);
         }
-        .input-group-text { background: #f1f5f9; border-color: #e2e8f0; font-size: .82rem; color: var(--ink-soft); }
-
         /* Primary actions */
         .btn-cns, .btn-cns-success, .btn-cns-ghost {
             width: 100%; padding: 10px 16px; border-radius: var(--radius-sm); font-weight: 600;
@@ -771,8 +758,6 @@
            STOP = navy-tinted (a structural intermediate point).
            TRAINING = red (kept distinctive — semantic warning + matches map circle).
            AIRCRAFT / TRIP = result-panel section labels; stay neutral navy/gold. */
-        .tag-aircraft { background: #e9ebf3; color: var(--brand-ink); border-color: #d2d6e3; }
-        .tag-trip     { background: #faf0d6; color: #6b541a;        border-color: #ecdba8; }
         .tag-home     { background: #fde5d4; color: #a44a23;        border-color: #f6cdb0; }
         .tag-dest     { background: #faecbe; color: #6b541a;        border-color: #ead993; }
         .tag-stop     { background: #e3e6f1; color: var(--brand-ink); border-color: #c9cee0; }
@@ -892,13 +877,6 @@
         /* =========================================================
            Floating map controls (bottom-right, stacked)
            ========================================================= */
-        .map-controls {
-            position: fixed; bottom: 16px; right: 16px; z-index: 10;
-            display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
-        }
-        .segmented {
-            padding: 4px;
-        }
         .seg-btn {
             border: none; background: transparent; color: var(--ink-soft);
             padding: 5px 12px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .78rem;
@@ -906,18 +884,6 @@
         }
         .seg-btn:hover { color: var(--ink); }
         .seg-btn.active { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(229,120,80,.30); }
-        .control-pill {
-            display: inline-flex; align-items: center; gap: 10px;
-            background: var(--panel-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-            border: 1px solid var(--panel-border); box-shadow: var(--shadow);
-            border-radius: 999px; padding: 7px 14px;
-            font-size: .82rem; color: var(--ink); white-space: nowrap;
-        }
-        .control-pill .pill-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
-        .control-pill label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 500; }
-        .control-pill input[type=checkbox] { accent-color: var(--primary); cursor: pointer; }
-        .btn-pill { cursor: pointer; }
-        .btn-pill:hover { background: #fff; }
 
         /* =========================================================
            Bottom drawer (Demand Calculator)
@@ -1074,8 +1040,6 @@
             border-radius: var(--radius-sm) !important;
             box-shadow: 0 6px 16px rgba(43,47,90,.22);
         }
-        .agg-num { font-weight: 800; font-size: 1.15rem; letter-spacing: -.02em; }
-
         /* Rotation-scheduler feature card. Replaces the old plain outline
            button — surfaces the key summary numbers inline so users can scan
            them without clicking, and reads as a feature rather than a control. */
@@ -1626,14 +1590,6 @@
             background: #fff; border: 1px solid var(--panel-border); border-radius: 6px;
             padding: 2px 8px; font-size: .78rem; color: var(--ink); cursor: pointer;
         }
-        .stops-advanced { font-size: .78rem; color: var(--ink-soft); }
-        .stops-advanced summary { cursor: pointer; padding: 2px 6px; border-radius: 6px; user-select: none; }
-        .stops-advanced summary:hover { background: rgba(15,23,41,.04); }
-        .stops-advanced[open] summary { color: var(--primary); font-weight: 600; }
-        .adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; padding: 8px; background: rgba(15,23,41,.03); border-radius: 8px; }
-        .adv-field label { display: block; font-size: .65rem; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
-        .adv-field input, .adv-field select { width: 100%; font-size: .8rem; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
-
         .stops-section { margin-bottom: 12px; padding: 10px; background: rgba(229,120,80,.07); border-left: 3px solid var(--primary); border-radius: 8px; }
         .stops-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;
             width: 100%; background: none; border: none; padding: 0; cursor: pointer; text-align: left; color: inherit; font: inherit; }
@@ -1673,13 +1629,6 @@
         .stops-list .alt-hint.alt-reset { cursor: pointer; margin-left: 2px; }
         .stops-list .alt-hint { font-size: .56rem; font-weight: 700; color: #7c3aed; background: rgba(124,58,237,.12); padding: 1px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: .05em; cursor: default; }
         .alt-tip { position: fixed; z-index: 4000; display: none; background: #1f2937; color: #fff; padding: 4px 9px; border-radius: 6px; font-size: .72rem; font-weight: 500; white-space: nowrap; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.3); }
-        .stops-list .stops-actions { display: flex; gap: 6px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed rgba(15,23,41,.10); }
-        .stops-list .stops-add { padding: 6px 0 0 0; position: relative; }
-        .stops-list .stops-add input { width: 100%; padding: 5px 8px; font-size: .82rem; border: 1px solid #e2e8f0; border-radius: 6px; }
-        .stops-list .stops-add input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(229,120,80,.18); }
-        .stops-btn { font-size: .76rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--panel-border); background: rgba(255,255,255,.8); color: var(--ink-soft); cursor: pointer; font-weight: 600; }
-        .stops-btn:hover { background: #fff; color: var(--ink); border-color: #cbd5e1; }
-
         /* Custom-entry list inside the plane/charger modals */
         .custom-list .cl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .custom-list .cl-title { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 700; margin: 0; }
@@ -1701,8 +1650,6 @@
         }
         @media (max-width: 720px) {
             .rail-left { left: 8px; right: 8px; width: auto; max-height: 60vh; }
-            .map-controls { top: 64px; right: 8px; }
-            .control-pill .pill-label { display: none; }
             .topbar { padding: 0 12px; }
             .topbar-tools { gap: 2px; }
             /* keep the controls uniform when compacting */
@@ -2683,13 +2630,6 @@
             scored.sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name));
             return scored.slice(0, limit).map(s => s[1]);
         }
-        function haversineKm(a, b) {
-            const R = 6371, toRad = d => d * Math.PI / 180;
-            const dLat = toRad(b[0] - a[0]), dLon = toRad(b[1] - a[1]);
-            const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLon / 2) ** 2;
-            return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-        }
-
         function syncUnset(field) {
             const input = document.getElementById(field);
             const sel = selected[field];
@@ -2904,7 +2844,7 @@
             };
             return { typePenalty: ORDERS[bias] || ORDERS['medium-large-small'] };
         }
-        // Per-flight spec override (battery / range / speed / c_rate). Null = use
+        // Per-flight spec override (battery / range / speed). Null = use
         // the catalog plane as-is. Temporary — it rides along on the simulate
         // payload (payload.plane) and is NEVER written back to planes.json.
         let _planeOverride = null;
@@ -3102,21 +3042,6 @@
                 kick();
             }, true);
         })();
-
-        // Find the best place to slot a new stop into the chain (smallest detour).
-        function bestInsertionIndex(newStop) {
-            const t = _terminus(); if (!t) return plannedStops.length;
-            const chain = [t.origin, ...plannedStops, t.dest];
-            let bestIdx = plannedStops.length, bestDelta = Infinity;
-            for (let i = 0; i < chain.length - 1; i++) {
-                const d0 = CNSRouting.haversineKm(chain[i], chain[i + 1]);
-                const d1 = CNSRouting.haversineKm(chain[i], newStop);
-                const d2 = CNSRouting.haversineKm(newStop, chain[i + 1]);
-                const delta = d1 + d2 - d0;
-                if (delta < bestDelta) { bestDelta = delta; bestIdx = i; }
-            }
-            return bestIdx;
-        }
 
         const TYPE_TAG = { 'small_airport': ['S','type-small','Small'], 'medium_airport': ['M','type-medium','Medium'], 'large_airport': ['L','type-large','Large'] };
 
@@ -3361,43 +3286,7 @@
                 smartReplan();
                 drawLiveRoute();
             }));
-
-            const resug = document.getElementById('reSuggestBtn');
-            if (resug) resug.addEventListener('click', recomputeRoute);
-
-            const addToggle = document.getElementById('addStopToggle');
-            const addRow = document.getElementById('addStopRow');
-            const addInp = document.getElementById('addStopInput');
-            const addLst = document.getElementById('addStopList');
-            if (!addToggle || !addRow || !addInp || !addLst) return;
-
-            addToggle.addEventListener('click', () => {
-                addRow.classList.toggle('d-none');
-                if (!addRow.classList.contains('d-none')) { addInp.value = ''; addInp.focus(); }
-            });
-            let acCurrent = [];
-            addInp.addEventListener('input', () => {
-                if (addInp.value.trim().length < 2) { addLst.classList.add('d-none'); return; }
-                acCurrent = rankAirportMatches(addInp.value, allAirports, 30);
-                addLst.innerHTML = acCurrent.length
-                    ? acCurrent.map((ap, i) => `<div class="ac-item" data-i="${i}"><strong>${escHtml(ap.name)}</strong> <small>${escHtml(labelFor(ap))}</small></div>`).join('')
-                    : '<div class="ac-item text-muted">No matches.</div>';
-                addLst.classList.remove('d-none');
-            });
-            addLst.addEventListener('mousedown', e => {
-                const item = e.target.closest('.ac-item[data-i]'); if (!item) return;
-                const ap = acCurrent[+item.dataset.i];
-                const stop = { ident: ap.ident, name: ap.name, type: ap.type, lat: ap.latitude_deg, lon: ap.longitude_deg, iata_code: ap.iata_code || '' };
-                const idx = bestInsertionIndex(stop);
-                plannedStops.splice(idx, 0, stop);
-                addRow.classList.add('d-none');
-                refreshAfterEdit();
-            });
-            addInp.addEventListener('blur', () => setTimeout(() => addLst.classList.add('d-none'), 150));
         }
-
-        // Public entry point used by other code paths (origin/dest change, etc.)
-        function replanRoute() { recomputeRoute(); }
 
         // Soft changes (advanced / plane / filter) keep user edits intact.
         // Toggle: ON ⇒ apply any populated form-field stops + recompute (if
@@ -4597,7 +4486,7 @@
             const p = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;   // VFR: no padding, no SID/STAR
             const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(p) : 0;
             if (window.CNSRouting) return CNSRouting.routedKm(a, b, p) + sid;   // routed (great-circle × padding) + SID/STAR terminal km
-            return haversineKm([a.lat, a.lon], [b.lat, b.lon]) + sid;   // pre-CNSRouting fallback (great-circle) + pad
+            return CNSRouting.haversineKm(a, b) + sid;   // pre-CNSRouting fallback (great-circle) + pad
         }
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
         // origin + planned stops + dest; the engine OWNS the retour mirror + training
@@ -5059,17 +4948,16 @@
             //      and energy reconciles with the totals and updates live with Model
             //      settings. The terminal top-up is NOT shown here — it happens after
             //      arrival and belongs to the Charging section. ---------------------
-            const _esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
             const _legRow = (from, to, distKm, durMin, energyKwh) =>
-                `<tr class="step"><td colspan="2"><div class="step-main"><span class="step-ico step-fly">✈</span>${_esc(from)} → ${_esc(to)}</div>` +
+                `<tr class="step"><td colspan="2"><div class="step-main"><span class="step-ico step-fly">✈</span>${escHtml(from)} → ${escHtml(to)}</div>` +
                 `<div class="step-sub">${fmtDist(distKm)} · ${fmtDuration(durMin)} · ${fmtEnergy(energyKwh)}</div></td></tr>`;
             const _chgRow = (name, min, energy, isDest) =>
-                `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico">⚡</span>Charge at ${_esc(name)}${isDest ? '<span class="dest-badge">destination</span>' : ''}</div>` +
+                `<tr class="step step-charge${isDest ? ' step-dest' : ''}"><td colspan="2"><div class="step-main"><span class="step-ico step-charge-ico">⚡</span>Charge at ${escHtml(name)}${isDest ? '<span class="dest-badge">destination</span>' : ''}</div>` +
                 `<div class="step-sub">+${fmtDuration(min)} · ${fmtEnergy(energy)}</div></td></tr>`;
             const _typeLabel = isTraining ? `Training pattern (${Math.round(flightMin)} min)`
                 : (data.trip_type === 'circular' ? 'Circular (closed loop)' : isRetour ? 'Return' : 'One-Way')
                   + (isMulti ? ` · ${data.stops.length} charging stop${data.stops.length > 1 ? 's' : ''}` : '');
-            const _steps = [`<tr class="step-head"><td>Trip type</td><td>${_esc(_typeLabel)}</td></tr>`];
+            const _steps = [`<tr class="step-head"><td>Trip type</td><td>${escHtml(_typeLabel)}</td></tr>`];
             const _destNm = (data._dest && data._dest.name) || '', _originNm = (data._origin && data._origin.name) || '';
             if (isTraining) {
                 _steps.push(`<tr class="step"><td colspan="2"><div class="step-main"><span class="step-ico step-fly">✈</span>Training pattern</div>` +
@@ -5117,7 +5005,7 @@
             const _chargeToFrac = Math.max(0, Math.min(1, arrivalSoc + (bd.terminalKwh || 0) / (p.battery_kwh || 1)));
             const _tgtLabel = (_chargeToFrac < 0.999) ? `${Math.round(_chargeToFrac * 100)}%` : 'full';
             const _finalLabel = (isRetour || data.trip_type === 'circular') ? 'Back at base' : (isTraining ? 'Recharge at' : 'Final destination');
-            const _crows = [`<tr><td>${_finalLabel}</td><td>${_esc(terminalName)}</td></tr>`];
+            const _crows = [`<tr><td>${_finalLabel}</td><td>${escHtml(terminalName)}</td></tr>`];
             if (terminalMin > 0.5) {
                 _crows.push(`<tr><td>Arrival charge</td><td>${Math.round(arrivalSoc * 100)}%</td></tr>`);
                 _crows.push(`<tr><td>Charge to</td><td>${_tgtLabel}</td></tr>`);
@@ -5126,7 +5014,7 @@
             } else {
                 _crows.push(`<tr><td>Top-up</td><td>no charge needed</td></tr>`);
             }
-            _crows.push(`<tr><td>Charger</td><td>${_esc(chargerLabel(data.charger))}</td></tr>`);
+            _crows.push(`<tr><td>Charger</td><td>${escHtml(chargerLabel(data.charger))}</td></tr>`);
             if (flags.chargerEfficiency) _crows.push(`<tr><td>Grid demand</td><td>${fmtEnergy(gridKwh)}</td></tr>`);
             document.getElementById('chargeRows').innerHTML = _crows.join('');
 
@@ -5224,26 +5112,25 @@
         // the styled card: # notes → prose, "term = formula = result" → aligned rows with
         // the derived result emphasized, "→ ..." → accented conclusion, "( ... )" → footnote.
         function _calcHtml(lines) {
-            const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
             return lines.map(raw => {
                 const t = String(raw).trim();
                 if (!t) return '<div class="calc-gap"></div>';
-                if (t.startsWith('#')) return `<div class="calc-note">${esc(t.replace(/^#\s?/, ''))}</div>`;
-                if (t.startsWith('→')) return `<div class="calc-conclusion">${esc(t.replace(/^→\s?/, ''))}</div>`;
-                if (t.startsWith('(')) return `<div class="calc-foot">${esc(t)}</div>`;
-                if (/^(Legs|Charges):$/.test(t)) return `<div class="calc-sec">${esc(t.slice(0, -1))}</div>`;
-                if (t.startsWith('Totals:')) return `<div class="calc-total">${esc(t)}</div>`;
-                if (/^(\d+\.|[A-Z]+\s+@)/.test(t)) return `<div class="calc-item">${esc(t)}</div>`;
+                if (t.startsWith('#')) return `<div class="calc-note">${escHtml(t.replace(/^#\s?/, ''))}</div>`;
+                if (t.startsWith('→')) return `<div class="calc-conclusion">${escHtml(t.replace(/^→\s?/, ''))}</div>`;
+                if (t.startsWith('(')) return `<div class="calc-foot">${escHtml(t)}</div>`;
+                if (/^(Legs|Charges):$/.test(t)) return `<div class="calc-sec">${escHtml(t.slice(0, -1))}</div>`;
+                if (t.startsWith('Totals:')) return `<div class="calc-total">${escHtml(t)}</div>`;
+                if (/^(\d+\.|[A-Z]+\s+@)/.test(t)) return `<div class="calc-item">${escHtml(t)}</div>`;
                 const eq = t.indexOf('=');
                 if (eq >= 0) {
                     const term = t.slice(0, eq).trim();
                     const chunks = t.slice(eq + 1).trim().split(' = ');
                     const math = chunks.length > 1
-                        ? `= ${esc(chunks.slice(0, -1).join(' = '))} = <span class="calc-res">${esc(chunks[chunks.length - 1])}</span>`
-                        : `= ${esc(chunks[0])}`;
-                    return `<div class="calc-row"><span class="calc-term">${esc(term)}</span><span class="calc-math">${math}</span></div>`;
+                        ? `= ${escHtml(chunks.slice(0, -1).join(' = '))} = <span class="calc-res">${escHtml(chunks[chunks.length - 1])}</span>`
+                        : `= ${escHtml(chunks[0])}`;
+                    return `<div class="calc-row"><span class="calc-term">${escHtml(term)}</span><span class="calc-math">${math}</span></div>`;
                 }
-                return `<div class="calc-item">${esc(t)}</div>`;
+                return `<div class="calc-item">${escHtml(t)}</div>`;
             }).join('');
         }
 
@@ -5494,7 +5381,7 @@
                 allAirports,
                 allowedTypes: ['small_airport', 'medium_airport', 'large_airport'],
                 allowedIdents: new Set(Object.keys(nrgChargerDb || {})),
-                planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate,
+                planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh,
                                     runway_req: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).runway_req,      // landability gate — catalog-sourced, trips don't persist it
                                     type: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).type,                  // climb-model gate (wing-borne vs powered-lift) — same sourcing
                                     range_incl_reserves: (BUILTIN_PLANES_BY_ID[t.planeId] || {}).range_incl_reserves,        // reserves already in the range — no landing-reserve build-down
@@ -5577,10 +5464,10 @@
                 let dailyEnergy = 0, dailyHours = 0;
                 // Daily charging hours come from the DES summary below (sInfo.chargeMin) —
                 // the SAME charge phases the rotation scheduler draws, so the figure always
-                // matches the sum of the 'charging here' bars. (The old per-trip
-                // dailyChargeMinutesAt estimate priced charges at each trip's STORED charger
-                // power and ignored the airport's actual charger fleet — adding a fast
-                // charger shrank the bars but not the number.)
+                // matches the sum of the 'charging here' bars. (The old per-trip estimate
+                // priced charges at each trip's STORED charger power and ignored the
+                // airport's actual charger fleet — summary().chargeMin fixed that: adding
+                // a fast charger now shrinks the bars AND the number.)
                 const rows = a.contribs.map((c, i) => {
                     const t = c.t;
                     const asg = plan.assignments[i];
@@ -6681,13 +6568,12 @@
             const track = document.getElementById('cnsTickerTrack');
             if (!track) return;
             const SEP = '  •••  ';
-            const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             fetch('/static/ticker.json', { cache: 'no-store' })
                 .then((r) => (r.ok ? r.json() : null))
                 .then((d) => {
                     const items = d && Array.isArray(d.items) ? d.items.filter(Boolean) : null;
                     if (!items || !items.length) return;
-                    const line = SEP + items.map(esc).join(SEP);
+                    const line = SEP + items.map(escHtml).join(SEP);
                     track.innerHTML =
                         '<span class="cns-ticker-text">' + line + '</span>' +
                         '<span class="cns-ticker-text" aria-hidden="true">' + line + '</span>';
