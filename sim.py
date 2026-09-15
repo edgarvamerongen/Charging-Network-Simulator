@@ -1,8 +1,7 @@
 import math
 import json
 import re
-import pandas as pd
-import argparse
+import csv
 import os
 import threading
 
@@ -12,6 +11,13 @@ import threading
 # "MariEHAMn Airport" before it matches Schiphol.
 _AIRPORT_CODE_RE = re.compile(r'^[A-Za-z0-9]{3,4}$')
 
+# Airport CSV columns consumers do arithmetic on; every other column stays the
+# string the file holds. An empty cell stays "" in both cases.
+_AIRPORT_FLOAT_COLS = frozenset((
+    'latitude_deg', 'longitude_deg', 'alternate_km',
+    'rwy_paved_m', 'rwy_grass_m', 'rwy_gravel_m',
+    'rwy_dirt_m', 'rwy_water_m', 'rwy_unknown_m'))
+
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0  # Earth radius in kilometers
     dlat = math.radians(lat2 - lat1)
@@ -19,6 +25,29 @@ def haversine(lat1, lon1, lat2, lon2):
     a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
+
+def _plane_summary(plane, avg_usage, training_range_km=None):
+    """The "plane" block every simulate response carries — identical keys for
+    training, single-leg and multi-leg."""
+    out = {
+        "id": plane.get('id'),
+        "name": plane.get('name'),
+        "seats": plane.get('seats'),
+        "load_kg": plane.get('load_kg'),
+        "battery_kwh": plane.get('battery_kwh'),
+        "range_km": plane['range_km'],
+        "speed_kmh": plane['speed_kmh'],
+        "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
+        "min_landing_soc": plane.get('min_landing_soc'),     # used by CNSSettings.usableFraction (per-aircraft override)
+    }
+    if training_range_km is not None:
+        out["training_range_km"] = training_range_km
+    out["image"] = plane.get('image')
+    out["svg"] = plane.get('svg')
+    return out
+
+def _charger_summary(charger):
+    return {"id": charger.get('id'), "name": charger.get('name'), "power_kw": charger['power_kw']}
 
 class Simulator:
     def __init__(self, base_dir="."):
@@ -33,14 +62,18 @@ class Simulator:
         self._generated_planes_path = os.path.join(base_dir, "data", "planes.generated.json")
         self._planes_lock = threading.Lock()
         self._gen_seen_mtime = None
-        self.planes_source = None
         self.planes = self._load_planes()
 
         with open(chargers_file, 'r') as f:
             self.chargers = json.load(f)
 
-        # Replace NaNs with empty string so JSON serialization doesn't fail
-        self.airports_df = pd.read_csv(airports_file).fillna("")
+        # Empty cells stay "" so JSON serialization doesn't fail
+        with open(airports_file, newline='', encoding='utf-8') as f:
+            self.airports = [
+                {k: (float(v) if v and k in _AIRPORT_FLOAT_COLS else v)
+                 for k, v in row.items()}
+                for row in csv.DictReader(f, restval="")
+            ]
 
     # -- aircraft catalog loading -------------------------------------------
     # battery_kwh is deliberately NOT required: hybrids may omit it entirely,
@@ -86,7 +119,6 @@ class Simulator:
             self._gen_seen_mtime = os.path.getmtime(self._generated_planes_path)
         except OSError:
             self._gen_seen_mtime = None
-        self.planes_source = self._generated_planes_path
         return gen
 
     def maybe_reload_planes(self):
@@ -113,7 +145,6 @@ class Simulator:
             data = self._read_generated()
             if data is not None:
                 self.planes = data
-                self.planes_source = self._generated_planes_path
 
     def get_all_airports(self):
         # We'll return just enough data for the map + autocomplete to reduce payload size.
@@ -124,9 +155,7 @@ class Simulator:
                   'alternate_km', 'alternate_ident',
                   'rwy_paved_m', 'rwy_grass_m', 'rwy_gravel_m',
                   'rwy_dirt_m', 'rwy_water_m', 'rwy_unknown_m']
-        df = self.airports_df[[c for c in wanted if c in self.airports_df.columns]]
-        # Convert to list of dicts
-        return df.to_dict('records')
+        return [{k: r[k] for k in wanted if k in r} for r in self.airports]
 
     def get_airport(self, code_or_name):
         q = (code_or_name or "").strip()
@@ -138,20 +167,15 @@ class Simulator:
         # name — see _AIRPORT_CODE_RE doc.
         if _AIRPORT_CODE_RE.match(q):
             q_upper = q.upper()
-            exact = self.airports_df[self.airports_df['ident'].str.upper() == q_upper]
-            if not exact.empty:
-                return exact.iloc[0]
-            iata = self.airports_df[self.airports_df['iata_code'].str.upper() == q_upper]
-            if not iata.empty:
-                return iata.iloc[0]
+            for col in ('ident', 'iata_code'):
+                hit = next((r for r in self.airports if r[col].upper() == q_upper), None)
+                if hit is not None:
+                    return hit
         # Fall back to the original name / municipality substring search.
-        matches = self.airports_df[
-            self.airports_df['name'].str.contains(q, case=False, na=False) |
-            self.airports_df['municipality'].str.contains(q, case=False, na=False)
-        ]
-        if matches.empty:
-            return None
-        return matches.iloc[0]
+        q_lower = q.lower()
+        return next((r for r in self.airports
+                     if q_lower in r['name'].lower()
+                     or q_lower in r['municipality'].lower()), None)
 
     def calculate_flight_by_distance(self, plane_id, distance_km, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None):
         plane = plane_obj if plane_obj else next((p for p in self.planes if p['id'] == plane_id), None)
@@ -227,19 +251,8 @@ class Simulator:
                 "flight_time_h": round(flight_time_h, 2),
                 "charge_time_h": round(charge_time_h, 3),
                 "charge_time_min": round(charge_time_h * 60, 1),
-                "plane": {
-                    "id": plane.get('id'), "name": plane.get('name'),
-                    "seats": plane.get('seats'), "load_kg": plane.get('load_kg'),
-                    "battery_kwh": plane.get('battery_kwh'), "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
-                    "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
-                    "min_landing_soc": plane.get('min_landing_soc'),
-                    "c_rate": plane.get('c_rate'),                       # battery charge C-rate (charging-curve model factor)
-                    "training_range_km": training_range,
-                    "image": plane.get('image'), "svg": plane.get('svg'),
-                },
-                "charger": {
-                    "id": charger.get('id'), "name": charger.get('name'), "power_kw": charger['power_kw'],
-                }
+                "plane": _plane_summary(plane, avg_usage, training_range_km=training_range),
+                "charger": _charger_summary(charger),
             }
 
         # DELIBERATE: this is the raw catalog range, with no landing reserve /
@@ -290,25 +303,8 @@ class Simulator:
             "flight_time_h": round(flight_time_h, 2),
             "charge_time_h": round(charge_time_h, 3),
             "charge_time_min": round(charge_time_h * 60, 1),
-            "plane": {
-                "id": plane.get('id'),
-                "name": plane.get('name'),
-                "seats": plane.get('seats'),
-                "load_kg": plane.get('load_kg'),
-                "battery_kwh": plane.get('battery_kwh'),
-                "range_km": plane['range_km'],
-                "speed_kmh": plane['speed_kmh'],
-                "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
-                "min_landing_soc": plane.get('min_landing_soc'),     # used by CNSSettings.usableFraction (per-aircraft override)
-                "c_rate": plane.get('c_rate'),                       # battery charge C-rate (charging-curve model factor)
-                "image": plane.get('image'),
-                "svg": plane.get('svg')
-            },
-            "charger": {
-                "id": charger.get('id'),
-                "name": charger.get('name'),
-                "power_kw": charger['power_kw']
-            }
+            "plane": _plane_summary(plane, avg_usage),
+            "charger": _charger_summary(charger)
         }
 
     def simulate_by_coords(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None, stops=None):
@@ -452,16 +448,8 @@ class Simulator:
             "legs_count": len(legs),
             "origin": {"name": origin['name'], "lat": origin['lat'], "lon": origin['lon']},
             "destination": {"name": destination['name'], "lat": destination['lat'], "lon": destination['lon']},
-            "plane": {
-                "id": plane.get('id'), "name": plane.get('name'),
-                "seats": plane.get('seats'), "load_kg": plane.get('load_kg'),
-                "battery_kwh": plane.get('battery_kwh'), "range_km": plane['range_km'], "speed_kmh": plane['speed_kmh'],
-                "avg_usage_kwh_per_100km": round(avg_usage, 2) if avg_usage is not None else None,
-                "min_landing_soc": plane.get('min_landing_soc'),     # for CNSSettings per-aircraft override
-                "c_rate": plane.get('c_rate'),                       # battery charge C-rate (charging-curve model factor)
-                "image": plane.get('image'), "svg": plane.get('svg')
-            },
-            "charger": {"id": charger.get('id'), "name": charger.get('name'), "power_kw": charger['power_kw']},
+            "plane": _plane_summary(plane, avg_usage),
+            "charger": _charger_summary(charger),
         }
 
     def simulate(self, plane_id, origin, destination, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None):
@@ -495,17 +483,3 @@ class Simulator:
             }
         })
         return result
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Charging Network Simulator")
-    parser.add_argument("--plane", type=str, required=True, help="Plane ID")
-    parser.add_argument("--origin", type=str, required=True, help="Origin Airport Name/City")
-    parser.add_argument("--dest", type=str, required=True, help="Destination Airport Name/City")
-    parser.add_argument("--charger", type=str, required=True, help="Charger ID")
-    parser.add_argument("--trip", type=str, default="one-way", choices=["one-way", "retour"])
-    args = parser.parse_args()
-
-    sim = Simulator()
-    res = sim.simulate(args.plane, args.origin, args.dest, args.charger, args.trip)
-    import pprint
-    pprint.pprint(res)

@@ -8,8 +8,9 @@ aggregate identical routes into frequencies → assemble the build blob.
 """
 
 import hashlib
-import math
 from datetime import datetime
+
+from sim import haversine
 
 
 def classify_trip(idents):
@@ -61,14 +62,6 @@ def validate_normalized(payload):
     basis = defaults.get('freq_basis')
     if basis is not None and basis not in _VALID_BASIS:
         raise ValueError('defaults.freq_basis must be one of %s' % (_VALID_BASIS,))
-
-
-def _haversine_km(a, b):
-    R = 6371.0
-    lat1, lon1, lat2, lon2 = map(math.radians, (a['lat'], a['lon'], b['lat'], b['lon']))
-    dlat, dlon = lat2 - lat1, lon2 - lon1
-    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
-    return 2 * R * math.asin(math.sqrt(h))
 
 
 def _parse_date(s):
@@ -156,7 +149,8 @@ def build_blob(payload, resolve, planes_by_id):
             entry['s'] = [_pt(by_ident[i]) for i in trip['s']]
         fl_out.append(entry)
         # longest consecutive leg vs default plane range
-        longest = max(_haversine_km(recs[i], recs[i + 1]) for i in range(len(recs) - 1))
+        longest = max(haversine(a['lat'], a['lon'], b['lat'], b['lon'])
+                      for a, b in zip(recs, recs[1:]))
         if plane_range and longest > plane_range:
             infeasible += 1
 

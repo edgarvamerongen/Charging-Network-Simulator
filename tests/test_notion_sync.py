@@ -541,7 +541,6 @@ class GeneratedCatalogLoaderTest(unittest.TestCase):
         s._generated_planes_path = os.path.join(tmp, "data", "planes.generated.json")
         s._planes_lock = threading.Lock()
         s._gen_seen_mtime = None
-        s.planes_source = None
         return s
 
     @staticmethod
@@ -559,7 +558,6 @@ class GeneratedCatalogLoaderTest(unittest.TestCase):
                     [{"id": "g1", "name": "G1", "battery_kwh": 2, "range_km": 2, "speed_kmh": 2}],
                     mtime=1000)
         s.planes = s._load_planes()
-        self.assertTrue(s.planes_source.endswith("planes.generated.json"))
         self.assertEqual(s.planes[0]["id"], "g1")
 
         self._write(s._generated_planes_path,

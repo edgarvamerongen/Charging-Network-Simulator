@@ -1,0 +1,4 @@
+-r requirements.txt
+# Offline CSV regeneration only (prepare_data.py / airport_alternates.py and
+# their tests) — nothing the server imports needs pandas.
+pandas==3.0.3

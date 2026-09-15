@@ -3,8 +3,7 @@ and their passthrough into the /api/airports payload."""
 import unittest
 
 from _helpers import REPO_ROOT  # noqa: F401  (ensures repo root is importable)
-from airport_alternates import (nearest_alternate, nearest_alternate_km,
-                                suitable_alternate_idents)
+from airport_alternates import nearest_alternate, suitable_alternate_idents
 
 
 class TestNearestAlternate(unittest.TestCase):
@@ -13,7 +12,7 @@ class TestNearestAlternate(unittest.TestCase):
         # (~111.19 km); point 2 is in central Asia, far from both.
         lats = [0.0, 0.0, 50.0]
         lons = [0.0, 1.0, 50.0]
-        km = nearest_alternate_km(lats, lons)
+        km = nearest_alternate(lats, lons)[0]
         self.assertAlmostEqual(km[0], 111.19, delta=1.0)
         self.assertAlmostEqual(km[1], 111.19, delta=1.0)
         self.assertGreater(km[2], 5000.0)  # remote -> nearest is far
@@ -29,7 +28,7 @@ class TestNearestAlternate(unittest.TestCase):
     def test_excludes_self(self):
         # Two airports at the SAME coordinate: each one's nearest *other*
         # airport is the duplicate at 0 km. The point must never match itself.
-        km = nearest_alternate_km([10.0, 10.0], [10.0, 10.0])
+        km = nearest_alternate([10.0, 10.0], [10.0, 10.0])[0]
         self.assertAlmostEqual(km[0], 0.0, places=6)
         self.assertAlmostEqual(km[1], 0.0, places=6)
 
@@ -38,7 +37,7 @@ class TestNearestAlternate(unittest.TestCase):
         from sim import haversine
         lats = [52.0, 48.0, 51.5, 45.0]
         lons = [5.0, 8.0, 0.0, 12.0]
-        km = nearest_alternate_km(lats, lons)
+        km = nearest_alternate(lats, lons)[0]
         for i in range(len(lats)):
             ref = min(haversine(lats[i], lons[i], lats[j], lons[j])
                       for j in range(len(lats)) if j != i)

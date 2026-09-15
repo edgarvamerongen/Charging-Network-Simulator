@@ -12,9 +12,10 @@ The route planner reserves divert energy from `alternate_km`; the map overlay
 draws the alternate by resolving `alternate_ident`. Dependency-light: numpy +
 pandas (no scipy). A chunked brute-force NN over ~7.8k points is a one-shot job.
 
-Run as a script to augment the committed CSV in place (needs runways.csv beside
-european_airports.csv):
-    ./venv/bin/python airport_alternates.py
+Pure functions only. `prepare_data.py` is the one regenerator of the committed
+european_airports.csv — it calls compute_alternate_columns +
+runway_length_columns and needs the raw OurAirports dumps beside it:
+    ./venv/bin/python prepare_data.py
 """
 import numpy as np
 import pandas as pd
@@ -41,10 +42,10 @@ def _is_paved(surface):
 
 # --- surface categories (display layer) ----------------------------------------
 # Full normalization of OurAirports' free-text `surface` into display categories
-# for the airport card (paved / grass / gravel / dirt / water / unknown). Copied
-# from the perf-engine branch's field_performance.py; when PR #30 merges, that
-# module supersedes this copy and _PAVED_TOKENS above unifies with it. Kept
-# SEPARATE from _is_paved so the baked alternate columns can never drift.
+# for the airport card (paved / grass / gravel / dirt / water / unknown).
+# DELIBERATELY a second vocabulary: _PAVED_TOKENS above gates divert
+# suitability and must never widen, so the display categories are kept SEPARATE
+# from _is_paved and the baked alternate columns can never drift.
 _SURFACE_KEYS = {
     "paved":  ("ASP", "ASPH", "CON", "CONC", "PEM", "PAVED", "BIT", "TAR", "MAC", "SEAL", "COP", "COM"),
     "grass":  ("TURF", "GRS", "GRE", "GRASS", "SOD", "LAWN"),
@@ -90,19 +91,6 @@ def runway_length_columns(runways_df):
     longest = longest.reindex(columns=list(RWY_CATEGORIES))
     longest.columns = [f"rwy_{c}_m" for c in longest.columns]
     return longest
-
-
-def augment_runway_columns(path="european_airports.csv", runways_path="runways.csv"):
-    """Append/refresh ONLY the rwy_*_m columns on the airport CSV, leaving the
-    baked alternate columns byte-identical (a newer local runways.csv must not
-    shift alternate_ident). Idempotent: pre-existing rwy_* columns are replaced."""
-    df = pd.read_csv(path)
-    runways = pd.read_csv(runways_path, dtype=str)
-    df = df.drop(columns=[c for c in df.columns if c.startswith("rwy_")])
-    longest = runway_length_columns(runways)
-    df = df.merge(longest, how="left", left_on="ident", right_index=True)
-    df.to_csv(path, index=False)
-    return df
 
 
 def suitable_alternate_idents(runways_df):
@@ -175,12 +163,6 @@ def nearest_alternate(lats, lons, candidate_mask=None, chunk=512):
     return out_km, out_idx
 
 
-def nearest_alternate_km(lats, lons, chunk=512):
-    """Great-circle km to each point's nearest *other* point (see
-    nearest_alternate)."""
-    return nearest_alternate(lats, lons, chunk=chunk)[0]
-
-
 def compute_alternate_columns(airports_df, runways_df):
     """(alternate_km, alternate_ident) for airports_df, where each alternate is
     the nearest airport with a suitable paved runway (see
@@ -192,32 +174,3 @@ def compute_alternate_columns(airports_df, runways_df):
                                 airports_df["longitude_deg"].to_numpy(),
                                 candidate_mask=mask)
     return np.round(km, 3), airports_df["ident"].to_numpy()[idx]
-
-
-def augment_csv(path="european_airports.csv", runways_path="runways.csv"):
-    """Read the airport CSV + the OurAirports runways export, (re)compute the
-    alternate columns (nearest airport with a suitable paved runway), write the
-    airport CSV back in place."""
-    df = pd.read_csv(path)
-    runways = pd.read_csv(runways_path, dtype=str)
-    df["alternate_km"], df["alternate_ident"] = compute_alternate_columns(df, runways)
-    df.to_csv(path, index=False)
-    return df
-
-
-if __name__ == "__main__":
-    import sys
-    if "--runways-only" in sys.argv:
-        out = augment_runway_columns()
-        have = out[[c for c in out.columns if c.startswith("rwy_")]].notna().any(axis=1)
-        print(f"Wrote rwy_*_m columns for {len(out)} airports "
-              f"({int(have.sum())} with at least one runway category; "
-              f"alternate columns untouched).")
-    else:
-        out = augment_csv()
-        col = out["alternate_km"]
-        n_used = out["alternate_ident"].nunique()
-        print(f"Wrote alternate_km/alternate_ident for {len(out)} airports "
-              f"-> {n_used} distinct paved alternates used "
-              f"(min {col.min():.1f} km, median {col.median():.1f} km, "
-              f"max {col.max():.1f} km).")
