@@ -92,5 +92,5 @@ window.CNSRunway = (function () {
         return s !== 'short' && s !== 'surface';
     }
 
-    return { summary: summary, suitability: suitability, hasData: hasData, fits: fits, CATS: CATS };
+    return { summary: summary, suitability: suitability, hasData: hasData, fits: fits };
 })();

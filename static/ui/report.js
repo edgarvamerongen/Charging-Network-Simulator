@@ -37,5 +37,5 @@
       UI.toast(msg);
     }
   });
-  UI.report = { pick, generate };
+  UI.report = { pick };
 })();

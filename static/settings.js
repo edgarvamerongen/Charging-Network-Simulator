@@ -20,9 +20,9 @@
  *                              22 kWh Pipistrel). The global `cRate` default is
  *                              deliberately high (5C) so it does NOT bind for the
  *                              current fleet — the cap is kept as a hook, not an
- *                              active constraint. The catalog no longer ships a
- *                              per-aircraft `c_rate`; if one is re-added it would
- *                              override the global default (see BACKLOG `max_kw`).
+ *                              active constraint. The catalog ships no per-aircraft
+ *                              `c_rate` and the model no longer reads one
+ *                              (see BACKLOG `max_kw`).
  *                          (b) CV-phase taper — above `threshold` SoC power
  *                              rolls off exponentially toward `taperPower × peak`, stretching the
  *                              top-up to near-full.
@@ -221,12 +221,10 @@ window.CNSSettings = (function () {
      *  of the charger's rated power and the pack's C-rate limit
      *  (`cRate × batteryKwh`). This is the CC-plateau half of the charging-curve
      *  model, so it's gated on the SAME `chargeTaper` toggle. Identity (returns
-     *  `powerKw`) when that toggle is off or battery size is unknown. A
-     *  per-aircraft `planeCRate` (from the catalog's `c_rate`) takes precedence
-     *  over the global slider — small GA packs (~1C) and high-power eVTOLs
-     *  differ a lot, and C-rate is already normalised to pack size so it scales
-     *  correctly to each aircraft. */
-    function effectiveChargePower(powerKw, batteryKwh, planeCRate, maxChargeKw) {
+     *  `powerKw`) when that toggle is off or battery size is unknown. The C-rate
+     *  is the global `chargeTaper.cRate` — the catalog no longer carries a
+     *  per-aircraft one. */
+    function effectiveChargePower(powerKw, batteryKwh, maxChargeKw) {
         let p = Math.max(0, +powerKw || 0);
         // Published OEM acceptance cap (Notion max_charge_kw): a hard physical
         // limit on the TOTAL power the aircraft can take — applies regardless of
@@ -236,9 +234,7 @@ window.CNSSettings = (function () {
         if (!s.enabled) return p;
         const batt = Math.max(0, +batteryKwh || 0);
         if (!batt) return p;
-        const cr = (planeCRate != null && isFinite(+planeCRate) && +planeCRate > 0)
-            ? +planeCRate
-            : Math.max(0.1, Math.min(10, +s.cRate || 5.0));
+        const cr = Math.max(0.1, Math.min(10, +s.cRate || 5.0));
         return Math.min(p, cr * batt);
     }
 

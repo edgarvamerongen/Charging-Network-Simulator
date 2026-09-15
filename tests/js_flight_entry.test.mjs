@@ -26,7 +26,7 @@ const DEST = { ident: 'EDDF', name: 'Frankfurt', lat: 50.03, lon: 8.56 };
 test('fromSim maps a single-leg response and preserves the explicit id', () => {
   const E = load();
   const d = {
-    plane: { id: 'beta_plane', name: 'Beta Alia', svg: 'beta.svg', battery_kwh: 225, c_rate: 1, range_km: 500, speed_kmh: 250 },
+    plane: { id: 'beta_plane', name: 'Beta Alia', svg: 'beta.svg', battery_kwh: 225, range_km: 500, speed_kmh: 250 },
     charger: { name: 'Cube 320', power_kw: 320 },
     trip_type: 'oneway', leg_energy_kwh: 154.3, recharge_energy_kwh: 154.3, flight_time_h: 1.4,
   };
@@ -49,7 +49,7 @@ test('fromSim maps a single-leg response and preserves the explicit id', () => {
 test('fromSim carries multi-leg fields through', () => {
   const E = load();
   const d = {
-    plane: { id: 'vaeridion', name: 'Vaeridion', svg: 'v.svg', battery_kwh: 600, c_rate: 2, range_km: 1000, speed_kmh: 320 },
+    plane: { id: 'vaeridion', name: 'Vaeridion', svg: 'v.svg', battery_kwh: 600, range_km: 1000, speed_kmh: 320 },
     charger: { name: '1 MW', power_kw: 1000 },
     trip_type: 'oneway', leg_energy_kwh: 100, multi_leg: true,
     total_flight_time_h: 3.2, total_recharge_energy_kwh: 280,

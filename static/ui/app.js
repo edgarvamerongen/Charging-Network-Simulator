@@ -10,7 +10,7 @@ window.CNSUI = (function () {
     origin: null, dest: null, stops: [], trip: 'one-way', freq: 1, per: 'day',
     result: null, profile: null, busy: false, err: '',
     filter: '', lanes: 'airports', showDep: false,
-    base: 'light', showSmall: false, showAssets: true, showNet: true,
+    base: 'light', showAssets: true, showNet: true,
     allChargers: false, picking: false, open: { route: true, charging: false, calc: false }, openAp: {},
     acFilters: { type: null, propulsion: null, status: null }, acFilterOpen: false, availOverride: null
   };
@@ -234,6 +234,6 @@ window.CNSUI = (function () {
 
   return { S, PLANES, CHARGERS, SEED, D, airports: () => AIRPORTS, byId: () => AP_BY_ID, assets: () => ASSETS,
            $, $$, esc, fmt, perDay, planeShort, shortName, plane, charger, ll, chain, toast, search, aircraft,
-           planeImg, resolvePlaneId, dispKm, netCount,
+           planeImg, resolvePlaneId, dispKm,
            render, setMode, boot, rebuildIndexes, folderChanged, modal, _setAirports, _applyDefaults };
 })();

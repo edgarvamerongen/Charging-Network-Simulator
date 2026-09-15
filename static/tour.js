@@ -572,16 +572,13 @@ window.CNSTour = (function () {
     }
 
     // ---- public ---------------------------------------------------------------
-    async function start(opts) {
+    async function start() {
         if (_activeDriver) { try { _activeDriver.destroy(); } catch (e) {} _activeDriver = null; }
         if (!(window.driver && window.driver.js)) {
             console.warn('Driver.js not loaded — tour skipped.'); return;
         }
-        const fresh = !opts || opts.seed !== false;
-        if (fresh) {
-            await _resetWorld();
-            await _seedDemoForm();
-        }
+        await _resetWorld();
+        await _seedDemoForm();
         const D = window.driver.js.driver;
         // Esc must always exit the tour. Driver.js (v1.3.1) only honours Esc when
         // allowClose is true — but we keep allowClose:false so outside-clicks

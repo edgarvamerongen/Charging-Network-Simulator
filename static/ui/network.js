@@ -16,7 +16,7 @@
   // ---- recompute (classic _recomputeCtx / recomputeAllFlights) ----
   function recomputeCtx() {
     return { allAirports: UI.airports(), allowedTypes: ['small_airport', 'medium_airport', 'large_airport'], allowedIdents: new Set(Object.keys(UI.assets() || {})),
-      planeFor: t => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate, runway_req: cat(t.planeId).runway_req, type: cat(t.planeId).type, range_incl_reserves: cat(t.planeId).range_incl_reserves, regime: cat(t.planeId).regime, max_charge_kw: cat(t.planeId).max_charge_kw }),
+      planeFor: t => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, runway_req: cat(t.planeId).runway_req, type: cat(t.planeId).type, range_incl_reserves: cat(t.planeId).range_incl_reserves, regime: cat(t.planeId).regime, max_charge_kw: cat(t.planeId).max_charge_kw }),
       availableRangeKm: p => UI.planner ? UI.planner.availableRangeKm(p) : null, routingOptions: UI.planner ? UI.planner.routingOptions() : {} };
   }
   function recomputeAll() { if (!window.CNSRecompute || !D()) return; const trips = D().loadFolder(); if (!trips.length) return; D().saveFolder(CNSRecompute.recomputeAll(trips, recomputeCtx())); UI.folderChanged(); }
@@ -113,7 +113,7 @@
     const isTraining = d.trip_type === 'training';
     const trip = { id: prev.id, destIdent: isTraining ? prev.originIdent : prev.destIdent, destName: isTraining ? prev.originName : prev.destName, destLat: isTraining ? prev.originLat : prev.destLat, destLon: isTraining ? prev.originLon : prev.destLon,
       originIdent: prev.originIdent, originName: prev.originName, originLat: prev.originLat, originLon: prev.originLon, planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
-      chargerId: prev.chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw, legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate, range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,
+      chargerId: prev.chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw, legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,
       freqN: o.freqN, freqUnit: o.freqUnit, fleetMode: o.fleetMode, chargerOverride: o.chargerOverride || undefined };
     if (d.multi_leg) Object.assign(trip, { multiLeg: true, flightTimeH: d.total_flight_time_h, rechargeEnergy: d.total_recharge_energy_kwh, stops: (window.CNSRecompute && CNSRecompute.mergeManualFlags) ? CNSRecompute.mergeManualFlags(d.stops, prev.stops) : d.stops, charges: d.charges, legs: d.legs, totalDistanceKm: d.total_distance_km, totalFlightTimeH: d.total_flight_time_h, totalChargeMin: d.total_charge_time_min, totalRechargeKwh: d.total_recharge_energy_kwh });
     else if (isTraining) Object.assign(trip, { rechargeEnergy: d.recharge_energy_kwh, flightTimeH: d.flight_time_h, trainingRangeKm: d.training_range_km, rawPatternEnergyKwh: d.raw_pattern_energy_kwh });
@@ -269,5 +269,5 @@
     if (t.dataset.act === 'tripFreq') { D().updateTrip(t.dataset.id, { freqN: Math.min(2000, Math.max(1, parseInt(t.value || '1', 10))) }); UI.folderChanged(); UI.render(); }
     if (t.dataset.act === 'tripUnit') { D().updateTrip(t.dataset.id, { freqUnit: t.value }); UI.folderChanged(); UI.render(); }
   });
-  UI.network = { render, remove, rows, recomputeAll, recomputeAllDebounced, loadScenario, SCENARIOS, openEdit, openReplay };
+  UI.network = { render, rows, recomputeAll, recomputeAllDebounced, loadScenario, SCENARIOS };
 })();

@@ -19,7 +19,6 @@
  * FlightProfile (units explicit):
  *   { tripType, multiLeg, training, battery_kwh, usable_kwh, reserve_kwh, availRangeKm,
  *     routingFactor, gridDemandFactor,
- *     nodes:   [{ ident,name,lat,lon, role, departSocFrac, billable }],   // role 'origin' billable:false
  *     legs:    [{ fromIdent,fromName,toIdent,toName, rawKm, distKm, flightMin, energyKwh,   // rawKm=great-circle; distKm=ROUTED (rawKm*pad)
  *                 socStartFrac, socEndFrac, overRange, legIndex }],   // routing padding lands on distKm, so energyKwh==ePerKm*distKm & flightMin==distKm/speed
  *     charges: [{ atIndex, ident,name,lat,lon, role, direction, arrivalSocFrac, targetSocFrac,
@@ -37,7 +36,7 @@ window.CNSFlight = (function () {
     function _usableFraction(plane) { const s = _settings(); return s && s.usableFraction ? s.usableFraction(plane) : 1; }
     function _gridDemandFactor() { const s = _settings(); return s && s.gridDemandFactor ? s.gridDemandFactor() : 1; }
     function _chargeTargetDefault() { const s = _settings(); return s && s.chargeTargetDefault ? s.chargeTargetDefault() : null; }
-    function _effectiveChargePower(kw, batt, cr, maxKw) { const s = _settings(); return (s && s.effectiveChargePower) ? s.effectiveChargePower(kw, batt, cr, maxKw) : (kw || 0); }
+    function _effectiveChargePower(kw, batt, maxKw) { const s = _settings(); return (s && s.effectiveChargePower) ? s.effectiveChargePower(kw, batt, maxKw) : (kw || 0); }
     function _chargeTimeMin(e, kw, batt, soc) { const s = _settings(); return (s && s.chargeTimeMin) ? s.chargeTimeMin(e, kw, batt, soc) : (kw ? 60 * e / kw : 0); }
     function _climbOverheadPct() { const s = _settings(); return (s && s.climbOverheadPct) ? s.climbOverheadPct() : 0; }
     function _climbSatFrac() { const s = _settings(); return (s && s.climbSatFrac) ? s.climbSatFrac() : 0.15; }
@@ -124,7 +123,6 @@ window.CNSFlight = (function () {
         const usable = batt * usableFrac;
         const reserve = batt - usable;
         const ePerKm = range > 0 ? batt / range : 0;
-        const cRate = plane.c_rate;                                   // vestigial; effectiveChargePower handles null
         // Climb model: training is excluded (ruled), so its legs keep the linear rate.
         const _cp = climbParams(plane);
         const eMaxClimb = (!training && _cp.applies) ? _cp.eMaxKwh : 0;
@@ -136,10 +134,10 @@ window.CNSFlight = (function () {
         const maxFlownKm = (eMaxClimb > 0) ? maxFlownLegKm(plane) : range * usableFrac;   // usable-energy max leg, flown km
         const availRangeKm = (range > 0 && route > 0) ? Math.max(0, maxFlownKm - sidStar) / route : 0;   // great-circle reach the planner enforces: the fixed SID/STAR pad is carved out so a padded leg (rawKm·route + sidStar) still respects the plane's max range. The DISPLAYED available range stays the full usable reach (pad shown in the LEG, not the headline reach). With the climb model on, the usable reach solves E(d)=usable in closed form (maxFlownLegKm).
         const getTarget = (typeof opts.getTargetSoc === 'function') ? opts.getTargetSoc : (() => _chargeTargetDefault());
-        const _rawChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => +opts.chargerKw || 0);
+        const _rawChargerKw = (typeof opts.getChargerKw === 'function') ? opts.getChargerKw : (() => 0);
         // Multi-charger aircraft draw N chargers at once (assume all N available —
-        // routes carry no charger-availability info); the pack-side caps (c-rate,
-        // taper) still apply to the COMBINED power inside _effectiveChargePower.
+        // routes carry no charger-availability info); the pack-side caps (C-rate,
+        // published max) still apply to the COMBINED power inside _effectiveChargePower.
         const nCharge = nChargers(plane);
         const getChargerKw = (ident) => _rawChargerKw(ident) * nCharge;
         // Interim-deficit charging (per-rotation opts supplied by the scheduler): a shared aircraft
@@ -153,7 +151,7 @@ window.CNSFlight = (function () {
             tripType, multiLeg: false, training,
             battery_kwh: batt, usable_kwh: usable, reserve_kwh: reserve, availRangeKm,
             routingFactor: route, sidStarKm: sidStar, gridDemandFactor: grid,
-            nodes: [], legs: [], charges: [], phases: [],
+            legs: [], charges: [], phases: [],
             totals: { rawKm: 0, distKm: 0, flightMin: 0, chargeMin: 0, enRouteMin: 0, terminalMin: 0, travelMin: 0, energyUsedKwh: 0, gridKwh: 0, avgUsageKwhPer100km: 0 },
             terminal: null, errors,
         };
@@ -172,12 +170,11 @@ window.CNSFlight = (function () {
             const departTo = terminusToFull ? batt
                 : Math.min(batt, (tgt != null) ? Math.max(tgt * batt, consumed + reserve) : (consumed + reserve));
             const chargeE = Math.max(0, departTo - arrival);
-            const powerKw = _effectiveChargePower(getChargerKw(o.ident), batt, cRate, plane.max_charge_kw);
+            const powerKw = _effectiveChargePower(getChargerKw(o.ident), batt, plane.max_charge_kw);
             const chargeMin = _chargeTimeMin(chargeE, powerKw, batt, batt > 0 ? arrival / batt : 0);   // [R7] SoC-aware
             const arrFrac = batt > 0 ? arrival / batt : 0;
             const depFrac = batt > 0 ? Math.min(1, departTo / batt) : 0;
             const tgtFrac = terminusToFull ? 1 : (tgt != null ? tgt : depFrac);
-            profile.nodes.push({ ident: o.ident, name: o.name, lat: +o.lat, lon: +o.lon, role: 'origin', departSocFrac: departSocFrac, billable: false });
             const flightMin = speed > 0 ? (trainKm * route) / speed * 60 : 0;   // pattern flight time IS padded (flown path)
             profile.legs.push({ fromIdent: o.ident, fromName: o.name, toIdent: o.ident, toName: o.name, rawKm: trainKm, distKm: trainKm, flightMin, energyKwh: consumed, socStartFrac: batt > 0 ? depart / batt : 0, socEndFrac: arrFrac, overRange: consumed > usable + 1e-9, legIndex: 0 });
             profile.charges.push({ atIndex: 0, ident: o.ident, name: o.name, lat: +o.lat, lon: +o.lon, role: 'training', direction: 'out', arrivalSocFrac: arrFrac, targetSocFrac: tgtFrac, departSocFrac: depFrac, energyKwh: chargeE, gridKwh: chargeE * grid, powerKw, chargeMin, isTerminal: true });
@@ -192,7 +189,6 @@ window.CNSFlight = (function () {
         const chain = _expandChain(waypoints, tripType);
         profile.multiLeg = (waypoints.length > 2);
         const nLegs = chain.length - 1;
-        const origin = chain[0];
 
         // legs: rawKm = great-circle (geographic); distKm = ROUTED length (rawKm * pad).
         // Routing padding lands on the LENGTH; energy + time + reach all derive from the
@@ -208,9 +204,6 @@ window.CNSFlight = (function () {
             profile.legs.push({ fromIdent: a.ident, fromName: a.name, toIdent: b.ident, toName: b.name, rawKm, distKm, flightMin, energyKwh, socStartFrac: 0, socEndFrac: 0, overRange, legIndex: i });
         }
         const turnIdx = (tripType === 'retour' || tripType === 'circular') ? (waypoints.length - 1) : -1;   // chain index of the turnaround (dest); for circular only the closing leg lies past it
-
-        // origin node — departs FULL, billable:false (D6); multi-leg one-way bills no origin charge
-        profile.nodes.push({ ident: origin.ident, name: origin.name, lat: +origin.lat, lon: +origin.lon, role: 'origin', departSocFrac: departSocFrac, billable: false });
 
         let socKwh = departSocFrac * batt;                        // [D6] origin departs full (departSocFrac=1) unless an interim rotation overrides it
         let off = 0;
@@ -239,7 +232,7 @@ window.CNSFlight = (function () {
             const isReturn = (turnIdx >= 0) && (i + 1 > turnIdx);
             const role = isTerminal ? ((tripType === 'retour' || tripType === 'circular') ? 'home' : 'dest')
                        : (i + 1 === turnIdx ? 'dest' : 'stop');
-            const powerKw = _effectiveChargePower(getChargerKw(node.ident), batt, cRate, plane.max_charge_kw);
+            const powerKw = _effectiveChargePower(getChargerKw(node.ident), batt, plane.max_charge_kw);
             const chargeMin = _chargeTimeMin(chargeE, powerKw, batt, batt > 0 ? arrival / batt : 0);   // [R7] SoC-aware
             const targetFrac = (isTerminal && terminusToFull) ? 1 : (getTarget(node.ident) != null ? getTarget(node.ident) : (batt > 0 ? Math.min(1, departTo / batt) : 0));
             profile.charges.push({
@@ -284,7 +277,6 @@ window.CNSFlight = (function () {
                 battery_kwh: trip.battery != null ? trip.battery : cat.battery_kwh,
                 range_km: trip.range_km != null ? trip.range_km : cat.range_km,
                 speed_kmh: trip.speed_kmh != null ? trip.speed_kmh : cat.speed_kmh,
-                c_rate: trip.c_rate,
                 training_range_km: trip.trainingRangeKm != null ? trip.trainingRangeKm : cat.training_range_km,
                 type: cat.type,                       // climb-model gate (wing-borne vs powered-lift) — catalog-sourced, trips don't persist it
                 range_incl_reserves: cat.range_incl_reserves,   // reserves already flown off the catalog range — usableFraction returns 1

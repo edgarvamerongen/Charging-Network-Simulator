@@ -86,5 +86,5 @@
     if (t.id === 'depSw' || t.classList.contains('dep-lbl')) { S.showDep = !S.showDep; render(); return; }
     if (t.id === 'focChip') { S.filter = ''; UI.render(); UI.map.drawNet(); UI.map.fitNet(); return; }
     if (t.id === 'drawerHead' && !e.target.closest('button')) $('#drawer').classList.toggle('open'); });
-  UI.timeline = { render, loadProfile, eventPeak };
+  UI.timeline = { render, loadProfile };
 })();

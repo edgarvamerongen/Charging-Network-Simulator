@@ -2,7 +2,7 @@
  * CNSDemand — the per-airport demand model: pure data + logic, no DOM.
  * --------------------------------------------------------------------
  *   • Folder/cfg storage (saved flights + per-airport charger config).
- *   • Helpers for role/energy a flight contributes at a given airport.
+ *   • Helpers for the role a flight plays at a given airport.
  *   • computeAirports(): groups all saved flights into per-airport demand.
  *
  * This is the layer any future UI (the current vanilla one, React, Svelte)
@@ -41,24 +41,6 @@ window.CNSDemand = (function () {
         if (trip.originIdent === ident) return 'origin';   // one-way departure hub (departs full → 0 charging)
         if (trip.multiLeg && Array.isArray(trip.stops) && trip.stops.some(s => s && s.ident === ident)) return 'stop';
         return null;
-    }
-
-    function tripsAt(ident) { return loadFolder().filter(t => roleAt(t, ident)); }
-
-    // Energy the airport must deliver per flight (per the relief / fullCharge model).
-    // For multi-leg trips, sum the backend-precomputed charges at this airport
-    // (a retour symmetric stop is visited twice, so its energy is the sum of both visits).
-    function energyAt(trip, ident, fullCharge) {
-        if (trip.multiLeg && Array.isArray(trip.charges)) {
-            return trip.charges
-                .filter(c => c && c.ident === ident)
-                .reduce((sum, c) => sum + numOf(c, 'energy_kwh'), 0);
-        }
-        const leg = numOf(trip, 'legEnergy'), batt = batteryOf(trip);
-        const role = roleAt(trip, ident);
-        if (role === 'home') return Math.min(2 * leg, batt);
-        if (trip.tripType !== 'retour') return leg;     // one-way arrival: a full leg
-        return fullCharge ? leg : Math.max(0, 2 * leg - batt);
     }
 
     // Group every saved flight into the airports it touches, with its base
@@ -205,7 +187,7 @@ window.CNSDemand = (function () {
 
     return {
         loadFolder, saveFolder, loadCfg, saveCfg,
-        flightsPerDay, batteryOf, roleAt, tripsAt, energyAt,
+        flightsPerDay, batteryOf, roleAt,
         computeAirports, updateTrip,
         defaultChargerFleet, targetSocFromCfg, resolveTargetSoc,
     };

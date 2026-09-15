@@ -7,7 +7,7 @@
  * stays in the browser modules so the server doesn't need a parallel Python
  * port that could drift out of sync.
  *
- * Depends on: CNSDemand, CNSScheduler, CNSCharging, CNSPlanes, CNSChargers.
+ * Depends on: CNSDemand, CNSScheduler, CNSCharging, CNSChargers.
  */
 window.CNSReport = (function () {
     const DAY_START = 7 * 60, DAY_END = 23 * 60;
@@ -60,8 +60,8 @@ window.CNSReport = (function () {
             // Feed the trip's assigned charger into the engine so per-leg charge
             // TIMES are real. profileForTrip defaults getChargerKw to () => 0
             // (it's normally only consumed for charge ENERGIES), which makes the
-            // profile's per-charge chargeMin explode (energy / 0). The plane's
-            // c-rate still caps the effective power, so this matches the charge
+            // profile's per-charge chargeMin explode (energy / 0). The acceptance
+            // caps still apply to the effective power, so this matches the charge
             // time shown on the contribution's main row.
             const tripChargerKw = +c.t.chargerPower || 0;
             const prof = (c.t.id in engCache) ? engCache[c.t.id]
@@ -76,17 +76,16 @@ window.CNSReport = (function () {
         });
         const plan = CNSCharging.planCharging(fleet, aircraftList);
 
-        let dailyKwh = 0, dailyChargingHours = 0;
+        let dailyKwh = 0;
         const contribs = a.contribs.map((c, i) => {
             const t = c.t;
             const asg = plan.assignments[i];
             const energy = asg.aircraft.energy;
             const nameplate = asg.power || (asg.charger ? asg.charger.power_kw : 0);   // combined nameplate when N bays are booked
             const battery = CNSDemand.batteryOf(t);
-            const cRate = ((window.PLANES_BY_ID || {})[t.planeId] || t).c_rate;
             const maxKw = ((window.PLANES_BY_ID || {})[t.planeId] || t).max_charge_kw;   // published acceptance cap
             const power = window.CNSSettings
-                ? CNSSettings.effectiveChargePower(nameplate, battery, cRate, maxKw)
+                ? CNSSettings.effectiveChargePower(nameplate, battery, maxKw)
                 : nameplate;
             const chargeMin = window.CNSSettings && power
                 ? CNSSettings.chargeTimeMin(energy, power, battery)
@@ -133,10 +132,10 @@ window.CNSReport = (function () {
         const peakKw = sInfo.peakKw || plan.peakPower || 0;
         // Daily charging hours come from the DES summary (chargeMin = Σ charge-phase
         // minutes here — the very bars the Gantt below draws), so the PDF figure always
-        // matches the scheduler. The old per-trip dailyChargeMinutesAt estimate priced
+        // matches the scheduler. The old per-trip estimate it replaced priced
         // charges at each trip's STORED charger power, blind to the airport's actual
         // charger fleet (and to infeasible flights, which runGlobal already excludes).
-        dailyChargingHours = (sInfo.chargeMin || 0) / 60;
+        const dailyChargingHours = (sInfo.chargeMin || 0) / 60;
 
         // Rotations — read straight from the global simulation's per-airport
         // view (CNSScheduler.rotationsAt). The phases are already actual-timed
@@ -210,7 +209,7 @@ window.CNSReport = (function () {
         const seen = new Map();
         flights.forEach(t => {
             if (seen.has(t.planeId)) return;
-            const cat = builtin[t.planeId] || (CNSPlanes.get ? CNSPlanes.get(t.planeId) : null);
+            const cat = builtin[t.planeId] || null;
             seen.set(t.planeId, {
                 id: t.planeId,
                 name: t.planeName,

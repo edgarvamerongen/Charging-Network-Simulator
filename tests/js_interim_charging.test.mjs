@@ -39,7 +39,7 @@ function savedTrip(o, d, plane, data, freqN, fleetMode, charger) {
     id: `t-${fleetMode}-${freqN}`, planeId: plane, planeName: P.name, tripType: 'retour',
     originIdent: o, originName: AP[o].name, originLat: AP[o].lat, originLon: AP[o].lon,
     destIdent: d, destName: AP[d].name, destLat: AP[d].lat, destLon: AP[d].lon,
-    battery: P.battery_kwh, range_km: P.range_km, speed_kmh: P.speed_kmh, c_rate: P.c_rate,
+    battery: P.battery_kwh, range_km: P.range_km, speed_kmh: P.speed_kmh,
     chargerId: charger, chargerName: charger, chargerPower: CHARGERS[charger].power_kw,
     legEnergy: data.leg_energy_kwh, flightTimeH: data.flight_time_h,
     freqN, freqUnit: 'day', fleetMode,
@@ -58,7 +58,7 @@ function totals(S, trip) {
     rot.phases.forEach(ph => { if (ph.kind === 'charge') { e += ph.energy || 0; m += ph.dur || 0; } });
     byRot.push(+e.toFixed(2)); energy += e; minutes += m;
   }));
-  const dcm = (S.CNSScheduler.dailyChargeMinutesAt) ? +S.CNSScheduler.dailyChargeMinutesAt(trip, 'EHAM').toFixed(2) : null;   // base daily charge minutes = the reporting figure
+  const dcm = +(S.CNSScheduler.summary('EHAM').chargeMin || 0).toFixed(2);   // base daily charge minutes = the reporting figure (report.js reads the same summary)
   return { energy: +energy.toFixed(2), minutes: +minutes.toFixed(2), byRot, dcm };
 }
 
@@ -96,11 +96,11 @@ test('final rotation tops up the most (its base charge reaches 100%)', () => {
 test('parity: a 1x/day shared retour is a single unchanged rotation', () => {
   assert.equal(shared1.byRot.length, 1, `expected 1 rotation, got ${shared1.byRot.length}`);
 });
-test('reporting: dailyChargeMinutesAt @ base is LOWER for shared than the all-to-full reference', () => {
-  assert.ok(shared3.dcm != null && separate3.dcm != null, 'dailyChargeMinutesAt unavailable');
+test('reporting: summary(base).chargeMin is LOWER for shared than the all-to-full reference', () => {
+  assert.ok(shared3.dcm > 0 && separate3.dcm > 0, 'summary chargeMin unavailable');
   assert.ok(shared3.dcm < separate3.dcm - 0.5, `base daily charge min: shared ${shared3.dcm} not < reference ${separate3.dcm}`);
 });
 
-console.log(`  reporting dailyChargeMinutesAt @ base: shared=${shared3.dcm}  separate=${separate3.dcm}`);
+console.log(`  reporting summary(base).chargeMin: shared=${shared3.dcm}  separate=${separate3.dcm}`);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

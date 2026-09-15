@@ -28,5 +28,5 @@
     });
     return { segs, zones, pts, low: pts.reduce((m, p) => Math.min(m, p.soc), 100) };
   }
-  window.CNSUI = window.CNSUI || {}; window.CNSUI.soc = { series, phases };
+  window.CNSUI = window.CNSUI || {}; window.CNSUI.soc = { series };
 })();

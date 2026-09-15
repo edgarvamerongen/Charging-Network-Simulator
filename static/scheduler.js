@@ -163,19 +163,18 @@ window.CNSScheduler = (function () {
         if (!_rs() || !power) return power ? energy / power * 60 : 0;
         return CNSSettings.chargeTimeMin(energy, power, batt, soc);
     };
-    // Battery acceptance cap: a small pack can't absorb an over-sized charger.
-    // `power` here must already be the charger's nameplate; the result is the
-    // EFFECTIVE power used for both charge time and peak draw. Identity when the
-    // acceptance toggle is off. Pass the plane's c_rate (catalog) when known.
-    const _cRateOf = (trip) => ((window.PLANES_BY_ID || {})[trip.planeId] || trip || {}).c_rate;
     // Chargers this trip's aircraft draws AT ONCE (catalog simultaneous_charging;
     // 1 for everyone else). Single source: CNSFlight.nChargers — the engine applies
     // the same count to its charge times, planCharging books this many bays, and
     // the global sim claims this many physical slots.
     const _nChOf = (trip) => (window.CNSFlight && CNSFlight.nChargers)
         ? CNSFlight.nChargers((window.PLANES_BY_ID || {})[trip.planeId] || trip || {}) : 1;
-    const _effPower = (power, batt, cRate, maxKw) =>
-        (_rs() && CNSSettings.effectiveChargePower) ? CNSSettings.effectiveChargePower(power, batt, cRate, maxKw) : (power || 0);
+    // Battery acceptance cap: a small pack can't absorb an over-sized charger.
+    // `power` here must already be the charger's nameplate; the result is the
+    // EFFECTIVE power used for both charge time and peak draw. Identity when the
+    // acceptance toggle is off. The C-rate is the global CNSSettings one.
+    const _effPower = (power, batt, maxKw) =>
+        (_rs() && CNSSettings.effectiveChargePower) ? CNSSettings.effectiveChargePower(power, batt, maxKw) : (power || 0);
     const _maxKwOf = (trip) => _planeOf(trip).max_charge_kw;   // published OEM acceptance cap (may be null)
     // Nameplate power of the charger a flight manually pinned (forcedChargerId),
     // or 0 when it isn't pinned / the pinned charger isn't in the catalog. The
@@ -208,24 +207,6 @@ window.CNSScheduler = (function () {
         return { first, interim, last };
     }
 
-    // Daily charging MINUTES a trip needs at `ident` — the reporting figure (demand drawer + PDF).
-    // Shared >1x/day lane: sum the per-rotation charge minutes (first + (N-2)*interim + last) from the
-    // rotation templates (SoC-aware via R7, same planCharging charger as ctx.chargerAt). Else: the
-    // single-rotation minutes * flightsPerDay (fractional — weekly trips stay amortised, NOT integer
-    // instancesPerDay). Daily kWh is conserved and stays on flightsPerDay at the call sites.
-    function dailyChargeMinutesAt(trip, ident) {
-        if (!trip) return 0;
-        const minsAt = (tpl) => (tpl && tpl.ph ? tpl.ph : []).reduce((s, p) => (p.kind === 'charge' && p.ident === ident) ? s + (p.dur || 0) : s, 0);
-        const N = instanceStarts(trip).length;
-        if (!fleetSeparate(trip) && N > 1) {
-            const { first, interim, last } = _rotationTemplates(trip);
-            return minsAt(first) + Math.max(0, N - 2) * minsAt(interim) + minsAt(last);
-        }
-        const fpd = (window.CNSDemand && CNSDemand.flightsPerDay) ? CNSDemand.flightsPerDay(trip)
-            : (trip.freqUnit === 'week' ? (num(trip, 'freqN')) / 7 : num(trip, 'freqN'));
-        return minsAt(tripPhases(trip, null)) * fpd;
-    }
-
     function tripPhases(trip, viewIdent, ctx, rotOpts) {
         if (trip.multiLeg) return _multiLegPhases(trip, viewIdent, ctx, rotOpts);
         ctx = ctx || _desContext(trip);
@@ -233,7 +214,6 @@ window.CNSScheduler = (function () {
         const route = _route(_planeOf(trip));
         const legMin = num(trip, 'flightTimeH') * 60 / legs * route;
         const batt = batteryOf(trip);
-        const cRate = _cRateOf(trip);
 
         const ph = []; let off = 0;
         ph.push({ kind: 'fly', leg: 'out', start: off, dur: legMin, label: 'Fly to ' + trip.destName }); off += legMin;
@@ -245,7 +225,7 @@ window.CNSScheduler = (function () {
         const prof = _tripProfile(trip, rotOpts);
         const destEnergy = prof ? prof.energyAt(trip.destIdent) : 0;
         const destArr = prof ? ((prof.charges.find(c => c.ident === trip.destIdent) || {}).arrivalSocFrac ?? null) : null;
-        const destPower = _effPower(ctx.chargerAt(trip.destIdent), batt, cRate, _maxKwOf(trip));
+        const destPower = _effPower(ctx.chargerAt(trip.destIdent), batt, _maxKwOf(trip));
         const destMin = _chargeMin(destEnergy, destPower, batt, destArr);
         const forcedPower = _forcedPower(trip);
         if (destMin > 0) { ph.push({ kind: 'charge', at: 'dest', ident: trip.destIdent, name: trip.destName, atX: viewIdent === trip.destIdent, start: off, dur: destMin, power: destPower, energy: destEnergy, arrivalFrac: destArr, forcedPower, label: 'Charge @ ' + trip.destName }); off += destMin; }
@@ -254,7 +234,7 @@ window.CNSScheduler = (function () {
             ph.push({ kind: 'fly', leg: 'back', start: off, dur: legMin, label: 'Fly back to ' + trip.originName }); off += legMin;
             const homeEnergy = prof ? prof.energyAt(trip.originIdent) : 0;
             const homeArr = prof ? ((prof.charges.find(c => c.ident === trip.originIdent && c.role === 'home') || {}).arrivalSocFrac ?? null) : null;
-            const homePower = _effPower(ctx.chargerAt(trip.originIdent), batt, cRate, _maxKwOf(trip));
+            const homePower = _effPower(ctx.chargerAt(trip.originIdent), batt, _maxKwOf(trip));
             const homeMin = _chargeMin(homeEnergy, homePower, batt, homeArr);
             if (homeMin > 0) { ph.push({ kind: 'charge', at: 'home', ident: trip.originIdent, name: trip.originName, atX: viewIdent === trip.originIdent, start: off, dur: homeMin, power: homePower, energy: homeEnergy, arrivalFrac: homeArr, forcedPower, label: 'Recharge @ ' + trip.originName }); off += homeMin; }
         }
@@ -273,7 +253,6 @@ window.CNSScheduler = (function () {
         const charges = Array.isArray(trip.charges) ? trip.charges : [];
         const route = _route(_planeOf(trip));
         const batt = batteryOf(trip);
-        const cRate = _cRateOf(trip);
         // Reserve-aware forward walk: each stop charges only what's needed for the
         // NEXT leg + landing reserve (or its SoC target); the terminal tops up to
         // full. Same path for panel + DES — only ctx.targetAt differs (saved cfg
@@ -293,7 +272,7 @@ window.CNSScheduler = (function () {
             off += legMin;
             const c = liveCharges[i] || charges[i];
             if (!c) return;
-            const power = _effPower(ctx.chargerAt(c.ident), batt, cRate, _maxKwOf(trip));
+            const power = _effPower(ctx.chargerAt(c.ident), batt, _maxKwOf(trip));
             const energy = Number(c.energy_kwh) || 0;     // recompute already applied routing padding
             const arrFrac = (c.arrival_frac != null) ? c.arrival_frac : null;
             const dur = _chargeMin(energy, power, batt, arrFrac);
@@ -395,7 +374,7 @@ window.CNSScheduler = (function () {
         loadTrips().filter(t => t.feasible !== false).forEach(t => {
             const { ph, total } = tripPhases(t, null);     // charges carry .ident
             const starts = instanceStarts(t);
-            const base = { trip: t, ph, total, cap: batteryOf(t), cRate: _cRateOf(t), nCh: _nChOf(t), maxKw: _maxKwOf(t) };
+            const base = { trip: t, ph, total, cap: batteryOf(t), nCh: _nChOf(t), maxKw: _maxKwOf(t) };
             if (fleetSeparate(t) && starts.length > 1) {
                 // Separate aircraft (fleet) → one lane each, can fly in parallel.
                 starts.forEach((d, k) => lanes.push({ ...base, desired: [d], planeIdx: k + 1, planeTotal: starts.length, schedSlot: k }));
@@ -515,8 +494,8 @@ window.CNSScheduler = (function () {
             // each capped by the battery's acceptance (C-rate) so the recorded
             // draw and duration are both physical. Every claimed bay is occupied
             // for the (capped) duration.
-            let power = chosen.reduce((s, i) => s + _effPower(pool[i].power, L.cap, L.cRate), 0);
-            power = _effPower(power, L.cap, L.cRate, L.maxKw);   // published acceptance caps the COMBINED draw
+            let power = chosen.reduce((s, i) => s + _effPower(pool[i].power, L.cap), 0);
+            power = _effPower(power, L.cap, L.maxKw);   // published acceptance caps the COMBINED draw
             const dur = _chargeMin(rot.tpl.ph[e.ci].energy, power, L.cap, rot.tpl.ph[e.ci].arrivalFrac);
             chosen.forEach(i => { pool[i].freeAt = start + dur; });
             const phase = rot.phases[e.ci];
@@ -627,7 +606,6 @@ window.CNSScheduler = (function () {
         evs.forEach(e => { cur += e.d; if (cur > peak) peak = cur; });
         return { peakKw: peak, latestEnd: latest, overflow: latest > DAY_END, chargeMin };
     }
-    function peakPowerKw(ident) { return summary(ident).peakKw; }
 
     // ---------- rendering ----------
     function renderInto(container, ident) {
@@ -787,5 +765,5 @@ window.CNSScheduler = (function () {
         _stamp = null; _ctx = {}; _globalStamp = null; _globalCache = null;
     }
 
-    return { init, renderInto, peakPowerKw, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, dailyChargeMinutesAt, DAY_START, DAY_END, SPAN };
+    return { init, renderInto, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, DAY_START, DAY_END, SPAN };
 })();

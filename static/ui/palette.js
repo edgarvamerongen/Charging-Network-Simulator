@@ -97,5 +97,5 @@
     $('#cmdkList').addEventListener('click', e => { const it = e.target.closest('.it'); if (it) run(+it.dataset.i); });
     $('#cmdkList').addEventListener('mousemove', e => { const it = e.target.closest('.it'); if (it && +it.dataset.i !== CMD.hl) { CMD.hl = +it.dataset.i; renderList(); } }); });
   document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#cmdk').hidden ? open('') : close(); } else if (e.key === 'Escape' && !$('#cmdk').hidden) close(); });
-  UI.palette = { open, close, items, syncControls };
+  UI.palette = { items };
 })();

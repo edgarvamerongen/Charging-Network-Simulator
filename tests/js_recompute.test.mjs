@@ -64,7 +64,7 @@ function tripFor(o, d, planeId = 'beta_plane', stops = []) {
   return { id: 't', planeId, planeName: P.name, tripType: 'retour',
     originIdent: o, originName: AP[o].name, originLat: AP[o].lat, originLon: AP[o].lon,
     destIdent: d, destName: AP[d].name, destLat: AP[d].lat, destLon: AP[d].lon,
-    battery: P.battery_kwh, range_km: P.range_km, speed_kmh: P.speed_kmh, c_rate: P.c_rate,
+    battery: P.battery_kwh, range_km: P.range_km, speed_kmh: P.speed_kmh,
     chargerId: 'dc_250', chargerName: '250 kW DC', chargerPower: 250,
     freqN: 1, freqUnit: 'day', fleetMode: 'separate', stops };
 }
@@ -72,7 +72,7 @@ const CATALOG = ['EHAM', 'EHGG', 'EHRD', 'EGLL', 'LFPG'].map(k => ap(k));
 const ctx = (rangeKm) => ({
   allAirports: CATALOG,
   allowedTypes: ['medium_airport', 'large_airport'],
-  planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh, c_rate: t.c_rate }),
+  planeFor: (t) => ({ id: t.planeId, name: t.planeName, battery_kwh: t.battery, range_km: t.range_km, speed_kmh: t.speed_kmh }),
   availableRangeKm: (plane) => {
     const route = S.CNSSettings.routingFactor();
     const sid = S.CNSSettings.sidStarPaddingKm ? S.CNSSettings.sidStarPaddingKm() : 0;

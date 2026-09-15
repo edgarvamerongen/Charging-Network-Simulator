@@ -29,7 +29,7 @@ function savedTrip(c) {
     id: c.name, planeId: c.input.plane, tripType: c.input.trip,
     originIdent: o, originName: AP[o].name, originLat: AP[o].lat, originLon: AP[o].lon,
     destIdent: dest, destName: AP[dest].name, destLat: AP[dest].lat, destLon: AP[dest].lon,
-    battery: P.battery_kwh, range_km: P.range_km, speed_kmh: P.speed_kmh, c_rate: P.c_rate,
+    battery: P.battery_kwh, range_km: P.range_km, speed_kmh: P.speed_kmh,
     legEnergy: c.input.sim.leg_energy_kwh,
   };
   if (c.input.sim.multi_leg) { t.multiLeg = true; t.stops = (c.input.stops || []).map(co); t.legs = c.input.sim.legs; t.charges = c.input.sim.charges; }

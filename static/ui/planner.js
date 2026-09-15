@@ -109,7 +109,7 @@
     // divert-edit.js calls these as THUNKS (static/divert-edit.js:88, 95, 154) — the classic passes
     // `airports: () => allAirports, isSuitable: () => _divertSuitable()` (index.html:6616-6620).
     // Passing values instead threw on every drag and made an ALT pick impossible.
-    if (window.CNSDivertEdit) CNSDivertEdit.init({ map: UI.map.map, airportByIdent: UI.byId(), airports: () => UI.airports(), isSuitable: () => divertSuitable(), onChange: onDivertChange, onDragFeedback: () => {} });
+    if (window.CNSDivertEdit) CNSDivertEdit.init({ map: UI.map.map, airportByIdent: UI.byId(), airports: () => UI.airports(), isSuitable: () => divertSuitable(), onChange: onDivertChange });
     if (window.CNSRangeGraph) CNSRangeGraph.init({ map: UI.map.map, getReachKm: () => availableRangeKm(plane()) || 0, airports: () => UI.airports(), allowedFor: () => { const types = allowedTypes(); const ids = plannerAllowedIdents(); return ap => types.includes(ap.type) || ids.has(ap.ident); } });
   }
   function altPick(ident) { const full = UI.byId()[ident]; if (!full || !window.CNSDivertEdit) return; CNSDivertEdit.startAltPick({ ident, lat: +full.latitude_deg, lon: +full.longitude_deg }); UI.toast('Click an airport on the map to use it as the divert for ' + ident); }
@@ -117,5 +117,5 @@
   function pickPending() { return !!(window.CNSDivertEdit && CNSDivertEdit.pickPending && CNSDivertEdit.pickPending()); }
   function notifyAirportPick(ap) { if (window.CNSDivertEdit && CNSDivertEdit.notifyAirportPick) CNSDivertEdit.notifyAirportPick(ap); }
 
-  UI.planner = { availableRangeKm, availRangeShownKm, terminus, ringChain, chain, validateRoute, recomputeRoute, replan, noRouteRemedy, divertSuitable, divertOverrideKm, stampDiverts, alternatesChain, allowedTypes, plannerAllowedIdents, fullNetworkIdents, routingOptions, initMap, altPick, altReset, pickPending, notifyAirportPick, wp };
+  UI.planner = { availableRangeKm, availRangeShownKm, chain, replan, noRouteRemedy, divertSuitable, alternatesChain, routingOptions, initMap, altPick, altReset, pickPending, notifyAirportPick };
 })();

@@ -54,5 +54,5 @@
       catch (ex) { err.textContent = ex.message || 'Could not add the charger.'; err.hidden = false; } return; }
     if (t.dataset.act === 'ccRemove') { try { await CNSChargers.remove(t.dataset.id); const i = UI.CHARGERS.findIndex(x => x.id === t.dataset.id); if (i >= 0) UI.CHARGERS.splice(i, 1); UI.rebuildIndexes(); if (S.chargerId === t.dataset.id) S.chargerId = UI.CHARGERS[0].id; chargerModal(); UI.plan.onFormChange(false); } catch (ex) { UI.toast('Could not remove: ' + ex.message); } }
   });
-  UI.share = { currentState, copyRouteLink, copyBuildLink, applyState };
+  UI.share = { copyRouteLink, copyBuildLink, applyState };
 })();

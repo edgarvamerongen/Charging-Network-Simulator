@@ -233,12 +233,12 @@ test('published-data gates: ONLY range_incl_reserves waives the alternate deduct
 test('effectiveChargePower: published max_charge_kw caps the TOTAL draw, taper on or off', () => {
   const { S } = loadSettings();
   S.save({ chargeTaper: { enabled: true, cRate: 5.0 } });
-  assert.equal(S.effectiveChargePower(250, 22, null, 40), 40, 'Velis: 40 kW acceptance beats charger + c-rate');
-  assert.equal(S.effectiveChargePower(500, 225, null, 400), 400, 'multi-charger combined 500 capped at 400');
-  assert.equal(S.effectiveChargePower(250, 225, null, 400), 250, 'non-binding cap is identity');
-  assert.equal(S.effectiveChargePower(250, 225, null, null), 250, 'no published cap -> unchanged');
+  assert.equal(S.effectiveChargePower(250, 22, 40), 40, 'Velis: 40 kW acceptance beats charger + c-rate');
+  assert.equal(S.effectiveChargePower(500, 225, 400), 400, 'multi-charger combined 500 capped at 400');
+  assert.equal(S.effectiveChargePower(250, 225, 400), 250, 'non-binding cap is identity');
+  assert.equal(S.effectiveChargePower(250, 225, null), 250, 'no published cap -> unchanged');
   S.save({ chargeTaper: { enabled: false } });
-  assert.equal(S.effectiveChargePower(250, 22, null, 40), 40, 'acceptance is physics — applies with taper off');
+  assert.equal(S.effectiveChargePower(250, 22, 40), 40, 'acceptance is physics — applies with taper off');
 });
 
 test('usableFraction: range_incl_reserves plane always gets 1.0 (no double reserve)', () => {

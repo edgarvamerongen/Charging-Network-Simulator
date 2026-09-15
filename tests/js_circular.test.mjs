@@ -96,13 +96,6 @@ test('demand.computeAirports: origin gets exactly ONE contribution (home, back) 
   if (!(home.contribs[0].base > 0)) throw new Error('home charge energy should be > 0');
 });
 
-test('demand.energyAt: home energy == the closing charge', () => {
-  const t = savedCircularTrip();
-  const term = t.charges[t.charges.length - 1];
-  const got = S.CNSDemand.energyAt(t, 'EHAM');
-  if (!approx(got, term.energy_kwh)) throw new Error(`energyAt home ${got} vs terminal ${term.energy_kwh}`);
-});
-
 // ---- scheduler: roles + fleet default ----------------------------------------
 test('scheduler.roleAt: circular origin is HOME (the closing recharge is scheduled)', () => {
   const t = savedCircularTrip();

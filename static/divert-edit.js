@@ -121,7 +121,6 @@ window.CNSDivertEdit = (function () {
                 const snap = _snap(cur, n.ident);
                 const reserve = snap ? CNSRouting.haversineKm(from, { lat: +snap.latitude_deg, lon: +snap.longitude_deg }) : CNSRouting.haversineKm(from, cur);
                 m.setTooltipContent(`${snap ? snap.ident : '—'} · ${_fmt(reserve)}`);
-                if (typeof _deps.onDragFeedback === 'function') _deps.onDragFeedback(n, reserve, i);
             });
             m.on('dragend', (e) => {
                 const p = e.target.getLatLng();

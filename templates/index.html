@@ -5589,9 +5589,8 @@
                     // model. Identity (linear) when the taper toggle is off.
                     const nameplate = asg.power || (asg.charger ? asg.charger.power_kw : 0);   // combined nameplate when N bays are booked
                     const battery = t.battery ?? t.legEnergy * 2;
-                    const cRate = ((window.PLANES_BY_ID || {})[t.planeId] || t).c_rate;
                     const maxKw = ((window.PLANES_BY_ID || {})[t.planeId] || t).max_charge_kw;   // published acceptance cap
-                    const power = CNSSettings.effectiveChargePower(nameplate, battery, cRate, maxKw);
+                    const power = CNSSettings.effectiveChargePower(nameplate, battery, maxKw);
                     const chargeMin = power ? CNSSettings.chargeTimeMin(energy, power, battery) : Infinity;
                     dailyEnergy += energy * flightsPerDay(t);
                     // Role labels use consistent aviation terminology:
@@ -5875,7 +5874,7 @@
                 originIdent: d._origin.ident, originName: d._origin.name, originLat: d._origin.lat, originLon: d._origin.lon,
                 planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
                 chargerId: d._chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
-                legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
+                legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh,
                 range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,   // R4: persist the effective plane spec so the engine can rebuild a custom-plane trip from coords (catalog planes also resolve via planeId)
                 freqN: d._freqN, freqUnit: d._freqUnit,
                 // 'shared' = one aircraft cycles N rotations; 'separate' = N
@@ -6086,7 +6085,7 @@
                 originIdent: prev.originIdent, originName: prev.originName, originLat: prev.originLat, originLon: prev.originLon,
                 planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
                 chargerId: prev.chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
-                legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
+                legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh,
                 range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,
                 freqN: o.freqN, freqUnit: o.freqUnit, fleetMode: o.fleetMode,
                 chargerOverride: o.chargerOverride || undefined,

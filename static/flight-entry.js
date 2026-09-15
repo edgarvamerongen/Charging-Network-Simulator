@@ -20,7 +20,7 @@ window.CNSFlightEntry = (function () {
             originIdent: o.ident, originName: o.name, originLat: o.lat, originLon: o.lon,
             planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
             chargerId: opts.chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw,
-            legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, c_rate: d.plane.c_rate,
+            legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh,
             // Persist the effective plane spec: the demand-calc recompute rebuilds
             // the routing plane from t.range_km/t.speed_kmh. Omitting them makes
             // every restored/seeded flight "Aircraft has no range." → infeasible.

@@ -4,9 +4,8 @@
  * demand.js attaches to window and uses CNSState for storage; we shim both.
  * The per-trip energy math (deliveredEnergy / recomputeMultiLegCharges) moved to the
  * unified engine (static/flight-model.js), tested in js_flight_model + js_flight_adapter.
- * What remains here is CNSDemand's own surface: energyAt (the multi-leg charge sum that
- * computeAirports reads), the per-airport contribution grouping, and resolveTargetSoc
- * (LOCAL-over-GLOBAL target).
+ * What remains here is CNSDemand's own surface: the per-airport contribution grouping
+ * and resolveTargetSoc (LOCAL-over-GLOBAL target).
  *
  * Run:  node tests/js_demand.test.mjs
  */
@@ -53,17 +52,6 @@ console.log('CNSDemand (static/demand.js) — node harness\n');
 const D = loadDemand();
 
 test('module loads', () => assert.equal(typeof D, 'object'));
-
-// ---- energyAt (legacy single-leg path) ------------------------------------
-test('energyAt: one-way dest == legEnergy', () => {
-  const trip = { tripType: 'one-way', destIdent: 'X', legEnergy: 90, battery: 225 };
-  assert.ok(approx(D.energyAt(trip, 'X', false), 90));
-});
-
-test('energyAt: retour home == min(2*leg, batt)', () => {
-  const trip = { tripType: 'retour', originIdent: 'H', destIdent: 'D', legEnergy: 180, battery: 225 };
-  assert.ok(approx(D.energyAt(trip, 'H', false), Math.min(360, 225)));   // 225
-});
 
 // ---- computeAirports: a one-way ORIGIN is LISTED but charges ZERO ----------
 // A one-way departure leaves FULL — its charge is accounted for where it last

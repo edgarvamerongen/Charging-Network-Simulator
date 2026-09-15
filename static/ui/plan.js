@@ -291,7 +291,6 @@
     const from = slotIdx(dragSlot), r = f.getBoundingClientRect(); let to = slotIdx(f.dataset.slot) + (e.clientY > r.top + r.height / 2 ? 1 : 0);
     const seq = chainSeq(); const [item] = seq.splice(from, 1); if (to > from) to--; seq.splice(to, 0, item); dragSlot = null; applySeq(seq); });
   document.addEventListener('dragend', () => { dragSlot = null; $$('.fld.dr').forEach(x => x.classList.remove('dragging', 'over-top', 'over-bottom')); });
-  const reorder = (from, to) => { const seq = chainSeq(); const [item] = seq.splice(from, 1); seq.splice(to, 0, item); applySeq(seq); };   // programmatic / test hook for the drag
 
   document.addEventListener('click', e => {
     if (S.mode !== 'plan') return;
@@ -337,5 +336,5 @@
   document.addEventListener('mousedown', e => { if (S.acFilterOpen && !e.target.closest('.ac-pop,[data-act=acFilters]')) { S.acFilterOpen = false; UI.render(); } });
   document.addEventListener('input', e => { if (e.target.dataset.act === 'freq') S.freq = Math.max(1, Math.min(2000, +e.target.value || 1)); });
 
-  UI.plan = { render, simulate, resimulate, addToNetwork, derive, legsForMap, onFormChange, resetForm, reorder };
+  UI.plan = { render, simulate, resimulate, addToNetwork, derive, legsForMap, onFormChange, resetForm };
 })();
