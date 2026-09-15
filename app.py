@@ -244,7 +244,7 @@ def _read_list(path):
     if not os.path.exists(path):
         return []
     try:
-        with open(path) as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
             if not isinstance(data, list):
                 return []

@@ -9,11 +9,23 @@ plane/charger objects, stops, trip_type) round-trip correctly.
 """
 import json
 import os
+import shutil
+import sys
+import tempfile
 import unittest
 import urllib.error
 import urllib.request
 
-from _helpers import (AIRPORTS, BETA, VELIS, CHARGER_172, dist, coord)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _helpers import (AIRPORTS, BETA, VELIS, CHARGER_172, dist, coord)  # noqa: E402
+
+# app.py reads its auth configuration at import time; set it the way
+# test_auth.py does so it makes no difference which module imports app first.
+os.environ.setdefault('CNS_APP_PASSWORD', 'test-secret-pw')
+os.environ.setdefault('CNS_SECRET_KEY', 'unit-test-fixed-key')
+os.environ.setdefault('CNS_INSECURE_COOKIES', '1')
+
+import app as cns_app  # noqa: E402
 
 BASE = os.environ.get("CNS_BASE_URL", "http://localhost:5055")
 
@@ -246,6 +258,60 @@ class TestSimulateAPI(unittest.TestCase):
             self.assertEqual(e.code, 400)
             return
         self.assertEqual(st, 400, r)
+
+
+# In-process (Flask test client, no live server, so deliberately NOT behind the
+# skip gate above): /api/custom/chargers is the only caller of app._log /
+# _read_list / _write_list / _custom_lock, and nothing else pins them.
+class TestCustomChargers(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp(prefix="cns_chargers_")
+        self._saved = (cns_app.DATA_DIR, cns_app.CUSTOM_CHARGERS_FILE,
+                       cns_app.CHARGERS_LOG, cns_app.AUTH_ENABLED)
+        cns_app.DATA_DIR = self._tmp
+        cns_app.CUSTOM_CHARGERS_FILE = os.path.join(self._tmp, "custom_chargers.json")
+        cns_app.CHARGERS_LOG = os.path.join(self._tmp, "chargers_log.txt")
+        cns_app.AUTH_ENABLED = False
+        cns_app.app.config["TESTING"] = True
+        self.client = cns_app.app.test_client()
+
+    def tearDown(self):
+        (cns_app.DATA_DIR, cns_app.CUSTOM_CHARGERS_FILE,
+         cns_app.CHARGERS_LOG, cns_app.AUTH_ENABLED) = self._saved
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def _add(self, name="Dock A", power=350):
+        return self.client.post("/api/custom/chargers",
+                                json={"name": name, "power_kw": power})
+
+    def test_post_returns_201_and_get_lists_it(self):
+        r = self._add()
+        self.assertEqual(r.status_code, 201, r.data)
+        saved = r.get_json()
+        self.assertTrue(saved["id"])
+        self.assertEqual(saved["power_kw"], 350)
+        self.assertEqual(self.client.get("/api/custom/chargers").get_json(), [saved])
+
+    def test_non_numeric_power_rejected(self):
+        r = self.client.post("/api/custom/chargers",
+                             json={"name": "Dock A", "power_kw": "fast"})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.client.get("/api/custom/chargers").get_json(), [])
+
+    def test_delete_removes_it_then_404s(self):
+        cid = self._add().get_json()["id"]
+        self.assertEqual(self.client.delete("/api/custom/chargers/" + cid).status_code, 200)
+        self.assertEqual(self.client.delete("/api/custom/chargers/" + cid).status_code, 404)
+        self.assertEqual(self.client.get("/api/custom/chargers").get_json(), [])
+
+    def test_cap_at_max_customs(self):
+        for i in range(cns_app.MAX_CUSTOMS):
+            self.assertEqual(self._add(f"Dock {i}").status_code, 201)
+        self.assertEqual(self._add("one too many").status_code, 400)
+
+    def test_unknown_ident_photo_404(self):
+        # Rejected by _airport_by_ident before any photo work — needs no network.
+        self.assertEqual(self.client.get("/api/airport-photo/ZZZZ9").status_code, 404)
 
 
 if __name__ == "__main__":
