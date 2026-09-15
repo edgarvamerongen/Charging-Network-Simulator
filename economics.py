@@ -18,3 +18,13 @@ REALISATION_HIGH = 1.00
 # Wholesale energy procurement cost (EUR/kWh). Tariff minus this is the gross
 # margin, before grid fees, demand charges and operating costs.
 PROCUREMENT_EUR_PER_KWH = 0.15
+
+
+def fmt_clock(minutes) -> str:
+    """Minutes from 00:00 as 'hh:mm', rounded and wrapped to 24h
+    (e.g. 405.9 -> '06:46', 1470 -> '00:30'). '' for anything unparseable."""
+    try:
+        m = max(0, int(round(float(minutes)))) % (24 * 60)
+    except (TypeError, ValueError):
+        return ''
+    return f'{m // 60:02d}:{m % 60:02d}'

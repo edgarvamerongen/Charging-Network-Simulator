@@ -33,8 +33,22 @@ column per setting); About sheet folded into `Data`.
 import io
 from datetime import datetime
 
+from openpyxl import Workbook
+from openpyxl.chart import (BarChart, DoughnutChart, Reference, ScatterChart,
+                            Series)
+from openpyxl.chart.marker import Marker
+from openpyxl.chart.series import DataPoint
+from openpyxl.chart.shapes import GraphicalProperties
+from openpyxl.drawing.line import LineProperties
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.workbook.defined_name import DefinedName
+from openpyxl.worksheet.hyperlink import Hyperlink
+from openpyxl.worksheet.table import Table, TableStyleInfo
+
 from economics import (DAY_START_MIN, DAY_END_MIN, REALISATION_LOW,
-                       REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH)
+                       REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH,
+                       fmt_clock as _clock)
 
 FORMAT_NAME = 'NRG2FLY Charging Network Simulator — workbook'
 FORMAT_VERSION = 'CNS Workbook v2'
@@ -75,7 +89,6 @@ def _fpd_expr(n_ref, unit_ref):
 
 class SpreadsheetBuilder:
     def __init__(self, payload):
-        from openpyxl import Workbook
         self.p = payload or {}
         self.wb = Workbook()
         # busiest-first everywhere: tab order, index, charts all read nicer
@@ -89,9 +102,6 @@ class SpreadsheetBuilder:
             self.tariff = float(self.p.get('chargeRate'))
         except (TypeError, ValueError):
             self.tariff = 0.60
-        self.realisation_low = REALISATION_LOW
-        self.realisation_high = REALISATION_HIGH
-        self.procurement = PROCUREMENT_EUR_PER_KWH
         self._tab_names = set()
         # filled while building per-airport sheets; consumed by Data + Overview
         self._airport_refs = []   # [{ident, name, lat, lon, sheet, daily, peak, installed}]
@@ -100,7 +110,6 @@ class SpreadsheetBuilder:
     # ---- low-level helpers --------------------------------------------------
     def _cell(self, ws, r, c, value=None, *, bold=False, size=11, color=C_FORMULA,
               fill=None, fmt=None, align=None, wrap=False, italic=False):
-        from openpyxl.styles import Font, PatternFill, Alignment
         cell = ws.cell(row=r, column=c)
         if value is not None:
             cell.value = value
@@ -124,8 +133,6 @@ class SpreadsheetBuilder:
 
     def _table(self, ws, name, first_row, last_row, first_col, last_col):
         """Wrap a written range in an Excel Table (import anchor + styling)."""
-        from openpyxl.utils import get_column_letter
-        from openpyxl.worksheet.table import Table, TableStyleInfo
         ref = f'{get_column_letter(first_col)}{first_row}:{get_column_letter(last_col)}{last_row}'
         tbl = Table(displayName=name, ref=ref)
         tbl.tableStyleInfo = TableStyleInfo(name='TableStyleLight9', showRowStripes=True,
@@ -133,11 +140,9 @@ class SpreadsheetBuilder:
         ws.add_table(tbl)
 
     def _named(self, name, ws_title, cell_ref):
-        from openpyxl.workbook.defined_name import DefinedName
         self.wb.defined_names.add(DefinedName(name, attr_text=f"'{ws_title}'!{cell_ref}"))
 
     def _widths(self, ws, widths):
-        from openpyxl.utils import get_column_letter
         for i, w in enumerate(widths, start=1):
             ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -154,9 +159,7 @@ class SpreadsheetBuilder:
 
     def _hyperlink(self, ws, r, c, text, target_sheet):
         """An internal hyperlink cell that jumps to another sheet."""
-        from openpyxl.worksheet.hyperlink import Hyperlink
-        cell = self._cell(ws, r, c, _safe_text(text), color=BLUE)
-        from openpyxl.styles import Font
+        cell = self._cell(ws, r, c, _safe_text(text))
         cell.font = Font(name=FONT, color=BLUE, underline='single')
         cell.hyperlink = Hyperlink(ref=cell.coordinate, location=f"'{target_sheet}'!A1")
         return cell
@@ -165,8 +168,6 @@ class SpreadsheetBuilder:
     @staticmethod
     def _solid_series(series, hex_color, line=False, width_emu=28575):
         """One brand colour for a whole series (kills openpyxl's rainbow default)."""
-        from openpyxl.chart.shapes import GraphicalProperties
-        from openpyxl.drawing.line import LineProperties
         if line:
             gp = GraphicalProperties()
             gp.line = LineProperties(solidFill=hex_color, w=width_emu)
@@ -260,9 +261,8 @@ class SpreadsheetBuilder:
         self._header_row(ws, r, ['Aircraft', 'Daily (kWh)', '% of day'])
         ebt_data_first = r + 1
         r += 1
-        from openpyxl.utils import get_column_letter as _gcl
-        ac_rng = f'${_gcl(ac_col)}${cf_first}:${_gcl(ac_col)}${cf_last}'
-        daily_rng = f'${_gcl(daily_col)}${cf_first}:${_gcl(daily_col)}${cf_last}'
+        ac_rng = f'${get_column_letter(ac_col)}${cf_first}:${get_column_letter(ac_col)}${cf_last}'
+        daily_rng = f'${get_column_letter(daily_col)}${cf_first}:${get_column_letter(daily_col)}${cf_last}'
         for t in types:
             if cf_last >= cf_first:
                 self._cell(ws, r, 1, _safe_text(t))
@@ -447,14 +447,13 @@ class SpreadsheetBuilder:
             ('Grid factor', _num(s.get('gridDemandFactor')) or 1.0, '0.00', None),
             ('Day start', _clock(DAY_START_MIN), None, None),
             ('Day end', _clock(DAY_END_MIN), None, None),
-            ('Realisation low', self.realisation_low, FMT_PCT, 'Settings_realisationLow'),
-            ('Realisation high', self.realisation_high, FMT_PCT, 'Settings_realisationHigh'),
-            ('Procurement (EUR/kWh)', self.procurement, '€0.00', 'Settings_procurement'),
+            ('Realisation low', REALISATION_LOW, FMT_PCT, 'Settings_realisationLow'),
+            ('Realisation high', REALISATION_HIGH, FMT_PCT, 'Settings_realisationHigh'),
+            ('Procurement (EUR/kWh)', PROCUREMENT_EUR_PER_KWH, '€0.00', 'Settings_procurement'),
         ]
         self._header_row(ws, r, [c[0] for c in cols])
         hdr = r
         r += 1
-        from openpyxl.utils import get_column_letter
         for i, (_label, val, fmt, named) in enumerate(cols, start=1):
             self._cell(ws, r, i, val, color=C_INPUT, fmt=fmt)
             if named:
@@ -481,15 +480,11 @@ class SpreadsheetBuilder:
             ('Energy / year', f'=SUM({daily_col})*365/1000', '#,##0 "MWh"'),
             ('Gross margin / yr', f'=SUM({daily_col})*365*(Settings_tariff-Settings_procurement)', FMT_EUR),
         ]
-        from openpyxl.styles import PatternFill, Font, Alignment
         col = 1
         for label, formula, fmt in cards:
-            for rr in (3, 4):       # fill both rows of the card area defensively
-                for cc in (col,):
-                    ws.cell(row=rr, column=cc).fill = PatternFill('solid', fgColor=NAVY)
-            num = self._cell(ws, 3, col, formula, bold=True, size=15, color=WHITE, fill=NAVY,
-                             fmt=fmt, align='center')
-            lab = self._cell(ws, 4, col, label, size=9, color=WHITE, fill=NAVY, align='center')
+            self._cell(ws, 3, col, formula, bold=True, size=15, color=WHITE, fill=NAVY,
+                       fmt=fmt, align='center')
+            self._cell(ws, 4, col, label, size=9, color=WHITE, fill=NAVY, align='center')
             col += 1
         ws.row_dimensions[3].height = 26
         ws.row_dimensions[4].height = 14
@@ -538,9 +533,6 @@ class SpreadsheetBuilder:
     def _add_donut(self, ws, first, last, anchor):
         if not first or not last or last < first:
             return
-        from openpyxl.chart import DoughnutChart, Reference
-        from openpyxl.chart.series import DataPoint
-        from openpyxl.chart.shapes import GraphicalProperties
         ch = DoughnutChart()
         ch.title = 'Energy by aircraft type'
         ch.height, ch.width = 7.5, 12
@@ -563,8 +555,6 @@ class SpreadsheetBuilder:
         """The load profile as a scatter-with-straight-lines over Excel-time x —
         a true step on a time-proportional axis (a category line chart would
         space unequal intervals equally and draw diagonals)."""
-        from openpyxl.chart import ScatterChart, Series, Reference
-        from openpyxl.chart.marker import Marker
         ch = ScatterChart()
         ch.title = 'Daily load profile (kW)'
         ch.height, ch.width = 8, 15
@@ -585,7 +575,6 @@ class SpreadsheetBuilder:
 
     def _add_airport_bar(self, ws, title, data_col, anchor, n):
         """Horizontal brand-blue bars over the Data sheet's Airports table."""
-        from openpyxl.chart import BarChart, Reference
         dws = self.wb['Data']
         ch = BarChart()
         ch.type = 'bar'             # horizontal — 16 long airport names read sideways
@@ -619,14 +608,6 @@ class SpreadsheetBuilder:
 
 
 # ---- small value coercers ---------------------------------------------------
-def _clock(minutes):
-    try:
-        m = max(0, int(round(float(minutes)))) % (24 * 60)
-        return f'{m // 60:02d}:{m % 60:02d}'
-    except (TypeError, ValueError):
-        return ''
-
-
 def _num(v):
     try:
         if v is None or v == '':
@@ -653,11 +634,5 @@ def _safe_text(v):
 
 
 def generate_xlsx(payload):
-    """Render the workbook and return its bytes. Raises RuntimeError if openpyxl
-    is unavailable (mirrors report.py's WeasyPrint handling)."""
-    try:
-        import openpyxl  # noqa: F401
-    except ImportError as e:
-        raise RuntimeError('openpyxl is not installed on the server. Install it with '
-                           f'`pip install openpyxl`. Original error: {e}')
+    """Render the workbook and return its bytes."""
     return SpreadsheetBuilder(payload).build()

@@ -14,101 +14,29 @@ Keeping all of the layout in HTML/CSS means the report can be redesigned
 without touching this file — only templates/report.html + static/report.css.
 """
 import base64
-import ctypes
+import html
 import io
-import json
 import math
 import mimetypes
 import os
-import platform
 import re
 import threading
 import urllib.parse
-import urllib.request
 from datetime import datetime
 
+import requests
+from staticmap import StaticMap, Line, CircleMarker
 
-def _macos_setup_weasyprint():
-    """WeasyPrint relies on Cairo/Pango/GLib via cffi. On macOS those live under
-    Homebrew (`/opt/homebrew/lib` on Apple Silicon, `/usr/local/lib` on Intel),
-    and DYLD_* environment variables are routinely scrubbed by SIP — so cffi's
-    `ctypes.util.find_library('gobject-2.0-0')` returns None and the whole
-    bind chain fails. We do two things:
-      1. Preload the dylibs by full path (RTLD_GLOBAL) so the symbols are live.
-      2. Monkey-patch `ctypes.util.find_library` to also check Homebrew prefixes
-         so cffi resolves the name without crashing.
-    Linux/Windows don't need any of this — the function returns immediately."""
-    if platform.system() != 'Darwin':
-        return
-    prefixes = [p for p in ('/opt/homebrew/lib', '/usr/local/lib') if os.path.isdir(p)]
-    if not prefixes:
-        return
-
-    name_map = {
-        'gobject-2.0-0':    'libgobject-2.0.0.dylib',
-        'gobject-2.0':      'libgobject-2.0.0.dylib',
-        'glib-2.0-0':       'libglib-2.0.0.dylib',
-        'glib-2.0':         'libglib-2.0.0.dylib',
-        'pango-1.0-0':      'libpango-1.0.0.dylib',
-        'pango-1.0':        'libpango-1.0.0.dylib',
-        'pangoft2-1.0-0':   'libpangoft2-1.0.0.dylib',
-        'pangoft2-1.0':     'libpangoft2-1.0.0.dylib',
-        'harfbuzz':         'libharfbuzz.0.dylib',
-        'fontconfig-1':     'libfontconfig.1.dylib',
-        'fontconfig':       'libfontconfig.1.dylib',
-        'freetype':         'libfreetype.6.dylib',
-        'cairo':            'libcairo.2.dylib',
-        'cairo-2':          'libcairo.2.dylib',
-        'gdk_pixbuf-2.0-0': 'libgdk_pixbuf-2.0.0.dylib',
-        'gdk_pixbuf-2.0':   'libgdk_pixbuf-2.0.0.dylib',
-    }
-
-    # 1) preload — ignore failures (a library that's not installed shouldn't
-    # crash startup; weasyprint will surface a clearer error later).
-    for fname in set(name_map.values()):
-        for prefix in prefixes:
-            path = os.path.join(prefix, fname)
-            if os.path.exists(path):
-                try:
-                    ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
-                except OSError:
-                    pass
-                break
-
-    # 2) monkey-patch find_library so cffi's name lookup succeeds.
-    import ctypes.util as cu
-    _orig = cu.find_library
-
-    def _patched(name):
-        path = _orig(name)
-        if path:
-            return path
-        fname = name_map.get(name)
-        if not fname:
-            return None
-        for prefix in prefixes:
-            cand = os.path.join(prefix, fname)
-            if os.path.exists(cand):
-                return cand
-        return None
-
-    cu.find_library = _patched
-
-
-_macos_setup_weasyprint()
-
-# Heavy deps are imported lazily inside generate_pdf() so a misconfigured
-# environment surfaces a single clear error at request time rather than
-# breaking module import (and the whole Flask app).
+# WeasyPrint is imported lazily inside generate_pdf() so a missing system
+# library surfaces a single clear error at request time rather than breaking
+# module import (and the whole Flask app). On macOS it only binds Cairo/Pango
+# when run with DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib (see CLAUDE.md).
 #
 # Operating day + revenue/cost assumptions are shared with spreadsheet.py via
 # economics.py so the PDF and XLSX exports never disagree.
 from economics import (DAY_START_MIN as DAY_START, DAY_END_MIN as DAY_END,
-                       REALISATION_LOW, REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH)
-
-# Bonus: auto-embed an airport photo on the cover (curated local first, then
-# Wikimedia). Flip to False to disable the network fallback entirely.
-AIRPORT_PHOTO_WIKIMEDIA = True
+                       REALISATION_LOW, REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH,
+                       fmt_clock as _fmt_clock)
 
 # House palette for the energy-mix donut (muted base + accents).
 _DONUT_PALETTE = ['#2563eb', '#F0892B', '#10b981', '#6f42c1', '#0ea5e9',
@@ -129,12 +57,6 @@ ROOT = os.path.dirname(__file__)
 PICS_DIR = os.path.join(ROOT, 'pics')
 
 # ---------- helpers ----------------------------------------------------------
-
-def _fmt_clock(minutes: float) -> str:
-    """e.g. 405.9 -> '13:46' (rounded). Wraps to 24h."""
-    m = max(0, int(round(minutes))) % (24 * 60)
-    return f'{m // 60:02d}:{m % 60:02d}'
-
 
 def _safe_pics_path(rel) -> str:
     """Resolve a payload-supplied, pics-relative path, refusing anything that
@@ -182,21 +104,22 @@ def _png_data_uri(png_bytes: bytes) -> str:
     return 'data:image/png;base64,' + base64.b64encode(png_bytes).decode('ascii')
 
 
-def _fmt_energy(kwh) -> str:
-    """kWh, switching to MWh (2 dp) at >= 1000 — matches the in-app unit display."""
+def _fmt_unit(v, unit, big_unit) -> str:
+    """A value in `unit`, switching to `big_unit` (2 dp) at >= 1000 — matches
+    the in-app unit display."""
     try:
-        v = float(kwh)
+        v = float(v)
     except (TypeError, ValueError):
         return ''
-    return f'{v / 1000:.2f} MWh' if v >= 1000 else f'{v:.0f} kWh'
+    return f'{v / 1000:.2f} {big_unit}' if v >= 1000 else f'{v:.0f} {unit}'
+
+
+def _fmt_energy(kwh) -> str:
+    return _fmt_unit(kwh, 'kWh', 'MWh')
 
 
 def _fmt_power(kw) -> str:
-    try:
-        v = float(kw)
-    except (TypeError, ValueError):
-        return ''
-    return f'{v / 1000:.2f} MW' if v >= 1000 else f'{v:.0f} kW'
+    return _fmt_unit(kw, 'kW', 'MW')
 
 
 def _fmt_money(eur) -> str:
@@ -215,7 +138,6 @@ def _append_onepager(pdf_bytes: bytes) -> bytes:
     if not os.path.exists(onepager):
         return pdf_bytes
     try:
-        import io
         from pypdf import PdfReader, PdfWriter
         writer = PdfWriter()
         writer.append(PdfReader(io.BytesIO(pdf_bytes)))
@@ -269,14 +191,7 @@ def _bar_chart_svg(items, fmt, color='#2563eb'):
 
 
 def _xml_escape(s):
-    if s is None:
-        return ''
-    return (str(s)
-            .replace('&', '&amp;')
-            .replace('<', '&lt;')
-            .replace('>', '&gt;')
-            .replace('"', '&quot;')
-            .replace("'", '&#39;'))
+    return html.escape('' if s is None else str(s), quote=True)
 
 
 def _nice_axis(vmax, target_ticks=4):
@@ -342,9 +257,7 @@ def _load_curve_svg(series, peak_kw=None, installed_kw=None):
         out.append(f'<line x1="{left}" y1="{y:.1f}" x2="{right}" y2="{y:.1f}" '
                    f'stroke="{_C_LINE}" stroke-width="1"/>')
         out.append(f'<text x="{left - 6}" y="{y + 3:.1f}" text-anchor="end" '
-                   f'font-size="9" fill="{_C_MUTED}">{v / div:.2f}</text>' if mw
-                   else f'<text x="{left - 6}" y="{y + 3:.1f}" text-anchor="end" '
-                   f'font-size="9" fill="{_C_MUTED}">{v / div:.0f}</text>')
+                   f'font-size="9" fill="{_C_MUTED}">{v / div:.{2 if mw else 0}f}</text>')
     out.append(f'<text x="{left - 6}" y="{top - 5:.1f}" text-anchor="end" '
                f'font-size="8.5" fill="{_C_MUTED}">{unit}</text>')
     # x hour ticks
@@ -553,10 +466,6 @@ def _network_map_png(routes, airports, width=900, height=520):
     """
     if not routes and not airports:
         return b''
-    try:
-        from staticmap import StaticMap, Line, CircleMarker
-    except ImportError:
-        return b''
 
     m = StaticMap(
         width, height,
@@ -627,26 +536,13 @@ def _fetch_host_allowed(url):
 
 
 def _http_get(url, timeout=6, accept_json=False, params=None):
-    # Prefer requests (bundles certifi) — this framework Python's urllib has no
-    # CA bundle and fails SSL verification against Wikimedia. staticmap already
-    # pulls requests in, so it's always available; urllib is a last resort.
+    # requests, not urllib: it bundles certifi, and this framework Python's
+    # urllib has no CA bundle (SSL verification against Wikimedia fails).
     if not _fetch_host_allowed(url):
         raise ValueError(f'refusing to fetch disallowed URL host: {url!r}')
-    try:
-        import requests
-        resp = requests.get(url, params=params, headers={'User-Agent': _WIKI_UA}, timeout=timeout)
-        resp.raise_for_status()
-        return resp.json() if accept_json else resp.content
-    except ImportError:
-        if params:
-            url += ('&' if '?' in url else '?') + urllib.parse.urlencode(params)
-        req = urllib.request.Request(url, headers={
-            'User-Agent': _WIKI_UA,
-            'Accept': 'application/json' if accept_json else '*/*',
-        })
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read()
-        return json.loads(data) if accept_json else data
+    resp = requests.get(url, params=params, headers={'User-Agent': _WIKI_UA}, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json() if accept_json else resp.content
 
 
 def _commons_filepath(filename):
@@ -784,7 +680,6 @@ def _satellite_photo(lat, lon, airport_type=None, size=(1500, 600)):
     thumbnail passes a small size so only a couple of tiles are fetched. Returns
     JPEG bytes or b'' (any failure ⇒ the cover falls back to its photo-less form)."""
     try:
-        from staticmap import StaticMap
         # large fields don't fit at z15 (~5 km across); everything else does
         zoom = 14 if 'large' in str(airport_type or '').lower() else 15
         m = StaticMap(
@@ -802,81 +697,92 @@ def _satellite_photo(lat, lon, airport_type=None, size=(1500, 600)):
         return b''
 
 
-def _airport_photo(ident, name, lat, lon, airport_type=None, iso_country=''):
-    """Return {'uri': <data-uri>, 'credit': <str>} for the chosen airport, or
-    blanks. Order: curated local pics/airports/<ICAO>.* → cache → (when
-    AIRPORT_PHOTO_WIKIMEDIA) Wikidata image by ICAO then by name → an Esri
-    satellite render of the field by coordinates. Downloads cache under
-    pics/airports/_cache/. Any failure is swallowed → the cover renders
-    photo-less (the band is hidden)."""
-    blank = {'uri': '', 'credit': ''}
+def _source_image(ident, name, lat, lon, airport_type=None, iso_country='',
+                  sat_size=(1500, 600)):
+    """Resolve an airport to raw image bytes — the one chain behind both the PDF
+    cover (_airport_photo) and the map's hover thumbnail (airport_photo_thumb):
+    curated pics/airports/<ICAO>.* → a prior cached download _cache/<ICAO>.* →
+    the Wikidata/Wikipedia lead image → an Esri satellite render of the field
+    (at `sat_size`). Returns (raw, credit, mime, from_disk); `from_disk` marks
+    the curated/cached hits so the caller doesn't write them back to the cache.
+    Nothing resolvable — or any failure along the way — gives (b'', '', '', False)."""
     ident = (ident or '').strip()
     if not _SAFE_IDENT_RE.match(ident):
-        ident = ''
+        ident = ''      # client-supplied: a traversal ident is "no ident"
 
     # 1) curated local, then a prior cached download
-    for base in ([os.path.join(PICS_DIR, 'airports', ident)] if ident else []) + \
-                ([os.path.join(_PHOTO_CACHE_DIR, ident)] if ident else []):
+    for base in ([os.path.join(PICS_DIR, 'airports', ident),
+                  os.path.join(_PHOTO_CACHE_DIR, ident)] if ident else []):
         for ext in ('jpg', 'jpeg', 'png', 'webp', 'svg'):
             p = f'{base}.{ext}'
-            if os.path.exists(p):
-                credit = ''
-                meta = f'{base}.txt'
-                if os.path.exists(meta):
-                    try:
-                        with open(meta, encoding='utf-8') as f:
-                            credit = f.read().strip()
-                    except OSError:
-                        pass
-                return {'uri': _file_data_uri(p), 'credit': credit}
-
-    if not AIRPORT_PHOTO_WIKIMEDIA:
-        return blank
+            if not os.path.exists(p):
+                continue
+            try:
+                with open(p, 'rb') as f:
+                    raw = f.read()
+            except OSError:
+                continue
+            credit = ''
+            try:
+                with open(f'{base}.txt', encoding='utf-8') as f:
+                    credit = f.read().strip()
+            except OSError:
+                pass
+            return raw, credit, mimetypes.guess_type(p)[0] or 'application/octet-stream', True
 
     # 2) Wikidata-resolved image — by ICAO, then by name (article lead image
     #    preferred; P18 fallback comes back credit-less)
     img_url, credit = _wikidata_image(ident, name, iso_country=iso_country)
     if img_url and _is_unsuitable_photo(img_url):
         img_url, credit = '', ''   # vector logo/crest — skip so the satellite render wins
-    if img_url and not credit:
-        fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')
-        credit = f'{os.path.splitext(fn)[0]} — Wikimedia Commons'
+    if img_url:
+        if not credit:
+            fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')
+            credit = f'{os.path.splitext(fn)[0]} — Wikimedia Commons'
+        try:
+            raw = _http_get(img_url)
+        except Exception:
+            raw = b''      # a dead upload URL still leaves the satellite render below
+        if raw:
+            return (raw, credit,
+                    mimetypes.guess_type(img_url.split('?')[0])[0] or 'image/jpeg', False)
+
     # 3) deterministic last resort: a satellite image of the field itself
     #    (replaces the old Commons geosearch, which returned any nearby photo)
-    raw = b''
-    if not img_url and lat is not None and lon is not None:
-        raw = _satellite_photo(lat, lon, airport_type)
+    if lat is not None and lon is not None:
+        raw = _satellite_photo(lat, lon, airport_type, size=sat_size)
         if raw:
-            credit = 'Satellite imagery © Esri — World Imagery'
+            return raw, 'Satellite imagery © Esri — World Imagery', 'image/jpeg', False
+    return b'', '', '', False
 
-    if not img_url and not raw:
-        return blank
-    # download (unless already rendered) + cache + embed
-    try:
-        if img_url:
-            raw = _http_get(img_url)
-            mime = mimetypes.guess_type(img_url.split('?')[0])[0] or 'image/jpeg'
-        else:
-            mime = 'image/jpeg'
+
+def _airport_photo(ident, name, lat, lon, airport_type=None, iso_country=''):
+    """Return {'uri': <data-uri>, 'credit': <str>} for the chosen airport, or
+    blanks. Resolution order is _source_image's; a freshly downloaded or
+    rendered image is cached under pics/airports/_cache/ for the next report.
+    Any failure is swallowed → the cover renders photo-less (band hidden)."""
+    raw, credit, mime, from_disk = _source_image(ident, name, lat, lon, airport_type,
+                                                 iso_country, sat_size=(1500, 600))
+    if not raw:
+        return {'uri': '', 'credit': ''}
+    ident = (ident or '').strip()
+    if not from_disk and _SAFE_IDENT_RE.match(ident):
         ext = 'svg' if 'svg' in mime else ('png' if 'png' in mime else 'jpg')
-        if ident:
-            try:
-                os.makedirs(_PHOTO_CACHE_DIR, exist_ok=True)
-                with open(os.path.join(_PHOTO_CACHE_DIR, f'{ident}.{ext}'), 'wb') as f:
-                    f.write(raw)
-                with open(os.path.join(_PHOTO_CACHE_DIR, f'{ident}.txt'), 'w', encoding='utf-8') as f:
-                    f.write(credit)
-            except OSError:
-                pass
-        return {'uri': f'data:{mime};base64,' + base64.b64encode(raw).decode('ascii'),
-                'credit': credit}
-    except Exception:
-        return blank
+        try:
+            os.makedirs(_PHOTO_CACHE_DIR, exist_ok=True)
+            with open(os.path.join(_PHOTO_CACHE_DIR, f'{ident}.{ext}'), 'wb') as f:
+                f.write(raw)
+            with open(os.path.join(_PHOTO_CACHE_DIR, f'{ident}.txt'), 'w', encoding='utf-8') as f:
+                f.write(credit)
+        except OSError:
+            pass
+    return {'uri': f'data:{mime};base64,' + base64.b64encode(raw).decode('ascii'),
+            'credit': credit}
 
 
 def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360, iso_country=''):
     """A small WebP thumbnail of the airport for the live map's hover preview.
-    Same resolution order as the PDF cover (_airport_photo): curated local →
+    Same resolution chain as the PDF cover (_source_image): curated local →
     Wikidata/Wikipedia lead image → an Esri satellite render of the field — but
     rendered and cached SMALL so a hover is cheap (the satellite fallback pulls a
     couple of tiles, not the cover's 1500x600). Caches separately as
@@ -912,49 +818,18 @@ def airport_photo_thumb(ident, name, lat, lon, airport_type=None, box=360, iso_c
     if not _THUMB_SEM.acquire(blocking=False):
         return None, '__busy__'
     try:
-        return _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, _read, iso_country=iso_country)
+        return _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, iso_country=iso_country)
     finally:
         _THUMB_SEM.release()
 
 
-def _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, _read, iso_country=''):
+def _build_airport_thumb(safe, name, lat, lon, airport_type, box, thumb, credf, iso_country=''):
     """The cold path of airport_photo_thumb: resolve a source image (curated /
     Wikidata / small satellite), bomb-guard the decode, downscale to WebP, cache.
     Runs under _THUMB_SEM. Returns (webp_bytes, credit) or (None, '')."""
-    raw, credit = b'', ''
-    # 1) reuse a curated photo or the PDF's cached source (same image — just downscale)
-    for base in ([os.path.join(PICS_DIR, 'airports', safe),
-                  os.path.join(_PHOTO_CACHE_DIR, safe)] if safe else []):
-        for ext in ('jpg', 'jpeg', 'png', 'webp'):
-            p = f'{base}.{ext}'
-            if os.path.exists(p):
-                try:
-                    with open(p, 'rb') as f:
-                        raw = f.read()
-                    credit = _read(f'{base}.txt')
-                    break
-                except OSError:
-                    pass
-        if raw:
-            break
-    # 2) Wikidata/Wikipedia lead image — by ICAO, then by name
-    if not raw and AIRPORT_PHOTO_WIKIMEDIA:
-        img_url, credit = _wikidata_image(safe, name, iso_country=iso_country)
-        if img_url and _is_unsuitable_photo(img_url):
-            img_url, credit = '', ''   # vector logo/crest — skip so the satellite render wins
-        if img_url:
-            if not credit:
-                fn = urllib.parse.unquote(img_url.rstrip('/').rsplit('/', 1)[-1]).replace('_', ' ')
-                credit = f'{os.path.splitext(fn)[0]} — Wikimedia Commons'
-            try:
-                raw = _http_get(img_url)
-            except Exception:
-                raw = b''
-    # 3) deterministic last resort: a SMALL Esri satellite render of the field
-    if not raw and lat is not None and lon is not None:
-        raw = _satellite_photo(lat, lon, airport_type, size=(box * 2, box * 2 * 9 // 16))
-        if raw:
-            credit = 'Satellite imagery © Esri — World Imagery'
+    raw, credit, _mime, _from_disk = _source_image(
+        safe, name, lat, lon, airport_type, iso_country,
+        sat_size=(box * 2, box * 2 * 9 // 16))
     if not raw:
         return None, ''
 

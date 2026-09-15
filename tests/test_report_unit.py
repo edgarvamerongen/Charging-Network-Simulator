@@ -60,12 +60,8 @@ class TestAirportPhotoIdentGuard(unittest.TestCase):
                 f.write(b'\xff\xd8secret-bytes')
             # ident that path-joins from pics/airports/ to the decoy (minus ext)
             ident = os.path.relpath(decoy[:-4], os.path.join(report.PICS_DIR, 'airports'))
-            prev = report.AIRPORT_PHOTO_WIKIMEDIA
-            report.AIRPORT_PHOTO_WIKIMEDIA = False   # keep the test offline
-            try:
-                res = report._airport_photo(ident, '', None, None)
-            finally:
-                report.AIRPORT_PHOTO_WIKIMEDIA = prev
+            # offline: name='' and lat/lon=None skip every network branch
+            res = report._airport_photo(ident, '', None, None)
             self.assertEqual(res, {'uri': '', 'credit': ''})
 
 
