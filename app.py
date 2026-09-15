@@ -7,7 +7,6 @@ import os
 import re
 import secrets
 import subprocess
-import tempfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -22,7 +21,7 @@ from flask import (Flask, render_template, request, jsonify, send_from_directory
                    url_for, Response, redirect, make_response, session, abort)
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
-from sim import Simulator
+from sim import Simulator, haversine
 import report
 from report import generate_pdf
 from spreadsheet import generate_xlsx
@@ -120,37 +119,27 @@ _PUBLIC_ENDPOINTS = {'login', 'logout', 'healthz', 'static', 'pics', 'plane_imag
                      # Both are per-IP rate-limited; see their route comments.
                      'public_airport_search', 'public_airport_photo'}
 
-# In-memory brute-force throttle for the login form. Per-worker (not shared
-# across gunicorn workers), which is fine for slowing guessing of a single
-# shared password; a determined attacker is further bounded by the password's
-# own entropy. For multi-instance deployments move this to Redis.
+# In-memory per-IP hit counters — the login brute-force throttle and the public
+# quick-scan endpoints share one table. Per-worker (not shared across gunicorn
+# workers), which is fine for slowing guessing of a single shared password; a
+# determined attacker is further bounded by the password's own entropy. For
+# multi-instance deployments move this to Redis.
 _LOGIN_MAX_ATTEMPTS = 8
 _LOGIN_WINDOW_S = 300
-_login_attempts = {}                          # ip -> (count, window_start_ts)
-_login_lock = threading.Lock()
+_RL_LOCK = threading.Lock()
+_rl = {}                                      # (bucket, ip) -> (count, window_start)
 
 
-def _login_blocked(ip):
+def _hits(bucket, ip, window_s, inc=1):
+    """Hits from `ip` in `bucket` inside the current window, after adding `inc`."""
     now = time.time()
-    with _login_lock:
-        count, start = _login_attempts.get(ip, (0, now))
-        if now - start > _LOGIN_WINDOW_S:
-            return False                       # window elapsed → fresh slate
-        return count >= _LOGIN_MAX_ATTEMPTS
-
-
-def _login_record_failure(ip):
-    now = time.time()
-    with _login_lock:
-        count, start = _login_attempts.get(ip, (0, now))
-        if now - start > _LOGIN_WINDOW_S:
+    with _RL_LOCK:
+        count, start = _rl.get((bucket, ip), (0, now))
+        if now - start > window_s:
             count, start = 0, now
-        _login_attempts[ip] = (count + 1, start)
-
-
-def _login_reset(ip):
-    with _login_lock:
-        _login_attempts.pop(ip, None)
+        count += inc
+        _rl[(bucket, ip)] = (count, start)
+        return count
 
 
 def _password_ok(candidate):
@@ -214,26 +203,15 @@ _MOBILE_UA_RE = re.compile(r'Mobi', re.I)
 # Lives in ./data so it's separate from the built-in JSON in the repo. .gitignore
 # keeps the data dir out of version control, so deploys never overwrite user data.
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
-CUSTOM_FILES = {
-    'chargers': os.path.join(DATA_DIR, 'custom_chargers.json'),
-}
-MAX_CUSTOMS = 5    # per type, keeps the UI tidy and the data file bounded
-LOG_FILES = {
-    'chargers': os.path.join(DATA_DIR, 'chargers_log.txt'),
-    'auth':     os.path.join(DATA_DIR, 'auth_log.txt'),
-}
+CUSTOM_CHARGERS_FILE = os.path.join(DATA_DIR, 'custom_chargers.json')
+MAX_CUSTOMS = 5    # keeps the UI tidy and the data file bounded
+CHARGERS_LOG = os.path.join(DATA_DIR, 'chargers_log.txt')
+AUTH_LOG = os.path.join(DATA_DIR, 'auth_log.txt')
 
 
 def _client_ip():
-    """Behind a Cloudflare Tunnel, request.remote_addr is 127.0.0.1; the real
-    client IP is in CF-Connecting-IP. Use it if present, fall back otherwise."""
-    return request.headers.get('CF-Connecting-IP') or request.remote_addr or '?'
-
-
-def _fmt_val(v):
-    if isinstance(v, str):
-        return '"' + v.replace('\\', '\\\\').replace('"', '\\"') + '"'
-    return str(v)
+    """Real client IP — ProxyFix (CNS_BEHIND_PROXY, top of file) puts it there."""
+    return request.remote_addr or '?'
 
 
 def _log(kind, action, **fields):
@@ -244,9 +222,11 @@ def _log(kind, action, **fields):
         os.makedirs(DATA_DIR, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         fields.setdefault('from', _client_ip())
-        body = ' '.join(f'{k}={_fmt_val(v)}' for k, v in fields.items())
+        body = ' '.join(
+            k + '=' + (json.dumps(v, ensure_ascii=False) if isinstance(v, str) else str(v))
+            for k, v in fields.items())
         line = f'{ts} {action:<7} {body}\n'
-        with open(LOG_FILES[kind], 'a', encoding='utf-8') as f:
+        with open({'chargers': CHARGERS_LOG, 'auth': AUTH_LOG}[kind], 'a', encoding='utf-8') as f:
             f.write(line)
     except OSError:
         pass
@@ -276,9 +256,7 @@ def _read_list(path):
             for entry in data:
                 if not isinstance(entry, dict):
                     continue
-                # Numeric fields that downstream math relies on; checked per file kind.
-                num_keys = ('battery_kwh', 'range_km', 'speed_kmh') if 'battery_kwh' in entry else ('power_kw',)
-                if all(_is_finite_num(entry.get(k)) for k in num_keys):
+                if _is_finite_num(entry.get('power_kw')):
                     cleaned.append(entry)
             return cleaned
     except (OSError, ValueError):
@@ -286,23 +264,14 @@ def _read_list(path):
 
 
 def _write_list(path, data):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     # Write-to-temp + atomic rename: a concurrent reader never sees a torn,
     # half-written JSON file, and a crash mid-write leaves the old file intact.
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix='.tmp')
-    try:
-        with os.fdopen(fd, 'w') as f:
-            json.dump(data, f, indent=2)
-        os.replace(tmp, path)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
-        raise
+    notion_sync.atomic_write_json(path, data)
 
 
 @contextlib.contextmanager
-def _custom_lock(kind):
-    """Cross-process mutex around the read-modify-write of a customs file.
+def _custom_lock():
+    """Cross-process mutex around the read-modify-write of the customs file.
     Without it, two gunicorn workers handling concurrent POSTs can both read
     the same list, each append, and the second write silently drops the first
     entry (and the MAX_CUSTOMS cap can be raced past). No-op where fcntl is
@@ -311,7 +280,7 @@ def _custom_lock(kind):
         yield
         return
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(os.path.join(DATA_DIR, f'.{kind}.lock'), 'w') as lf:
+    with open(os.path.join(DATA_DIR, '.chargers.lock'), 'w') as lf:
         fcntl.flock(lf, fcntl.LOCK_EX)
         try:
             yield
@@ -412,7 +381,7 @@ def login():
     error = None
     if request.method == 'POST':
         ip = _client_ip()
-        if _login_blocked(ip):
+        if _hits('login', ip, _LOGIN_WINDOW_S, inc=0) >= _LOGIN_MAX_ATTEMPTS:
             _log('auth', 'BLOCK', reason='rate-limited')
             return render_template('login.html',
                                    error='Too many attempts. Wait a few minutes and try again.'), 429
@@ -420,10 +389,11 @@ def login():
             session.clear()
             session['authed'] = True
             session.permanent = True
-            _login_reset(ip)
+            with _RL_LOCK:
+                _rl.pop(('login', ip), None)
             _log('auth', 'LOGIN')
             return redirect(_safe_next(request.form.get('next') or request.args.get('next')))
-        _login_record_failure(ip)
+        _hits('login', ip, _LOGIN_WINDOW_S)
         _log('auth', 'FAIL')
         error = 'Incorrect password.'
 
@@ -579,40 +549,28 @@ def embed():
     reachable = []
     if tier == 'range':
         olat, olon = origin['latitude_deg'], origin['longitude_deg']
-        if timeline:
-            # ONE payload for every era: computed at the largest vision range,
-            # each entry carrying its distance so the client slider filters
-            # instantly. Pool: medium+large across the whole span, plus the
-            # small airfields inside the smallest (trainer-era) range — those
-            # are the whole point of the 2024 view, but including every small
-            # strip out to 750 km would triple the payload and the marker
-            # count for dots nobody can tell apart at that zoom.
-            max_rng = max(s['range_km'] for s in timeline)
-            min_rng = min(s['range_km'] for s in timeline)
-            for ap in airports:
-                if ap['ident'] == origin['ident']:
-                    continue
-                d = _haversine(olat, olon, ap['latitude_deg'], ap['longitude_deg'])
-                if d <= max_rng and (
-                        ap.get('type') in ('large_airport', 'medium_airport')
-                        or d <= min_rng):
-                    reachable.append({
-                        'ident': ap['ident'], 'name': ap['name'],
-                        'lat': ap['latitude_deg'], 'lon': ap['longitude_deg'],
-                        'type': ap['type'], 'dist': round(d, 1),
-                    })
-        else:
-            range_km = plane.get('range_km', 500)
-            for ap in airports:
-                if ap['ident'] == origin['ident']:
-                    continue
-                d = _haversine(olat, olon, ap['latitude_deg'], ap['longitude_deg'])
-                if d <= range_km:
-                    reachable.append({
-                        'ident': ap['ident'], 'name': ap['name'],
-                        'lat': ap['latitude_deg'], 'lon': ap['longitude_deg'],
-                        'type': ap['type'], 'dist': round(d, 1),
-                    })
+        # Timeline mode builds ONE payload for every era: computed at the largest
+        # vision range, each entry carrying its distance so the client slider
+        # filters instantly. Pool: medium+large across the whole span, plus the
+        # small airfields inside the smallest (trainer-era) range — those are the
+        # whole point of the 2024 view, but including every small strip out to
+        # 750 km would triple the payload and the marker count for dots nobody
+        # can tell apart at that zoom.
+        tl_ranges = [s['range_km'] for s in timeline or ()]
+        limit = max(tl_ranges) if timeline else plane.get('range_km', 500)
+        min_rng = min(tl_ranges, default=0)
+        for ap in airports:
+            if ap['ident'] == origin['ident']:
+                continue
+            d = haversine(olat, olon, ap['latitude_deg'], ap['longitude_deg'])
+            if d <= limit and (not timeline
+                               or ap.get('type') in ('large_airport', 'medium_airport')
+                               or d <= min_rng):
+                reachable.append({
+                    'ident': ap['ident'], 'name': ap['name'],
+                    'lat': ap['latitude_deg'], 'lon': ap['longitude_deg'],
+                    'type': ap['type'], 'dist': round(d, 1),
+                })
 
     # Airports for network tier (medium+ only to keep the map fast)
     network_airports = []
@@ -738,24 +696,12 @@ def encode_share_state(state):
     return base64.urlsafe_b64encode(json_bytes).rstrip(b'=').decode()
 
 
-def _haversine(lat1, lon1, lat2, lon2):
-    """Great-circle distance in km between two lat/lon points."""
-    R = 6371
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1))*math.cos(math.radians(lat2))*math.sin(dlon/2)**2
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-
-
-@app.route('/api/airport-photo/<ident>', methods=['GET'])
-def airport_photo(ident):
-    ap = _airport_by_ident(ident)
-    if ap is None:
-        abort(404)
+def _photo_response(ap, box=360):
+    """The airport-photo response shared by the authed and the public route."""
     data, credit = report.airport_photo_thumb(
         ap['ident'], ap.get('name', ''),
         ap.get('latitude_deg'), ap.get('longitude_deg'), ap.get('type'),
-        iso_country=ap.get('iso_country', ''))
+        box=box, iso_country=ap.get('iso_country', ''))
     if not data:
         if credit == '__busy__':
             # cold-build slots full — ask the client to retry (it must NOT cache
@@ -771,6 +717,14 @@ def airport_photo(ident):
     return resp
 
 
+@app.route('/api/airport-photo/<ident>', methods=['GET'])
+def airport_photo(ident):
+    ap = _airport_by_ident(ident)
+    if ap is None:
+        abort(404)
+    return _photo_response(ap)
+
+
 # ---- public quickscan endpoints ----------------------------------------------
 # The Quick Scan on nrg2fly.com is a static page: it cannot log in, so it gets
 # two deliberately narrow public endpoints instead of a session. Both are
@@ -780,22 +734,6 @@ def airport_photo(ident):
 # the nrg2fly.com origins that actually host the scan.
 
 _QS_ALLOWED_ORIGINS = ('https://nrg2fly.com', 'https://www.nrg2fly.com')
-_QS_RL_LOCK = threading.Lock()
-_qs_rl = {}                                   # (ip, bucket) -> (count, window_start)
-
-
-def _qs_rate_limited(bucket, limit, window_s=60):
-    """True when this client should be throttled. Same in-memory per-worker
-    model as the login throttle — coarse, but enough to stop a loop from
-    hammering the photo builder; the disk cache absorbs repeats anyway."""
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '?').split(',')[0].strip()
-    now = time.time()
-    with _QS_RL_LOCK:
-        count, start = _qs_rl.get((ip, bucket), (0, now))
-        if now - start > window_s:
-            count, start = 0, now
-        _qs_rl[(ip, bucket)] = (count + 1, start)
-        return count >= limit
 
 
 def _qs_cors(resp):
@@ -839,7 +777,7 @@ def public_airport_search():
     q = (request.args.get('q') or '').strip().lower()
     if len(q) < 2:
         return _qs_cors(jsonify([]))
-    if _qs_rate_limited('search', limit=120):          # type-ahead fires per keystroke
+    if _hits('search', _client_ip(), 60) > 120:        # type-ahead fires per keystroke
         resp = jsonify({'error': 'rate limited'})
         resp.status_code = 429
         return _qs_cors(resp)
@@ -870,26 +808,14 @@ def public_airport_search():
 @app.route('/api/public/airport-photo/<ident>', methods=['GET'])
 def public_airport_photo(ident):
     # Photo cold-builds do real work (Wikidata/Esri fetch + render): tighter cap.
-    if _qs_rate_limited('photo', limit=15):
+    if _hits('photo', _client_ip(), 60) > 15:
         return _qs_cors(Response(status=429))
     ap = _airport_by_ident(ident)
     if ap is None:
         abort(404)
     # Fixed hero size — no client-controlled dimensions, so the cache can't be
     # ballooned by size-probing and every viewer shares one cached image.
-    data, credit = report.airport_photo_thumb(
-        ap['ident'], ap.get('name', ''),
-        ap.get('latitude_deg'), ap.get('longitude_deg'), ap.get('type'),
-        box=1100, iso_country=ap.get('iso_country', ''))
-    if not data:
-        if credit == '__busy__':
-            return _qs_cors(Response(status=503, headers={'Retry-After': '2'}))
-        abort(404)
-    resp = Response(data, mimetype='image/webp')
-    resp.headers['Cache-Control'] = 'public, max-age=604800'
-    if credit:
-        resp.headers['X-Photo-Credit'] = quote(credit)   # may carry non-ASCII (—, ©)
-    return _qs_cors(resp)
+    return _qs_cors(_photo_response(ap, box=1100))
 
 
 # ---- airport-resident chargers (real-world NRG2FLY install data) -------------
@@ -928,7 +854,7 @@ def get_airport_chargers_one(icao):
 # is managed in Notion, so there is no user-facing way to add aircraft anymore.
 @app.route('/api/custom/chargers', methods=['GET'])
 def list_custom_chargers():
-    return jsonify(_read_list(CUSTOM_FILES['chargers']))
+    return jsonify(_read_list(CUSTOM_CHARGERS_FILE))
 
 
 @app.route('/api/custom/chargers', methods=['POST'])
@@ -949,8 +875,8 @@ def add_custom_charger():
         _log('chargers', 'REJECT', reason='value out of range', name=c.get('name', ''))
         return jsonify({'error': 'power_kw ≤ 100000'}), 400
 
-    with _custom_lock('chargers'):
-        data = _read_list(CUSTOM_FILES['chargers'])
+    with _custom_lock():
+        data = _read_list(CUSTOM_CHARGERS_FILE)
         if len(data) >= MAX_CUSTOMS:
             _log('chargers', 'REJECT', reason=f'cap of {MAX_CUSTOMS} reached', name=c.get('name', ''))
             return jsonify({'error': f'Limit of {MAX_CUSTOMS} custom chargers reached — remove one first.'}), 400
@@ -960,21 +886,21 @@ def add_custom_charger():
                  'power_kw': power}
 
         data.append(saved)
-        _write_list(CUSTOM_FILES['chargers'], data)
+        _write_list(CUSTOM_CHARGERS_FILE, data)
     _log('chargers', 'ADD', **saved)
     return jsonify(saved), 201
 
 
 @app.route('/api/custom/chargers/<charger_id>', methods=['DELETE'])
 def delete_custom_charger(charger_id):
-    with _custom_lock('chargers'):
-        data = _read_list(CUSTOM_FILES['chargers'])
+    with _custom_lock():
+        data = _read_list(CUSTOM_CHARGERS_FILE)
         target = next((c for c in data if c.get('id') == charger_id), None)
         if not target:
             _log('chargers', 'MISS', op='delete', id=charger_id)
             return jsonify({'error': 'not found'}), 404
         kept = [c for c in data if c.get('id') != charger_id]
-        _write_list(CUSTOM_FILES['chargers'], kept)
+        _write_list(CUSTOM_CHARGERS_FILE, kept)
     _log('chargers', 'DELETE', id=charger_id, name=target.get('name', ''))
     return jsonify({'deleted': charger_id})
 

@@ -480,6 +480,19 @@ def build_entries(ac, profs):
 # ---------------------------------------------------------------------------
 # Transform: pages -> (entries, report)   (pure — no network, no disk)
 # ---------------------------------------------------------------------------
+def _empty_report(abort=None):
+    """A report with the standard shape but nothing emitted — the base every
+    report is built on, and what the early failure paths (missing env, Notion
+    pull failed) return, so every caller sees the same keys."""
+    return {
+        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "emitted": 0, "ok": [], "hidden": [], "skipped": [],
+        "carried_forward": [], "notion_pages_read": 0,
+        "images": {"linked": 0, "downloaded": 0, "cached": 0, "failed": 0},
+        "image_warnings": [], "abort": abort,
+    }
+
+
 def transform(aircraft_pages, profile_pages, known_charger_ids, last_good_by_id=None):
     """Group profiles under aircraft, filter to `CNS`-checked, validate, emit;
     quarantine invalid aircraft (carrying their last-good entries forward).
@@ -546,18 +559,12 @@ def transform(aircraft_pages, profile_pages, known_charger_ids, last_good_by_id=
         abort = ("no aircraft to publish — every row is CNS-unchecked or failed "
                  "validation; keeping the last-good catalog")
 
-    report = {
-        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "emitted": len(entries),
-        "ok": ok_ids,
-        "hidden": hidden,
-        "skipped": skipped,
-        "carried_forward": carried,
-        "notion_pages_read": len(aircraft_pages) + len(profile_pages),
-        "images": {"linked": 0, "downloaded": 0, "cached": 0, "failed": 0},
-        "image_warnings": [],
-        "abort": abort,
-    }
+    report = _empty_report(abort)
+    report.update(
+        emitted=len(entries), ok=ok_ids, hidden=hidden, skipped=skipped,
+        carried_forward=carried,
+        notion_pages_read=len(aircraft_pages) + len(profile_pages),
+    )
     return entries, report
 
 
@@ -611,7 +618,7 @@ def _load_json_list(path):
         return []
 
 
-def _atomic_write_json(path, obj):
+def atomic_write_json(path, obj):
     d = os.path.dirname(path) or "."
     os.makedirs(d, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
@@ -629,7 +636,7 @@ def _snapshot(entries, base_dir):
     snap_dir = os.path.join(base_dir, "data", "snapshots")
     os.makedirs(snap_dir, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    _atomic_write_json(os.path.join(snap_dir, f"planes-{ts}.json"), entries)
+    atomic_write_json(os.path.join(snap_dir, f"planes-{ts}.json"), entries)
     snaps = sorted(glob.glob(os.path.join(snap_dir, "planes-*.json")))
     for old in snaps[:-SNAPSHOT_KEEP]:
         try:
@@ -641,22 +648,6 @@ def _snapshot(entries, base_dir):
 def _known_charger_ids(base_dir):
     return {c.get("id") for c in _load_json_list(os.path.join(base_dir, "chargers.json"))
             if isinstance(c, dict) and c.get("id")}
-
-
-# ---------------------------------------------------------------------------
-# Orchestration
-# ---------------------------------------------------------------------------
-def _empty_report(abort=None):
-    """A report with the standard shape but nothing emitted — used for the
-    early failure paths (missing env, Notion pull failed) so every caller sees
-    the same keys."""
-    return {
-        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "emitted": 0, "ok": [], "hidden": [], "skipped": [],
-        "carried_forward": [], "notion_pages_read": 0,
-        "images": {"linked": 0, "downloaded": 0, "cached": 0, "failed": 0},
-        "image_warnings": [], "abort": abort,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -736,6 +727,9 @@ def apply_photos(entries, aircraft_pages, base_dir, report, fetch=_default_fetch
     report["image_warnings"] = warnings
 
 
+# ---------------------------------------------------------------------------
+# Orchestration
+# ---------------------------------------------------------------------------
 def sync(dry_run=False, base_dir=BASE_DIR):
     """Pull Notion, transform, and (unless dry-run) write the generated catalog.
 
@@ -779,9 +773,9 @@ def sync(dry_run=False, base_dir=BASE_DIR):
     # final urls; failures are warnings and the pics/-based fallback survives.
     apply_photos(entries, aircraft_pages, base_dir, report)
 
-    _atomic_write_json(generated, entries)
+    atomic_write_json(generated, entries)
     _snapshot(entries, base_dir)
-    _atomic_write_json(report_path, report)
+    atomic_write_json(report_path, report)
     return 0, report
 
 

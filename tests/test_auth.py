@@ -23,8 +23,8 @@ class AuthTestCase(unittest.TestCase):
         # auth is enabled for this process; reset the brute-force throttle so
         # tests don't interfere with each other
         cns_app.AUTH_ENABLED = True
-        with cns_app._login_lock:
-            cns_app._login_attempts.clear()
+        with cns_app._RL_LOCK:
+            cns_app._rl.clear()
 
     def _login(self):
         return self.client.post('/login', data={'password': 'test-secret-pw'})

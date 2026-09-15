@@ -34,22 +34,17 @@ def _db_path():
     return os.environ.get('CNS_SHARES_DB') or os.path.join(DATA_DIR, 'shares.db')
 
 
-def _connect():
+@contextlib.contextmanager
+def _conn():
+    """Open a connection and guarantee it closes. sqlite's own ``with conn:``
+    commits but never closes the connection, leaking the handle (a
+    ResourceWarning in tests, and file descriptors under a long-running
+    gunicorn). This wrapper commits on success and always closes."""
     path = _db_path()
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     conn = sqlite3.connect(path)
     conn.execute('PRAGMA journal_mode=WAL')
     conn.execute('PRAGMA busy_timeout=3000')   # wait out a concurrent writer instead of erroring
-    return conn
-
-
-@contextlib.contextmanager
-def _conn():
-    """Yield a connection and guarantee it closes. sqlite's own ``with conn:``
-    commits but never closes the connection, leaking the handle (a
-    ResourceWarning in tests, and file descriptors under a long-running
-    gunicorn). This wrapper commits on success and always closes."""
-    conn = _connect()
     try:
         yield conn
         conn.commit()

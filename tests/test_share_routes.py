@@ -25,8 +25,8 @@ class ShareRoutesTest(unittest.TestCase):
         cns_app.app.config['TESTING'] = True
         self.client = cns_app.app.test_client()
         cns_app.AUTH_ENABLED = True
-        with cns_app._login_lock:
-            cns_app._login_attempts.clear()
+        with cns_app._RL_LOCK:
+            cns_app._rl.clear()
         shares.init_db()
 
     def _login(self):
