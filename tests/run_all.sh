@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 #
 # One-shot runner for the whole Charging Network Simulator test suite.
-#   - Python unit/consistency/API tests (stdlib unittest, via ./venv/bin/python)
-#   - Node harnesses for the browser-global calc modules (settings/charging/demand)
+#   - Python unit/consistency/API tests (stdlib unittest, via ./venv/bin/python) —
+#     needs `pip install -r requirements-dev.txt` (pulls in pandas, for tests/test_alternates.py)
+#   - Node harnesses for the browser-global calc modules (settings/charging/demand/...),
+#     all node:test files under tests/js_*.test.mjs, run via one `node --test` glob
 #
 # Usage:  bash tests/run_all.sh
 # Exit code is nonzero if any layer fails.
@@ -22,13 +24,9 @@ echo "=================================================================="
 
 echo
 echo "=================================================================="
-echo "NODE  (browser-global calc modules):"
+echo "NODE  (browser-global calc modules + /v2 shell helpers):"
 echo "=================================================================="
-for f in tests/js_settings.test.mjs tests/js_units.test.mjs tests/js_charging.test.mjs tests/js_demand.test.mjs tests/js_flight_model.test.mjs tests/js_flight_padding.test.mjs tests/js_climb.test.mjs tests/js_divert.test.mjs tests/js_flight_adapter.test.mjs tests/js_interim_charging.test.mjs tests/js_routing.test.mjs tests/js_recompute.test.mjs tests/js_share.test.mjs tests/js_flight_entry.test.mjs tests/js_buildshare.test.mjs tests/js_range_graph.test.mjs tests/js_circular.test.mjs tests/js_runway.test.mjs; do
-  echo "--- node $f ---"
-  node "$f" || rc=1
-  echo
-done
+node --test tests/js_*.test.mjs || rc=1
 
 echo
 echo "=================================================================="
@@ -39,13 +37,6 @@ node tests/golden_capture.mjs --check || rc=1
 echo
 echo "--- node tests/sched_snapshot.mjs (DES parity gate, skips if :5055 down) ---"
 node tests/sched_snapshot.mjs || rc=1
-echo
-
-echo "=================================================================="
-echo "V2 UI UNIT (pure helpers of the /v2 shell — no browser needed):"
-echo "=================================================================="
-echo "--- node --test tests/js_ui_*.test.mjs ---"
-node --test tests/js_ui_*.test.mjs || rc=1
 echo
 
 echo "=================================================================="

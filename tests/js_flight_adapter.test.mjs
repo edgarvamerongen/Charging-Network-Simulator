@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { loadStack, AP } from './golden_capture.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -37,8 +38,6 @@ function savedTrip(c) {
   return t;
 }
 
-let pass = 0, fail = 0;
-const test = (n, fn) => { try { fn(); pass++; console.log(`  ok   ${n}`); } catch (e) { fail++; console.log(`  FAIL ${n}\n       ${e.message}`); } };
 const near = (a, b) => Math.abs((+a || 0) - (+b || 0)) <= Math.max(0.05, Math.abs(+b || 0) * 0.01);
 
 console.log('CNSFlight saved-trip adapter (profileForTrip + chargeEnergyAt) — node harness\n');
@@ -81,6 +80,3 @@ for (const c of golden.cases) {
     }
   });
 }
-
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);

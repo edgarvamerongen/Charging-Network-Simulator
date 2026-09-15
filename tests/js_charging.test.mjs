@@ -22,6 +22,7 @@ import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
@@ -34,11 +35,6 @@ function loadCharging() {
   return sandbox.window.CNSCharging;
 }
 
-let passed = 0, failed = 0;
-function test(name, fn) {
-  try { fn(); passed++; console.log(`  ok   ${name}`); }
-  catch (e) { failed++; console.log(`  FAIL ${name}\n       ${e.message}`); }
-}
 const approx = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 
 console.log('CNSCharging (static/charging.js) — node harness\n');
@@ -237,6 +233,3 @@ test('pinned multi-charger flight claims duplicates of the pinned MODEL only', (
   assert.equal(a.bays, 2);
   assert.equal(plan.peakPower, 600, 'the 500 kW bay stays idle');
 });
-
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

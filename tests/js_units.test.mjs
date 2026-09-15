@@ -17,6 +17,7 @@ import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
@@ -34,12 +35,6 @@ function loadUnits() {
   vm.runInContext(code, sandbox);
   return sandbox.window.CNSUnits;
 }
-
-let passed = 0, failed = 0;
-const test = (name, fn) => {
-  try { fn(); passed++; console.log(`  ok   ${name}`); }
-  catch (e) { failed++; console.log(`  FAIL ${name}\n       ${e.message}`); }
-};
 
 test('metric formatting (defaults)', () => {
   const U = loadUnits();
@@ -88,6 +83,3 @@ test('index.html: the units subscriber re-renders every distance-bearing compone
     assert.ok(body.includes(hook), `units onChange subscriber is missing ${hook}() — that component will keep stale units`);
   }
 });
-
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

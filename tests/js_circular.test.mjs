@@ -5,6 +5,8 @@
  * Run:  node tests/js_circular.test.mjs
  */
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { loadStack, AP } from './golden_capture.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,8 +14,6 @@ const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO, 'te
 const wp = (k) => ({ ident: k, name: AP[k].name, lat: AP[k].lat, lon: AP[k].lon });
 const ap = (k, type = 'medium_airport') => ({ ident: k, name: AP[k].name, type, latitude_deg: AP[k].lat, longitude_deg: AP[k].lon, iata_code: '', alternate_km: 0 });
 
-let pass = 0, fail = 0;
-const test = (n, fn) => { try { fn(); pass++; console.log(`  ok   ${n}`); } catch (e) { fail++; console.log(`  FAIL ${n}\n       ${e.message}`); } };
 const approx = (a, b, tol = 0.05) => Math.abs(a - b) <= tol;
 
 const S = loadStack();
@@ -25,7 +25,7 @@ console.log('Circular trip type (flight-model / demand / scheduler / recompute) 
 test('_expandChain: circular closes the ring back to the origin', () => {
   const chain = S.CNSFlight._expandChain([wp('EHAM'), wp('EHRD'), wp('LFPG')], 'circular');
   const idents = chain.map(w => w.ident);
-  if (idents.join(',') !== 'EHAM,EHRD,LFPG,EHAM') throw new Error('chain ' + idents.join(','));
+  assert.equal(idents.join(','), 'EHAM,EHRD,LFPG,EHAM');
 });
 
 function circularProfile() {
@@ -37,27 +37,27 @@ function circularProfile() {
 
 test('simulateTrip: circular has stops+2 legs; the last returns home', () => {
   const prof = circularProfile();
-  if (prof.legs.length !== 3) throw new Error(`expected 3 legs, got ${prof.legs.length}`);
+  assert.equal(prof.legs.length, 3, `expected 3 legs, got ${prof.legs.length}`);
   const last = prof.legs[prof.legs.length - 1];
-  if (last.fromIdent !== 'LFPG' || last.toIdent !== 'EHAM') throw new Error(`closing leg ${last.fromIdent}→${last.toIdent}`);
-  if (!prof.multiLeg) throw new Error('circular must be multiLeg');
+  assert.ok(last.fromIdent === 'LFPG' && last.toIdent === 'EHAM', `closing leg ${last.fromIdent}→${last.toIdent}`);
+  assert.ok(prof.multiLeg, 'circular must be multiLeg');
 });
 
 test('simulateTrip: terminal charge is HOME at the origin; only it is direction back', () => {
   const prof = circularProfile();
   const term = prof.charges[prof.charges.length - 1];
-  if (term.role !== 'home' || term.ident !== 'EHAM') throw new Error(`terminal ${term.role}@${term.ident}`);
+  assert.ok(term.role === 'home' && term.ident === 'EHAM', `terminal ${term.role}@${term.ident}`);
   const backs = prof.charges.filter(c => c.direction === 'back');
-  if (backs.length !== 1 || backs[0] !== term) throw new Error('only the closing charge is direction back');
+  assert.ok(backs.length === 1 && backs[0] === term, 'only the closing charge is direction back');
   const roles = prof.charges.map(c => c.role).join(',');
-  if (roles !== 'stop,dest,home') throw new Error('roles ' + roles);
+  assert.equal(roles, 'stop,dest,home');
 });
 
 test('simulateTrip: loop conserves energy (departs full, tops to full at home)', () => {
   const prof = circularProfile();
   const burned = prof.legs.reduce((s, l) => s + l.energyKwh, 0);
   const charged = prof.charges.reduce((s, c) => s + c.energyKwh, 0);
-  if (!approx(charged, burned)) throw new Error(`charged ${charged} vs burned ${burned}`);
+  assert.ok(approx(charged, burned), `charged ${charged} vs burned ${burned}`);
 });
 
 // ---- demand: roles + contributions ------------------------------------------
@@ -79,9 +79,9 @@ function savedCircularTrip() {
 
 test('demand.roleAt: circular origin is HOME, dest is dest, stop is stop', () => {
   const t = savedCircularTrip();
-  if (S.CNSDemand.roleAt(t, 'EHAM') !== 'home') throw new Error('origin should be home, got ' + S.CNSDemand.roleAt(t, 'EHAM'));
-  if (S.CNSDemand.roleAt(t, 'LFPG') !== 'dest') throw new Error('dest role');
-  if (S.CNSDemand.roleAt(t, 'EHRD') !== 'stop') throw new Error('stop role');
+  assert.equal(S.CNSDemand.roleAt(t, 'EHAM'), 'home');
+  assert.equal(S.CNSDemand.roleAt(t, 'LFPG'), 'dest');
+  assert.equal(S.CNSDemand.roleAt(t, 'EHRD'), 'stop');
 });
 
 test('demand.computeAirports: origin gets exactly ONE contribution (home, back) — no zero-origin duplicate', () => {
@@ -89,17 +89,17 @@ test('demand.computeAirports: origin gets exactly ONE contribution (home, back) 
   S.CNSState.setJSON('cns_folder', [t]);
   const airports = S.CNSDemand.computeAirports();
   const home = airports['EHAM'];
-  if (!home) throw new Error('home airport missing');
-  if (home.contribs.length !== 1) throw new Error(`expected 1 contribution at home, got ${home.contribs.length}: ` + home.contribs.map(c => c.role).join(','));
-  if (home.contribs[0].role !== 'home') throw new Error('home contribution role ' + home.contribs[0].role);
-  if (home.contribs[0].direction !== 'back') throw new Error('home charge should be the return visit');
-  if (!(home.contribs[0].base > 0)) throw new Error('home charge energy should be > 0');
+  assert.ok(home, 'home airport missing');
+  assert.equal(home.contribs.length, 1, `expected 1 contribution at home, got ${home.contribs.length}: ` + home.contribs.map(c => c.role).join(','));
+  assert.equal(home.contribs[0].role, 'home');
+  assert.equal(home.contribs[0].direction, 'back', 'home charge should be the return visit');
+  assert.ok(home.contribs[0].base > 0, 'home charge energy should be > 0');
 });
 
 // ---- scheduler: roles + fleet default ----------------------------------------
 test('scheduler.roleAt: circular origin is HOME (the closing recharge is scheduled)', () => {
   const t = savedCircularTrip();
-  if (S.CNSScheduler.roleAt(t, 'EHAM') !== 'home') throw new Error('scheduler origin role ' + S.CNSScheduler.roleAt(t, 'EHAM'));
+  assert.equal(S.CNSScheduler.roleAt(t, 'EHAM'), 'home');
 });
 
 test('scheduler fleet default: circular matches retour — unset = separate (parallel starts), shared = sequential', () => {
@@ -108,9 +108,9 @@ test('scheduler fleet default: circular matches retour — unset = separate (par
   const base = { ...savedCircularTrip(), freqN: 2, flightTimeH: 4 };
   S.CNSState.setJSON('cns_sched', {});
   const unset = S.CNSScheduler.instanceStarts({ ...base, id: 'cu', fleetMode: undefined });
-  if (!(unset.length === 2 && unset[0] === unset[1])) throw new Error('unset circular should default separate (parallel starts): ' + unset.join(','));
+  assert.ok(unset.length === 2 && unset[0] === unset[1], 'unset circular should default separate (parallel starts): ' + unset.join(','));
   const shared = S.CNSScheduler.instanceStarts({ ...base, id: 'cs', fleetMode: 'shared' });
-  if (!(shared.length === 2 && shared[1] > shared[0])) throw new Error('shared circular should fly sequential rotations: ' + shared.join(','));
+  assert.ok(shared.length === 2 && shared[1] > shared[0], 'shared circular should fly sequential rotations: ' + shared.join(','));
 });
 
 // ---- recompute: ring is preserved --------------------------------------------
@@ -124,12 +124,9 @@ test('recomputeFlight: circular stays multiLeg + feasible; ring intact', () => {
     availableRangeKm: (plane) => plane.range_km * S.CNSSettings.usableFraction(plane) / S.CNSSettings.routingFactor(),
   };
   const out = S.CNSRecompute.recomputeFlight(t, ctx);
-  if (out.feasible !== true) throw new Error('circular should stay feasible: ' + out.infeasibleReason);
-  if (out.multiLeg !== true) throw new Error('circular must stay multiLeg after recompute');
+  assert.equal(out.feasible, true, 'circular should stay feasible: ' + out.infeasibleReason);
+  assert.equal(out.multiLeg, true, 'circular must stay multiLeg after recompute');
   const term = out.charges[out.charges.length - 1];
-  if (!term || term.ident !== 'EHAM' || term.role !== 'home') throw new Error('recomputed terminal must be home@EHAM');
-  if (out.legs.length !== out.stops.length + 2) throw new Error(`legs ${out.legs.length} vs stops+2 ${out.stops.length + 2}`);
+  assert.ok(term && term.ident === 'EHAM' && term.role === 'home', 'recomputed terminal must be home@EHAM');
+  assert.equal(out.legs.length, out.stops.length + 2, `legs ${out.legs.length} vs stops+2 ${out.stops.length + 2}`);
 });
-
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);

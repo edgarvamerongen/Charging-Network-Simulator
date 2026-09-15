@@ -14,6 +14,7 @@ import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
@@ -43,12 +44,6 @@ const ap = (ident, lon, alt) => ({
 });
 const node = (ident, lon, alt) => ({ ident, lat: 0, lon, alternate_km: alt });
 const PLANE = (range_km) => ({ range_km });
-
-let passed = 0, failed = 0;
-function test(name, fn) {
-  try { fn(); passed++; console.log(`  ok   ${name}`); }
-  catch (e) { failed++; console.log(`  FAIL ${name}\n       ${e.message}`); }
-}
 
 // planRoute builds its result inside the vm realm; assert.deepEqual is
 // realm-sensitive, so copy the stop idents into THIS realm before comparing
@@ -453,6 +448,3 @@ test('powered-lift: wing-borne planes still cannot use the same no-data airport'
     allowedTypes: ['medium_airport'], allAirports: [bare('A', 1.5)], options: {} });
   assert.ok(res.error, 'CTOL must still be gated by the missing runway data');
 });
-
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

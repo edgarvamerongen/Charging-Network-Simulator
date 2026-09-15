@@ -11,6 +11,7 @@ import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
@@ -21,12 +22,6 @@ function load() {
   vm.createContext(sandbox);
   vm.runInContext(code, sandbox);
   return sandbox.window.CNSRunway;
-}
-
-let passed = 0, failed = 0;
-function test(name, fn) {
-  try { fn(); passed++; console.log(`  ok   ${name}`); }
-  catch (e) { failed++; console.log(`  FAIL ${name}\n       ${e.message}`); }
 }
 
 console.log('CNSRunway (static/runway.js) — node harness\n');
@@ -111,6 +106,3 @@ test('fits: known data proves the plane cannot land -> false', () => {
   assert.equal(R.fits({ runway_req: { grass: 1250 } }, GRASSY), false);  // short: 600 < 1250
   assert.equal(R.fits({ runway_req: { paved: 550 } }, GRASSY), false);   // surface: no paved at all
 });
-
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

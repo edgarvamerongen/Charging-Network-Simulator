@@ -4,6 +4,7 @@
  * Run:  node tests/js_recompute.test.mjs
  */
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
+import { test } from 'node:test';
 import { loadStack, AP } from './golden_capture.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,9 +13,6 @@ const PLANES = Object.fromEntries(JSON.parse(fs.readFileSync(path.join(REPO, 'te
 // rwy_paved_m: candidates need runway data or the planner refuses to stop there.
 const ap = (k, type = 'medium_airport', alt = 0) => ({ ident: k, name: AP[k].name, type, latitude_deg: AP[k].lat, longitude_deg: AP[k].lon, iata_code: '', alternate_km: alt, rwy_paved_m: 2000 });
 const node = (k, alt = 0) => ({ ident: k, name: AP[k].name, lat: AP[k].lat, lon: AP[k].lon, alternate_km: alt });
-
-let pass = 0, fail = 0;
-const test = (n, fn) => { try { fn(); pass++; console.log(`  ok   ${n}`); } catch (e) { fail++; console.log(`  FAIL ${n}\n       ${e.message}`); } };
 
 const S = loadStack(); S.CNSSettings.reset();
 const beta = PLANES.beta_plane;
@@ -189,6 +187,3 @@ test('index.html: _recomputeCtx is map-filter independent (full catalog, setting
   for (const must of ['small_airport', 'medium_airport', 'large_airport', 'allowedIdents'])
     if (!m[1].includes(must)) throw new Error(`_recomputeCtx missing ${must} (full-catalog pool)`);
 });
-
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);

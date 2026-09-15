@@ -71,7 +71,7 @@ export const AP = {
 };
 const co = (k) => ({ ident: k, name: AP[k].name, lat: AP[k].lat, lon: AP[k].lon });
 
-export const MATRIX = [
+const MATRIX = [
   { name: 'oneway-velis-short', plane: 'pipistrel_velis', o: 'EHRD', d: 'EHAM', trip: 'one-way' },
   { name: 'oneway-beta',        plane: 'beta_plane',      o: 'EHAM', d: 'LFPG', trip: 'one-way' },
   { name: 'retour-beta',        plane: 'beta_plane',      o: 'EHAM', d: 'EHGG', trip: 'retour' },
@@ -132,7 +132,7 @@ export function breakdownFromProfile(prof) {
   };
 }
 
-export function breakdownSnapshot(bd) {
+function breakdownSnapshot(bd) {
   return {
     energyUsedKwh: round(bd.energyUsedKwh), flightMin: round(bd.flightMin), chargeMin: round(bd.chargeMin),
     enRouteMin: round(bd.enRouteMin), terminalMin: round(bd.terminalMin), terminalKwh: round(bd.terminalKwh),
@@ -141,7 +141,7 @@ export function breakdownSnapshot(bd) {
   };
 }
 
-export async function captureCase(c) {
+async function captureCase(c) {
   const data = await sim(c);
   if (data.error) return { name: c.name, error: data.error };
   const variants = {};
