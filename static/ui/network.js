@@ -38,7 +38,7 @@
     const getTargetSoc = id => (D().resolveTargetSoc ? D().resolveTargetSoc(cfgs[id]) : null);
     const cache = {};
     // Classic renderFolder (index.html:5610-5613): the engine profile is the only source — no profile ⇒ 0 kWh
-    // (`_engEnergyAt(c) ?? 0`). The old CNSDemand.energyAt fallback was called with an undefined ident and double-counted.
+    // (`_engEnergyAt(c) ?? 0`). The old demand-side fallback it replaced was called with an undefined ident and double-counted.
     const energyOf = c => { if (c.t.feasible === false) return 0; const pr = (c.t.id in cache) ? cache[c.t.id] : (cache[c.t.id] = (window.CNSFlight && CNSFlight.profileForTrip) ? CNSFlight.profileForTrip(c.t, { getTargetSoc }) : null); return (pr && CNSFlight.chargeEnergyAt) ? (CNSFlight.chargeEnergyAt(pr, c) ?? 0) : 0; };
     return Object.values(aps).map(a => {
       const cfg = cfgs[a.ident] || {};

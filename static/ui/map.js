@@ -135,6 +135,6 @@
   // which setMode has already flipped by the time it hides/shows the route layer).
   function hideRoute() { if (map.hasLayer(routeLayer)) map.removeLayer(routeLayer); drawAlternates(); }
   function showRoute() { if (!map.hasLayer(routeLayer)) routeLayer.addTo(map); drawAlternates(); }
-  UI.map = { init, drawAirports, drawAssets, drawRoute, drawNet, fitNet, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
+  UI.map = { init, drawAssets, drawRoute, drawNet, fitNet, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
              closePopup: () => map.closePopup(), hideRoute, showRoute, get map() { return map; } };
 })();
