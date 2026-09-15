@@ -95,13 +95,6 @@ window.CNSFlight = (function () {
         const dAff = (usable - cp.eMaxKwh) / cp.cruisePerKm;          // affine branch (past d_sat)
         return dAff >= cp.dSatKm ? dAff : Math.max(0, usable) / (cp.cruisePerKm + cp.eMaxKwh / cp.dSatKm);
     }
-    function _haversineKm(a, b) {
-        if (window.CNSRouting && CNSRouting.haversineKm) return CNSRouting.haversineKm(a, b);
-        const R = 6371, toRad = d => d * Math.PI / 180;
-        const dLat = toRad(b.lat - a.lat), dLon = toRad(b.lon - a.lon);
-        const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-        return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-    }
     const _pt = (w) => ({ lat: +w.lat, lon: +w.lon });
 
     // ---- [R1] expand the caller's origin+stops+dest into the actually-visited chain ----------
@@ -206,7 +199,7 @@ window.CNSFlight = (function () {
         // flown distance (single-count), so distKm, energyKwh and flightMin reconcile. (R5)
         for (let i = 0; i < nLegs; i++) {
             const a = chain[i], b = chain[i + 1];
-            const rawKm = _haversineKm(_pt(a), _pt(b));          // great-circle (geographic)
+            const rawKm = CNSRouting.haversineKm(_pt(a), _pt(b));   // great-circle (geographic) — routing.js loads first everywhere
             const distKm = rawKm * route + sidStar;              // ROUTED length: airways multiplier, then fixed SID/STAR terminal km
             const energyKwh = legEnergy(distKm);                 // flown — derives from the routed length (climb ramp + cruise; linear when the model is off/gated)
             const flightMin = speed > 0 ? distKm / speed * 60 : 0;   // flown — derives from the routed length

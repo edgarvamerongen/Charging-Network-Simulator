@@ -7,7 +7,7 @@
   const D = () => window.CNSDemand, SC = () => window.CNSScheduler;
   const H0 = 360, H1 = 1380, SPAN = H1 - H0;            // 06:00 – 23:00 (scheduler DAY_END)
   const pct = m => Math.max(0, Math.min(100, (m - H0) / SPAN * 100)), w = m => Math.max(.4, m / SPAN * 100);
-  const clock = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(Math.round(m % 60)).padStart(2, '0');
+  const clock = CNSUnits.fmtClock;   // units.js:45 — one hh:mm formatter (rounds the WHOLE minute, so 07:59.7 reads 08:00, not 07:60)
   const gridMul = () => (window.CNSSettings && CNSSettings.gridDemandFactor) ? CNSSettings.gridDemandFactor() : 1;
   /** 15-min bins of concurrent charging power — the SHADING under the load row. A bin sums every charge that
       touches it, so two consecutive charges sharing one bin add up: `peak` here is an upper bound, NOT the peak.
@@ -78,7 +78,7 @@
     // Gantt, static/scheduler.js:761-780, gives no feedback on a click either).
     if (Math.abs(d.dm || 0) < 2.5) return;
     const [tripId, k] = d.key.split(':'); const nt = Math.max(H0 + 60, Math.min(H1, Math.round((d.takeoff + d.dm) / 5) * 5));
-    try { const sched = JSON.parse(localStorage.getItem('cns_schedule') || '{}'); const arr = sched[tripId]; if (Array.isArray(arr) && arr.length > +k) { arr[+k] = nt; sched[tripId] = arr; localStorage.setItem('cns_schedule', JSON.stringify(sched)); UI.folderChanged(); UI.render(); UI.toast(`Take-off moved to ${clock(nt)}`); } } catch (err) { console.warn('[v2] reschedule failed', err); }
+    try { const sched = CNSState.getJSON('cns_schedule', {}); const arr = sched[tripId]; if (Array.isArray(arr) && arr.length > +k) { arr[+k] = nt; sched[tripId] = arr; CNSState.setJSON('cns_schedule', sched); UI.folderChanged(); UI.render(); UI.toast(`Take-off moved to ${clock(nt)}`); } } catch (err) { console.warn('[v2] reschedule failed', err); }
   });
   document.addEventListener('click', e => { const t = e.target.closest('#laneSeg button,#depSw,.dep-lbl,#focChip,#drawerHead'); if (!t) return;
     if (t.closest('#laneSeg')) { S.lanes = t.dataset.lanes; render(); return; }

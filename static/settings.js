@@ -66,7 +66,7 @@ window.CNSSettings = (function () {
     });
 
     // Cloned so call sites can't mutate the frozen defaults via the returned object.
-    const _clone = (o) => JSON.parse(JSON.stringify(o));
+    const _clone = (o) => structuredClone(o);
 
     function loadAll() {
         const stored = CNSState.getJSON(KEY, null);

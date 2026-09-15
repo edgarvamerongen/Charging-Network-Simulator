@@ -46,16 +46,8 @@ window.CNSSpreadsheet = (function () {
                 try { msg = (await resp.json()).error || msg; } catch (e) {}
                 throw new Error(msg);
             }
-            const blob = await resp.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
             const today = new Date().toISOString().slice(0, 10);
-            a.href = url;
-            a.download = `nrg2fly-charging-plan-${today}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            CNSUnits.downloadBlob(await resp.blob(), `nrg2fly-charging-plan-${today}.xlsx`);
         } catch (err) {
             alert('Could not export the spreadsheet: ' + (err && err.message ? err.message : err));
         } finally {

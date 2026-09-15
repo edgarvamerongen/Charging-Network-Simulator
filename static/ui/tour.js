@@ -32,7 +32,7 @@
     if (S.mode !== 'plan') UI.setMode('plan'); if (S.rail !== 'form') { S.rail = 'form'; UI.render(); }
     const steps = STEPS().map(s => ({ element: s.el, popover: { title: s.title, description: s.desc }, onHighlightStarted: s.before ? async () => { await s.before(); } : undefined }));
     const d = D({ showProgress: true, allowClose: true, popoverClass: 'cns-tour', nextBtnText: 'Next', prevBtnText: 'Back', doneBtnText: 'Done', steps }); UI.tour._d = d; d.drive();
-    try { localStorage.setItem('cns_tour_done', 'true'); } catch (e) {}
+    try { CNSState.setJSON('cns_tour_done', true); } catch (e) {}
   }
   function check() { const rows = STEPS().map((s, i) => ({ step: i + 1, anchor: s.el || '(centered)', title: s.title, ok: !s.el || !!document.querySelector(s.el) })); console.table(rows); return rows; }
   function welcome() {
@@ -45,8 +45,8 @@
   document.addEventListener('click', e => {
     if (e.target.closest('#tourBtn')) { start(); return; }
     if (e.target.closest('[data-act=tourStart]')) { UI.modal.close(); start(); return; }
-    if (e.target.closest('#modal') && e.target.id === 'welcomeHide') { try { localStorage.setItem(HIDE, JSON.stringify(e.target.checked)); } catch (err) {} }
+    if (e.target.closest('#modal') && e.target.id === 'welcomeHide') { try { CNSState.setJSON(HIDE, e.target.checked); } catch (err) {} }
   });
-  function maybeWelcome() { let hide = false; try { hide = JSON.parse(localStorage.getItem(HIDE) || 'false'); } catch (e) {} if (!hide && !UI.D.shareState && !location.hash) setTimeout(welcome, 400); }
+  function maybeWelcome() { let hide = false; try { hide = !!CNSState.getJSON(HIDE, false); } catch (e) {} if (!hide && !UI.D.shareState && !location.hash) setTimeout(welcome, 400); }
   UI.tour = { start, check, welcome, maybeWelcome, STEPS };
 })();

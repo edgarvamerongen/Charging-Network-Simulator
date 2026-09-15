@@ -15,12 +15,14 @@ import assert from 'node:assert/strict';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
 
+// divert-edit.js calls CNSRouting.haversineKm directly (routing.js is loaded before it
+// in every shell), so the sandbox loads the same two files in the same order.
 function loadModule() {
-  const code = fs.readFileSync(path.join(REPO, 'static', 'divert-edit.js'), 'utf8');
-  const sandbox = { window: {}, console, JSON, Math, Object, Array, Number, isFinite };
+  const sandbox = { console, JSON, Math, Object, Array, Number, isFinite };
+  sandbox.window = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(code, sandbox);
-  return sandbox.window.CNSDivertEdit;
+  for (const f of ['routing.js', 'divert-edit.js']) vm.runInContext(fs.readFileSync(path.join(REPO, 'static', f), 'utf8'), sandbox);
+  return sandbox.CNSDivertEdit;
 }
 
 let passed = 0, failed = 0;

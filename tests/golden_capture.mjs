@@ -26,21 +26,22 @@ const PLANES = Object.fromEntries(
 
 // ---- load the real stack into one vm context (window === global, like the browser)
 export function loadStack() {
-  const stateStore = {};
   const lsStore = new Map();
-  const CNSState = {
-    KEYS: { folder: 'cns_folder', cfg: 'cns_airport_cfg' },
-    getJSON: (k, d) => (k in stateStore ? JSON.parse(JSON.stringify(stateStore[k])) : d),
-    setJSON: (k, v) => { stateStore[k] = JSON.parse(JSON.stringify(v)); },
-  };
   const localStorage = {
     getItem: (k) => (lsStore.has(k) ? lsStore.get(k) : null),
     setItem: (k, v) => lsStore.set(k, String(v)),
     removeItem: (k) => lsStore.delete(k),
   };
+  // Backed by the SAME store as localStorage, exactly like the real static/state.js —
+  // the engines mix `CNSState.getJSON` and raw `localStorage` reads of the same key.
+  const CNSState = {
+    KEYS: { folder: 'cns_folder', cfg: 'cns_airport_cfg', sched: 'cns_schedule' },
+    getJSON: (k, d) => { const v = localStorage.getItem(k); if (v == null) return d; try { return JSON.parse(v); } catch (e) { return d; } },
+    setJSON: (k, v) => localStorage.setItem(k, JSON.stringify(v)),
+  };
   const sandbox = {
     console, JSON, Math, Object, Array, Number, isFinite, isNaN, String, Boolean,
-    parseInt, parseFloat, Date, Error, TypeError, RangeError, Map, Set, Symbol, RegExp,
+    parseInt, parseFloat, Date, Error, TypeError, RangeError, Map, Set, Symbol, RegExp, structuredClone,
     CNSState, localStorage, PLANES_BY_ID: PLANES,
   };
   sandbox.window = sandbox;

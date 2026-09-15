@@ -67,19 +67,11 @@
         <div class="plugs">${(x.plugs || []).map(p => `<div><span>${UI.esc(p.label)} · ${UI.esc(p.connector)}</span><b class="num">${p.power_kw} kW</b></div>`).join('')}</div></div>`);
       assetLayer.addLayer(m); });
   }
-  function hav(a, b) { const R = 6371, dL = (b[0] - a[0]) * Math.PI / 180, dN = (b[1] - a[1]) * Math.PI / 180, x = Math.sin(dL / 2) ** 2 + Math.cos(a[0] * Math.PI / 180) * Math.cos(b[0] * Math.PI / 180) * Math.sin(dN / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); }
   // Distance to SHOW on a leg label: the ROUTED leg (great-circle × routing padding) + the
   // fixed SID/STAR pad, i.e. the classic's _dispKm (index.html:4596-4601) and the same number
   // the result table prints — a raw great-circle here reads as a second, contradicting distance.
-  // Prefers the shell's shared helper when one exists (UI.dispKm), so both stay in step.
-  function dispKm(a, b) {
-    const A = { lat: a[0], lon: a[1], latitude_deg: a[0], longitude_deg: a[1] }, B = { lat: b[0], lon: b[1], latitude_deg: b[0], longitude_deg: b[1] };
-    if (typeof UI.dispKm === 'function') { try { const v = UI.dispKm(A, B); if (isFinite(v) && v > 0) return v; } catch (e) {} }
-    const p = UI.plane();
-    const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(p) : 0;
-    if (window.CNSRouting && CNSRouting.routedKm) return CNSRouting.routedKm(A, B, p) + sid;
-    return hav(a, b) + sid;
-  }
+  // One implementation, in the shell (app.js:70); this only adapts [lat, lon] pairs to it.
+  const dispKm = (a, b) => UI.dispKm({ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] });
   /** Great-circle arc between two [lat, lon] points (spherical interpolation, n+1 points). */
   function arc(a, b, n) {
     const R = Math.PI / 180, la1 = a[0] * R, lo1 = a[1] * R, la2 = b[0] * R, lo2 = b[1] * R;

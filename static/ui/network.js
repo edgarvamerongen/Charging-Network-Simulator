@@ -10,8 +10,8 @@
   const cat = id => (window.PLANES_BY_ID || {})[id] || {};
   const rate = () => (ST() && ST().chargeRate) ? ST().chargeRate() : 0.6;
   const gridMul = () => (ST() && ST().gridDemandFactor) ? ST().gridDemandFactor() : 1;
-  // Clock times round to the nearest minute (CNSUnits.fmtClock, units.js:45) — fmt.h is a DURATION formatter (ceil).
-  const clockOf = m => { if (window.CNSUnits && CNSUnits.fmtClock) return CNSUnits.fmtClock(m); const c = Math.max(0, Math.round(m || 0)); return String(Math.floor(c / 60)).padStart(2, '0') + ':' + String(c % 60).padStart(2, '0'); };
+  // Clock times round to the nearest minute (units.js:45) — fmt.h is a DURATION formatter (ceil).
+  const clockOf = CNSUnits.fmtClock;
 
   // ---- recompute (classic _recomputeCtx / recomputeAllFlights) ----
   function recomputeCtx() {
@@ -27,7 +27,7 @@
   // phase (multi-leg-only traffic): a sensible upper bound so the card stays meaningful instead of reading 0.
   function planPeak(fleet, contribs, energyOf) {
     if (!window.CNSCharging || !CNSCharging.planCharging || !fleet.length || !contribs.length) return 0;
-    const list = contribs.map(c => ({ name: c.t.planeName, energy: c.t.feasible === false ? 0 : energyOf(c), size: c.t.battery ?? c.t.legEnergy * 2,
+    const list = contribs.map(c => ({ name: c.t.planeName, energy: c.t.feasible === false ? 0 : energyOf(c), size: CNSDemand.batteryOf(c.t),
       forcedChargerId: c.t.chargerOverride, nChargers: (window.CNSFlight && CNSFlight.nChargers) ? CNSFlight.nChargers(cat(c.t.planeId) || c.t) : 1 }));
     try { return CNSCharging.planCharging(fleet, list).peakPower || 0; } catch (e) { return 0; }
   }
@@ -200,17 +200,9 @@
     training: { title: 'Training school', meta: '1 airfield · Velis circuits · 12 sorties / day', chargers: { EHTE: ['dc_22', 'dc_22', 'dc_22'] }, focus: 'EHTE', spark: [50, 50, 50, 50, 50, 50, 50, 50, 50], routes: [['EHTE', 'EHTE', 'pipistrel_velis', 12, 'day', 'training']] }
   };
   // Scenario plane ids are prototype names; the live catalog may spell them differently (production: beta_alia,
-  // vaeridion_microliner). app.js owns the mapping — consume it defensively so a shell without it still loads.
-  const PLANE_ALIAS = { beta_plane: 'beta_alia', vaeridion: 'vaeridion_microliner', vaeridion_light: 'vaeridion_microliner_9_seats' };
-  const knownPlane = id => !!id && UI.PLANES.some(p => p.id === id);
-  function resolvePlane(id) {
-    if (knownPlane(id)) return id;
-    const viaApp = (typeof UI.resolvePlaneId === 'function') ? UI.resolvePlaneId(id) : null; if (knownPlane(viaApp)) return viaApp;
-    if (knownPlane(PLANE_ALIAS[id])) return PLANE_ALIAS[id];
-    const byAirframe = UI.PLANES.find(p => p.aircraft_id === id); if (byAirframe) return byAirframe.id;
-    const byPrefix = UI.PLANES.find(p => String(p.id).indexOf(String(id)) === 0); if (byPrefix) return byPrefix.id;
-    return id;
-  }
+  // vaeridion_microliner). app.js owns the mapping (alias table + airframe + name + id prefix); an unresolvable
+  // id is passed through so the failure surfaces as "unknown aircraft" rather than the wrong one.
+  const resolvePlane = id => UI.resolvePlaneId(id) || id;
   async function loadScenario(key) {
     const sc = SCENARIOS[key]; if (!sc) return; const by = UI.byId();
     // A scenario is a fresh network: the previous one's per-airport chargers and hand-placed take-offs must not survive it.

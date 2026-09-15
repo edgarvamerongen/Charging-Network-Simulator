@@ -48,7 +48,9 @@ window.CNSUI = (function () {
   const planeImg = p => (p && p.image_url) ? p.image_url : (p && p.image ? '/pics/' + String(p.image).split('/').map(encodeURIComponent).join('/') : '');
   // Legacy / scenario / share-link plane ids that are not catalog row ids (the prototype catalog's).
   const PLANE_ALIAS = { beta_plane: 'beta_alia', vaeridion: 'vaeridion_microliner', vaeridion_light: 'vaeridion_microliner_9_seats' };
-  /** id → a REAL catalog row id: exact row · airframe (aircraft_id) · alias map · name match. null when nothing matches. */
+  /** id → a REAL catalog row id: exact row · airframe (aircraft_id) · alias map · name match · id prefix.
+      null when nothing matches. (The id-prefix arm came from network.js's scenario resolver — a catalog id
+      whose prefix the NAME does not spell, e.g. 'h55' → 'h55_b23', resolves on that arm alone.) */
   function resolvePlaneId(id) {
     const k = String(id == null ? '' : id).trim(); if (!k) return null;
     if (PLANES.some(p => p.id === k)) return k;
@@ -58,7 +60,8 @@ window.CNSUI = (function () {
     const words = k.split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     if (!words.length) return null;
     const re = new RegExp(words.join('.*'), 'i');
-    const byName = PLANES.find(p => re.test(String(p.name || ''))); return byName ? byName.id : null;
+    const byName = PLANES.find(p => re.test(String(p.name || ''))); if (byName) return byName.id;
+    const byPrefix = PLANES.find(p => String(p.id).indexOf(k) === 0); return byPrefix ? byPrefix.id : null;
   }
   // An unknown id resolves through the alias map rather than silently becoming PLANES[0] — the range
   // gate must never evaluate a different aircraft than the one the caller named (TIMELINE-9/SHELL-1).
@@ -69,12 +72,9 @@ window.CNSUI = (function () {
   // routed (great-circle × airways padding) + the fixed SID/STAR pad, i.e. the engine's per-leg distKm.
   function dispKm(a, b) {
     const P = x => ({ lat: +(x.latitude_deg ?? x.lat), lon: +(x.longitude_deg ?? x.lon) });
-    const A = P(a), B = P(b), p = plane();
+    const p = plane();
     const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(p) : 0;
-    if (window.CNSRouting && CNSRouting.routedKm) return CNSRouting.routedKm(A, B, p) + sid;
-    const R = 6371, dL = (B.lat - A.lat) * Math.PI / 180, dN = (B.lon - A.lon) * Math.PI / 180;
-    const x = Math.sin(dL / 2) ** 2 + Math.cos(A.lat * Math.PI / 180) * Math.cos(B.lat * Math.PI / 180) * Math.sin(dN / 2) ** 2;
-    return 2 * R * Math.asin(Math.sqrt(x)) + sid;
+    return CNSRouting.routedKm(P(a), P(b), p) + sid;   // routing.js loads before every ui/*.js
   }
   const chain = () => {
     if (CNSUI.planner) return CNSUI.planner.chain();

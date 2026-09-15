@@ -47,5 +47,18 @@ window.CNSUnits = (function () {
         return String(Math.floor(c / 60)).padStart(2, '0') + ':' + String(c % 60).padStart(2, '0');
     };
 
-    return { isNautical, get, set, onChange, r, num, fmtDist, fmtSpeed, fmtUsage, fmtEnergy, fmtPower, fmtDuration, fmtClock };
+    // Hand a fetched blob to the browser as a file — the one download path for every
+    // export (PDF, XLSX). Not a unit helper, but this is the module every shell loads first.
+    const downloadBlob = (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+    };
+
+    return { isNautical, get, set, onChange, r, num, fmtDist, fmtSpeed, fmtUsage, fmtEnergy, fmtPower, fmtDuration, fmtClock, downloadBlob };
 })();

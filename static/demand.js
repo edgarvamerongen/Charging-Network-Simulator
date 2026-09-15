@@ -131,7 +131,7 @@ window.CNSDemand = (function () {
                 return;
             }
             // Legacy single-leg path (unchanged behaviour)
-            const battery = t.battery ?? t.legEnergy * 2;
+            const battery = batteryOf(t);
             if (t.tripType === 'retour') {
                 ensure(t.originIdent, t.originName, t.originLat, t.originLon)
                     .contribs.push({ t, role: 'home', other: t.destName, base: Math.min(2 * t.legEnergy, battery) });

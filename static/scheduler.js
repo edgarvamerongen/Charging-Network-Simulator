@@ -39,13 +39,16 @@ window.CNSScheduler = (function () {
     let catalog = {};
     let onChange = null;
 
-    const loadTrips = () => { try { return JSON.parse(localStorage.getItem(FOLDER_KEY) || '[]'); } catch (e) { return []; } };
-    const loadSched = () => { try { return JSON.parse(localStorage.getItem(SCHED_KEY) || '{}'); } catch (e) { return {}; } };
-    const saveSched = (s) => localStorage.setItem(SCHED_KEY, JSON.stringify(s));
-    const loadCfg = () => { try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { return {}; } };
+    const loadTrips = () => CNSState.getJSON(FOLDER_KEY, []);
+    const loadSched = () => CNSState.getJSON(SCHED_KEY, {});
+    const saveSched = (s) => CNSState.setJSON(SCHED_KEY, s);
+    const loadCfg = () => CNSState.getJSON(CFG_KEY, {});
 
     const num = (t, k, d = 0) => { const v = Number(t[k]); return isFinite(v) ? v : d; };
-    const batteryOf = (t) => t.battery != null ? num(t, 'battery') : 2 * num(t, 'legEnergy');
+    // Trip battery + the role a trip plays at an airport are CNSDemand's model (demand.js
+    // loads first in every shell); referenced inline, like the CNSUnits formatters below.
+    const batteryOf = (t) => CNSDemand.batteryOf(t);
+    const roleAt = (t, ident) => CNSDemand.roleAt(t, ident);
     const shorten = (s, n = 16) => (s && s.length > n) ? s.slice(0, n - 1) + '…' : (s || '');
     // Clock + duration formatting live in CNSUnits (single source of truth). They're
     // only used in the DOM-render paths below, where units.js is always loaded first;
@@ -59,13 +62,6 @@ window.CNSScheduler = (function () {
     const esc = (s) => (window.escHtml ? window.escHtml(s) : String(s ?? '').replace(/[&<>"']/g,
         (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 
-    function roleAt(trip, ident) {
-        if (trip.destIdent === ident) return 'dest';
-        if (trip.originIdent === ident && (trip.tripType === 'retour' || trip.tripType === 'circular')) return 'home';
-        if (trip.originIdent === ident) return 'origin';   // one-way departure hub: take-off here at 100%, no charge
-        if (trip.multiLeg && Array.isArray(trip.stops) && trip.stops.some(s => s && s.ident === ident)) return 'stop';
-        return null;
-    }
     function tripsAt(ident) { return loadTrips().filter(t => roleAt(t, ident)); }
 
     // Does a freq>1 trip mean SEPARATE aircraft (a fleet, flying in parallel)

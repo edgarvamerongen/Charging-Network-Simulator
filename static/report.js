@@ -69,7 +69,7 @@ window.CNSReport = (function () {
             return {
                 _i: i, name: c.t.planeName,
                 energy: prof ? (CNSFlight.chargeEnergyAt(prof, c) ?? 0) : 0,   // engine charge energy (0 if unresolvable)
-                size: c.t.battery ?? c.t.legEnergy * 2,
+                size: CNSDemand.batteryOf(c.t),
                 nChargers: (window.CNSFlight && CNSFlight.nChargers)          // multi-charger aircraft book N bays at once
                     ? CNSFlight.nChargers((window.PLANES_BY_ID || {})[c.t.planeId] || c.t) : 1,
             };
@@ -82,7 +82,7 @@ window.CNSReport = (function () {
             const asg = plan.assignments[i];
             const energy = asg.aircraft.energy;
             const nameplate = asg.power || (asg.charger ? asg.charger.power_kw : 0);   // combined nameplate when N bays are booked
-            const battery = t.battery ?? t.legEnergy * 2;
+            const battery = CNSDemand.batteryOf(t);
             const cRate = ((window.PLANES_BY_ID || {})[t.planeId] || t).c_rate;
             const maxKw = ((window.PLANES_BY_ID || {})[t.planeId] || t).max_charge_kw;   // published acceptance cap
             const power = window.CNSSettings
@@ -145,10 +145,9 @@ window.CNSReport = (function () {
         const rows = (window.CNSScheduler && CNSScheduler.rotationsAt) ? CNSScheduler.rotationsAt(ident) : [];
         const rotations = rows.map(row => {
             const t = row.trip;
-            const role = (t.destIdent === ident) ? 'dest'
-                       : (t.originIdent === ident && (t.tripType === 'retour' || t.tripType === 'circular')) ? 'home'
-                       : (t.originIdent === ident) ? 'origin'
-                       : 'stop';
+            // Same role vocabulary as the contribs above (both CNSDemand.roleAt) — the rows
+            // come from CNSScheduler.rotationsAt, which filters on that role, so it is never null.
+            const role = CNSDemand.roleAt(t, ident);
             const instances = row.rotations.map(rot => ({
                 start: rot.takeoff,
                 phases: rot.phases.map(p => ({
@@ -382,16 +381,8 @@ window.CNSReport = (function () {
                 try { msg = (await resp.json()).error || msg; } catch (e) {}
                 throw new Error(msg);
             }
-            const blob = await resp.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
             const today = new Date().toISOString().slice(0, 10);
-            a.href = url;
-            a.download = `nrg2fly-charging-plan-${today}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            CNSUnits.downloadBlob(await resp.blob(), `nrg2fly-charging-plan-${today}.pdf`);
         } catch (err) {
             alert('Could not generate the PDF: ' + (err && err.message ? err.message : err));
         } finally {

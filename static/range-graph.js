@@ -8,9 +8,12 @@
  * the planner would accept — no type exceptions; show small, get small.
  *
  * Orthogonal by design: this module owns ONE Leaflet layer in its OWN pane and
- * mutates nothing else. Dependencies are injected via init() — it never reaches
- * into planner/routing/airport state. Map hue discipline: navy = world, so the
- * whole graph is navy (--brand-ink); blue (route) and orange (NRG2FLY) untouched.
+ * mutates nothing else. Host state is injected via init() — it never reaches into
+ * planner/airport state. Map hue discipline: navy = world, so the whole graph is
+ * navy (--brand-ink); blue (route) and orange (NRG2FLY) untouched.
+ *
+ * Depends on: CNSRouting.haversineKm and window.escHtml — both defined before this
+ * file in every shell that loads it (index.html, desktop.html).
  *
  * Integration surface (everything else is internal):
  *   1. <script src="/static/range-graph.js">
@@ -27,17 +30,6 @@ window.CNSRangeGraph = (function () {
 
     let _map = null, _layer = null, _getReachKm = null, _getAirports = null, _allowedFor = null, _activeIdent = null, _lastIdent = null;
 
-    // ---- pure: great-circle distance (km) ----
-    function _haversineKm(a, b) {
-        const R = 6371, rad = (x) => x * Math.PI / 180;
-        const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
-        const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
-        return 2 * R * Math.asin(Math.sqrt(s));
-    }
-    function _hk(a, b) {
-        return (window.CNSRouting && CNSRouting.haversineKm) ? CNSRouting.haversineKm(a, b) : _haversineKm(a, b);
-    }
-
     // ---- pure + testable: airports within `reachKm` great-circle of `from` (excl. self) ----
     function airportsInRange(from, reachKm, airports) {
         if (!from || !(reachKm > 0) || !Array.isArray(airports)) return [];
@@ -48,7 +40,7 @@ window.CNSRangeGraph = (function () {
             if (!a || a.ident === from.ident) continue;
             const lat = +a.latitude_deg, lon = +a.longitude_deg;
             if (!isFinite(lat) || !isFinite(lon)) continue;
-            const km = _hk(F, { lat, lon });
+            const km = CNSRouting.haversineKm(F, { lat, lon });
             if (km <= reachKm) out.push({ ap: a, km });
         }
         return out;
@@ -121,7 +113,7 @@ window.CNSRangeGraph = (function () {
             _layer.addLayer(L.polyline([hub, to], { color: NAVY, weight: 1.4, opacity: 0.6, pane: PANE, interactive: false }));
             _layer.addLayer(L.circleMarker(to, { radius: 7.5, color: '#ffffff', weight: 3.5, opacity: 0.5, fill: false, pane: PANE, interactive: false }));   // white halo casing
             _layer.addLayer(L.circleMarker(to, { radius: 7.5, color: NAVY, weight: 1.8, opacity: 0.95, fill: false, pane: PANE, interactive: false }));   // navy halo around the world dot
-            if (LABEL_TYPES[ap.type]) _layer.addLayer(_label(to, _esc(ap.ident)));
+            if (LABEL_TYPES[ap.type]) _layer.addLayer(_label(to, escHtml(ap.ident)));
         });
 
         // hub: enlarged solid navy + soft halo
@@ -130,7 +122,6 @@ window.CNSRangeGraph = (function () {
     }
 
     function toggle(ident) { if (_activeIdent === ident) clear(); else show(ident); }
-    function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
-    return { init, show, clear, toggle, refresh, airportsInRange, _haversineKm };
+    return { init, show, clear, toggle, refresh, airportsInRange };
 })();

@@ -32,7 +32,7 @@ window.CNSDivertEdit = (function () {
             const lat = +a.latitude_deg, lon = +a.longitude_deg;
             if (!isFinite(lat) || !isFinite(lon)) continue;
             if (typeof isSuitable === 'function' && !isSuitable(a)) continue;
-            const km = _hk(point, { lat, lon });
+            const km = CNSRouting.haversineKm(point, { lat, lon });
             if (km < bestKm) { bestKm = km; best = a; }
         }
         return best;
@@ -56,21 +56,13 @@ window.CNSDivertEdit = (function () {
         if (!alt || !node) return 0;
         const full = node.ident ? (ctx.byIdent[node.ident] || node) : node;
         const from = { lat: +(node.lat != null ? node.lat : full.latitude_deg), lon: +(node.lon != null ? node.lon : full.longitude_deg) };
-        return _hk(from, { lat: +alt.latitude_deg, lon: +alt.longitude_deg });
+        return CNSRouting.haversineKm(from, { lat: +alt.latitude_deg, lon: +alt.longitude_deg });
     }
 
     // A leg into a node is infeasible when its length + that node's divert
     // reserve exceed the aircraft's available reach (same test the router runs).
     function legInfeasible(legKm, reserveKm, rangeKm) {
         return (Number(legKm) || 0) + (Number(reserveKm) || 0) > (Number(rangeKm) || 0) + 1e-9;
-    }
-
-    function _hk(a, b) {
-        if (window.CNSRouting && CNSRouting.haversineKm) return CNSRouting.haversineKm(a, b);
-        const R = 6371, r = (d) => d * Math.PI / 180;
-        const dLat = r(b.lat - a.lat), dLon = r(b.lon - a.lon);
-        const x = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLon / 2) ** 2;
-        return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
     }
 
     // ---- map surface -----------------------------------------------------------
@@ -113,7 +105,7 @@ window.CNSDivertEdit = (function () {
             const line = L.polyline([[from.lat, from.lon], [to.lat, to.lon]], {
                 color: '#7c3aed', weight: 2.5, dashArray: '5 6', opacity: 0.9, interactive: false,
             }).addTo(_deps.map);
-            const km0 = _hk(from, to);
+            const km0 = CNSRouting.haversineKm(from, to);
             const overridden = !!n.divertOverride;
             const icon = L.divIcon({
                 className: 'divert-marker-wrap', iconSize: [16, 16], iconAnchor: [8, 8],
@@ -127,7 +119,7 @@ window.CNSDivertEdit = (function () {
                 const cur = { lat: p.lat, lon: p.lng };
                 line.setLatLngs([[from.lat, from.lon], [p.lat, p.lng]]);
                 const snap = _snap(cur, n.ident);
-                const reserve = snap ? _hk(from, { lat: +snap.latitude_deg, lon: +snap.longitude_deg }) : _hk(from, cur);
+                const reserve = snap ? CNSRouting.haversineKm(from, { lat: +snap.latitude_deg, lon: +snap.longitude_deg }) : CNSRouting.haversineKm(from, cur);
                 m.setTooltipContent(`${snap ? snap.ident : '—'} · ${_fmt(reserve)}`);
                 if (typeof _deps.onDragFeedback === 'function') _deps.onDragFeedback(n, reserve, i);
             });
@@ -156,7 +148,9 @@ window.CNSDivertEdit = (function () {
         return true;
     }
 
-    function _fmt(km) { return (typeof fmtDist === 'function') ? fmtDist(km) : `${Math.round(km)} km`; }
+    // units.js loads before this module in every shell, so the NM toggle is honoured
+    // in /v2 too (the old probe found `fmtDist` only inside the classic inline script).
+    function _fmt(km) { return CNSUnits.fmtDist(km); }
 
     return {
         init, render, clear,

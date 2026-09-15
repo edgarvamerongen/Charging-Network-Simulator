@@ -29,7 +29,7 @@ function loadSettings() {
       getJSON: (k, d) => (k in store ? JSON.parse(JSON.stringify(store[k])) : d),
       setJSON: (k, v) => { store[k] = JSON.parse(JSON.stringify(v)); },
     },
-    console, JSON, Math, Object,
+    console, JSON, Math, Object, structuredClone,
   };
   vm.createContext(sandbox);
   vm.runInContext(code, sandbox);

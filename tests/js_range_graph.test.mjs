@@ -19,14 +19,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
 
 function loadRG() {
-  const code = fs.readFileSync(path.join(REPO, 'static', 'range-graph.js'), 'utf8');
-  // range-graph.js touches L / document / CNSRouting only inside init()/show(),
-  // so a bare window is all the sandbox needs to define CNSRangeGraph. With no
-  // CNSRouting present, airportsInRange uses its built-in haversine fallback.
-  const sandbox = { window: {}, console };
+  // range-graph.js touches L / document only inside init()/show(), so no DOM is
+  // needed — but airportsInRange calls CNSRouting.haversineKm (routing.js is loaded
+  // before it in every shell), so the sandbox loads the same two files in order.
+  const sandbox = { console };
+  sandbox.window = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(code, sandbox);
-  return sandbox.window.CNSRangeGraph;
+  for (const f of ['routing.js', 'range-graph.js']) vm.runInContext(fs.readFileSync(path.join(REPO, 'static', f), 'utf8'), sandbox);
+  return sandbox.CNSRangeGraph;
 }
 
 const HUB = { ident: 'HUB', latitude_deg: 52.0, longitude_deg: 5.0 };

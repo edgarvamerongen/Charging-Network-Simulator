@@ -20,10 +20,7 @@
     if (!resp.ok) { let msg = `Server returned ${resp.status}`; try { msg = (await resp.json()).error || msg; } catch (e) {} throw new Error(msg); }
     const blob = await resp.blob();
     if (!blob || !blob.size) throw new Error('The server returned an empty PDF.');
-    const url = URL.createObjectURL(blob), a = document.createElement('a');
-    a.href = url; a.download = `nrg2fly-charging-plan-${new Date().toISOString().slice(0, 10)}.pdf`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    CNSUnits.downloadBlob(blob, `nrg2fly-charging-plan-${new Date().toISOString().slice(0, 10)}.pdf`);
     return blob.size;
   }
   document.addEventListener('click', async e => {
