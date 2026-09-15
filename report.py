@@ -713,6 +713,8 @@ def _source_image(ident, name, lat, lon, airport_type=None, iso_country='',
     # 1) curated local, then a prior cached download
     for base in ([os.path.join(PICS_DIR, 'airports', ident),
                   os.path.join(_PHOTO_CACHE_DIR, ident)] if ident else []):
+        # ponytail: thumb path can't decode svg (PIL) — a curated <ICAO>.svg here would
+        # short-circuit the thumb to "no photo"; none exists in pics/airports/ today.
         for ext in ('jpg', 'jpeg', 'png', 'webp', 'svg'):
             p = f'{base}.{ext}'
             if not os.path.exists(p):
@@ -721,6 +723,8 @@ def _source_image(ident, name, lat, lon, airport_type=None, iso_country='',
                 with open(p, 'rb') as f:
                     raw = f.read()
             except OSError:
+                continue
+            if not raw:
                 continue
             credit = ''
             try:

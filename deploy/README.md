@@ -17,6 +17,10 @@ trigger Notion pulls). See `NOTION_CATALOG_PLAN.md` for the full design.
 - `/etc/cns.env` has `CNS_NOTION_TOKEN`, `CNS_NOTION_AIRCRAFT_DB`,
   `CNS_NOTION_PROFILES_DB` (and `CNS_SYNC_TOKEN` for the HTTP trigger).
 - The venv has `requests`: `./venv/bin/pip install -r requirements.txt`.
+- `/etc/cns.env` must also set `CNS_BEHIND_PROXY=1` when the app sits behind Caddy
+  (it does on the VPS): ProxyFix then trusts one hop of `X-Forwarded-For`, which
+  the login throttle, the quick-scan per-IP limits and the auth log all rely on —
+  without it every visitor shares one bucket.
 
 ### Install
 1. **Align the paths** with your running app — the units ship with placeholder

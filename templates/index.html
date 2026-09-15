@@ -4485,8 +4485,7 @@
         function _dispKm(a, b) {
             const p = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;   // VFR: no padding, no SID/STAR
             const sid = (window.CNSSettings && CNSSettings.sidStarPaddingKm) ? CNSSettings.sidStarPaddingKm(p) : 0;
-            if (window.CNSRouting) return CNSRouting.routedKm(a, b, p) + sid;   // routed (great-circle × padding) + SID/STAR terminal km
-            return CNSRouting.haversineKm(a, b) + sid;   // pre-CNSRouting fallback (great-circle) + pad
+            return CNSRouting.routedKm(a, b, p) + sid;
         }
         // Build the engine FlightProfile for the just-simulated trip. Waypoints are
         // origin + planned stops + dest; the engine OWNS the retour mirror + training

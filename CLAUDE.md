@@ -52,6 +52,9 @@ subagents over many human-driven sessions.
 - Each worktree runs its own server from its own files (no shared-template cache surprises).
 - Edits to `static/*.js` need a browser reload; template edits also need a server
   restart (Flask debug is off, so Jinja caches compiled templates).
+- Test suite: `PY=/abs/path/to/venv/bin/python bash tests/run_all.sh` (the worktrees
+  have no venv). The Python layer needs `pip install -r requirements-dev.txt` once
+  (pandas, used only by the offline CSV regeneration scripts and `tests/test_alternates.py`).
 
 ## Data
 

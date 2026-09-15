@@ -12,8 +12,9 @@
  * planner/airport state. Map hue discipline: navy = world, so the whole graph is
  * navy (--brand-ink); blue (route) and orange (NRG2FLY) untouched.
  *
- * Depends on: CNSRouting.haversineKm and window.escHtml — both defined before this
- * file in every shell that loads it (index.html, desktop.html).
+ * Depends on: CNSRouting is loaded before this file; escHtml is defined later by
+ * each shell and is only referenced at render time (never at load time), so it
+ * must stay a call-time reference.
  *
  * Integration surface (everything else is internal):
  *   1. <script src="/static/range-graph.js">

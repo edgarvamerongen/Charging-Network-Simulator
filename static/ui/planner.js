@@ -117,5 +117,5 @@
   function pickPending() { return !!(window.CNSDivertEdit && CNSDivertEdit.pickPending && CNSDivertEdit.pickPending()); }
   function notifyAirportPick(ap) { if (window.CNSDivertEdit && CNSDivertEdit.notifyAirportPick) CNSDivertEdit.notifyAirportPick(ap); }
 
-  UI.planner = { availableRangeKm, availRangeShownKm, chain, replan, noRouteRemedy, divertSuitable, alternatesChain, routingOptions, initMap, altPick, altReset, pickPending, notifyAirportPick };
+  UI.planner = { availableRangeKm, availRangeShownKm, terminus, chain, replan, noRouteRemedy, divertSuitable, alternatesChain, plannerAllowedIdents, routingOptions, initMap, altPick, altReset, pickPending, notifyAirportPick, wp };
 })();

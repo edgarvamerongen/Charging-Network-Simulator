@@ -29,6 +29,7 @@ Env (from /etc/cns.env on the VPS; never hard-coded):
     CNS_NOTION_PROFILES_DB   Performance Profiles database id
 """
 import argparse
+import contextlib
 import glob
 import json
 import math
@@ -628,8 +629,9 @@ def atomic_write_json(path, obj):
             f.write("\n")
         os.replace(tmp, path)  # atomic on POSIX — never a torn read
     finally:
-        if os.path.exists(tmp):
-            os.remove(tmp)
+        with contextlib.suppress(OSError):
+            if os.path.exists(tmp):
+                os.remove(tmp)
 
 
 def _snapshot(entries, base_dir):
