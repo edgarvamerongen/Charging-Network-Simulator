@@ -53,22 +53,27 @@ test('v5 defaults: reserve/taper/SID-STAR/alternate ON, routing/efficiency OFF',
 });
 
 // ---- identity when a toggle is explicitly OFF (accessor returns the no-op) ---
+// cmp is per-row: the original usableFraction/gridDemandFactor/routingFactor tests
+// asserted exact equality; only chargeTimeMin used an approx comparison. Keep that
+// distinction instead of loosening all four to approx.
+const eq = (got, expected, name) => assert.equal(got, expected, name);
+const ap = (got, expected, name) => assert.ok(approx(got, expected), `${name}: got ${got}`);
 test('identity: toggled-off accessors return their no-op value', () => {
   const cases = [
     ['usableFraction == 1.0 when reserve off',
-      { landingReserve: { enabled: false } }, S => S.usableFraction({}), 1.0],
+      { landingReserve: { enabled: false } }, S => S.usableFraction({}), 1.0, eq],
     ['gridDemandFactor == 1.0 when efficiency off',
-      null, S => S.gridDemandFactor(), 1.0],
+      null, S => S.gridDemandFactor(), 1.0, eq],
     ['routingFactor == 1.0 when padding off',
-      { routingPadding: { enabled: false } }, S => S.routingFactor(), 1.0],
+      { routingPadding: { enabled: false } }, S => S.routingFactor(), 1.0, eq],
     ['chargeTimeMin linear when taper off (100kWh/100kW -> 60min)',
-      { chargeTaper: { enabled: false } }, S => S.chargeTimeMin(100, 100, 225), 60],
+      { chargeTaper: { enabled: false } }, S => S.chargeTimeMin(100, 100, 225), 60, ap],
   ];
-  for (const [name, save, run, expected] of cases) {
+  for (const [name, save, run, expected, cmp] of cases) {
     const { S } = loadSettings();
     if (save) S.save(save);
     const got = run(S);
-    assert.ok(approx(got, expected), `${name}: got ${got}`);
+    cmp(got, expected, name);
   }
 });
 
