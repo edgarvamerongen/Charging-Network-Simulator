@@ -52,7 +52,7 @@ window.CNSFlight = (function () {
         return (s && s.enabled) ? Math.max(1, Math.floor(+s.max) || 1) : 1;
     }
 
-    // ---- Climb-energy model (CLIMB_ENERGY_MODEL.md) -------------------------------
+    // ---- Climb-energy model (design doc CLIMB_ENERGY_MODEL.md retired; this is the record) ----
     // Wing-borne aircraft pay a NET climb-minus-descent overhead per leg:
     //     E(leg) = cruisePerKm·distKm + eMaxKwh·min(1, distKm / dSatKm)
     // with eMaxKwh = overheadPct × battery and dSatKm = satFrac × range_km

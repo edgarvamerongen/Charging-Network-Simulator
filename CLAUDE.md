@@ -55,15 +55,13 @@ subagents over many human-driven sessions.
 
 ## Data
 
-- `data/` is gitignored. `planes.json` / `chargers.json` are tracked catalogs.
-- **Aircraft catalog is migrating to Notion.** The full, decision-locked
-  implementation guide is `NOTION_CATALOG_PLAN.md` (repo root — `docs/` is
-  gitignored, don't move it there). Notion becomes the master; a sync writes
-  `data/planes.generated.json`; `sim.py` prefers it over `planes.json`; the
-  custom-planes overlay and eventually `planes.json` itself get retired.
-  Read the plan before touching catalog code. Beware: an older draft plan
-  referenced `plane_schema.py` / `measurements[]` / `docs/DATABASE_PLAN.md` —
-  those files do not exist in git; the plan file explains.
+- `data/` is gitignored. `chargers.json` is a tracked catalog; `planes.json`
+  is retired (see below).
+- **Aircraft catalog lives in Notion.** `notion_sync.py` writes
+  `data/planes.generated.json`, the only catalog `sim.py` loads; `planes.json`
+  is retired. `NOTION_CATALOG_PLAN.md` (repo root — `docs/` is gitignored,
+  don't move it there) is the design record — read it before touching
+  catalog code.
 
 ## Guided tour
 

@@ -60,7 +60,7 @@ window.CNSSettings = (function () {
         chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
         routingPadding:    { enabled: false, factor: 1.05 },          // ≥1; OFF by default — SID/STAR (additive km) is the preferred padding now
         sidStarPadding:    { enabled: true,  km: 10 },                // fixed km added to EACH leg (SID+STAR terminal track miles); additive on top of routingPadding
-        climbModel:        { enabled: true,  overheadPct: 0.10, satFrac: 0.15 },  // CLIMB_ENERGY_MODEL.md: NET climb overhead (% of battery) per leg, ramping to full by satFrac×range_km; wing-borne only (the engine gates VTOL + training); calibrated so a full-range mission still uses exactly one battery
+        climbModel:        { enabled: true,  overheadPct: 0.10, satFrac: 0.15 },  // NET climb overhead (% of battery) per leg, ramping to full by satFrac×range_km; wing-borne only (the engine gates VTOL + training); calibrated so a full-range mission still uses exactly one battery (design doc CLIMB_ENERGY_MODEL.md retired — this code is the record)
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
     });
@@ -174,11 +174,12 @@ window.CNSSettings = (function () {
         return Math.max(5, Math.min(50, +s.km || 10));
     }
 
-    /** NET climb-minus-descent overhead as a fraction of battery
-     *  (CLIMB_ENERGY_MODEL.md). 0 when off — the engine then reduces to the
-     *  linear ePerKm model exactly. Clamped to the slider's [0, 0.20]. The
-     *  engine itself gates powered-lift (type ~ VTOL) and training flights,
-     *  which never pay the overhead. */
+    /** NET climb-minus-descent overhead as a fraction of battery (design doc
+     *  CLIMB_ENERGY_MODEL.md retired — this function is the record). 0 when
+     *  off — the engine then reduces to the linear ePerKm model exactly.
+     *  Clamped to the slider's [0, 0.20]. The engine itself gates
+     *  powered-lift (type ~ VTOL) and training flights, which never pay the
+     *  overhead. */
     function climbOverheadPct() {
         const s = loadAll().climbModel;
         if (!s || !s.enabled) return 0;

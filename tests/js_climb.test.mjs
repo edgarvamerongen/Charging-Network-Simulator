@@ -1,6 +1,7 @@
 /*
  * Climb-energy model test (static/flight-model.js + static/settings.js).
- * CLIMB_ENERGY_MODEL.md — ruled 2026-07-27:
+ * The design doc (CLIMB_ENERGY_MODEL.md) is retired; this test is the record
+ * (ruled 2026-07-27):
  *     E(leg) = cruisePerKm·d + eMax·min(1, d/dSat)
  *     eMax = 10% × battery (NET of descent give-back), dSat = 15% × range_km.
  * Anchor: E(range_km) == battery exactly. Gates: powered-lift (type ~ VTOL)
