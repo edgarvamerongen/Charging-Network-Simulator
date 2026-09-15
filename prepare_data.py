@@ -76,6 +76,13 @@ eu_airports = eu_airports.merge(runway_length_columns(runways),
 eu_airports.to_csv("european_airports.csv", index=False)
 
 # -----------------------------------------
+# Global airport index — pruned copy of the raw OurAirports dump with just
+# the columns airport_resolver.py needs at runtime (ICAO/IATA -> coords).
+# -----------------------------------------
+airports[["ident", "name", "latitude_deg", "longitude_deg", "iata_code"]].to_csv(
+    "airports_index.csv", index=False)
+
+# -----------------------------------------
 # Preview
 # -----------------------------------------
 print(eu_airports[[

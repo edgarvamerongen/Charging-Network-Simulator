@@ -51,7 +51,7 @@ class AirportResolverTest(unittest.TestCase):
 
 
 def tearDownModule():
-    """Restore global state so subsequent test modules see the real airports.csv."""
+    """Restore global state so subsequent test modules see the real airports_index.csv."""
     os.environ.pop('CNS_AIRPORTS_CSV', None)
     airport_resolver._reset()
 

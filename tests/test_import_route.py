@@ -20,7 +20,7 @@ _AUTH = {'Authorization': 'Bearer test-import-token'}
 class ImportRouteTest(unittest.TestCase):
     def setUp(self):
         os.environ['CNS_SHARES_DB'] = _DB
-        # Ensure the resolver uses the real airports.csv regardless of what a
+        # Ensure the resolver uses the real airports_index.csv regardless of what a
         # prior test module may have set (e.g. test_airport_resolver.py points
         # CNS_AIRPORTS_CSV at a 4-row fixture).
         os.environ.pop('CNS_AIRPORTS_CSV', None)
