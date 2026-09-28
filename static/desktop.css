@@ -213,11 +213,13 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .calc .mu{color:var(--muted)}
 /* network */
 .tiles{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line)}
-.tiles>div{padding:10px 12px;border-right:1px solid var(--line)}
+.tiles>div{padding:10px 12px;border-right:1px solid var(--line);min-width:0}
+.tiles.t3{grid-template-columns:repeat(3,1fr)}
 .tiles>div:last-child{border-right:0}
 .tiles .v{font-size:18px;font-weight:600;letter-spacing:-.02em;margin-top:3px}
 .tiles .v small{font-size:11px;font-weight:500;color:var(--muted);margin-left:2px;white-space:nowrap}
 .tiles .cap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tiles .s{font-size:10.5px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ntool{display:flex;align-items:center;gap:8px;padding:8px var(--pad);border-bottom:1px solid var(--line)}
 .ntool select{height:28px;border:1px solid var(--control);border-radius:var(--r);padding:0 8px;background:var(--surface);font-size:12px;outline:none}
 .ntool .sp{flex:1}

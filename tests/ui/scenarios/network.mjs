@@ -230,25 +230,23 @@ export default async function run(ctx) {
   }, { retry: 0 });
 
   // ================= revenue day / year =================
+  // v2 shows both periods at once (audit T8): the tile's value is per day, its sub-line per year.
   await check('revenue-day-year', async () => {
     await openRow('EHLE');
     const rd = async () => ({ v2: (await v2.eval(V2_STATS('EHLE'))).tiles3[0], cl: (await classic.eval(CL_CARDS)).find(c => c.ident === 'EHLE') });
     const y = await rd();
-    const yV2 = ctx.num(y.v2.v), yCl = ctx.num(y.cl.heroes[2]);
+    const dV2 = ctx.num(y.v2.v), yV2 = ctx.num(y.v2.s), yCl = ctx.num(y.cl.heroes[2]);
     const probs = [];
     if (!/per year/.test(y.cl.revSub)) probs.push('classic default is not yearly: ' + y.cl.revSub);
-    if (yV2 !== yCl) probs.push(`year: v2 ${y.v2.v} vs classic ${y.cl.heroes[2]} (${y.cl.revSub})`);
-    await click('.ap[data-ap=EHLE] [data-act=revDay]'); await v2Settle();
+    if (yV2 !== yCl) probs.push(`year: v2 ${y.v2.s} vs classic ${y.cl.heroes[2]} (${y.cl.revSub})`);
     await classic.eval(`(function(){ document.querySelector('#folder [data-dest=EHLE] [data-rev-period=day]').click(); return true; })()`);
     const d = await rd();
-    const dV2 = ctx.num(d.v2.v), dCl = ctx.num(d.cl.heroes[2]);
+    const dCl = ctx.num(d.cl.heroes[2]);
     if (!/per day/.test(d.cl.revSub)) probs.push('classic did not switch to per day: ' + d.cl.revSub);
-    if (dV2 !== dCl) probs.push(`day: v2 ${d.v2.v} vs classic ${d.cl.heroes[2]}`);
-    if (yV2 === dV2) probs.push('v2 revenue did not change between year and day');
-    await click('.ap[data-ap=EHLE] [data-act=revYear]'); await v2Settle();
+    if (dV2 !== dCl) probs.push(`day: v2 ${y.v2.v} vs classic ${d.cl.heroes[2]}`);
     await classic.eval(`(function(){ document.querySelector('#folder [data-dest=EHLE] [data-rev-period=year]').click(); return true; })()`);
     if (probs.length) throw new Error(probs.join('; '));
-    return { detail: `year: v2 ${y.v2.v} = classic ${y.cl.heroes[2]}; day: v2 ${d.v2.v} = classic ${d.cl.heroes[2]}; rate ${y.v2.s}`, repro: 'EHLE pane [data-act=revDay]/[data-act=revYear] vs classic [data-rev-period]' };
+    return { detail: `day: v2 ${y.v2.v} = classic ${d.cl.heroes[2]}; year: v2 ${y.v2.s} = classic ${y.cl.heroes[2]}`, repro: 'EHLE pane revenue tile (value per day, sub-line per year) vs classic [data-rev-period]' };
   }, { retry: 0 });
 
   // ================= charger-efficiency (grid) factor =================

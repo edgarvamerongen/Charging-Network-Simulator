@@ -354,7 +354,7 @@ export default async function run(ctx) {
     await v2.click('#modeSeg button[data-mode=network]'); await v2.waitFor(`CNSUI.S.mode === 'network' && document.querySelectorAll('#railBody .ap').length > 0`, 4000, 50);
     await v2.click('#railBody .ap > button'); await v2.waitFor(`!!document.querySelector('#railBody .ap.open .tiles3')`, 2000, 50);
     const led = await v2.eval(`(function(){ const t = s => { const e = document.querySelector(s); return e ? e.textContent.replace(/\\s+/g, ' ').trim() : null; }; const R = CNSUI.network.rows(); const ap = document.querySelector('#railBody .ap.open');
-      return { ident: ap && ap.dataset.ap, tile: t('#railBody .ap.open .tiles3 .s'), tileV: t('#railBody .ap.open .tiles3 .v'), hint: t('#railBody .ntool .hint'), kwh: R.map(r => ({ ident: r.ident, kwh: r.kwh })), total: R.reduce((s, r) => s + r.kwh, 0), rate: CNSSettings.chargeRate() }; })()`);
+      return { ident: ap && ap.dataset.ap, tile: t('#railBody .ap.open .tiles3 .s'), tileV: t('#railBody .ap.open .tiles3 .v'), hint: t('#railBody .tiles.t3 > div:nth-child(3) .v'), kwh: R.map(r => ({ ident: r.ident, kwh: r.kwh })), total: R.reduce((s, r) => s + r.kwh, 0), rate: CNSSettings.chargeRate() }; })()`);
     await ctx.screenshot(v2, 'tariff-ledger');
     const c = await classicApply();
     // restore: plan mode (real click), empty folder, default tariff
@@ -367,8 +367,9 @@ export default async function run(ctx) {
     if (!/€1\.00 \/ kWh/.test(a.costM || '')) fails.push(`.cost .m "${a.costM}"`);
     const chargedR = Math.ceil(a.charged - 1e-9); const wantCost = chargedR * a.fpd * 1;
     if (Math.abs(ctx.num(a.costV) - wantCost) > 0.011) fails.push(`.cost .v "${a.costV}" vs ${chargedR} kWh × ${a.fpd} × €1.00 = ${wantCost}`);
-    if (!/€1\.00 \/ kWh/.test(led.tile || '')) fails.push(`ledger tile "${led.tile}" (airport ${led.ident})`);
-    if (Math.abs(ctx.num(led.hint) - led.total) > 0.011) fails.push(`ledger "${led.hint}" vs ${led.total.toFixed(2)} kWh × €1.00`);
+    const apK = led.kwh.find(r => r.ident === led.ident);   // the airport tile reads revenue per day (its year under it)
+    if (!apK || Math.abs(ctx.num(led.tileV) - Math.round(apK.kwh)) > 1) fails.push(`ledger tile "${led.tileV}" vs ${apK ? apK.kwh.toFixed(2) : '?'} kWh × €1.00 (airport ${led.ident})`);
+    if (Math.abs(ctx.num(led.hint) - Math.round(led.total)) > 1) fails.push(`network Revenue / day "${led.hint}" vs ${led.total.toFixed(2)} kWh × €1.00`);
     if (Math.abs(led.rate - 1) > 1e-9) fails.push(`network rate() ${led.rate}`);
     if (!/€1\.00\/kWh/.test(ws(c.hlRevenueSub))) fails.push(`classic #hlRevenueSub "${c.hlRevenueSub}"`);
     if (fails.length) throw new Error(fails.join('; ') + ' — ' + file);

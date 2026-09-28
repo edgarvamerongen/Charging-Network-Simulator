@@ -45,7 +45,7 @@
     const rgHtml = REGIMES.map(r => { const exists = hasR(r), on = String(p.regime || '') === r;
       const title = exists ? (r === 'IFR+reserves' ? 'Range incl. IFR reserves' : 'VFR range') : `No ${regShort(r)} profile for this aircraft in the catalog`;
       return `<button data-act="acRegime" data-v="${esc(r)}" class="${on ? 'on' : ''}" aria-pressed="${on}" title="${esc(title)}" ${exists ? '' : 'disabled'}>${esc(regShort(r))}</button>`; }).join('');
-    const specLine = [p.seats != null ? p.seats + ' seats' : '', hasBatt(p) ? p.battery_kwh + ' kWh' : 'no charge', p.range_km ? fmt.r(fmt.km(p.range_km)) + ' ' + fmt.ukm() : '', p.speed_kmh ? p.speed_kmh + ' km/h' : ''].filter(Boolean).join(' · ');
+    const specLine = [p.seats != null ? p.seats + ' seats' : '', hasBatt(p) ? fmt.ekwh(p.battery_kwh) : 'no charge', p.range_km ? fmt.r(fmt.km(p.range_km)) + ' ' + fmt.ukm() : '', p.speed_kmh ? p.speed_kmh + ' km/h' : ''].filter(Boolean).join(' · ');
     const reachMeta = [`Reach ${fmt.r(fmt.km(reach))} of ${fmt.r(fmt.km(p.range_km || 0))} ${fmt.ukm()}`, usage ? Math.round(usage) + ' kWh/100 km' : '', climb.applies ? '+' + Math.round(climb.eMaxKwh) + ' kWh climb' : '', S.availOverride != null ? '<b>override</b>' : ''].filter(Boolean).join(' · ');
     return `<div class="sec acsec"><div class="lbl"><span class="cap">Aircraft</span><span class="ac-tools"><button class="fbtn" data-act="acFilters">${summary} <span class="ch">▾</span></button><button class="lnk" data-act="pick">${S.picking ? 'Close' : 'Change'}</button>${pop}</span></div>
       ${pickHtml}
@@ -114,7 +114,7 @@
     // Photo precedence + no photo = no <img> (a bare /pics/ is a 404 per row per render); ranges
     // follow the unit toggle like the card does; a battery-less hybrid reads 'no charge'.
     const pickHtml = S.picking ? `<div class="pick">${UI.PLANES.map(x => { const im = UI.planeImg(x);
-      return `<button data-act="plane" data-id="${x.id}" class="${x.id === S.planeId ? 'on' : ''}">${im ? `<img src="${esc(im)}" alt="">` : glyph('✈', 56, 36)}<span><span class="n">${esc(x.name)}</span><br><span class="m">${esc(x.oem || '')} · ${x.seats} seats · ${hasBatt(x) ? x.battery_kwh + ' kWh' : 'no charge'} · ${esc(x.status || '')}</span></span><span class="r num">${fmt.r(fmt.km(x.range_km))} ${fmt.ukm()}<small>${esc(regShort(x.regime || ''))}${x.max_charge_kw ? ' · ' + x.max_charge_kw + ' kW max' : ''}</small></span></button>`; }).join('')}</div>` : '';
+      return `<button data-act="plane" data-id="${x.id}" class="${x.id === S.planeId ? 'on' : ''}">${im ? `<img src="${esc(im)}" alt="">` : glyph('✈', 56, 36)}<span><span class="n">${esc(x.name)}</span><br><span class="m">${esc(x.oem || '')} · ${x.seats} seats · ${hasBatt(x) ? fmt.ekwh(x.battery_kwh) : 'no charge'} · ${esc(x.status || '')}</span></span><span class="r num">${fmt.r(fmt.km(x.range_km))} ${fmt.ukm()}<small>${esc(regShort(x.regime || ''))}${x.max_charge_kw ? ' · ' + x.max_charge_kw + ' kW max' : ''}</small></span></button>`; }).join('')}</div>` : '';
     $('#railBody').innerHTML = `
     ${UI.PROTO ? '' : `<div class="ph"><h3>Create a route</h3><div class="tools"><span class="hint" style="margin:0">${esc(regShort(p.regime || ''))}${p.range_incl_reserves ? ' · range incl. reserves' : ''}</span></div></div>`}
     ${aircraftHtml(p, reach, fits, pickHtml)}
@@ -124,7 +124,7 @@
       ${S.trip === 'training' ? '' : `<div class="fld dr${badSlot('dest')}" draggable="true" data-slot="dest">${grip('dest')}<input placeholder="Destination airport" class="${acUnset('dest') ? 'ac-unset' : ''}" value="${esc(acValue('dest'))}" data-ac="dest"><span class="icao">${esc(S.dest ? S.dest.ident : '')}</span><div class="ac" id="ac-dest"></div></div>`}
       ${c.length >= 2 ? routeBlock(c, d, fits) : ''}</div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Trip type</div><div class="seg sm" data-seg="trip">${Object.keys(tripLabel).map(k => `<button data-v="${k}" class="${S.trip === k ? 'on' : ''}">${tripLabel[k]}</button>`).join('')}</div><div class="hint">${tripHint[S.trip]}</div></div>
-    <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="2000" value="${S.freq}" data-act="freq" class="num"><span class="t">routes /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per === 'day' ? 'on' : ''}">day</button><button data-v="week" class="${S.per === 'week' ? 'on' : ''}">week</button></div></div></div>
+    <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="2000" value="${S.freq}" data-act="freq" class="num"><span class="t">${fmt.pl(S.freq, 'flight')} /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per === 'day' ? 'on' : ''}">day</button><button data-v="week" class="${S.per === 'week' ? 'on' : ''}">week</button></div></div></div>
     <div class="sec"><div class="lbl"><span class="cap">Charger</span><span style="display:flex;gap:10px"><button class="lnk" data-act="ccOpen">Custom</button><button class="lnk" data-act="allChargers">${S.allChargers ? 'Fewer' : 'All chargers'}</button></span></div>
       ${chList.map(x => { const im = x.image_url || (x.image ? '/pics/' + String(x.image).split('/').map(encodeURIComponent).join('/') : '');
         return `<button class="chg ${x.id === S.chargerId ? 'on' : ''}" data-act="charger" data-id="${x.id}">${im ? `<img src="${esc(im)}" alt="">` : glyph('⚡', 48, 32)}<span class="n">${esc(cName(x))}</span><span class="kw num">${kwLabel(x)}</span></button>`; }).join('')}
@@ -229,9 +229,17 @@
   /** The result's building blocks: the result rail and the prototype's live rail (?proto) share them. */
   function resultParts(d) {
     const p = UI.plane(), ch = UI.charger(); const c = UI.chain();
-    const fpd = UI.perDay({ freq: S.freq, per: S.per }); const rate = (window.CNSSettings && CNSSettings.chargeRate) ? CNSSettings.chargeRate() : 0.6; const chargedR = fmt.r(d.charged); const costDay = d.charged * fpd * rate;   // revenue on the EXACT charged kWh, like the network ledger; only the display rounds
+    const fpd = UI.perDay({ freq: S.freq, per: S.per }); const rate = (window.CNSSettings && CNSSettings.chargeRate) ? CNSSettings.chargeRate() : 0.6; const costDay = d.charged * fpd * rate;   // revenue on the EXACT charged kWh, like the network ledger; only the display rounds
     const climb = (window.CNSFlight && CNSFlight.climbParams) ? CNSFlight.climbParams(p) : { applies: false };
     const batt = hasBatt(p);
+    // The Calculation panel shows the chain a professional can check (audit T7): routed distance × the
+    // engine's cruise rate + the climb term = the flight's energy (flight-model.js legEnergyKwh); the
+    // charge at the effective power, full power up to the taper knee.
+    const distSum = d.legs.reduce((s, l) => s + (l.distKm || 0), 0), per100 = climb.applies ? climb.cruisePerKm * 100 : (batt && p.range_km ? p.battery_kwh / p.range_km * 100 : 0);
+    const climbSum = Math.max(0, d.used - per100 / 100 * distSum), taper = (window.CNSSettings && CNSSettings.loadAll) ? CNSSettings.loadAll().chargeTaper : null;
+    const knee = taper && taper.enabled ? Math.round((taper.threshold || 0.75) * 100) : 0, top = Math.round(Math.max(0, ...d.charges.map(x => (x.departSocFrac || 0) * 100)));
+    const calc = { energy: batt ? `${fmt.int(distSum)} km × ${per100.toFixed(1)} kWh/100 km${climbSum >= 0.5 ? ` + ${Math.round(climbSum)} kWh climb` : ''}${d.legs.length > 1 ? ` (${d.legs.length} legs)` : ''} = <b>${fmt.ekwh(d.used)}</b>` : 'none drawn from the network',
+      charge: d.charges.length ? `${fmt.ekwh(d.charged)}${d.charges.length > 1 ? ` in ${d.charges.length} charges` : ''} at ${fmt.int(d.charges[0].powerKw || 0)} kW${knee && top > knee ? `, full power to ${knee} %, tapering to ${top} %` : ''} = <b>${fmt.min(d.chargeMin)}</b>` : 'no charge' };
     const soc = batt ? UI.soc.series(d.legs, d.charges, p.battery_kwh, climb, { training: d.training }) : null;
     const RES = Math.round((1 - ((window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7)) * 100);
     const railW = Math.max(240, (($('#railBody') || {}).clientWidth || 320) - 28);
@@ -245,9 +253,10 @@
       ${soc.segs.map(s => `<path d="M${X(s.x0).toFixed(1)} ${Y(s.y0).toFixed(1)} L${X(s.x1).toFixed(1)} ${Y(s.y1).toFixed(1)}" stroke="${s.t === 'fly' ? '#32326E' : '#c4421f'}" stroke-width="${s.t === 'fly' ? 2 : 2.5}" fill="none" stroke-linecap="round"/>`).join('')}
       ${soc.pts.map((q, i) => `<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.soc).toFixed(1)}" r="3" fill="${q.soc < RES ? '#b3261e' : '#32326E'}"/><text x="${X(q.x).toFixed(1)}" y="${(Y(q.soc) + (i === 0 ? -8 : 14)).toFixed(1)}" font-size="10.5" font-weight="600" fill="${q.soc < RES ? '#b3261e' : '#32326E'}" text-anchor="${i === 0 ? 'start' : i === soc.pts.length - 1 ? 'end' : 'middle'}">${Math.round(q.soc)} %${q.id ? ' · ' + esc(q.id) : ''}</text>`).join('')}
       <text x="6" y="${(Y(RES) + 11).toFixed(1)}" font-size="9.5" fill="#63668a">reserve ${RES} %</text></svg></div></div>`;
-    const tE = `<div><div class="cap">Energy</div><div class="v num">${fmt.parts(d.used, 'Wh').n}<small>${fmt.parts(d.used, 'Wh').u}</small></div><div class="s">${d.legs.length > 1 ? d.legs.length + ' legs' : 'per flight'}</div></div>`;
-    const tT = `<div><div class="cap">Travel</div><div class="v num">${fmt.h(d.travelMin)}<small>h</small></div><div class="s">${d.travelMin > d.flyMin + 0.5 ? 'incl. charging' : 'block time'}</div></div>`;
-    const tC = `<div><div class="cap">Charge</div><div class="v num">${d.chargeMin >= 60 ? fmt.h(d.chargeMin) + '<small>h</small>' : fmt.r(d.chargeMin) + '<small>min</small>'}</div><div class="s">${d.charges.length > 2 ? 'at ' + d.charges.length + ' airports' : d.charges.length === 2 ? 'at ' + d.charges.map(x => esc(x.ident || '')).join(' + ') : 'at ' + esc(d.terminal.ident || 'destination')}</div></div>`;
+    const durV = m => m >= 60 ? fmt.h(m) + '<small>h</small>' : fmt.r(m) + '<small>min</small>';   // min below 60, h:mm from 60
+    const tE = `<div><div class="cap">Energy</div><div class="v num">${fmt.int(d.used)}<small>kWh</small></div><div class="s">${d.legs.length > 1 ? d.legs.length + ' legs' : 'per flight'}</div></div>`;
+    const tT = `<div><div class="cap">Travel</div><div class="v num">${durV(d.travelMin)}</div><div class="s">${d.travelMin > d.flyMin + 0.5 ? 'incl. charging' : 'block time'}</div></div>`;
+    const tC = `<div><div class="cap">Charge</div><div class="v num">${durV(d.chargeMin)}</div><div class="s">${d.charges.length > 2 ? 'at ' + d.charges.length + ' airports' : d.charges.length === 2 ? 'at ' + d.charges.map(x => esc(x.ident || '')).join(' + ') : 'at ' + esc(d.terminal.ident || 'destination')}</div></div>`;
     const tR = `<div><div class="cap">Revenue</div><div class="v num">€${Math.round(costDay).toLocaleString('en')}<small>/ day</small></div><div class="s num">at €${rate.toFixed(2)} / kWh</div></div>`;
     return { p, ch, c,
       head: `<div class="rh2"><div><div class="ttl">${c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}</div></div><button class="lnk" data-act="edit">Edit</button></div>`,
@@ -256,19 +265,19 @@
       ${tC}</div>`,
       live: `<div class="stats s4">${tE}${tT}${tC}${tR}</div>`,
       cost: `<div class="cost"><div><div class="cap">Revenue</div><div class="v num">€${fmt.eur(costDay)}<small>/ day</small></div></div><div class="m num">at €${rate.toFixed(2)} / kWh${fpd === 1 ? '' : ` · ${S.freq} / ${S.per}`}</div></div>`,
-      split: `<div class="split"><div class="b"><i class="f" style="flex:${(d.flyMin / 60).toFixed(3)}"></i><i class="c" style="flex:${(d.chargeMin / 60).toFixed(3)}"></i></div><div class="lg"><span><i></i>Fly ${fmt.h(d.flyMin)} h</span><span><i class="c"></i>Charge ${fmt.min(d.chargeMin)}</span><span style="margin-left:auto" class="num">${fmt.dist(d.dist)}</span></div></div>`,
+      split: `<div class="split"><div class="b"><i class="f" style="flex:${(d.flyMin / 60).toFixed(3)}"></i><i class="c" style="flex:${(d.chargeMin / 60).toFixed(3)}"></i></div><div class="lg"><span><i></i>Fly ${fmt.min(d.flyMin)}</span><span><i class="c"></i>Charge ${fmt.min(d.chargeMin)}</span><span style="margin-left:auto" class="num">${fmt.dist(d.dist)}</span></div></div>`,
       soc: socSvg,
       details: `<div class="acc ${S.open.route ? 'open' : ''}" data-acc="route"><button><span>Route <span class="sub">${d.legs.length} leg${d.legs.length > 1 ? 's' : ''} · ${c.length - 2 > 0 ? (c.length - 2) + ' stop' + (c.length - 2 > 1 ? 's' : '') : 'no stops'}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane"><table class="tbl"><tr><th>Leg</th><th class="r u">${fmt.ukm()}</th><th class="r">Time</th><th class="r u">kWh</th></tr>
-      ${d.legs.map((l, i) => `<tr><td><span class="mu num">${String(i + 1).padStart(2, '0')}</span> ${esc(UI.shortName(l.fromName))} → ${esc(UI.shortName(l.toName))}${l.overRange ? ' <span class="mu" style="color:var(--danger)">over range</span>' : ''}</td><td class="r num">${fmt.r(fmt.km(l.distKm))}</td><td class="r num">${fmt.h(l.flightMin)}</td><td class="r num">${fmt.r(l.energyKwh)}</td></tr>`).join('')}</table>
+      ${d.legs.map((l, i) => `<tr><td><span class="mu num">${String(i + 1).padStart(2, '0')}</span> ${esc(UI.shortName(l.fromName))} → ${esc(UI.shortName(l.toName))}${l.overRange ? ' <span class="mu" style="color:var(--danger)">over range</span>' : ''}</td><td class="r num">${fmt.r(fmt.km(l.distKm))}</td><td class="r num">${fmt.min(l.flightMin)}</td><td class="r num">${fmt.r(l.energyKwh)}</td></tr>`).join('')}</table>
       ${climb.applies && !d.training ? `<div class="hint num">Includes up to ${Math.round(climb.eMaxKwh)} kWh net climb per leg.</div>` : ''}</div></div>
-    <div class="acc alt ${S.open.charging ? 'open' : ''}" data-acc="charging"><button><span>Charging <span class="sub">${esc(ch.name)} · ${fmt.kwh(d.charged)}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
+    <div class="acc alt ${S.open.charging ? 'open' : ''}" data-acc="charging"><button><span>Charging <span class="sub">${esc(ch.name)} · ${fmt.ekwh(d.charged)}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane"><table class="tbl"><tr><th>Where</th><th class="r">Arrive</th><th class="r">To</th><th class="r u">kWh</th><th class="r">Time</th></tr>
       ${d.charges.map(x => `<tr><td>${esc(x.ident || '')} ${esc(UI.shortName(x.name))} <span class="mu">${x.isTerminal ? 'terminal' : 'en route'}</span></td><td class="r num">${Math.round((x.arrivalSocFrac || 0) * 100)} %</td><td class="r num">${Math.round((x.targetSocFrac || 0) * 100)} %</td><td class="r num">${fmt.r(x.energyKwh)}</td><td class="r num">${fmt.min(x.chargeMin)}</td></tr>`).join('')}</table></div></div>
     <div class="acc ${S.open.calc ? 'open' : ''}" data-acc="calc"><button><span>Calculation</span><svg class="ic"><use href="#i-chev"/></svg></button>
       <div class="pane calc num"><div><span class="mu">Battery</span> ${batt ? `${p.battery_kwh} kWh · usable ${Math.round(((window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7) * 100)} %` : 'none · a non-charging aircraft; the grid supplies 0 kWh'}</div>
-      <div><span class="mu">Energy</span> ${d.legs.map(l => fmt.r(l.energyKwh)).join(' + ')} = <b>${fmt.r(d.used)} kWh</b></div>
-      <div><span class="mu">Charge</span> ${chargedR} kWh at ${esc(ch.name)} = <b>${fmt.min(d.chargeMin)}</b></div>
+      <div><span class="mu">Energy</span> ${calc.energy}</div>
+      <div><span class="mu">Charge</span> ${calc.charge}</div>
       <div><span class="mu">Revenue</span> ${d.charged.toFixed(2)} kWh charged × ${fpd.toFixed(fpd % 1 ? 2 : 0)} / day × €${rate.toFixed(2)} = <b>€${fmt.eur(costDay)}</b></div></div></div>` };
   }
   function renderResult() {

@@ -45,11 +45,17 @@ window.CNSUI = (function () {
     // (1,320 kW → 1.3 MW, 6,700 kWh → 6.7 MWh). `parts` splits number and unit for the big tiles;
     // `kw`/`kwh` join them for running text. A COLUMN takes one unit for all its rows: `prefixFor`
     // picks it from the column's largest value and `as` formats a row in it (62 kW never sits above 0.82 MW).
-    parts: (v, u) => { const n = +v || 0; return n >= 1000 ? { n: (+(n / 1000).toFixed(1)).toLocaleString('en', { minimumFractionDigits: 1, maximumFractionDigits: 1 }), u: 'M' + u } : { n: String(r(n)), u: 'k' + u }; },
+    parts: (v, u) => { const n = +v || 0, d = n >= 100000 ? 0 : 1;   // from 100 MW(h) the decimal is noise
+      return n >= 1000 ? { n: (+(n / 1000).toFixed(d)).toLocaleString('en', { minimumFractionDigits: d, maximumFractionDigits: d }), u: 'M' + u } : { n: String(r(n)), u: 'k' + u }; },
     prefixFor: vals => Math.max(0, ...vals.map(v => +v || 0)) >= 1000 ? 'M' : 'k',
     as: (v, prefix, u) => { const n = +v || 0; return prefix === 'M' ? { n: (n / 1000).toFixed(n >= 10000 ? 1 : 2), u: 'M' + u } : { n: String(r(n)), u: 'k' + u }; },
     kw: v => { const q = fmt.parts(v, 'W'); return q.n + ' ' + q.u; },
-    kwh: v => { const q = fmt.parts(v, 'Wh'); return q.n + ' ' + q.u; }
+    kwh: v => { const q = fmt.parts(v, 'Wh'); return q.n + ' ' + q.u; },
+    // Integers group from 1,000 (14,000 kWh); aircraft-scale energy (a leg, a flight, a charge, a
+    // battery) always reads in kWh, the megawatt rule is for network totals only.
+    int: v => r(v).toLocaleString('en'),
+    ekwh: v => fmt.int(v) + ' kWh',
+    pl: (n, one, many) => (n === 1 ? one : (many || one + 's'))
   };
   const perDay = f => f.per === 'day' || f.freqUnit === 'day' ? +(f.freq ?? f.freqN ?? 1) : +(f.freq ?? f.freqN ?? 1) / 7;
   const planeShort = n => String(n || '').replace(/^Beta /, '').split(' — ')[0].replace(/ \(.*\)$/, '');

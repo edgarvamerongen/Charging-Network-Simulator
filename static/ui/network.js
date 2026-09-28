@@ -5,7 +5,7 @@
   const UI = window.CNSUI, S = UI.S, $ = UI.$, $$ = UI.$$, esc = UI.esc, fmt = UI.fmt;
   const tripLabel = { 'one-way': 'One-way', retour: 'Return', circular: 'Circular', training: 'Training' };
   const ROLE = { training: 'Training', home: 'Departure', origin: 'Departure', stop: 'Stop', dest: 'Destination' };
-  Object.assign(S, { revYear: true, socOpen: {} });
+  Object.assign(S, { socOpen: {} });
   const D = () => window.CNSDemand, SC = () => window.CNSScheduler, ST = () => window.CNSSettings;
   const cat = id => (window.PLANES_BY_ID || {})[id] || {};
   const rate = () => (ST() && ST().chargeRate) ? ST().chargeRate() : 0.6;
@@ -98,12 +98,12 @@
   // ---- render ----
   function airportPane(a) {
     // Revenue is priced per CHARGED kWh (aircraft side, classic index.html:5708); energy is grid side.
-    const rev = a.kwhAircraft * rate() * (S.revYear ? 365 : 1);
+    const rev = a.kwhAircraft * rate();   // per day; the year sits under it, like energy (audit T8)
     const grid = a.gridMul > 1 ? ' (grid)' : '';
     const opts = UI.CHARGERS.slice().sort((x, y) => y.power_kw - x.power_kw);
     const socPct = a.targetSoc != null ? Math.round(a.targetSoc * 100) : null;
     return `<div class="pane">
-      <div class="tiles3"><div><div class="cap">Revenue <span class="seg xs" data-rev><button data-act="revDay" class="${S.revYear ? '' : 'on'}">day</button><button data-act="revYear" class="${S.revYear ? 'on' : ''}">year</button></span></div><div class="v num">€${Math.round(rev).toLocaleString('en')}</div><div class="s num">€${rate().toFixed(2)} / kWh</div></div>
+      <div class="tiles3"><div><div class="cap">Revenue</div><div class="v num">€${Math.round(rev).toLocaleString('en')}<small>/ day</small></div><div class="s num">€${Math.round(rev * 365).toLocaleString('en')} / year</div></div>
         <div><div class="cap">Energy${grid}</div><div class="v num">${fmt.parts(a.kwh, 'Wh').n}<small>${fmt.parts(a.kwh, 'Wh').u} / day</small></div><div class="s num">${fmt.kwh(a.kwh * 365)} / year</div></div>
         <div><div class="cap">Charging</div><div class="v num">${fmt.min(a.chargeMin)}<small>/ day</small></div><div class="s">${a.overflow ? '<span style="color:var(--danger)">runs past 23:00</span>' : 'ends ' + clockOf(a.latestEnd)}</div></div></div>
       ${a.overflow ? `<div class="alert">Rotations run past 23:00 at this airport. Add a charger or spread the flights.</div>` : ''}
@@ -121,19 +121,20 @@
   function render() {
     const R = rows(); const folder = D() ? D().loadFolder() : [];
     const foc = S.filter && R.find(a => a.ident === S.filter) || null; if (foc) S.openAp[foc.ident] = true;
-    const flights = folder.reduce((s, t) => s + D().flightsPerDay(t), 0); const kwh = R.reduce((s, a) => s + a.kwh, 0); const kwhAc = R.reduce((s, a) => s + a.kwhAircraft, 0); const peak = R.reduce((s, a) => s + a.peak, 0); const bad = infeasibleCount(R);
+    const flights = folder.reduce((s, t) => s + D().flightsPerDay(t), 0); const kwh = R.reduce((s, a) => s + a.kwh, 0); const kwhAc = R.reduce((s, a) => s + a.kwhAircraft, 0); const peak = R.reduce((s, a) => s + a.peak, 0); const netPeak = UI.timeline && UI.timeline.peak ? UI.timeline.peak() : peak; const bad = infeasibleCount(R);
     const grid = gridMul() > 1 ? ' (grid)' : '';
     const pk = fmt.prefixFor(R.map(a => a.peak));   // the ledger's peak column reads in ONE unit (T1)
     const head = foc
-      ? `<div><h3>${foc.ident} <span style="font-weight:400;color:var(--muted)">${esc(UI.shortName(foc.name))}</span></h3><div class="sub num">${foc.trips.length} route${foc.trips.length === 1 ? '' : 's'} · ${foc.flights % 1 ? foc.flights.toFixed(1) : foc.flights} flights / day · ${foc.fleet.length} charger${foc.fleet.length === 1 ? '' : 's'}</div></div><div class="tools"><button class="lnk" data-act="focus" data-ap="">← All airports</button></div>`
+      ? `<div><h3>${foc.ident} <span style="font-weight:400;color:var(--muted)">${esc(UI.shortName(foc.name))}</span></h3><div class="sub num">${foc.trips.length} route${foc.trips.length === 1 ? '' : 's'} · ${foc.flights % 1 ? foc.flights.toFixed(1) : foc.flights} ${fmt.pl(foc.flights, 'flight')} / day · ${foc.fleet.length} charger${foc.fleet.length === 1 ? '' : 's'}</div></div><div class="tools"><button class="lnk" data-act="focus" data-ap="">← All airports</button></div>`
       : `<div><h3>Network</h3><div class="sub num">${R.length} airport${R.length === 1 ? '' : 's'} · ${folder.length} route${folder.length === 1 ? '' : 's'} · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day${bad ? ' · <span style="color:var(--danger)">' + bad + ' without a route</span>' : ''}</div></div><div class="tools">${folder.length ? '<button class="lnk" data-act="clear">Clear all</button>' : ''}</div>`;
     const tiles = foc
       ? `<div class="tiles"><div><div class="cap">Energy / day${grid}</div><div class="v num">${fmt.parts(foc.kwh, 'Wh').n}<small>${fmt.parts(foc.kwh, 'Wh').u}</small></div></div><div><div class="cap">Peak load${grid}</div><div class="v num">${fmt.parts(foc.peak, 'W').n}<small>${fmt.parts(foc.peak, 'W').u}</small></div></div><div><div class="cap">Charging / day</div><div class="v num">${foc.chargeMin >= 60 ? fmt.h(foc.chargeMin) + '<small>h</small>' : fmt.r(foc.chargeMin) + '<small>min</small>'}</div></div><div><div class="cap">Revenue / day</div><div class="v num">€${Math.round(foc.kwhAircraft * rate()).toLocaleString('en')}</div></div></div>`
-      : folder.length ? `<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${R.length}</div></div><div><div class="cap">Flights / day</div><div class="v num">${flights % 1 ? flights.toFixed(1) : flights}</div></div><div><div class="cap">Energy / day${grid}</div><div class="v num">${fmt.parts(kwh, 'Wh').n}<small>${fmt.parts(kwh, 'Wh').u}</small></div></div><div><div class="cap">Peak (sum)${grid}</div><div class="v num">${fmt.parts(peak, 'W').n}<small>${fmt.parts(peak, 'W').u}</small></div></div></div>` : '';
+      // The counts live in the header line; the tiles carry the three totals, each with its context (audit T4, T8).
+      : folder.length ? `<div class="tiles t3"><div><div class="cap">Energy / day${grid}</div><div class="v num">${fmt.parts(kwh, 'Wh').n}<small>${fmt.parts(kwh, 'Wh').u}</small></div><div class="s num">${fmt.kwh(kwh * 365)} / year</div></div><div><div class="cap">Network peak${grid}</div><div class="v num">${fmt.parts(netPeak, 'W').n}<small>${fmt.parts(netPeak, 'W').u}</small></div><div class="s num" title="Each airport's own peak, added up">airports ${fmt.kw(peak)}</div></div><div><div class="cap">Revenue / day</div><div class="v num">€${Math.round(kwhAc * rate()).toLocaleString('en')}</div><div class="s num">€${Math.round(kwhAc * rate() * 365).toLocaleString('en')} / year</div></div></div>` : '';
     $('#railBody').innerHTML = `<div class="ph">${head}</div>${tiles}
-    ${folder.length ? `<div class="ntool"><span class="cap">Show</span><select class="sel" data-act="filter">${['<option value="">All airports</option>', ...R.map(a => `<option value="${a.ident}" ${S.filter === a.ident ? 'selected' : ''}>${a.ident} · ${esc(UI.shortName(a.name))}</option>`)].join('')}</select><span class="sp"></span><span class="hint num" style="margin:0">€${fmt.eur(kwhAc * rate())} / day</span></div>
+    ${folder.length ? `<div class="ntool"><span class="cap">Show</span><select class="sel" data-act="filter">${['<option value="">All airports</option>', ...R.map(a => `<option value="${a.ident}" ${S.filter === a.ident ? 'selected' : ''}>${a.ident} · ${esc(UI.shortName(a.name))}</option>`)].join('')}</select></div>
     ${R.filter(a => !S.filter || a.ident === S.filter).map((a, i) => `<div class="ap ${S.openAp[a.ident] ? 'open' : ''}${i % 2 ? ' alt' : ''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(UI.shortName(a.name))}<small>${a.trips.length} route${a.trips.length === 1 ? '' : 's'}${a.overflow ? ' · <span style="color:var(--danger)">overflow</span>' : ''}${UI.assets()[a.ident] ? ' · NRG2FLY site' : ''}${UI.PROTO ? waitTag(a) : ''}</small></span>
-      <span class="st num">${a.flights % 1 ? a.flights.toFixed(1) : a.flights}<small>flights / day</small></span><span class="st num">${fmt.as(a.peak, pk, 'W').n}<small>peak <span class="u">${fmt.as(a.peak, pk, 'W').u}</span></small></span><svg class="ic"><use href="#i-chev"/></svg></button>${airportPane(a)}</div>`).join('')}`
+      <span class="st num">${a.flights % 1 ? a.flights.toFixed(1) : a.flights}<small>${fmt.pl(a.flights, 'flight')} / day</small></span><span class="st num">${fmt.as(a.peak, pk, 'W').n}<small>peak <span class="u">${fmt.as(a.peak, pk, 'W').u}</span></small></span><svg class="ic"><use href="#i-chev"/></svg></button>${airportPane(a)}</div>`).join('')}`
     : `<div class="cap" style="padding:12px var(--pad) 8px">Empty network · start from a scenario</div><div class="scen">${Object.entries(SCENARIOS).map(([k, s]) => `<div class="sc"><b>${s.title}</b><small>${s.meta}</small><div class="sp">${s.spark.map(v => `<i style="height:${v}%"></i>`).join('')}</div><button class="lnk" data-act="scenario" data-k="${k}">Load</button></div>`).join('')}</div><div class="hint" style="padding:0 var(--pad) 14px">Or plan a route in Plan mode and add it. Each flight adds charging demand at its departure and arrival airports.</div>`}`;
     $('#railFoot').innerHTML = folder.length ? `<div class="btns"><button class="btn p" data-act="build">Share build</button><button class="btn" data-act="pdf">PDF</button><button class="btn" data-act="xlsx">XLSX</button></div>` : '';
     $('#netCount').textContent = folder.length || '';
@@ -299,7 +300,6 @@
       case 'pdf': UI.report && UI.report.pick(); break;
       case 'focus': S.filter = t.dataset.ap || ''; if (S.filter) S.openAp[S.filter] = true;
         if (S.mode !== 'network') { UI.setMode('network'); } else { UI.render(); UI.map.drawNet(); UI.map.fitNet(); } break;
-      case 'revDay': case 'revYear': S.revYear = t.dataset.act === 'revYear'; UI.render(); break;
       case 'fleetAdd': { const ids = fleetOf(t.dataset.ap); ids.push(ids[ids.length - 1] || (UI.CHARGERS[0] && UI.CHARGERS[0].id)); cfgPatch(t.dataset.ap, { chargers: ids }); break; }
       case 'fleetRm': { const ids = fleetOf(t.dataset.ap); ids.splice(+t.dataset.i, 1); cfgPatch(t.dataset.ap, { chargers: ids }); break; }
       case 'useN': cfgPatch(t.dataset.ap, { chargers: t.dataset.ids.split(',') }); UI.toast(`${t.dataset.ap}: ${t.dataset.ids.split(',').length} chargers`); break;

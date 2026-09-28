@@ -59,4 +59,7 @@ test('units rule: aircraft-scale figures stay in kW/kWh, totals from 1,000 read 
   assert.equal(f.prefixFor([62, 1300]), 'M');
   assert.deepEqual({ ...f.as(62, 'M', 'W') }, { n: '0.06', u: 'MW' });   // the whole column in MW when one row needs it
   assert.deepEqual({ ...f.as(0, 'k', 'W') }, { n: '0', u: 'kW' });       // no dash for an airport that charges nothing
+  assert.deepEqual({ ...f.parts(2463000, 'Wh') }, { n: '2,463', u: 'MWh' });   // from 100 MWh the decimal is noise
+  assert.equal(f.ekwh(14000), '14,000 kWh');                               // aircraft scale stays kWh, grouped
+  assert.equal(f.pl(1, 'flight') + ' / ' + f.pl(3, 'flight'), 'flight / flights');
 });
