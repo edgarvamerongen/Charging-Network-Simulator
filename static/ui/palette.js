@@ -89,9 +89,9 @@
     $('#cmdkIn').addEventListener('focus', () => { if ($('#cmdk').hidden) open(null); });
     $('#cmdkIn').addEventListener('input', e => { $('#cmdk').hidden = false; CMD.items = items(e.target.value); CMD.hl = 0; renderList(); });
     document.addEventListener('mousedown', e => { if (!$('#cmdk').hidden && !e.target.closest('#cmdkWrap')) close(); });
-    $('#cmdkIn').addEventListener('keydown', e => { if (e.key === 'ArrowDown') { CMD.hl = Math.min(CMD.items.length - 1, CMD.hl + 1); renderList(); e.preventDefault(); } else if (e.key === 'ArrowUp') { CMD.hl = Math.max(0, CMD.hl - 1); renderList(); e.preventDefault(); } else if (e.key === 'Enter') { run(CMD.hl); e.preventDefault(); } else if (e.key === 'Escape') { close(); e.target.blur(); } });
+    $('#cmdkIn').addEventListener('keydown', e => { if (e.key === 'ArrowDown') { CMD.hl = Math.min(CMD.items.length - 1, CMD.hl + 1); renderList(); e.preventDefault(); } else if (e.key === 'ArrowUp') { CMD.hl = Math.max(0, CMD.hl - 1); renderList(); e.preventDefault(); } else if (e.key === 'Enter') { run(CMD.hl); e.preventDefault(); } else if (e.key === 'Escape') { close(); e.target.value = ''; e.target.blur(); } });
     $('#cmdkList').addEventListener('click', e => { const it = e.target.closest('.it'); if (it) run(+it.dataset.i); });
     $('#cmdkList').addEventListener('mousemove', e => { const it = e.target.closest('.it'); if (it && +it.dataset.i !== CMD.hl) { CMD.hl = +it.dataset.i; renderList(); } }); });
-  document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if ($('#cmdk').hidden) { open(null); $('#cmdkIn').select(); } else { close(); $('#cmdkIn').blur(); } } else if (e.key === 'Escape' && !$('#cmdk').hidden) { close(); $('#cmdkIn').blur(); } });
+  document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if ($('#cmdk').hidden) open(''); else { close(); $('#cmdkIn').blur(); } } else if (e.key === 'Escape' && !$('#cmdk').hidden) { close(); $('#cmdkIn').value = ''; $('#cmdkIn').blur(); } });
   UI.palette = { items };
 })();

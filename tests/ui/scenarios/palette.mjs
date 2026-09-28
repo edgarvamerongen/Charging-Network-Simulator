@@ -41,7 +41,7 @@ const V2_STATE = `(function(){ var S = CNSUI.S; var oi = document.querySelector(
     baseOn: [].slice.call(document.querySelectorAll('#mapDd [data-base].on')).map(function (b) { return b.dataset.base; }), unitOn: [window.CNSUnits && CNSUnits.isNautical() ? 'nm' : 'km'],
     tiles: Object.values(CNSUI.map.map._layers).filter(function (l) { return l instanceof L.TileLayer; }).map(function (l) { return l._url; }),
     originInput: oi ? oi.value : null, originIcao: oi && oi.nextElementSibling ? oi.nextElementSibling.textContent.trim() : null, routeD: [].slice.call(document.querySelectorAll('#railBody .route .stop .d')).map(function (e) { return e.textContent.trim(); }),
-    tourCalls: (window.__cns && __cns.tourCalls) || 0, driver: !!document.querySelector('.driver-popover, .driver-overlay, .driver-active'), center: [c.lat, c.lng], zoom: CNSUI.map.map.getZoom(),
+    tourCalls: (window.__cns && __cns.tourCalls) || 0, inView: CNSUI.map.routeInView ? CNSUI.map.routeInView() : null, driver: !!document.querySelector('.driver-popover, .driver-overlay, .driver-active'), center: [c.lat, c.lng], zoom: CNSUI.map.map.getZoom(),
     popup: ((document.querySelector('.leaflet-popup .pp .ic2') || {}).textContent || '').trim(), toast: ((document.querySelector('#toast') || {}).textContent || '').trim(), toastShown: !!document.querySelector('#toast.show'),
     laneOn: [].slice.call(document.querySelectorAll('#laneSeg button.on')).map(function (b) { return b.dataset.lanes; }), drawerSub: ((document.querySelector('#drawerSub') || {}).textContent || '').trim(),
     modalTitle: ((document.querySelector('#modalBox .mh h3') || {}).textContent || '').trim(), rpRadios: document.querySelectorAll('#modalBox input[name=rp]').length,
@@ -197,7 +197,8 @@ export default async function run(ctx) {
       'Units: kilometres': s => s.units === 'metric' && s.unitOn.join() === 'km',
       'Units: nautical miles': s => s.units === 'nautical' && s.unitOn.join() === 'nm',
       'Switch to Network mode': s => s.mode === 'network' && s.bodyNet,
-      'Simulate the current route': s => s.result || s.err
+      'Simulate the current route': s => s.result || s.err,
+      'Fit the map to the route': s => s.mode === 'plan' && s.inView === true   // M2: the route framed into the free map
     };
     const eff = EFFECTS[hl.label];
     if (!eff) throw new Error(`highlighted item "${hl.label}" has no effect table entry — list: ${labelsOf(st)}`);
@@ -573,7 +574,7 @@ export default async function run(ctx) {
     await v2.waitFor(`document.querySelector('#modal').hidden`, 2000, 30);
     const missing = keys.fields.filter(k => !keys.stored.includes(k) || !cKeys.includes(k));
     if (!s.modal || !s.ms || s.msTitle !== 'Model settings') throw new Error(`modal=${s.modal} ms=${s.ms} title="${s.msTitle}"`);
-    if (s.msRows !== keys.fields.length + 1) throw new Error(`${s.msRows} .msr rows, expected ${keys.fields.length} fields + tariff`);
+    if (s.msRows !== keys.fields.length + 2) throw new Error(`${s.msRows} .msr rows, expected ${keys.fields.length} fields + tariff + distance units`);
     if (missing.length) throw new Error('setting keys not shared with the classic: ' + j(missing));
     return { detail: `"Model settings" → #modal open, title "${s.msTitle}", ${s.msRows} rows (${keys.fields.length} fields + tariff), ${s.msSliders} sliders, autofocus ${s.activeTag}; CNSSettings keys v2=${j(keys.stored)} classic=${j(cKeys)}; Escape closes`,
       repro: 'v2: ⌘K settings → Enter on "Model settings" → #modalBox .ms', evidence: [ctx.shot('actions-settings')] };
