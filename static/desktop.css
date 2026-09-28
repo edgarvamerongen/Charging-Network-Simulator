@@ -60,6 +60,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .pp-logo{width:14px;height:14px;vertical-align:-2px;margin-right:6px}
 /* Network mode (audit P5): the network's airports carry their code; the rest of Europe fades back */
 .netlbl{position:absolute;top:0;transform:translateY(-50%);font:600 10.5px Inter,system-ui,sans-serif;letter-spacing:.02em;color:var(--ink);background:rgba(255,255,255,.86);padding:0 3px;border-radius:2px;white-space:nowrap}
+.netlbl{cursor:pointer}.netlbl:hover{background:var(--ink);color:#fff}
 .netlbl.dim{opacity:.4}
 body.net .leaflet-dots-pane{opacity:.3}
 .ep{width:11px;height:11px;border-radius:50%;background:var(--ink);border:2px solid #fff;box-shadow:0 0 0 1px rgba(50,50,110,.35)}

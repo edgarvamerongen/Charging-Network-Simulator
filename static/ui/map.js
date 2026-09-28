@@ -47,7 +47,7 @@
     dotRenderer = L.canvas({ pane: 'dots', padding: 0.4, tolerance: 3 });
     ['large_airport', 'medium_airport', 'small_airport'].forEach(t => dots[t] = L.layerGroup()); assetLayer = L.layerGroup().addTo(map); routeLayer = L.layerGroup().addTo(map); netLayer = L.layerGroup().addTo(map);
     hiLayer = L.layerGroup().addTo(map);   // the open airport's ring — ties the expanded ledger row to the map
-    map.on('zoomend', () => { rescaleDots(); applyVisibility(); });
+    map.on('zoomend', () => { rescaleDots(); applyVisibility(); if (S.mode === 'network') drawNet(); });   // network labels are placed in screen space
     drawAirports(); drawAssets();
   }
   function drawAirports() {
@@ -165,9 +165,18 @@
       const w = net ? Math.min(6, 1 + 1.1 * Math.sqrt(f)) : 1.5;
       netLayer.addLayer(L.polyline(arcPath(pts), { pane: 'net', interactive: false, color: '#32326E', weight: hit && S.filter ? w + .5 : w, opacity: S.filter ? (hit ? .8 : .12) : (net ? .55 : .45), lineCap: 'round' })); });
     if (!net) return;
-    Object.entries(perAp).forEach(([id, f]) => { const a = UI.byId()[id]; if (!a) return; const on = lit.has(id), r = Math.min(12, 3.5 + 1.6 * Math.sqrt(f));
-      netLayer.addLayer(L.circleMarker(UI.ll(a), { pane: 'net', interactive: false, radius: r, fillColor: '#32326E', fillOpacity: on ? .9 : .25, color: '#fff', weight: 1.5, opacity: on ? 1 : .4 }));
-      netLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="netlbl${on ? '' : ' dim'}" style="left:${Math.round(r + 3)}px">${UI.esc(id)}</div>`, iconSize: [0, 0] }) })); });
+    const isolate = id => { S.filter = S.filter === id ? '' : id; if (S.filter) S.openAp[id] = true; UI.render(); drawNet(); fitNet(); };
+    const aps = Object.entries(perAp).map(([id, f]) => ({ id, f, a: UI.byId()[id] })).filter(x => x.a).sort((x, y) => y.f - x.f);
+    // Labels never cover one another or another airport's disc (a click must reach the airport it names): the
+    // busiest airports label first, a label that would collide goes to the other side of its disc, else it is
+    // left out and the disc's tooltip names the airport. Placed in screen space, so zoomend re-runs this.
+    const taken = [], clear = b => !taken.some(q => b[0] < q[2] && q[0] < b[2] && b[1] < q[3] && q[1] < b[3]);
+    aps.forEach(x => { x.r = Math.min(12, 3.5 + 1.6 * Math.sqrt(x.f)); x.pt = map.latLngToContainerPoint(UI.ll(x.a)); taken.push([x.pt.x - x.r, x.pt.y - x.r, x.pt.x + x.r, x.pt.y + x.r]); });
+    aps.forEach(x => { const w = 7 * x.id.length + 8, R = [x.pt.x + x.r + 3, x.pt.y - 8, x.pt.x + x.r + 3 + w, x.pt.y + 8], Lb = [x.pt.x - x.r - 3 - w, x.pt.y - 8, x.pt.x - x.r - 3, x.pt.y + 8];
+      x.side = clear(R) ? 'left' : clear(Lb) ? 'right' : null; if (x.side) taken.push(x.side === 'left' ? R : Lb); });
+    aps.forEach(({ id, a, r, side }) => { const on = lit.has(id), tip = S.filter === id ? 'Show all airports' : 'Show ' + id + ' in the network';
+      netLayer.addLayer(L.circleMarker(UI.ll(a), { pane: 'net', radius: r, fillColor: '#32326E', fillOpacity: on ? .9 : .25, color: '#fff', weight: 1.5, opacity: on ? 1 : .4, bubblingMouseEvents: false }).on('click', () => isolate(id)).bindTooltip(side ? tip : id + ': ' + tip.toLowerCase(), { direction: 'top', offset: [0, -r] }));
+      if (side) netLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', keyboard: false, title: tip, icon: L.divIcon({ className: '', html: `<div class="netlbl${on ? '' : ' dim'}" style="${side}:${Math.round(r + 3)}px">${UI.esc(id)}</div>`, iconSize: [0, 0] }) }).on('click', () => isolate(id))); });
   }
   function highlightAirports(idents) {
     if (!hiLayer) return;
