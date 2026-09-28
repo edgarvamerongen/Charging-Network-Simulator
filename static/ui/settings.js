@@ -1,5 +1,6 @@
 /* CNS v2 — ui/settings.js: the Model settings dialog over CNSSettings (same keys, same storage —
-   both shells read the same values), plus the active-flags badge on the topbar gear. */
+   both shells read the same values), plus the Model chip in the topbar: "Model: default" or
+   "Model: N changes" from the defaults (audit P6; the old gear badge counted enabled features). */
 (function () {
   const UI = window.CNSUI, S = UI.S, $ = UI.$, $$ = UI.$$, esc = UI.esc;
   const ST = () => window.CNSSettings;
@@ -19,7 +20,7 @@
     const c = CNSFlight.climbParams(p); return c.applies ? `${esc(UI.planeShort(p.name))}: +${Math.round(c.eMaxKwh)} kWh per leg, full from ${Math.round(c.dSatKm)} km` : `${esc(UI.planeShort(p.name))}: not applied (powered-lift or no battery)`;
   }
   function body() {
-    const s = ST().loadAll(); const rate = (s.chargeRate || {}).value ?? 0.6;
+    const s = ST().loadAll(); const rate = (s.chargeRate || {}).value ?? 0.6; const nm = !!(window.CNSUnits && CNSUnits.isNautical && CNSUnits.isNautical());
     return `<div class="mh"><h3>Model settings</h3><button class="tb icon" data-modal="close"><svg class="ic"><use href="#i-x"/></svg></button></div>
       <div class="mb ms">
         ${FIELDS.map(F => { const v = s[F.key] || {}; return `<div class="msr ${v.enabled ? '' : 'off'}"><div class="row" style="align-items:flex-start;gap:10px"><button class="sw ${v.enabled ? 'on' : ''}" data-ms="toggle" data-key="${F.key}" title="${v.enabled ? 'On' : 'Off'}"></button><div style="flex:1"><div class="name" style="font-size:13px">${F.title}</div><div class="hint" style="margin-top:2px">${F.desc}</div>
@@ -27,6 +28,7 @@
           ${F.example ? `<div class="hint num" data-ms="example">${example()}</div>` : ''}${F.curve ? `<svg class="taper" data-ms-taper viewBox="0 0 320 72" preserveAspectRatio="none" role="img" aria-label="Charge power against state of charge"></svg>` : ''}</div></div></div>`; }).join('')}
         <div class="msr"><div class="row" style="align-items:flex-start;gap:10px"><span style="width:26px"></span><div style="flex:1"><div class="name" style="font-size:13px">Charge tariff</div><div class="hint" style="margin-top:2px">Price per charged kWh for the revenue figures.</div>
           <div class="msl"><span class="cap">Tariff</span><input type="range" min="0" max="200" step="5" value="${Math.round(rate * 100)}" data-ms="rate"><b class="num" data-ms-val="rate">€${(+rate).toFixed(2)} / kWh</b></div></div></div></div>
+        <div class="msr"><div class="row" style="align-items:center;gap:10px"><span style="width:26px"></span><div style="flex:1"><div class="name" style="font-size:13px">Distance units</div><div class="hint" style="margin-top:2px">Display only; the model is unchanged.</div></div><div class="seg sm" id="unitSeg"><button data-u="km" class="${nm ? '' : 'on'}">km</button><button data-u="nm" class="${nm ? 'on' : ''}">NM</button></div></div></div>
         <div class="hint" style="margin-top:12px">Applies to every calculation.</div></div>
       <div class="btns"><button class="btn" data-ms="reset">Reset to defaults</button><span style="flex:1"></span><button class="btn p" data-modal="close">Done</button></div>`;
   }
@@ -49,9 +51,12 @@
   }
   function open() { UI.modal.open(body()); drawTaper(); }
   function refresh() { if (!UI.modal.isOpen() || !$('#modalBox .ms')) return; const box = $('#modalBox'); const top = box.scrollTop; box.innerHTML = body(); box.scrollTop = top; drawTaper(); }
-  function badge() { const b = $('#setBadge'); if (!b || !ST()) return; const f = ST().activeFlags(); const n = Object.entries(f).filter(([k, v]) => k !== 'anyOn' && v).length; b.textContent = n; b.hidden = !n; }
+  /** Model settings that differ from the defaults: what the chip and the assumptions line count. */
+  function changes() { if (!ST() || !ST().loadAll) return 0; const s = ST().loadAll(), D0 = ST().DEFAULTS || {}; return Object.keys(D0).filter(k => JSON.stringify(s[k]) !== JSON.stringify(D0[k])).length; }
+  const label = () => { const n = changes(); return n ? n + ' change' + (n > 1 ? 's' : '') : 'default'; };
+  function badge() { const b = $('#modelState'); if (!b) return; b.textContent = label(); b.parentElement.setAttribute('aria-label', 'Model settings: ' + label()); }
   document.addEventListener('click', e => {
-    if (e.target.closest('#setBtn')) { open(); return; }   // must precede the [data-ms] guard — the gear is not a [data-ms] element
+    if (e.target.closest('#setBtn')) { open(); return; }   // must precede the [data-ms] guard — the chip is not a [data-ms] element
     const t = e.target.closest('[data-ms]'); if (!t) return;
     if (t.dataset.ms === 'toggle') { const cur = ST().loadAll()[t.dataset.key] || {}; ST().save({ [t.dataset.key]: { enabled: !cur.enabled } }); refresh(); badge(); }
     if (t.dataset.ms === 'reset') { const prev = ST().loadAll(); ST().reset(); refresh(); badge(); UI.toast('Model settings reset to defaults', { label: 'Undo', run: () => { ST().save(prev); refresh(); badge(); } }); }
@@ -64,5 +69,5 @@
     if (t.dataset.ms === 'rate') ST().save({ chargeRate: { value: +t.value / 100 } }); });
   if (ST() && ST().subscribe) ST().subscribe(badge);
   document.addEventListener('DOMContentLoaded', badge);
-  UI.settings = { open, badge, FIELDS };
+  UI.settings = { open, badge, changes, label, FIELDS };
 })();

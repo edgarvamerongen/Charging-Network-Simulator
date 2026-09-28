@@ -36,12 +36,12 @@ const ws = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
 const V2_DIALOG = `(function(){ const q = s => document.querySelector(s);
   const stored = (function(){ try { return JSON.parse(localStorage.getItem(${j(KEY)})); } catch (e) { return null; } })();
   const flags = CNSSettings.activeFlags(); const nFlags = Object.entries(flags).filter(([k, v]) => k !== 'anyOn' && v).length;
-  const b = q('#setBadge'); const ae = document.activeElement;
+  const b = q('#modelState'); const ae = document.activeElement; const nChanges = CNSUI.settings.changes();
   const rows = qa('#modalBox .msr').map(r => { const sw = r.querySelector('.sw'); return { key: sw ? sw.dataset.key : null, name: ws(r.querySelector('.name')), on: sw ? sw.classList.contains('on') : null, off: r.classList.contains('off'),
     sliders: qa('input[type=range]', r).map(i => ({ ms: i.dataset.ms, key: i.dataset.key || null, f: i.dataset.f || null, min: i.min, max: i.max, step: i.step, value: i.value, disabled: i.disabled,
       label: ws((i.dataset.ms === 'rate' ? q('[data-ms-val=rate]') : q('[data-ms-val="' + i.dataset.key + '.' + i.dataset.f + '"]')) || {}) })), example: r.querySelector('[data-ms=example]') ? ws(r.querySelector('[data-ms=example]')) : null }; });
   function ws(el) { return String((el && el.textContent) || '').replace(/\\s+/g, ' ').trim(); } function qa(s, el) { return [...(el || document).querySelectorAll(s)]; }
-  return { open: !q('#modal').hidden, isMs: !!q('#modalBox .ms'), rows, badge: b ? { text: b.textContent, hidden: b.hidden } : null, nFlags, flags, stored, loadAll: CNSSettings.loadAll(), defaults: CNSSettings.DEFAULTS,
+  return { open: !q('#modal').hidden, isMs: !!q('#modalBox .ms'), rows, badge: b ? { text: b.textContent, hidden: b.hidden } : null, nChanges, nFlags, flags, stored, loadAll: CNSSettings.loadAll(), defaults: CNSSettings.DEFAULTS,
     active: ae ? { tag: ae.tagName.toLowerCase(), type: ae.type || null, ms: ae.dataset ? ae.dataset.ms || null : null, key: ae.dataset ? ae.dataset.key || null : null, inModal: !!ae.closest('#modalBox') } : null,
     plane: CNSUI.S.planeId, rail: CNSUI.S.rail, mode: CNSUI.S.mode }; })()`;
 /** The result rail as rendered: energy tile, cost headline + audit line, battery-chart reserve labels, calc pane. */
@@ -121,18 +121,19 @@ export default async function run(ctx) {
     const st = await openDialog();
     const model = st.rows.filter(r => r.key), tariff = st.rows.filter(r => !r.key);
     const fails = [];
-    if (st.rows.length !== 9) fails.push(`${st.rows.length} .msr rows (want 8 model rows + the tariff row)`);
+    if (st.rows.length !== 10) fails.push(`${st.rows.length} .msr rows (want 8 model rows + tariff + distance units)`);
     if (model.length !== 8 || MODEL_KEYS.some(k => !model.find(r => r.key === k))) fails.push(`model rows ${j(model.map(r => r.key))} ≠ ${j(MODEL_KEYS)}`);
-    if (tariff.length !== 1 || !/Charge tariff/.test(tariff[0].name) || !tariff[0].sliders.find(s => s.ms === 'rate')) fails.push('no tariff row with a [data-ms=rate] slider');
+    if (!tariff.some(r => /Charge tariff/.test(r.name) && r.sliders.find(s => s.ms === 'rate'))) fails.push('no tariff row with a [data-ms=rate] slider');
+    if (!tariff.some(r => /Distance units/.test(r.name))) fails.push('no distance units row');
     for (const r of model) { const en = !!st.loadAll[r.key].enabled; if (r.on !== en) fails.push(`${r.key}: switch ${r.on} vs stored enabled ${en}`); if (r.off !== !en) fails.push(`${r.key}: .off ${r.off} vs enabled ${en}`); for (const s of r.sliders) if (s.disabled !== !en) fails.push(`${r.key}.${s.f}: disabled ${s.disabled} while enabled ${en}`); }
     // slider value + label ↔ stored value (display maps of settings.js FIELDS)
     const expect = { 'landingReserve.minLandingSoc': ['20', '20 %'], 'climbModel.overheadPct': ['10', '10 % of battery'], 'sidStarPadding.km': ['10', '10 km'], 'routingPadding.factor': ['105', '1.05×'], 'chargeTaper.threshold': ['75', '75 % SoC'], 'chargeTaper.taperPower': ['30', '30 % of peak'], 'chargeTarget.value': ['80', '80 %'], 'chargerEfficiency.value': ['88', '88 %'] };
     const sliders = {}; for (const r of st.rows) for (const s of r.sliders) sliders[s.ms === 'rate' ? 'rate' : s.key + '.' + s.f] = s;
     for (const [k, [v, l]] of Object.entries(expect)) { const s = sliders[k]; if (!s) { fails.push(`slider ${k} missing`); continue; } if (s.value !== v || s.label !== l) fails.push(`${k}: value "${s.value}" label "${s.label}" (want ${v} / "${l}")`); }
     if (!sliders.rate || sliders.rate.value !== '60' || sliders.rate.label !== '€0.60 / kWh') fails.push(`tariff slider ${j(sliders.rate)} (want 60 / "€0.60 / kWh")`);
-    // badge = number of active flags (classic updateBadge: flags minus anyOn — index.html:6262)
+    // the Model chip reads the settings that differ from the defaults (audit P6; the classic badge counts active flags)
     const c = await cls();
-    if (!st.badge || st.badge.hidden || st.badge.text !== String(st.nFlags)) fails.push(`#setBadge ${j(st.badge)} vs ${st.nFlags} active flags`);
+    if (!st.badge || st.badge.text !== 'default' || st.nChanges !== 0) fails.push(`#modelState ${j(st.badge)} with ${st.nChanges} changes at boot`);
     if (st.nFlags !== 6 || c.nFlags !== 6) fails.push(`active flags v2 ${st.nFlags} / classic ${c.nFlags} (defaults: 6 on)`);
     if (!same(st.loadAll, st.defaults)) fails.push('loadAll() ≠ DEFAULTS at boot');
     await ctx.screenshot(v2, 'dialog');
@@ -442,20 +443,20 @@ export default async function run(ctx) {
     let opened = true; try { await v2.waitFor(`!document.querySelector('#modal').hidden && !!document.querySelector('#modalBox .ms')`, 5000, 50); } catch (e) { opened = false; }
     await v2.sleep(150); const st = await dlg(); await ctx.screenshot(v2, 'deep-link');
     await closeDialog();
-    if (!opened || !st.isMs || st.rows.length !== 9) throw new Error(`/v2#settings: dialog open=${st.open} ms=${st.isMs} rows=${st.rows.length}`);
+    if (!opened || !st.isMs || st.rows.length !== 10) throw new Error(`/v2#settings: dialog open=${st.open} ms=${st.isMs} rows=${st.rows.length}`);
     return { detail: `/v2#settings boots with the Model settings dialog open (${st.rows.length} rows, badge "${st.badge.text}", focus on open ${j(st.active)})`, repro: 'v2: navigate to /v2#settings', evidence: [ctx.shot('deep-link')] };
   }, { retry: 0 });
 
-  // ---- badge hides at zero flags (classic #modelBadge gets d-none) ---------------------------
+  // ---- the chip counts changes from the defaults; all features off is a changed model ----------
   await ctx.check('badge-zero', async () => {
     await closeDialog();
     await save(Object.fromEntries(MODEL_KEYS.map(k => [k, { enabled: false }]))); await v2.sleep(150);
     const st = await dlg(); const c = await classicApply();
     await v2.eval(`CNSSettings.reset(); true`); await v2.sleep(150); const st2 = await dlg();
-    if (!st.badge.hidden || st.nFlags !== 0) throw new Error(`badge ${j(st.badge)} with ${st.nFlags} flags`);
+    if (st.nFlags !== 0 || !st.nChanges || st.badge.text !== `${st.nChanges} change${st.nChanges === 1 ? '' : 's'}`) throw new Error(`chip ${j(st.badge)} with ${st.nFlags} flags, ${st.nChanges} changes`);
     if (!c.badge || !c.badge.hidden || c.nFlags !== 0) throw new Error(`classic badge ${j(c.badge)} with ${c.nFlags} flags`);
-    if (st2.badge.hidden || st2.badge.text !== '6') throw new Error(`after reset: badge ${j(st2.badge)}`);
-    return { detail: `all 8 off → #setBadge hidden (classic #modelBadge d-none); reset → "6"`, repro: 'v2: CNSSettings.save({…enabled:false}); read #setBadge.hidden' };
+    if (st2.badge.text !== 'default') throw new Error(`after reset: chip ${j(st2.badge)}`);
+    return { detail: `all 8 off → chip "${st.badge.text}" (classic #modelBadge d-none); reset → "default"`, repro: 'v2: CNSSettings.save({…enabled:false}); read #modelState' };
   }, { retry: 0 });
 
   await ctx.check('no-exceptions', async () => {

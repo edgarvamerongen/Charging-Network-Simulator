@@ -303,11 +303,11 @@
   /** The model behind every figure, in one line: default or N changes, then the knobs that move the numbers. */
   function assumptions(p) {
     const ST = window.CNSSettings; if (!ST || !ST.loadAll) return '';
-    const s = ST.loadAll(), D0 = ST.DEFAULTS || {}; const n = Object.keys(D0).filter(k => JSON.stringify(s[k]) !== JSON.stringify(D0[k])).length;
+    const s = ST.loadAll();
     const cp = (window.CNSFlight && CNSFlight.climbParams) ? CNSFlight.climbParams(p) : { applies: false }; const sid = ST.sidStarPaddingKm ? ST.sidStarPaddingKm(p) : 0;
     const parts = [s.landingReserve && s.landingReserve.enabled ? 'reserve ' + Math.round(s.landingReserve.minLandingSoc * 100) + ' %' : 'no landing reserve', cp.applies ? 'climb +' + Math.round(cp.eMaxKwh) + ' kWh' : '',
       sid ? 'SID/STAR ' + sid + ' km' : '', s.chargeTaper && s.chargeTaper.enabled ? 'taper from ' + Math.round(s.chargeTaper.threshold * 100) + ' % SoC' : 'no taper', '€' + (ST.chargeRate ? ST.chargeRate() : 0.6).toFixed(2) + ' / kWh'].filter(Boolean);
-    return `<div class="live-as"><button class="lnk" data-act="model">Model: ${n ? n + ' change' + (n > 1 ? 's' : '') : 'default'}</button> · ${parts.join(' · ')}</div>`;
+    return `<div class="live-as"><button class="lnk" data-act="model">Model: ${UI.settings.label()}</button> · ${parts.join(' · ')}</div>`;
   }
   // A live re-render replaces the field the operator is typing in: put the caret back.
   function focusKey() { const a = document.activeElement; if (!a || !$('#railBody') || !$('#railBody').contains(a)) return null; const k = a.dataset.ac ? `[data-ac="${a.dataset.ac}"]` : a.dataset.act ? `[data-act="${a.dataset.act}"]` : null; let sel = null; try { sel = [a.selectionStart, a.selectionEnd]; } catch (e) { /* number inputs have no selection */ } return k ? { k, sel } : null; }

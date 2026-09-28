@@ -26,7 +26,7 @@ a{color:inherit}
 .num{font-variant-numeric:tabular-nums}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .seg button:focus-visible{outline-color:var(--accent);outline-offset:-2px}
-.modal-box:focus,.cmdk-box:focus{outline:none}   /* the box takes focus only so Escape/Tab work; it is not a control */
+.modal-box:focus{outline:none}   /* the box takes focus only so Escape/Tab work; it is not a control */
 input[type=checkbox],input[type=radio],input[type=range]{accent-color:var(--ink)}
 .u{text-transform:none;letter-spacing:0}   /* unit symbols keep their case inside uppercase captions (kWh, km/h) */
 svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
@@ -76,11 +76,12 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .tb.icon{width:28px;padding:0;justify-content:center;color:var(--muted)}
 .tb.icon:hover{color:var(--ink)}
 .search{position:relative}
-.search input{height:28px;width:220px;border:1px solid var(--control);border-radius:var(--r);padding:0 8px 0 28px;font-size:12px;background:var(--surface);outline:none}
+.search input{height:28px;width:300px;border:1px solid var(--control);border-radius:var(--r);padding:0 34px 0 28px;font-size:12px;background:var(--surface);outline:none}
 .search input:focus{border-color:var(--ink)}
 .search svg{position:absolute;left:8px;top:7px;color:var(--muted)}
-.units{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}
-.units .seg{height:24px}.units .seg button{padding:0 8px;font-size:11px}
+/* the Model chip (audit P6): says whether the numbers run on the default model */
+.tb.model{border-color:var(--line-2);color:var(--muted)}.tb.model b{font-weight:600;color:var(--ink)}
+.tb.model:hover{border-color:var(--ink);background:transparent}
 
 /* ---------- dropdowns / popovers ---------- */
 .dd{position:absolute;top:calc(100% + 6px);right:0;background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);min-width:200px;padding:6px;z-index:40;display:none}
@@ -90,6 +91,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .dd button:hover,.dd label:hover{background:var(--canvas)}
 .dd button.on::after{content:"";margin-left:auto;width:6px;height:6px;background:var(--ink)}
 .dd hr{border:0;border-top:1px solid var(--line);margin:6px 0}
+.dd a{display:flex;align-items:center;height:30px;padding:0 8px;border-radius:var(--r);font-size:12.5px;text-decoration:none;color:var(--ink)}.dd a:hover{background:var(--canvas)}
 .dd input[type=checkbox]{accent-color:var(--ink)}
 .ac{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);z-index:50;display:none;max-height:260px;overflow:auto}
 .ac.open{display:block}
@@ -294,12 +296,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .grow .lab button{font-weight:500;color:var(--ink)}
 .grow .lab button:hover{text-decoration:underline;text-underline-offset:2px}
 /* ---------- command palette ---------- */
-.cmdk{position:fixed;inset:0;z-index:100}
-.cmdk-dim{position:absolute;inset:0;background:rgba(50,50,110,.22)}
-.cmdk-box{position:absolute;left:50%;top:16vh;transform:translateX(-50%);width:560px;max-width:calc(100vw - 32px);background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 16px 48px rgba(50,50,110,.22), 0 2px 6px rgba(50,50,110,.08);overflow:hidden}
-.cmdk-in{display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);color:var(--muted)}
-.cmdk-in input{flex:1;height:44px;border:0;outline:none;font-size:14px;background:transparent;color:var(--ink)}
-.cmdk-in input::placeholder{color:var(--faint)}
+.cmdk{position:absolute;top:calc(100% + 6px);left:0;width:440px;max-width:calc(100vw - 24px);background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 16px 48px rgba(50,50,110,.22), 0 2px 6px rgba(50,50,110,.08);overflow:hidden;z-index:60}
 .cmdk-list{max-height:min(52vh,420px);overflow:auto;padding:6px 0}
 .cmdk-list .grp{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:8px 14px 3px}
 .cmdk-list .it{display:flex;align-items:center;gap:10px;padding:7px 14px;font-size:13px;cursor:pointer}
@@ -428,7 +425,6 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .ms .msr.off .name{color:var(--muted)}
 .ms .msl{display:grid;grid-template-columns:90px 1fr 110px;gap:10px;align-items:center;margin-top:8px}
 .ms .msl input[type=range]{accent-color:var(--ink);width:100%}.ms .msl b{font-weight:600;font-size:12px;text-align:right}
-.badge{position:absolute;right:-2px;top:-2px;min-width:14px;height:14px;padding:0 3px;border-radius:var(--r);background:var(--ink);color:#fff;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;line-height:1}
 .rp{cursor:pointer}.rp input{accent-color:var(--ink)}
 /* ---- tour (Driver.js) in the Instrument language ---- */
 .driver-popover.cns-tour{border-radius:var(--r);font-family:Inter,system-ui,sans-serif;color:var(--ink);box-shadow:0 16px 48px rgba(50,50,110,.22);border:1px solid var(--line);padding:14px 16px;max-width:340px}
@@ -497,7 +493,8 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .topbar .brand{flex:none}
 .ntool select{min-width:0;flex:0 1 auto}.ntool .hint{white-space:nowrap}
 @media (max-width:1180px){.topbar .brand .t{display:none}}
-@media (max-width:1120px){.units>span{display:none}.search input{width:170px}}
+@media (max-width:1280px){.search input{width:240px}}
+@media (max-width:1120px){.search input{width:250px}.topbar .v2tag{display:none}}
 
 /* ---- prototype (?proto): design audit P1 docked panes, P2 live result, P3 charger sizing ----
    Everything below is scoped to body.proto or to markup only the prototype renders. */

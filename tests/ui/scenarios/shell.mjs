@@ -95,7 +95,8 @@ export default async function run(ctx) {
   await ctx.check('units-toggle', async () => {
     const before = await v2.eval(ROUTE_D);
     if (!before.some(t => / km$/.test(t))) throw new Error('precondition: no ".route .stop .d" showing km in the form rail — ' + j(before));
-    await v2.click('#unitSeg [data-u=nm]');
+    await v2.click('#setBtn'); await v2.waitFor(`!!document.querySelector('#modalBox #unitSeg')`, 2000, 50);   // units live in Model settings (audit P7)
+    await v2.click('#modalBox #unitSeg [data-u=nm]');
     await v2.waitFor(`localStorage.getItem('cns_units') === 'nautical'`, 2000, 50);
     await v2.sleep(200);
     const nm = await v2.eval(`({ raw: localStorage.getItem('cns_units'), get: CNSUnits.get(), on: [...document.querySelectorAll('#unitSeg button.on')].map(b => b.dataset.u), d: ${ROUTE_D}, spec: (document.querySelector('#railBody .sp') || { textContent: '' }).textContent.trim() })`);
@@ -111,7 +112,7 @@ export default async function run(ctx) {
     if (Number.isFinite(kmVal) && Number.isFinite(nmVal) && Math.abs(nmVal - kmVal / 1.852) > 1.01) problems.push(`NM value ${nmVal} vs km ${kmVal} / 1.852 = ${(kmVal / 1.852).toFixed(1)}`);
     if (classicNm.units !== 'nautical' || !classicNm.unitToggle || !/ NM$/.test(classicNm.psRange)) problems.push(`classic after reload: units=${classicNm.units} toggle=${classicNm.unitToggle} psRange="${classicNm.psRange}"`);
     // back to km
-    await v2.click('#unitSeg [data-u=km]');
+    await v2.click('#modalBox #unitSeg [data-u=km]');
     await v2.waitFor(`localStorage.getItem('cns_units') === 'metric'`, 2000, 50);
     await v2.sleep(200);
     const km = await v2.eval(`({ raw: localStorage.getItem('cns_units'), on: [...document.querySelectorAll('#unitSeg button.on')].map(b => b.dataset.u), d: ${ROUTE_D} })`);
@@ -168,9 +169,9 @@ export default async function run(ctx) {
   // Gap: the build link on an empty network answers through CNSShare.toast → .cns-share-toast, which the classic
   // styles (index.html:588) and desktop.css does not. The message must be visible to a human.
   await ctx.check('export-menu-empty-build', async () => {
-    await openMenu(v2, '#expBtn', '#expDd');
+    await openMenu(v2, '#shareBtn', '#shareDd');
     const since = v2.responses.length; const exBefore = v2.exceptions().length;
-    await v2.click('#expDd [data-exp=build]');
+    await v2.click('#shareDd [data-exp=build]');
     const hit = await waitToast(v2, /Add at least one flight before sharing a build/, 2500);
     const vis = await v2.eval(`(function(){ const el = document.querySelector('.cns-share-toast'); if (!el) return null; const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
       const top = (r.width && r.height) ? document.elementFromPoint(cx, cy) : null; const tag = e => e ? e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\\s+/).join('.') : '') : null;
@@ -185,15 +186,15 @@ export default async function run(ctx) {
     if (!hit || !vis) throw new Error(`no "Add at least one flight before sharing a build." message — toasts=${j(await toasts(v2))} el=${j(vis)}`);
     const visible = vis.show && +vis.opacity > 0 && vis.inViewport && (vis.pointerEvents === 'none' || !vis.covered) && (vis.position === 'fixed' || vis.position === 'absolute');
     if (!visible) throw new Error(`.cns-share-toast exists with text "${vis.text}" but is not visible: position=${vis.position} opacity=${vis.opacity} z=${vis.zIndex} rect=${j(vis.rect)} inViewport=${vis.inViewport} covered=${vis.covered} (top=${vis.top}) styled=${vis.styled} — the classic styles it (index.html:588), desktop.css has no .cns-share-toast rule`);
-    return { detail: `toast "${hit.text}" visible: ${j(vis)}`, repro: 'v2 fresh profile: click #expBtn, click [data-exp=build]; inspect .cns-share-toast', evidence: [ctx.shot('export-build-empty')] };
+    return { detail: `toast "${hit.text}" visible: ${j(vis)}`, repro: 'v2 fresh profile: click #shareBtn, click [data-exp=build]; inspect .cns-share-toast', evidence: [ctx.shot('export-build-empty')] };
   }, { retry: 0 });
 
   // Gap: the menu's "Share this route" works from the FORM state too (no result yet).
   await ctx.check('export-menu-share-form', async () => {
     const st0 = await v2.eval(V2_STATE);
-    await openMenu(v2, '#expBtn', '#expDd');
+    await openMenu(v2, '#shareBtn', '#shareDd');
     const since = v2.responses.length; const clip0 = await v2.eval('__cns.clip.length');
-    await v2.click('#expDd [data-exp=share]');
+    await v2.click('#shareDd [data-exp=share]');
     const resp = await v2.waitForResponse('/api/share', { since, timeout: 8000, method: 'POST' });
     const body = JSON.parse(String(await v2.responseBody(resp.requestId)));
     await v2.waitFor(`__cns.clip.length > ${clip0}`, 3000, 50);
@@ -202,7 +203,7 @@ export default async function run(ctx) {
     if (resp.status !== 200) throw new Error(`POST /api/share → ${resp.status} ${j(body)}`);
     if (!clip.includes('/v2/s/' + body.slug)) throw new Error(`clipboard "${clip}" does not contain /v2/s/${body.slug}`);
     if (!hit) throw new Error('no "Link copied" toast — ' + j(await toasts(v2)));
-    return { detail: `rail=${st0.rail}; POST /api/share ${resp.status} slug=${body.slug}; clipboard=${clip}; toast "${hit.text}"`, repro: 'v2 form state: click #expBtn, click [data-exp=share]' };
+    return { detail: `rail=${st0.rail}; POST /api/share ${resp.status} slug=${body.slug}; clipboard=${clip}; toast "${hit.text}"`, repro: 'v2 form state: click #shareBtn, click [data-exp=share]' };
   }, { retry: 0 });
 
   // =============================================================================================
@@ -297,9 +298,9 @@ export default async function run(ctx) {
     const bad = seeded.filter(r => r.err || r.added !== 1); if (bad.length) throw new Error('seed failed: ' + j(bad));
     const folder = await v2.eval('CNSDemand.loadFolder().length'); if (folder !== 2) throw new Error('folder length ' + folder);
     ctx.state.buildFolder = await v2.eval(`CNSDemand.loadFolder().map(t => ({ id: t.id, o: t.originIdent, d: t.destIdent, plane: t.planeId, charger: t.chargerId, trip: t.tripType, freqN: t.freqN, freqUnit: t.freqUnit }))`);
-    await openMenu(v2, '#expBtn', '#expDd');
+    await openMenu(v2, '#shareBtn', '#shareDd');
     const since = v2.responses.length; const clip0 = await v2.eval('__cns.clip.length'); const t0 = await v2.eval('(window.__toasts || []).length');
-    await v2.click('#expDd [data-exp=build]');
+    await v2.click('#shareDd [data-exp=build]');
     const resp = await v2.waitForResponse('/api/share', { since, timeout: 8000, method: 'POST' });
     const body = JSON.parse(String(await v2.responseBody(resp.requestId)));
     await v2.waitFor(`__cns.clip.length > ${clip0}`, 3000, 50);

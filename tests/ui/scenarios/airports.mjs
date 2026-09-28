@@ -70,15 +70,15 @@ const emptyMapPoint = page => page.eval(`(function(){ const m = CNSUI.map.map, S
     const el = document.elementFromPoint(x, y); if (!el || el.closest('.leaflet-marker-pane,.leaflet-popup-pane,.leaflet-pins-pane,.topbar,.rail,.drawer,.cmdk,.modal-v2,.dd')) continue;
     return { x, y, top: el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.split(/\\s+/)[0] : ''), dots: pts.length }; }
   return null; })()`);
-/** Header search: real typing into #q, Enter on the first suggestion, wait for the fly-to popup of `ident`. */
+/** Header search (the palette's own field, audit P7): real typing into #cmdkIn, Enter on the first result (fly to), wait for the fly-to popup of `ident`. */
 async function headerSearch(page, ident, nameStart) {
-  await page.click('#q'); await selectAll(page); await page.type(ident); await page.sleep(60);
-  const q = await page.eval(`({ open: document.querySelector('#qAc').classList.contains('open'), first: (document.querySelector('#qAc button') || { dataset: {} }).dataset.id, n: document.querySelectorAll('#qAc button').length })`);
-  if (!q.open || q.first !== ident) throw new Error(`#qAc after typing ${ident}: ${JSON.stringify(q)}`);
+  await page.click('#cmdkIn'); await selectAll(page); await page.type(ident); await page.sleep(60);
+  const q = await page.eval(`({ open: !document.querySelector('#cmdk').hidden, first: ((document.querySelector('#cmdkList .it b') || {}).textContent || ''), n: document.querySelectorAll('#cmdkList .it').length })`);
+  if (!q.open || q.first !== ident) throw new Error(`#cmdkList after typing ${ident}: ${JSON.stringify(q)}`);
   const c0 = await page.eval('CNSUI.map.map.getCenter()');
   await page.press('Enter'); await page.sleep(150); await page.waitForMapIdle(9000);
   await page.waitFor(`(function(){ const t = document.querySelector('.leaflet-popup .pp .t span'); return !!t && t.textContent.indexOf(${JSON.stringify(nameStart)}) >= 0; })()`, 4000);
-  const after = await page.eval(`(function(){ const m = CNSUI.map.map; const a = CNSUI.byId()[${JSON.stringify(ident)}]; const c = m.getCenter(); return { q: document.querySelector('#q').value, qOpen: document.querySelector('#qAc').classList.contains('open'), zoom: m.getZoom(), dCenterDeg: Math.hypot(c.lat - a.latitude_deg, c.lng - a.longitude_deg), popup: document.querySelector('.leaflet-popup .pp .t span').textContent, popupIcao: (document.querySelector('.leaflet-popup .pp .ic2') || {}).textContent }; })()`);
+  const after = await page.eval(`(function(){ const m = CNSUI.map.map; const a = CNSUI.byId()[${JSON.stringify(ident)}]; const c = m.getCenter(); return { q: document.querySelector('#cmdkIn').value, qOpen: !document.querySelector('#cmdk').hidden, zoom: m.getZoom(), dCenterDeg: Math.hypot(c.lat - a.latitude_deg, c.lng - a.longitude_deg), popup: document.querySelector('.leaflet-popup .pp .t span').textContent, popupIcao: (document.querySelector('.leaflet-popup .pp .ic2') || {}).textContent }; })()`);
   return { before: c0, after };
 }
 /** Real click on a popup action button (Departure | Destination | Stop) and report the popup afterwards. */
@@ -298,7 +298,7 @@ export default async function run(ctx) {
     await ctx.screenshot(classic, 'header-search-classic');
     await classic.eval(`window.setDest('EDDF'); true`);
     const control = `classic: #airportSearch "EDDM" + Enter → .ap-card popup; real click on Destination at (${cBtn.cx.toFixed(0)},${cBtn.cy.toFixed(0)}) → selected.destination ${cl.d}, popup still in the DOM=${cl.popup}`;
-    const detail = `#q "EDDM" + Enter → #q "${hs.after.q}", map centre ${hs.after.dCenterDeg.toFixed(3)}° from EDDM at zoom ${hs.after.zoom}, popup "${hs.after.popup}" (${(hs.after.popupIcao || '').trim()}); real click on Destination at (${act.rect.cx.toFixed(0)},${act.rect.cy.toFixed(0)}) → S.dest EDDM, field "${field.value}" ${field.icao}; popup closed=${act.closed}. ${control}`;
+    const detail = `#cmdkIn "EDDM" + Enter → #cmdkIn "${hs.after.q}", map centre ${hs.after.dCenterDeg.toFixed(3)}° from EDDM at zoom ${hs.after.zoom}, popup "${hs.after.popup}" (${(hs.after.popupIcao || '').trim()}); real click on Destination at (${act.rect.cx.toFixed(0)},${act.rect.cy.toFixed(0)}) → S.dest EDDM, field "${field.value}" ${field.icao}; popup closed=${act.closed}. ${control}`;
     if (!act.closed) { const f = note(ctx, 'header-search-detail', detail); throw new Error(`v2: S.dest EDDM set, but the popup stays open after the real Destination click (shows "${act.popupStill}"); classic: selected.destination ${cl.d}, popup left in the DOM=${cl.popup}. Cause: map.js:12 buttons only call setDest() and app.js:101 window.setDest never closes the popup (classic 2716–2720 closes it in setOrigin/setDest, card buttons 4287–4289 also call closeAirportCard()). Full detail: ${f}`); }
     return { detail, repro: 'node tests/ui/run.mjs airports --only header-search', evidence: [ctx.shot('header-search-popup'), ctx.shot('header-search-after-destination'), ctx.shot('header-search-classic')] };
   }, R);

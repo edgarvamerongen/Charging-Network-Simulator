@@ -26,7 +26,7 @@ const PAL_STATE = `(function(){ var k = document.getElementById('cmdk'), inp = d
   var items = [].slice.call(document.querySelectorAll('#cmdkList .it')).map(function (e) { var c = e.firstElementChild ? e.firstElementChild.cloneNode(true) : e.cloneNode(true); var s = c.querySelector('.sub'); if (s) s.remove();
     var grp = null; var p = e.previousElementSibling; while (p) { if (p.classList.contains('grp')) { grp = p.textContent.trim(); break; } p = p.previousElementSibling; }
     return { i: +e.dataset.i, on: e.classList.contains('on'), g: grp, label: c.textContent.replace(/\\s+/g, ' ').trim(), sub: (e.querySelector('.sub') || { textContent: '' }).textContent.trim(), k: (e.querySelector('.k') || { textContent: '' }).textContent.trim() }; });
-  var box = document.querySelector('.cmdk-box'); var r = box ? box.getBoundingClientRect() : null;
+  var box = document.querySelector('#cmdk'); var r = box ? box.getBoundingClientRect() : null;
   return { hidden: k.hidden, display: cs.display, visible: !k.hidden && cs.display !== 'none', focused: document.activeElement === inp, active: document.activeElement ? (document.activeElement.id || document.activeElement.tagName) : null,
     value: inp.value, items: items, groups: [].slice.call(document.querySelectorAll('#cmdkList .grp')).map(function (e) { return e.textContent.trim(); }), none: !!document.querySelector('#cmdkList .none'),
     box: r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null }; })()`;
@@ -38,7 +38,7 @@ const V2_STATE = `(function(){ var S = CNSUI.S; var oi = document.querySelector(
     msTitle: ((document.querySelector('#modalBox .mh h3') || {}).textContent || '').trim(), msSliders: document.querySelectorAll('#modalBox input[type=range]').length, activeTag: document.activeElement ? document.activeElement.tagName + ':' + (document.activeElement.type || '') : null,
     netCount: ((document.querySelector('#netCount') || {}).textContent || '').trim(), folder: window.CNSDemand ? CNSDemand.loadFolder().length : null, apRows: [].slice.call(document.querySelectorAll('#railBody .ap')).map(function (e) { return e.dataset.ap; }),
     openAp: Object.keys(S.openAp || {}).filter(function (k) { return S.openAp[k]; }), units: localStorage.getItem('cns_units'), unitsGet: window.CNSUnits ? CNSUnits.get() : null, mapOpts: mo,
-    baseOn: [].slice.call(document.querySelectorAll('#mapDd [data-base].on')).map(function (b) { return b.dataset.base; }), unitOn: [].slice.call(document.querySelectorAll('#unitSeg button.on')).map(function (b) { return b.dataset.u; }),
+    baseOn: [].slice.call(document.querySelectorAll('#mapDd [data-base].on')).map(function (b) { return b.dataset.base; }), unitOn: [window.CNSUnits && CNSUnits.isNautical() ? 'nm' : 'km'],
     tiles: Object.values(CNSUI.map.map._layers).filter(function (l) { return l instanceof L.TileLayer; }).map(function (l) { return l._url; }),
     originInput: oi ? oi.value : null, originIcao: oi && oi.nextElementSibling ? oi.nextElementSibling.textContent.trim() : null, routeD: [].slice.call(document.querySelectorAll('#railBody .route .stop .d')).map(function (e) { return e.textContent.trim(); }),
     tourCalls: (window.__cns && __cns.tourCalls) || 0, driver: !!document.querySelector('.driver-popover, .driver-overlay, .driver-active'), center: [c.lat, c.lng], zoom: CNSUI.map.map.getZoom(),
@@ -165,13 +165,12 @@ export default async function run(ctx) {
     const d = await pal(v2); steps.push(`⌘K again → hidden=${d.hidden}`);
     await v2.press('k', MOD.Meta);
     await v2.waitFor(OPEN_FOCUSED, 3000, 30);
-    // the dim fills the viewport; the box sits at top 16vh centred — click bottom-left, well outside the box
-    const where = await v2.eval(`(function(){ var e = document.elementFromPoint(30, innerHeight - 30); return e ? e.className : null; })()`);
-    await v2.clickAt(30, 870);
+    // the list drops down under the search field (audit P7): a click anywhere outside it closes it
+    const where = await v2.eval(`(function(){ var e = document.elementFromPoint(innerWidth - 60, innerHeight - 120); return e ? (e.id || e.className || e.tagName) : null; })()`);
+    await v2.clickAt(1380, 780);
     await v2.waitFor(HIDDEN, 2000, 30);
-    const e = await pal(v2); steps.push(`dim click at (30,870) on "${where}" → hidden=${e.hidden}`);
-    if (where !== 'cmdk-dim') throw new Error('expected the dim under the click, got ' + where + ' — ' + steps.join('; '));
-    return { detail: steps.join('; '), repro: 'v2: Input.dispatchKeyEvent k+Meta; Escape; click #kbdHint; ⌘K; click (30,870)', evidence: [ctx.shot('open-cmdk')] };
+    const e = await pal(v2); steps.push(`outside click at (1380,780) on "${where}" → hidden=${e.hidden}`);
+    return { detail: steps.join('; '), repro: 'v2: Input.dispatchKeyEvent k+Meta; Escape; click #kbdHint; ⌘K; click (1380,780)', evidence: [ctx.shot('open-cmdk')] };
   });
 
   // =============================================================================================
@@ -216,20 +215,15 @@ export default async function run(ctx) {
     return `"zzqxjv" → 0 items, .none shown`;
   });
 
-  // ⌘K while typing in the header search (#q) must still open the palette and take the focus (document-level keydown).
+  // The header search IS the palette (audit P7): a click on the field opens the list, typing filters it.
   await check('open-from-header-search', async () => {
     await closePal(v2);
-    await v2.click('#q'); await v2.type('ed');
-    const before = await v2.eval(`({ active: document.activeElement && document.activeElement.id, ac: document.querySelector('#qAc').classList.contains('open'), n: document.querySelectorAll('#qAc button').length })`);
-    await v2.press('k', MOD.Meta);
-    await v2.waitFor(OPEN_FOCUSED, 3000, 30);
+    await v2.click('#cmdkIn'); await v2.waitFor(OPEN_FOCUSED, 3000, 30); await v2.type('ed'); await v2.sleep(80);
     const st = await pal(v2);
     await v2.press('Escape'); await v2.waitFor(HIDDEN, 2000, 30);
-    await v2.setValue('#q', '', ['input']);
-    await v2.eval(`(function(){ document.querySelector('#qAc').classList.remove('open'); document.activeElement && document.activeElement.blur(); return true; })()`);
-    if (before.active !== 'q' || !before.ac) throw new Error('precondition: header search not focused/open: ' + j(before));
-    if (!st.visible || !st.focused) throw new Error(`⌘K from #q: visible=${st.visible} focused=${st.focused} active=${st.active}`);
-    return { detail: `#q focused with "ed" (${before.n} suggestions open) → ⌘K → palette visible, focus moved to #cmdkIn (active=${st.active}), ${st.items.length} default items; Escape closes`, repro: 'v2: click #q, type "ed", Input.dispatchKeyEvent k+Meta' };
+    await v2.setValue('#cmdkIn', '', ['input']); await v2.press('Escape');
+    if (!st.visible || !st.focused || !st.items.some(it => it.g === 'Airports')) throw new Error(`click + "ed": visible=${st.visible} focused=${st.focused} items=${labelsOf(st)}`);
+    return { detail: `click #cmdkIn → list open and focused; "ed" → ${st.items.length} items (${[...new Set(st.items.map(it => it.g))].join(', ')}); Escape closes`, repro: 'v2: click #cmdkIn, type "ed"' };
   });
 
   // Keyboard bounds: ArrowUp at the top stays at 0, ArrowDown past the end stays on the last item, Enter on an empty list is a no-op.
