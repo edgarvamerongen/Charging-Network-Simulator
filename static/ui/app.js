@@ -18,6 +18,13 @@ window.CNSUI = (function () {
 
   // ---- helpers ------------------------------------------------------------
   const hasDoc = typeof document !== 'undefined';
+  // Prototype of the design audit's structural moves (P1 docked panes, P2 live result, P3 charger
+  // sizing). Off unless the URL carries ?proto, so the shell everyone uses is untouched by it.
+  const PROTO = hasDoc && typeof location !== 'undefined' && /[?&]proto(=|&|$)/.test(location.search);
+  if (PROTO && document.body) {
+    document.body.classList.add('proto');
+    const tag = document.querySelector('.v2tag'); if (tag) { tag.textContent = 'Prototype'; tag.href = location.pathname + location.hash; tag.title = 'Back to the current v2'; }
+  }
   const $ = (s, el) => (el || document).querySelector(s);
   const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -241,7 +248,7 @@ window.CNSUI = (function () {
     document.addEventListener('click', e => { const b = e.target.closest('#modeSeg button'); if (b) setMode(b.dataset.mode); });
   }
 
-  return { S, PLANES, CHARGERS, SEED, D, airports: () => AIRPORTS, byId: () => AP_BY_ID, assets: () => ASSETS,
+  return { S, PLANES, CHARGERS, SEED, D, PROTO, airports: () => AIRPORTS, byId: () => AP_BY_ID, assets: () => ASSETS,
            $, $$, esc, fmt, perDay, planeShort, shortName, plane, charger, ll, chain, toast, search, aircraft,
            planeImg, resolvePlaneId, dispKm,
            render, setMode, boot, rebuildIndexes, folderChanged, modal, _setAirports, _applyDefaults };

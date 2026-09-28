@@ -82,6 +82,7 @@
       S.filter ? ['Show all airports', () => { S.filter = ''; UI.render(); UI.map.drawNet(); UI.map.fitNet(); }] : null,
       [S.lanes === 'fleet' ? 'Timeline: airport lanes' : 'Timeline: fleet lanes', () => { S.lanes = S.lanes === 'fleet' ? 'airports' : 'fleet'; $('#drawer').classList.add('open'); UI.timeline.render(); }],
       ['Open the classic version', () => { location.href = '/?desktop=1'; }],
+      [UI.PROTO ? 'Leave the prototype' : 'Open the prototype: fixed panels, live result, charger sizing', () => { location.search = UI.PROTO ? '' : '?proto'; }],
     ].filter(Boolean).filter(([l]) => hit(l));
     A.slice(0, ql ? 8 : 10).forEach(([l, run, k]) => add('Actions', esc(l), run, k || ''));
     return L.slice(0, 14);

@@ -42,7 +42,8 @@ window.CNSScheduler = (function () {
     const loadTrips = () => CNSState.getJSON(FOLDER_KEY, []);
     const loadSched = () => CNSState.getJSON(SCHED_KEY, {});
     const saveSched = (s) => CNSState.setJSON(SCHED_KEY, s);
-    const loadCfg = () => CNSState.getJSON(CFG_KEY, {});
+    let _cfgOverride = null;   // set only inside whatIfChargers()
+    const loadCfg = () => _cfgOverride || CNSState.getJSON(CFG_KEY, {});
 
     const num = (t, k, d = 0) => { const v = Number(t[k]); return isFinite(v) ? v : d; };
     // Trip battery + the role a trip plays at an airport are CNSDemand's model (demand.js
@@ -758,6 +759,22 @@ window.CNSScheduler = (function () {
         return inst;
     }
 
+    /** Read-only what-if: run `fn` (which calls runGlobal / summary) as if airport `ident` had the
+        charger fleet `chargerIds`. Nothing is saved: the real caches come back afterwards, and the
+        schedule is restored should a default lay-out get written meanwhile. Only the fleet differs,
+        so the cached trip profiles (which depend on the per-airport SoC target) stay valid. */
+    function whatIfChargers(ident, chargerIds, fn) {
+        const real = CNSState.getJSON(CFG_KEY, {}), sched0 = localStorage.getItem(SCHED_KEY);
+        const keep = [_stamp, _ctx, _globalStamp, _globalCache];
+        _cfgOverride = Object.assign({}, real, { [ident]: Object.assign({}, real[ident] || {}, { chargers: chargerIds.slice() }) });
+        _stamp = null; _ctx = {}; _globalStamp = null; _globalCache = null;
+        try { return fn(); }
+        finally {
+            _cfgOverride = null; [_stamp, _ctx, _globalStamp, _globalCache] = keep;
+            if (localStorage.getItem(SCHED_KEY) !== sched0) { if (sched0 == null) localStorage.removeItem(SCHED_KEY); else localStorage.setItem(SCHED_KEY, sched0); }
+        }
+    }
+
     function init(opts) {
         opts = opts || {};
         catalog = opts.chargers || {};
@@ -765,5 +782,5 @@ window.CNSScheduler = (function () {
         _stamp = null; _ctx = {}; _globalStamp = null; _globalCache = null;
     }
 
-    return { init, renderInto, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, DAY_START, DAY_END, SPAN };
+    return { init, renderInto, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, whatIfChargers, DAY_START, DAY_END, SPAN };
 })();

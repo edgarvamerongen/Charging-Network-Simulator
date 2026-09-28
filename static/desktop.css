@@ -492,3 +492,42 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .ntool select{min-width:0;flex:0 1 auto}.ntool .hint{white-space:nowrap}
 @media (max-width:1180px){.topbar .brand .t{display:none}}
 @media (max-width:1120px){.units>span{display:none}.search input{width:170px}}
+
+/* ---- prototype (?proto): design audit P1 docked panes, P2 live result, P3 charger sizing ----
+   Everything below is scoped to body.proto or to markup only the prototype renders. */
+body.proto #map{inset:var(--topbar-h) 0 var(--map-b,36px) var(--rail-w)}
+body.proto .rail{top:var(--topbar-h);left:0;bottom:0;max-height:none;border:0;border-right:1px solid var(--line);border-radius:0;box-shadow:none}
+body.proto .drawer{left:var(--rail-w);right:0;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;transition:none}
+body.proto .drawer.open{height:var(--tl-h,40vh)}
+.tl-split{position:absolute;left:0;right:0;top:0;height:6px;cursor:row-resize;z-index:3}
+.tl-split::after{content:"";position:absolute;left:50%;top:2px;width:32px;height:2px;margin-left:-16px;background:var(--line-2)}
+.tl-split:hover::after{background:var(--ink)}
+.drawer:not(.open) .tl-split{display:none}
+/* P2: the live result heads the form (sticky), then the battery and the model line */
+.live{position:sticky;top:0;z-index:4;background:var(--surface);border-bottom:1px solid var(--line)}
+.live-hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px var(--pad) 8px}
+.live-hd .ttl{font-size:var(--fs-lg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live-hd .ttl .ar{color:var(--muted);font-weight:400}
+.live-hd .m{font-size:11px;color:var(--muted);white-space:nowrap}
+.stats.s4{grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:0}
+.stats.s4>div{padding:8px 12px}
+.stats.s4 .v{font-size:19px}
+.live.stale .stats{opacity:.45}
+.live-empty{padding:12px var(--pad) 14px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line)}
+.live-empty.err{color:var(--danger)}
+.live-as{padding:6px var(--pad) 8px;font-size:11px;color:var(--muted);background:var(--canvas);border-bottom:1px solid var(--line)}
+.live-as .lnk{font-size:11px}
+.acrow{display:flex;align-items:center;gap:10px}
+.acrow .thumb{width:64px;height:42px}
+.acrow-t{flex:1;min-width:0}
+.acrow-t .name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acrow-t .meta{margin-top:1px}
+.acrow .ac-rg{position:static;flex:none}
+/* P3: what-if table of charger counts */
+.size{margin-top:10px;border:1px solid var(--line);border-radius:var(--r);padding:8px 10px 10px;background:var(--surface)}
+.size .lbl{margin-bottom:4px}
+.size .tbl th,.size .tbl td{padding:4px 6px}
+.size .tbl th.now,.size .tbl td.now{font-weight:600;color:var(--ink)}
+.size .tbl th.rec,.size .tbl td.rec{background:rgba(196,66,31,.08)}
+.size-rec{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;font-size:12px}
+.size-rec .btn{flex:none;padding:0 12px}

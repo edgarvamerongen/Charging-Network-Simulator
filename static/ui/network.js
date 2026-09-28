@@ -56,6 +56,44 @@
   }
   const infeasibleCount = R => R.reduce((s, a) => s + a.trips.filter(t => t.feasible === false).length, 0);
 
+  // ---- prototype (?proto; design audit P3): how many chargers an airport needs ----------------------
+  // What-if runs of the scheduler's day (CNSScheduler.whatIfChargers saves nothing), from one charger
+  // fewer to three more than today: the longest wait for a charger, the queue per day, the peak load.
+  const hm = m => { const t = Math.round(m || 0); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  function waitsAt(ident) {
+    const g = SC().runGlobal(); let maxWait = 0, queue = 0, queued = 0;
+    g.lanes.forEach(L => L.rotations.forEach(rot => rot.phases.forEach(ph => { if (ph.kind === 'charge' && ph.ident === ident && ph.wait > 0) { maxWait = Math.max(maxWait, ph.wait); queue += ph.wait; queued++; } })));
+    const sm = SC().summary(ident); return { maxWait, queue, queued, peak: (sm.peakKw || 0) * gridMul(), overflow: !!sm.overflow };
+  }
+  const _size = {};
+  function sizing(a) {
+    if (!SC() || !SC().whatIfChargers || !a.fleetIds.length) return null;
+    const key = ['cns_folder', 'cns_airport_cfg', 'cns_schedule', ST() ? ST().KEY : ''].map(k => localStorage.getItem(k) || '').join('¦') + '¦' + a.ident;
+    if (_size[a.ident] && _size[a.ident].key === key) return _size[a.ident].v;
+    const cur = a.fleetIds.length, lo = Math.max(1, cur - 1);
+    const idsFor = n => { const ids = a.fleetIds.slice(0, n); while (ids.length < n) ids.push(ids[ids.length - 1]); return ids; };   // more = the last charger again, like "+ Add charger"
+    const cols = [];
+    for (let n = lo; n < lo + 5; n++) { const ids = idsFor(n); cols.push(Object.assign({ n, ids, now: n === cur }, n === cur ? waitsAt(a.ident) : SC().whatIfChargers(a.ident, ids, () => waitsAt(a.ident)))); }
+    const v = { cols, cur }; _size[a.ident] = { key, v }; return v;
+  }
+  function sizingHtml(a) {
+    const z = sizing(a); if (!z) return '';
+    const lim = S.waitOk || 15, rec = z.cols.find(c => c.maxWait <= lim) || null, now = z.cols.find(c => c.now), last = z.cols[z.cols.length - 1];
+    const pk = fmt.prefixFor(z.cols.map(c => c.peak)), pkOf = c => fmt.as(c.peak, pk, 'W');
+    const cls = c => `${c.now ? ' now' : ''}${rec && c.n === rec.n ? ' rec' : ''}`;
+    const row = (label, f) => `<tr><td>${label}</td>${z.cols.map(c => `<td class="r num${cls(c)}">${f(c)}</td>`).join('')}</tr>`;
+    const msg = !rec ? `Even ${last.n} chargers leave a wait of ${hm(last.maxWait)} h: spread the departures or use a faster charger.`
+      : rec.n === z.cur ? `The ${z.cur} charger${z.cur === 1 ? '' : 's'} here keep the longest wait under ${lim} min.`
+      : rec.n > z.cur ? `${rec.n} chargers keep the longest wait under ${lim} min (${hm(rec.maxWait)} h) at a ${pkOf(rec).n} ${pkOf(rec).u} peak.`
+      : `${rec.n} charger${rec.n === 1 ? '' : 's'} would already keep the longest wait under ${lim} min.`;
+    return `${now && now.maxWait > lim ? `<div class="alert">Aircraft wait up to ${hm(now.maxWait)} h for a charger here.</div>` : ''}
+      <div class="size"><div class="lbl"><span class="cap">Chargers needed</span><span class="hint" style="margin:0">longest wait under <select class="sel" data-act="waitOk">${[5, 10, 15, 30, 60].map(v => `<option value="${v}" ${v === lim ? 'selected' : ''}>${v} min</option>`).join('')}</select></span></div>
+      <table class="tbl"><tr><th>Chargers</th>${z.cols.map(c => `<th class="r${cls(c)}">${c.n}${c.now ? ' now' : ''}</th>`).join('')}</tr>
+        ${row('Longest wait', c => hm(c.maxWait))}${row('Queue per day', c => hm(c.queue))}${row(`Peak load, <span class="u">${pk}W</span>`, c => pkOf(c).n)}</table>
+      <div class="size-rec"><span>${msg}</span>${rec && rec.n !== z.cur ? `<button class="btn sm p" data-act="useN" data-ap="${a.ident}" data-ids="${rec.ids.join(',')}">Use ${rec.n}</button>` : ''}</div></div>`;
+  }
+  const waitTag = a => { if (!SC()) return ''; const w = waitsAt(a.ident); return w.maxWait > (S.waitOk || 15) ? ` · <span style="color:var(--danger)">waits up to ${hm(w.maxWait)} h</span>` : ''; };
+
   // ---- render ----
   function airportPane(a) {
     // Revenue is priced per CHARGED kWh (aircraft side, classic index.html:5708); energy is grid side.
@@ -68,6 +106,7 @@
         <div><div class="cap">Energy${grid}</div><div class="v num">${fmt.parts(a.kwh, 'Wh').n}<small>${fmt.parts(a.kwh, 'Wh').u} / day</small></div><div class="s num">${fmt.kwh(a.kwh * 365)} / year</div></div>
         <div><div class="cap">Charging</div><div class="v num">${fmt.min(a.chargeMin)}<small>/ day</small></div><div class="s">${a.overflow ? '<span style="color:var(--danger)">runs past 23:00</span>' : 'ends ' + clockOf(a.latestEnd)}</div></div></div>
       ${a.overflow ? `<div class="alert">Rotations run past 23:00 at this airport. Add a charger or spread the flights.</div>` : ''}
+      ${UI.PROTO ? sizingHtml(a) : ''}
       <div class="lbl" style="margin-top:10px"><span class="cap">Chargers</span><button class="lnk" data-act="fleetAdd" data-ap="${a.ident}">+ Add charger</button></div>
       <div class="fleet">${a.fleetIds.map((id, i) => `<span class="slot"><select class="sel" data-act="fleetSel" data-ap="${a.ident}" data-i="${i}">${opts.map(c => `<option value="${c.id}" ${c.id === id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>${a.fleetIds.length > 1 ? `<button class="rm" data-act="fleetRm" data-ap="${a.ident}" data-i="${i}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button>` : ''}</span>`).join('')}</div>
       <div class="lbl" style="margin-top:10px"><span class="cap">Charge target</span><button class="chip" data-act="socToggle" data-ap="${a.ident}">${socPct == null ? 'auto' : 'at least ' + socPct + ' %'}</button></div>
@@ -92,7 +131,7 @@
       : folder.length ? `<div class="tiles"><div><div class="cap">Airports</div><div class="v num">${R.length}</div></div><div><div class="cap">Flights / day</div><div class="v num">${flights % 1 ? flights.toFixed(1) : flights}</div></div><div><div class="cap">Energy / day${grid}</div><div class="v num">${fmt.parts(kwh, 'Wh').n}<small>${fmt.parts(kwh, 'Wh').u}</small></div></div><div><div class="cap">Peak (sum)${grid}</div><div class="v num">${fmt.parts(peak, 'W').n}<small>${fmt.parts(peak, 'W').u}</small></div></div></div>` : '';
     $('#railBody').innerHTML = `<div class="ph">${head}</div>${tiles}
     ${folder.length ? `<div class="ntool"><span class="cap">Show</span><select class="sel" data-act="filter">${['<option value="">All airports</option>', ...R.map(a => `<option value="${a.ident}" ${S.filter === a.ident ? 'selected' : ''}>${a.ident} · ${esc(UI.shortName(a.name))}</option>`)].join('')}</select><span class="sp"></span><span class="hint num" style="margin:0">€${fmt.eur(kwhAc * rate())} / day</span></div>
-    ${R.filter(a => !S.filter || a.ident === S.filter).map((a, i) => `<div class="ap ${S.openAp[a.ident] ? 'open' : ''}${i % 2 ? ' alt' : ''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(UI.shortName(a.name))}<small>${a.trips.length} route${a.trips.length === 1 ? '' : 's'}${a.overflow ? ' · <span style="color:var(--danger)">overflow</span>' : ''}${UI.assets()[a.ident] ? ' · NRG2FLY site' : ''}</small></span>
+    ${R.filter(a => !S.filter || a.ident === S.filter).map((a, i) => `<div class="ap ${S.openAp[a.ident] ? 'open' : ''}${i % 2 ? ' alt' : ''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(UI.shortName(a.name))}<small>${a.trips.length} route${a.trips.length === 1 ? '' : 's'}${a.overflow ? ' · <span style="color:var(--danger)">overflow</span>' : ''}${UI.assets()[a.ident] ? ' · NRG2FLY site' : ''}${UI.PROTO ? waitTag(a) : ''}</small></span>
       <span class="st num">${a.flights % 1 ? a.flights.toFixed(1) : a.flights}<small>flights / day</small></span><span class="st num">${fmt.as(a.peak, pk, 'W').n}<small>peak <span class="u">${fmt.as(a.peak, pk, 'W').u}</span></small></span><svg class="ic"><use href="#i-chev"/></svg></button>${airportPane(a)}</div>`).join('')}`
     : `<div class="cap" style="padding:12px var(--pad) 8px">Empty network · start from a scenario</div><div class="scen">${Object.entries(SCENARIOS).map(([k, s]) => `<div class="sc"><b>${s.title}</b><small>${s.meta}</small><div class="sp">${s.spark.map(v => `<i style="height:${v}%"></i>`).join('')}</div><button class="lnk" data-act="scenario" data-k="${k}">Load</button></div>`).join('')}</div><div class="hint" style="padding:0 var(--pad) 14px">Or plan a route in Plan mode and add it. Each flight adds charging demand at its departure and arrival airports.</div>`}`;
     $('#railFoot').innerHTML = folder.length ? `<div class="btns"><button class="btn p" data-act="build">Share build</button><button class="btn" data-act="pdf">PDF</button><button class="btn" data-act="xlsx">XLSX</button></div>` : '';
@@ -206,16 +245,19 @@
   const resolvePlane = id => UI.resolvePlaneId(id) || id;
   async function loadScenario(key) {
     const sc = SCENARIOS[key]; if (!sc) return; const by = UI.byId();
+    if (UI.plan && UI.plan.cancelLive) UI.plan.cancelLive();   // the prototype's pending live run must not race the batch
     // A scenario is a fresh network: the previous one's per-airport chargers and hand-placed take-offs must not survive it.
     D().saveFolder([]); const cfg = {}; Object.entries(sc.chargers).forEach(([ap, ch]) => { cfg[ap] = { chargers: ch.slice() }; }); D().saveCfg(cfg);
     try { localStorage.removeItem('cns_schedule'); } catch (e) { /* private mode */ }
     S.filter = ''; S.openAp = {};
     UI.setMode('plan'); UI.toast(`Loading ${sc.title}…`);
     // One render + one fit for the whole batch, not one per route (each simulate/add re-renders the shell).
-    const _render = UI.render, _fit = UI.map.fitNet, _drawNet = UI.map.drawNet, _drawRoute = UI.map.drawRoute;
+    // ensureRouteVisible too: each batch simulate would otherwise animate the map to its own route, and the last
+    // animation lands AFTER the network fit below (a Leaflet zoom transition re-applies its target when it ends).
+    const _render = UI.render, _fit = UI.map.fitNet, _drawNet = UI.map.drawNet, _drawRoute = UI.map.drawRoute, _ensure = UI.map.ensureRouteVisible;
     const fails = [];
     try {
-      UI.render = () => {}; UI.map.fitNet = () => {}; UI.map.drawNet = () => {}; UI.map.drawRoute = () => {};
+      UI.render = () => {}; UI.map.fitNet = () => {}; UI.map.drawNet = () => {}; UI.map.drawRoute = () => {}; UI.map.ensureRouteVisible = () => {};
       for (const [o, d, pl, fr, per, tr] of sc.routes) {
         if (!by[o] || !by[d]) { fails.push(`${o}→${d}: airport not in the catalog`); continue; }
         const planeId = resolvePlane(pl);
@@ -226,9 +268,11 @@
         await UI.plan.simulate();
         if (S.result) UI.plan.addToNetwork(); else fails.push(`${o}→${d} ${planeId}: ${S.err || 'no result'}`);
       }
-    } finally { UI.render = _render; UI.map.fitNet = _fit; UI.map.drawNet = _drawNet; UI.map.drawRoute = _drawRoute; }
+    } finally { UI.render = _render; UI.map.fitNet = _fit; UI.map.drawNet = _drawNet; UI.map.drawRoute = _drawRoute; UI.map.ensureRouteVisible = _ensure; }
     UI.plan.resetForm(); if (sc.focus) S.openAp[sc.focus] = true;
-    UI.setMode('network'); $('#drawer').classList.add('open'); UI.timeline.render();
+    // Open the timeline BEFORE Network mode fits the map, so the fit knows the drawer's height and
+    // nothing lands behind it (fitting first framed the network, then the drawer covered half of it).
+    $('#drawer').classList.add('open'); UI.timeline.render(); UI.setMode('network');
     const n = D().loadFolder().length;
     if (fails.length) console.warn('[v2] scenario ' + key + ': ' + fails.length + ' route(s) failed —', fails);
     UI.toast(`${sc.title} loaded: ${n} route${n === 1 ? '' : 's'}` + (fails.length ? ` · ${fails.length} failed: ${fails[0]}` : ''));
@@ -257,6 +301,7 @@
       case 'revDay': case 'revYear': S.revYear = t.dataset.act === 'revYear'; UI.render(); break;
       case 'fleetAdd': { const ids = fleetOf(t.dataset.ap); ids.push(ids[ids.length - 1] || (UI.CHARGERS[0] && UI.CHARGERS[0].id)); cfgPatch(t.dataset.ap, { chargers: ids }); break; }
       case 'fleetRm': { const ids = fleetOf(t.dataset.ap); ids.splice(+t.dataset.i, 1); cfgPatch(t.dataset.ap, { chargers: ids }); break; }
+      case 'useN': cfgPatch(t.dataset.ap, { chargers: t.dataset.ids.split(',') }); UI.toast(`${t.dataset.ap}: ${t.dataset.ids.split(',').length} chargers`); break;
       case 'socToggle': S.socOpen[t.dataset.ap] = !S.socOpen[t.dataset.ap]; UI.render(); break;
       case 'editTrip': openEdit(t.dataset.id, t.dataset.ap); break;
       case 'replay': openReplay(t.dataset.ap); break;
@@ -265,6 +310,7 @@
   });
   document.addEventListener('change', e => { const t = e.target; if (!t.dataset) return;
     if (t.dataset.act === 'filter') { S.filter = t.value; UI.render(); UI.map.drawNet(); UI.map.fitNet(); }
+    if (t.dataset.act === 'waitOk') { S.waitOk = +t.value; UI.render(); }
     if (t.dataset.act === 'fleetSel') { const ids = fleetOf(t.dataset.ap); ids[+t.dataset.i] = t.value; cfgPatch(t.dataset.ap, { chargers: ids }); }
     if (t.dataset.act === 'socMode') { if (t.value === 'auto') { const c = D().loadCfg(); c[t.dataset.ap] = Object.assign({}, c[t.dataset.ap] || {}); delete c[t.dataset.ap].targetDepartureSoc; delete c[t.dataset.ap].fullCharge; D().saveCfg(c); UI.folderChanged(); UI.render(); } else { const sl = $(`[data-act=socSlider][data-ap="${t.dataset.ap}"]`); cfgPatch(t.dataset.ap, { targetDepartureSoc: (+(sl ? sl.value : 80)) / 100, fullCharge: undefined }); } }
     if (t.dataset.act === 'socSlider') cfgPatch(t.dataset.ap, { targetDepartureSoc: (+t.value) / 100, fullCharge: undefined });

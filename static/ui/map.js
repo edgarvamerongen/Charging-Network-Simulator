@@ -105,6 +105,15 @@
     if (d.classList.contains('open')) { const t = parseFloat(getComputedStyle(d).getPropertyValue('--drawer-h')); if (t > h) h = t + Math.max(0, window.innerHeight - r.bottom); }
     return Math.max(80, Math.round(h) + 24);
   }
+  // The part of the map nothing covers. Floating shell: the rail (420 px + margins) on the left and the
+  // timeline drawer at the bottom sit ON the map. Docked prototype (?proto): they sit beside it, so the
+  // whole map container is free and a fit only needs air.
+  const docked = () => document.body.classList.contains('proto');
+  const pads = () => docked() ? { paddingTopLeft: [48, 48], paddingBottomRight: [48, 48] } : { paddingTopLeft: [460, 60], paddingBottomRight: [40, drawerPad()] };
+  function inFree(latlngs) {
+    const size = map.getSize(), left = docked() ? 12 : 444, bottom = docked() ? size.y - 12 : size.y - drawerPad() + 24;   // drawerPad() adds 24 px of air
+    return latlngs.every(ll => { const pt = map.latLngToContainerPoint(ll); return pt.x >= left && pt.x <= size.x - 12 && pt.y >= 12 && pt.y <= bottom; });
+  }
   function drawRoute(fit) {
     routeLayer.clearLayers(); const c = UI.chain();
     if (S.trip === 'training' && S.origin) { const p = UI.plane(); const r = ((p.training_range_km || 60) / 2) * 1000; routeLayer.addLayer(L.circle(UI.ll(S.origin), { pane: 'rt', interactive: false, radius: r, color: '#c4421f', weight: 2, fillColor: '#c4421f', fillOpacity: .06, dashArray: '4 6' })); if (fit) fitRoute(false); return; }
@@ -123,18 +132,18 @@
   /** Frame the plan route (a training flight: its circuit area) into the map the rail and the timeline leave free. */
   function fitRoute(animate) {
     const c = UI.chain(); if (!c.length) return;
-    const pad = { paddingTopLeft: [460, 60], paddingBottomRight: [40, drawerPad()], animate: !!animate };
+    const pad = Object.assign(pads(), { animate: !!animate });
     if (S.trip === 'training' && S.origin) { const r = ((UI.plane().training_range_km || 60) / 2) * 1000; map.fitBounds(L.latLng(UI.ll(S.origin)).toBounds(r * 2.6), pad); return; }
     if (c.length < 2) { map.panTo(UI.ll(c[0]), { animate: !!animate }); return; }
     map.fitBounds(L.latLngBounds(arcPath(c.map(UI.ll))), Object.assign({ maxZoom: 9 }, pad));
   }
   /** Every airport of the plan chain inside the free map: right of the rail, above the timeline, on screen. */
-  function routeInView() {
-    const c = UI.chain(); if (!c.length) return true;
-    const size = map.getSize(), bottom = size.y - drawerPad() + 24;   // drawerPad() adds 24 px of air below the drawer edge
-    return c.every(a => { const pt = map.latLngToContainerPoint(UI.ll(a)); return pt.x >= 444 && pt.x <= size.x - 12 && pt.y >= 12 && pt.y <= bottom; });
-  }
+  function routeInView() { const c = UI.chain(); return !c.length || inFree(c.map(UI.ll)); }
   function ensureRouteVisible() { if (!routeInView()) fitRoute(true); }
+  /** Every airport of the network (or of the isolated airport's routes) inside the free map. */
+  function netInView() { const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs && (!S.filter || l.options.opacity > .5)) pts.push(...l.getLatLngs()); }); return !pts.length || inFree(pts); }   // every arc point: a return route starts AND ends at its base
+  /** After a layout change (the docked timeline opening, closing or resizing): re-frame only what fell out of view. */
+  function ensureVisible() { if (S.mode === 'network') { if (!netInView()) fitNet(); } else ensureRouteVisible(); }
   function fit() { if (S.mode === 'network') fitNet(); else fitRoute(true); }
   if (typeof document !== 'undefined') document.addEventListener('keydown', e => {
     if ((e.key !== 'f' && e.key !== 'F') || e.metaKey || e.ctrlKey || e.altKey || !map) return;
@@ -159,7 +168,7 @@
     });
   }
   // The rail (420 px + margins) on the left and the timeline drawer at the bottom are both kept clear.
-  function fitNet() { const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs) pts.push(...l.getLatLngs()); }); if (pts.length) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [460, 60], paddingBottomRight: [40, drawerPad()], maxZoom: 8, animate: false }); }
+  function fitNet() { const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs) pts.push(...l.getLatLngs()); }); if (pts.length) map.fitBounds(L.latLngBounds(pts), Object.assign(pads(), { maxZoom: 8, animate: false })); }
   function setBase(n) { Object.values(BASES).forEach(b => map.removeLayer(b)); (BASES[n] || BASES.light).addTo(map); S.base = n; }
   function flyTo(a) { map.flyTo(UI.ll(a), Math.max(map.getZoom(), 8)); setTimeout(() => L.popup({ offset: [0, -2] }).setLatLng(UI.ll(a)).setContent(popupHtml(a)).openOn(map), 400); }
   // The divert overlay belongs to the route: it hides and returns WITH it, so Network mode
@@ -167,6 +176,6 @@
   // which setMode has already flipped by the time it hides/shows the route layer).
   function hideRoute() { if (map.hasLayer(routeLayer)) map.removeLayer(routeLayer); drawAlternates(); }
   function showRoute() { if (!map.hasLayer(routeLayer)) routeLayer.addTo(map); drawAlternates(); }
-  UI.map = { init, drawAssets, drawRoute, drawNet, fitNet, fitRoute, fit, routeInView, ensureRouteVisible, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
+  UI.map = { init, drawAssets, drawRoute, drawNet, fitNet, fitRoute, fit, routeInView, ensureRouteVisible, ensureVisible, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
              closePopup: () => map.closePopup(), hideRoute, showRoute, get map() { return map; } };
 })();
