@@ -58,11 +58,12 @@
 
   // ---- prototype (?proto; design audit P3): how many chargers an airport needs ----------------------
   // What-if runs of the scheduler's day (CNSScheduler.whatIfChargers saves nothing), from one charger
-  // fewer to three more than today: the longest wait for a charger, the queue per day, the peak load.
+  // fewer to three more than today: the longest delay a charger queue causes (a later take-off, or a wait
+  // where that can't absorb it), the delay per day, the peak load.
   const hm = m => { const t = Math.round(m || 0); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
   function waitsAt(ident) {
     const g = SC().runGlobal(); let maxWait = 0, queue = 0, queued = 0;
-    g.lanes.forEach(L => L.rotations.forEach(rot => rot.phases.forEach(ph => { if (ph.kind === 'charge' && ph.ident === ident && ph.wait > 0) { maxWait = Math.max(maxWait, ph.wait); queue += ph.wait; queued++; } })));
+    g.lanes.forEach(L => L.rotations.forEach(rot => rot.phases.forEach(ph => { if (ph.kind === 'charge' && ph.ident === ident && ph.queue > 0) { maxWait = Math.max(maxWait, ph.queue); queue += ph.queue; queued++; } })));
     const sm = SC().summary(ident); return { maxWait, queue, queued, peak: (sm.peakKw || 0) * gridMul(), overflow: !!sm.overflow };
   }
   const _size = {};
@@ -82,17 +83,17 @@
     const pk = fmt.prefixFor(z.cols.map(c => c.peak)), pkOf = c => fmt.as(c.peak, pk, 'W');
     const cls = c => `${c.now ? ' now' : ''}${rec && c.n === rec.n ? ' rec' : ''}`;
     const row = (label, f) => `<tr><td>${label}</td>${z.cols.map(c => `<td class="r num${cls(c)}">${f(c)}</td>`).join('')}</tr>`;
-    const msg = !rec ? `Even ${last.n} chargers leave a wait of ${hm(last.maxWait)}&nbsp;h: spread the departures or use a faster charger.`
-      : rec.n === z.cur ? `The ${z.cur} charger${z.cur === 1 ? '' : 's'} here keep the longest wait under ${lim}&nbsp;min.`
-      : rec.n > z.cur ? `${rec.n} chargers keep the longest wait under ${lim}&nbsp;min (${hm(rec.maxWait)}&nbsp;h) at a ${pkOf(rec).n}&nbsp;${pkOf(rec).u} peak.`
-      : `${rec.n} charger${rec.n === 1 ? '' : 's'} would already keep the longest wait under ${lim}&nbsp;min.`;
-    return `${now && now.maxWait > lim ? `<div class="alert">Aircraft wait up to ${hm(now.maxWait)}&nbsp;h for a charger here.</div>` : ''}
-      <div class="size"><div class="lbl"><span class="cap">Chargers needed</span><span class="hint" style="margin:0">longest wait under <select class="sel" data-act="waitOk">${[5, 10, 15, 30, 60].map(v => `<option value="${v}" ${v === lim ? 'selected' : ''}>${v} min</option>`).join('')}</select></span></div>
+    const msg = !rec ? `Even ${last.n} chargers leave a delay of ${hm(last.maxWait)}&nbsp;h: spread the departures or use a faster charger.`
+      : rec.n === z.cur ? `The ${z.cur} charger${z.cur === 1 ? '' : 's'} here keep the longest delay under ${lim}&nbsp;min.`
+      : rec.n > z.cur ? `${rec.n} chargers keep the longest delay under ${lim}&nbsp;min (${hm(rec.maxWait)}&nbsp;h) at a ${pkOf(rec).n}&nbsp;${pkOf(rec).u} peak.`
+      : `${rec.n} charger${rec.n === 1 ? '' : 's'} would already keep the longest delay under ${lim}&nbsp;min.`;
+    return `${now && now.maxWait > lim ? `<div class="alert">Aircraft delayed up to ${hm(now.maxWait)}&nbsp;h by the chargers here.</div>` : ''}
+      <div class="size"><div class="lbl"><span class="cap">Chargers needed</span><span class="hint" style="margin:0">longest delay under <select class="sel" data-act="waitOk">${[5, 10, 15, 30, 60].map(v => `<option value="${v}" ${v === lim ? 'selected' : ''}>${v} min</option>`).join('')}</select></span></div>
       <table class="tbl"><tr><th>Chargers</th>${z.cols.map(c => `<th class="r${cls(c)}">${c.n}${c.now ? ' now' : ''}</th>`).join('')}</tr>
-        ${row('Longest wait', c => hm(c.maxWait))}${row('Queue per day', c => hm(c.queue))}${row(`Peak load, <span class="u">${pk}W</span>`, c => pkOf(c).n)}</table>
+        ${row('Longest delay', c => hm(c.maxWait))}${row('Delay per day', c => hm(c.queue))}${row(`Peak load, <span class="u">${pk}W</span>`, c => pkOf(c).n)}</table>
       <div class="size-rec"><span>${msg}</span>${rec && rec.n !== z.cur ? `<button class="btn sm p" data-act="useN" data-ap="${a.ident}" data-ids="${rec.ids.join(',')}">Use ${rec.n}</button>` : ''}</div></div>`;
   }
-  const waitTag = a => { if (!SC()) return ''; const w = waitsAt(a.ident); return w.maxWait > (S.waitOk || 15) ? ` · <span style="color:var(--danger)">waits up to ${hm(w.maxWait)}&nbsp;h</span>` : ''; };
+  const waitTag = a => { if (!SC()) return ''; const w = waitsAt(a.ident); return w.maxWait > (S.waitOk || 15) ? ` · <span style="color:var(--danger)">delays up to ${hm(w.maxWait)}&nbsp;h</span>` : ''; };
 
   // ---- render ----
   function airportPane(a) {

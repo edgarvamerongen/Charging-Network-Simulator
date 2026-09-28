@@ -18,8 +18,12 @@
  *      at most N can charge simultaneously. If a plane arrives and every charger
  *      is busy it WAITS; the wait ELONGATES that rotation (and pushes the
  *      aircraft's later rotations). Different aircraft may fly at the same time.
- *   Charging order: when several planes compete, the LOWER-CAPACITY aircraft
- *   charges first (quicker charge → frees the charger sooner → offloads the airport).
+ *   Take-offs are AUTOMATIC unless the user fixed one (dragged it): the scheduler
+ *   delays an automatic departure rather than let the aircraft queue at a charger
+ *   (departure first). Waiting is left only where that can't absorb it (a busy
+ *   day, too few chargers) and for fixed take-offs, which fly exactly as set.
+ *   Charging order: first come, first served; each charge takes the charger slot
+ *   that finishes it first.
  *
  * Charge times/energies are sized by the charger the AIRPORT provides (its fleet,
  * assigned via charging.js) — never the trip's own simulation charger.
@@ -40,7 +44,23 @@ window.CNSScheduler = (function () {
     let onChange = null;
 
     const loadTrips = () => CNSState.getJSON(FOLDER_KEY, []);
-    const loadSched = () => CNSState.getJSON(SCHED_KEY, {});
+    // cns_schedule holds, per trip, one take-off per rotation: a number is a FIXED take-off, null an
+    // automatic one (see _storedStarts). Schedules saved before automatic placement (no _v) held a
+    // number in every slot, the 07:00 / back-to-back default included: a slot still on that default
+    // becomes automatic, anything else was dragged there and stays fixed.
+    const loadSched = () => {
+        const s = CNSState.getJSON(SCHED_KEY, {}) || {};
+        if (s._v === 2) return s;
+        const out = { _v: 2 }, trips = loadTrips();
+        Object.keys(s).forEach(id => {
+            const t = trips.find(x => x.id === id), arr = s[id];
+            if (!t || !Array.isArray(arr)) return;
+            const def = _defaultLayout(t, arr.length);
+            out[id] = arr.map((v, k) => (typeof v === 'number' && isFinite(v) && Math.abs(v - def[k]) > 0.5) ? v : null);
+        });
+        saveSched(out);
+        return out;
+    };
     const saveSched = (s) => CNSState.setJSON(SCHED_KEY, s);
     let _cfgOverride = null;   // set only inside whatIfChargers()
     const loadCfg = () => _cfgOverride || CNSState.getJSON(CFG_KEY, {});
@@ -303,30 +323,55 @@ window.CNSScheduler = (function () {
         return Math.min(MAX_INSTANCES_PER_DAY, perDay);
     }
 
-    // Take-off times are stored 1:1 with what's displayed (no hidden re-sequencing —
-    // that caused drift). Defaults are laid out back-to-back; thereafter the
-    // slot-based drag keeps a lane's rotations from ever overlapping.
+    // Stored take-offs of a trip's rotations: a number is FIXED (the user dragged it), null is
+    // AUTOMATIC (the global sim places it). Missing or resized (frequency change) → all automatic.
+    function _storedStarts(trip) {
+        const sched = loadSched(), n = instancesPerDay(trip);
+        const arr = sched[trip.id];
+        if (Array.isArray(arr) && arr.length === n) return arr.map(v => (typeof v === 'number' && isFinite(v)) ? v : null);
+        sched[trip.id] = new Array(n).fill(null); saveSched(sched);
+        return sched[trip.id].slice();
+    }
+
+    // The nominal lay-out before any queueing: SEPARATE aircraft (a fleet) all leave at 07:00, ONE
+    // aircraft flies its rotations back to back (it can't start the next until the previous one
+    // lands). It was the stored default before take-offs were placed automatically.
+    function _defaultLayout(trip, n) {
+        const parallel = fleetSeparate(trip) && n > 1, dur = parallel ? 0 : rotationLength(trip);
+        const arr = [];
+        for (let k = 0; k < n; k++) arr.push(parallel ? DAY_START : Math.min(DAY_END, DAY_START + k * dur));
+        return arr;
+    }
+
+    // Actual take-off of each of a trip's rotations as the day is flown (automatic ones where the
+    // scheduler placed them); the nominal lay-out for a trip that isn't in the network.
     function instanceStarts(trip) {
-        const dur = rotationLength(trip);
-        const sched = loadSched();
-        const n = instancesPerDay(trip);
-        let arr = sched[trip.id];
-        if (!Array.isArray(arr) || arr.length !== n) {
-            // Default lay-out depends on whether the instances are the SAME
-            // aircraft repeating or DIFFERENT aircraft:
-            //   • one-way freq>1 → each flight is a separate plane that can
-            //     depart in parallel, so default them all to 07:00 (the
-            //     charger queue at the destination, if any, then staggers
-            //     them naturally in the global sim).
-            //   • retour/training → one aircraft flying sequential rotations,
-            //     so lay them back-to-back (it can't start the next until the
-            //     previous one lands).
-            const parallel = fleetSeparate(trip) && n > 1;
-            arr = [];
-            for (let k = 0; k < n; k++) arr.push(parallel ? DAY_START : Math.min(DAY_END, DAY_START + k * dur));
-            sched[trip.id] = arr; saveSched(sched);
+        const ls = runGlobal().lanes.filter(L => L.trip.id === trip.id);
+        if (!ls.length) return _defaultLayout(trip, instancesPerDay(trip));
+        return ls[0].schedSlot != null ? ls.map(L => L.rotations[0].takeoff) : ls[0].rotations.map(r => r.takeoff);
+    }
+
+    /** Fix rotation k of a trip at take-off `t` (minutes), or hand it back to automatic placement
+        (t = null). One aircraft's earlier rotations are fixed where they fly now, so fixing a later
+        rotation never reshuffles the start of its day. */
+    function setTakeoff(tripId, k, t) {
+        const trip = loadTrips().find(x => x.id === tripId);
+        if (!trip) return;
+        const sched = loadSched(), n = instancesPerDay(trip);
+        const arr = (Array.isArray(sched[tripId]) && sched[tripId].length === n) ? sched[tripId].slice() : new Array(n).fill(null);
+        if (t != null && !(fleetSeparate(trip) && n > 1)) {
+            const L = runGlobal().lanes.find(x => x.trip.id === tripId);
+            for (let j = 0; L && j < k; j++) if (typeof arr[j] !== 'number') arr[j] = Math.round(L.rotations[j].takeoff);
         }
-        return arr.slice();
+        arr[k] = (t == null) ? null : Math.round(t);
+        sched[tripId] = arr; saveSched(sched);
+    }
+    /** Every take-off back to automatic placement. */
+    function releaseAll() { saveSched({ _v: 2 }); }
+    /** Number of fixed take-offs in the network. */
+    function fixedCount() {
+        const s = loadSched();
+        return loadTrips().reduce((c, t) => { const a = s[t.id]; return c + (Array.isArray(a) && a.length === instancesPerDay(t) ? a.filter(v => typeof v === 'number').length : 0); }, 0);
     }
 
     // =====================================================================
@@ -345,11 +390,16 @@ window.CNSScheduler = (function () {
     //     sequential rotations (return home each cycle); a freq>1 one-way
     //     schedule needs a separate aircraft per flight, so each gets its
     //     own lane (matches the prior semantic split).
-    //   • Each airport has a POOL of N chargers (one aircraft at a time).
-    //   • Charge events are processed in global ARRIVAL-time order (FCFS).
-    //     Claiming a charger updates its free-time; the wait elongates the
-    //     aircraft's rotation, shifting every later phase — including
-    //     arrivals at downstream airports.
+    //   • Each airport has a POOL of N chargers (one aircraft at a time),
+    //     each with a calendar of the charges booked on it.
+    //   • Charge events are processed in ARRIVAL-time order (FCFS); each
+    //     charge takes the slot that FINISHES it first. A queue wait
+    //     elongates the aircraft's rotation, shifting every later phase —
+    //     including arrivals at downstream airports.
+    //   • FIXED take-offs (dragged by the user) are flown first, exactly as
+    //     set. AUTOMATIC ones are then fitted around them and leave as much
+    //     later as they can without finishing any later (departure first),
+    //     so they land when their charger is free instead of queueing.
     //
     // Output per lane → rotations[] → phases[] with ACTUAL absolute-minute
     // start times, so views just draw what the simulation says.
@@ -362,19 +412,77 @@ window.CNSScheduler = (function () {
                (localStorage.getItem(SCHED_KEY) || '') + '¦' + _settingsStamp();
     }
 
+    // A charger's calendar: the charges booked on it, {s, e} sorted by start.
+    const _freeOver = (bay, s, e) => !bay.busy.some(iv => iv.s < e && s < iv.e);
+    function _insert(bay, iv) {
+        let i = bay.busy.length;
+        while (i && bay.busy[i - 1].s > iv.s) i--;
+        bay.busy.splice(i, 0, iv);
+        return { bay, iv };
+    }
+    const _book = (bay, s, e) => _insert(bay, { s, e });
+    // The slot that STARTS last for a charge that must end by `bound` (as late as
+    // possible): at the bound and at every earlier moment a booking starts, the
+    // bays free for the whole charge before it (strongest `want` for a multi-
+    // charger aircraft). A stronger bay charges faster, so it can start later.
+    function _slotBefore(pool, bays, bound, want, durOf) {
+        const ends = [bound];
+        bays.forEach(i => pool[i].busy.forEach(iv => { if (iv.s < bound) ends.push(iv.s); }));
+        ends.sort((x, y) => y - x);
+        let best = null;
+        for (const t of ends) {
+            if (best && t <= best.start) break;                // an earlier end can't start later
+            const sets = want === 1 ? bays.map(i => [i])
+                : [bays.filter(i => _freeOver(pool[i], t - 1e-6, t)).slice(0, want)];
+            sets.forEach(set => {
+                if (set.length < want) return;
+                const dur = durOf(set), s = t - dur;
+                if (!set.every(i => _freeOver(pool[i], s, t))) return;
+                if (!best || s > best.start + 1e-6) best = { set, start: s, dur };
+            });
+        }
+        return best;
+    }
+    // The slot that FINISHES first for a charge arriving at `a` (minimal charging
+    // time): at the arrival and at every later moment a booking ends, the bays
+    // free for the whole charge. A multi-charger aircraft (`want` > 1) takes the
+    // strongest `want` bays free at that moment. The earlier start wins a tie,
+    // then the stronger bay (bays are power-desc).
+    // ponytail: rescans the calendars per candidate (O(bookings²) per charge);
+    // index them if a network ever books thousands of charges a day.
+    function _slot(pool, bays, a, want, durOf) {
+        const times = [a];
+        bays.forEach(i => pool[i].busy.forEach(iv => { if (iv.e > a) times.push(iv.e); }));
+        times.sort((x, y) => x - y);
+        let best = null;
+        for (const t of times) {
+            if (best && t >= best.start + best.dur) break;     // a later start can't finish first
+            const sets = want === 1 ? bays.map(i => [i])
+                : [bays.filter(i => _freeOver(pool[i], t, t + 1e-6)).slice(0, want)];
+            sets.forEach(set => {
+                if (set.length < want) return;
+                const dur = durOf(set);
+                if (!set.every(i => _freeOver(pool[i], t, t + dur))) return;
+                if (!best || t + dur < best.start + best.dur - 1e-6) best = { set, start: t, dur };
+            });
+        }
+        return best;
+    }
+
     function runGlobal() {
         const stamp = _globalKey();
         if (stamp === _globalStamp && _globalCache) return _globalCache;
         _globalStamp = stamp;
 
-        // 1. Build lanes (aircraft) with their canonical phase template.
+        // 1. Build lanes (aircraft) with their canonical phase template. `desired`
+        //    holds each rotation's FIXED take-off, or null where it is automatic.
         const lanes = [];
         // Infeasible flights (recompute marked feasible:false — no valid route at current
         // settings) don't fly, so they contribute no lane, peak, or rotation. Legacy trips
         // have no `feasible` field → undefined !== false keeps them, unchanged.
         loadTrips().filter(t => t.feasible !== false).forEach(t => {
             const { ph, total } = tripPhases(t, null);     // charges carry .ident
-            const starts = instanceStarts(t);
+            const starts = _storedStarts(t);
             const base = { trip: t, ph, total, cap: batteryOf(t), nCh: _nChOf(t), maxKw: _maxKwOf(t) };
             if (fleetSeparate(t) && starts.length > 1) {
                 // Separate aircraft (fleet) → one lane each, can fly in parallel.
@@ -389,15 +497,15 @@ window.CNSScheduler = (function () {
         });
 
         // 2. Charger pools — one slot per PHYSICAL charger, carrying its real
-        //    power. A charge sizes its duration by the charger it actually
-        //    claims, and peak draw is the sum of in-use slot powers, so it's
-        //    bounded by the installed fleet.
+        //    power and its calendar. A charge sizes its duration by the charger
+        //    it actually claims, and peak draw is the sum of in-use slot powers,
+        //    so it's bounded by the installed fleet.
         const pools = {};
         const poolOf = (ident) => {
             if (!pools[ident]) {
                 const fp = getContext(ident).fleetPowers;
                 const powers = (fp && fp.length) ? fp : [0];
-                pools[ident] = powers.map(p => ({ power: p, freeAt: -Infinity }));
+                pools[ident] = powers.map(p => ({ power: p, busy: [] }));
             }
             return pools[ident];
         };
@@ -418,112 +526,147 @@ window.CNSScheduler = (function () {
                 const seg = [];                            // ph indices that are real charges (per template)
                 tpl.ph.forEach((p, i) => { if (p.kind === 'charge' && p.dur > 0) seg.push(i); });
                 return {
-                    takeoff: d, end: d, cumShift: 0, nextC: 0, tpl, _chargeSeg: seg,
+                    takeoff: 0, end: 0, cumShift: 0, nextC: 0, tpl, _chargeSeg: seg, fixed: d != null,
                     // actual-timed copy of every phase (start filled in as we go)
                     phases: tpl.ph.map(p => ({
                         kind: p.kind, ident: p.ident || null, atRole: p.at,
                         start: 0, dur: p.dur, power: p.power || 0, energy: p.energy || 0,
-                        atIdx: p.atIdx, label: p.label, wait: 0,
+                        atIdx: p.atIdx, label: p.label, wait: 0, queue: 0,
                     })),
                 };
             });
+            // Every rotation up to the lane's last FIXED take-off flies in phase A,
+            // the automatic rest in phase B (one aircraft keeps its order).
+            L.nFixed = 1 + L.desired.reduce((m, d, k) => (d != null ? k : m), -1);
         });
 
-        // 4. Event queue ordered by arrival time. Each event = the next
-        //    pending charge of (lane li, rotation k). Insertion-sorted; event
-        //    counts are small (hundreds at most) so this is plenty fast.
-        const pq = [];
-        const pushEv = (e) => {
-            let lo = 0, hi = pq.length;
-            while (lo < hi) { const m = (lo + hi) >> 1; if (pq[m].arrival <= e.arrival) lo = m + 1; else hi = m; }
-            pq.splice(lo, 0, e);
-        };
-
-        // Seed the next charge of a rotation (or finalise it + chain to the
-        // lane's next rotation when no charges remain).
-        function advance(li, k) {
-            const L = lanes[li], rot = L.rotations[k];
-            if (rot.nextC >= rot._chargeSeg.length) {
-                rot.end = rot.takeoff + rot.tpl.total + rot.cumShift;
-                if (k + 1 < L.desired.length) {
-                    const next = L.rotations[k + 1];
-                    next.takeoff = Math.max(L.desired[k + 1], rot.end);   // no self-overlap
-                    advance(li, k + 1);
+        // 4. One event-driven pass over lane rotations [from, to): charge arrivals
+        //    in time order (FCFS), insertion-sorted (event counts are small), each
+        //    claiming the slot that finishes first.
+        function pass(runs) {
+            const pq = [];
+            const pushEv = (e) => {
+                let lo = 0, hi = pq.length;
+                while (lo < hi) { const m = (lo + hi) >> 1; if (pq[m].arrival <= e.arrival) lo = m + 1; else hi = m; }
+                pq.splice(lo, 0, e);
+            };
+            // Seed the next charge of a rotation (or finalise it + chain to the
+            // lane's next rotation when no charges remain).
+            function advance(li, k, to) {
+                const L = lanes[li], rot = L.rotations[k];
+                if (rot.nextC >= rot._chargeSeg.length) {
+                    rot.end = rot.takeoff + rot.tpl.total + rot.cumShift;
+                    if (k + 1 < to) {
+                        const next = L.rotations[k + 1];
+                        next.takeoff = Math.max(L.desired[k + 1] ?? DAY_START, rot.end);   // no self-overlap
+                        advance(li, k + 1, to);
+                    }
+                    return;
                 }
-                return;
+                const ci = rot._chargeSeg[rot.nextC];
+                // cumShift = waits + (actual charger dur − baked dur) accumulated so
+                // far this rotation, so a later charge's arrival reflects how long
+                // the actual chargers really took, not the planCharging estimate.
+                pushEv({ li, k, ci, to, arrival: rot.takeoff + rot.tpl.ph[ci].start + rot.cumShift });
             }
-            const ci = rot._chargeSeg[rot.nextC];
-            // cumShift = waits + (actual charger dur − baked dur) accumulated so
-            // far this rotation, so a later charge's arrival reflects how long
-            // the actual chargers really took, not the planCharging estimate.
-            const arrival = rot.takeoff + rot.tpl.ph[ci].start + rot.cumShift;
-            pushEv({ li, k, ci, arrival });
+            runs.forEach(({ li, from, to }) => {
+                const L = lanes[li], rot = L.rotations[from];
+                rot.takeoff = Math.max(L.desired[from] ?? DAY_START, from ? L.rotations[from - 1].end : -Infinity);
+                advance(li, from, to);
+            });
+            while (pq.length) {
+                const e = pq.shift();
+                const L = lanes[e.li], rot = L.rotations[e.k], cph = rot.tpl.ph[e.ci], pool = poolOf(cph.ident);
+                // MANUAL-FIRST: a flight that pinned a charger only considers bays of
+                // that power. A pin whose charger isn't in this airport's fleet matches
+                // none and falls back to every bay, so it can never deadlock the sim.
+                let bays = pool.map((_, i) => i);
+                const pinned = cph.forcedPower ? bays.filter(i => pool[i].power === cph.forcedPower) : [];
+                if (pinned.length) bays = pinned;
+                // A multi-charger aircraft (L.nCh > 1, catalog simultaneous_charging)
+                // claims up to nCh DISTINCT bays at once — all occupied for the same
+                // (shorter) duration, combined draw.
+                const want = Math.max(1, Math.min(L.nCh || 1, bays.length));
+                // Size a charge by the PHYSICAL chargers it claims — not the planCharging
+                // estimate. Power is the claimed slots' nameplate sum, each capped by the
+                // battery's acceptance (C-rate), then the published acceptance caps the
+                // COMBINED draw, so the recorded draw and duration are both physical.
+                const powerOn = (set) => _effPower(set.reduce((s, i) => s + _effPower(pool[i].power, L.cap), 0), L.cap, L.maxKw);
+                const durOf = (set) => _chargeMin(cph.energy, powerOn(set), L.cap, cph.arrivalFrac);
+                const slot = _slot(pool, bays, e.arrival, want, durOf);
+                const phase = rot.phases[e.ci];
+                phase.start = slot.start;             // ACTUAL charge start (queue wait already in)
+                phase.dur = slot.dur;                 // ACTUAL duration on the claimed charger(s)
+                phase.power = powerOn(slot.set);      // ACTUAL draw — used for peak
+                phase.wait = phase.queue = slot.start - e.arrival;   // queue wait at THIS airport
+                phase._bk = slot.dur > 0 ? slot.set.map(i => _book(pool[i], slot.start, slot.start + slot.dur)) : [];
+                phase._ctx = { pool, bays, want, powerOn, durOf };   // to re-plan it (step 5)
+                // Shift the rest of the rotation by the wait AND by any difference
+                // between the actual charger duration and the baked estimate.
+                rot.cumShift += phase.wait + (slot.dur - cph.dur);
+                rot.nextC += 1;
+                advance(e.li, e.k, e.to);
+            }
         }
-        lanes.forEach((L, li) => advance(li, 0));
+        // Phase A: fixed take-offs, flown as set. Phase B: automatic ones, around them.
+        pass(lanes.map((L, li) => ({ li, from: 0, to: L.nFixed })).filter(r => r.to > 0));
+        pass(lanes.map((L, li) => ({ li, from: L.nFixed, to: L.desired.length })).filter(r => r.to > r.from));
 
-        // 5. Process charge arrivals in time order: claim the earliest-free
-        //    charger, record the wait, push the rotation's next charge.
-        while (pq.length) {
-            const e = pq.shift();
-            const L = lanes[e.li], rot = L.rotations[e.k], pool = poolOf(rot.tpl.ph[e.ci].ident);
-            // MANUAL-FIRST: if this flight pinned a charger, claim a bay of that
-            // power (the earliest-free one), waiting for it if every matching bay
-            // is busy. A pin whose charger isn't in this airport's fleet leaves
-            // bi < 0 and falls through to the automatic rule, so it can never
-            // deadlock the sim.
-            // A multi-charger aircraft (L.nCh > 1, catalog simultaneous_charging)
-            // claims up to nCh DISTINCT bays at once — all occupied for the same
-            // (shorter) duration, combined draw. want=1 reproduces the old rules
-            // exactly (strongest bay free at arrival, else earliest-free).
-            const want = Math.max(1, Math.min(L.nCh || 1, pool.length));
-            let chosen = [];
-            const forced = rot.tpl.ph[e.ci].forcedPower || 0;
-            if (forced) {
-                chosen = pool.map((_, i) => i).filter(i => pool[i].power === forced)
-                    .sort((x, y) => pool[x].freeAt - pool[y].freeAt).slice(0, want);
+        // 5. DEPARTURE FIRST (automatic take-offs): each automatic rotation is
+        //    re-planned backwards from where it ends — its last charge as late as
+        //    it can still end there, each earlier charge as late as the next one
+        //    allows — so it leaves as late as it can without finishing any later,
+        //    and lands as its charger frees up instead of queueing for it. The
+        //    latest-ending rotations go first and the passes repeat, since each
+        //    re-plan can open room for another. A wait is left only where the
+        //    calendar allows nothing better (a busy day, too few chargers).
+        // ponytail: repeats until nothing moves, capped at 50 passes.
+        function replan(rot) {
+            const idx = rot._chargeSeg, P = rot.phases;
+            if (!idx.length) return false;
+            const legs = (a, b) => { let s = 0; for (let j = a; j < b; j++) s += P[j].dur; return s; };   // flying between charges
+            const own = idx.flatMap(ci => P[ci]._bk);
+            own.forEach(({ bay, iv }) => bay.busy.splice(bay.busy.indexOf(iv), 1));   // off the calendar while re-planned
+            const plan = [];
+            let bound = rot.end - legs(idx[idx.length - 1] + 1, P.length);
+            for (let j = idx.length - 1; j >= 0 && bound != null; j--) {
+                const c = P[idx[j]]._ctx, slot = _slotBefore(c.pool, c.bays, bound, c.want, c.durOf);
+                plan[j] = slot;
+                bound = slot ? slot.start - legs(j ? idx[j - 1] + 1 : 0, idx[j]) : null;
             }
-            if (!chosen.length) {
-                const free = [], busy = [];
-                pool.forEach((b, i) => (b.freeAt <= e.arrival ? free : busy).push(i));   // pool is power-desc: free[] keeps strongest-first
-                busy.sort((x, y) => pool[x].freeAt - pool[y].freeAt);
-                chosen = free.slice(0, want);
-                while (chosen.length < want && busy.length) chosen.push(busy.shift());
-            }
-            const start = Math.max(e.arrival, ...chosen.map(i => pool[i].freeAt));
-            // Size this charge by the PHYSICAL chargers it claimed — not the
-            // planCharging estimate. Power is the claimed slots' nameplate sum,
-            // each capped by the battery's acceptance (C-rate) so the recorded
-            // draw and duration are both physical. Every claimed bay is occupied
-            // for the (capped) duration.
-            let power = chosen.reduce((s, i) => s + _effPower(pool[i].power, L.cap), 0);
-            power = _effPower(power, L.cap, L.maxKw);   // published acceptance caps the COMBINED draw
-            const dur = _chargeMin(rot.tpl.ph[e.ci].energy, power, L.cap, rot.tpl.ph[e.ci].arrivalFrac);
-            chosen.forEach(i => { pool[i].freeAt = start + dur; });
-            const phase = rot.phases[e.ci];
-            phase.start = start;                 // ACTUAL charge start (queue wait already in)
-            phase.dur = dur;                      // ACTUAL duration on the claimed charger
-            phase.power = power;                  // ACTUAL draw — used for peak
-            phase.wait = start - e.arrival;       // queue wait at THIS airport
-            // Shift the rest of the rotation by the wait AND by any difference
-            // between the actual charger duration and the baked estimate.
-            rot.cumShift += phase.wait + (dur - rot.tpl.ph[e.ci].dur);
-            rot.nextC += 1;
-            advance(e.li, e.k);
+            if (bound == null || !(bound > rot.takeoff + 1e-6)) { own.forEach(({ bay, iv }) => _insert(bay, iv)); return false; }
+            rot.takeoff = bound;
+            plan.forEach((slot, j) => {
+                const ph = P[idx[j]], c = ph._ctx;
+                ph.start = slot.start; ph.dur = slot.dur; ph.power = c.powerOn(slot.set);
+                ph._bk = slot.dur > 0 ? slot.set.map(i => _book(c.pool[i], slot.start, slot.start + slot.dur)) : [];
+            });
+            const last = plan[plan.length - 1];
+            rot.end = last.start + last.dur + legs(idx[idx.length - 1] + 1, P.length);
+            return true;
+        }
+        const autos = [];
+        lanes.forEach(L => L.rotations.forEach(rot => { if (!rot.fixed) autos.push(rot); }));
+        for (let n = 0; n < 50; n++) {
+            autos.sort((a, b) => b.end - a.end);
+            if (!autos.map(replan).some(Boolean)) break;
         }
 
         // 6. Forward-walk each rotation to stamp actual start times on the
-        //    NON-charge (fly) phases — each begins where the previous ended.
-        //    Charge starts are already actual; the gap before a charge (its
-        //    queue wait) is captured in phase.wait for the renderer.
+        //    NON-charge (fly) phases — each begins where the previous ended. A
+        //    charge keeps its slot; the gap in front of it is the wait that is left
+        //    (phase.wait), while phase.queue keeps the whole delay its queue caused.
         lanes.forEach(L => L.rotations.forEach(rot => {
             let t = rot.takeoff;
-            rot.tpl.ph.forEach((p, i) => {
-                const ph = rot.phases[i];
+            rot.phases.forEach(ph => {
                 if (ph.kind === 'charge' && ph.dur > 0) {
+                    const w = ph.start - t;
+                    ph.wait = w > 1e-6 ? w : 0;
                     t = ph.start + ph.dur;        // charge body already placed at actual start
                 } else {
                     ph.start = t; t += ph.dur;
                 }
+                delete ph._bk; delete ph._ctx;
             });
             rot.end = t;
         }));
@@ -572,7 +715,7 @@ window.CNSScheduler = (function () {
                             atIdx: ph.atIdx, label: ph.label,
                         });
                     });
-                    return { takeoff: rot.takeoff, end: rot.end, phases: rel };
+                    return { takeoff: rot.takeoff, end: rot.end, fixed: rot.fixed, phases: rel };
                 }),
             });
         });
@@ -618,13 +761,13 @@ window.CNSScheduler = (function () {
         const sched = loadSched();
         const ids = new Set(loadTrips().map(t => t.id));
         let pruned = false;
-        Object.keys(sched).forEach(k => { if (!ids.has(k)) { delete sched[k]; pruned = true; } });
+        Object.keys(sched).forEach(k => { if (k !== '_v' && !ids.has(k)) { delete sched[k]; pruned = true; } });
         if (pruned) saveSched(sched);
 
         const legend = document.createElement('div');
         legend.className = 'est-note mb-2';
         legend.innerHTML =
-            'Each bar is one <strong>rotation</strong> (a single aircraft: depart → charge → return → recharge). Same aircraft can\'t overlap itself; a charger serves one plane at a time. Drag to reschedule.<br>' +
+            'Each bar is one <strong>rotation</strong> (a single aircraft: depart → charge → return → recharge). Same aircraft can\'t overlap itself; a charger serves one plane at a time. Take-offs are placed automatically so an aircraft leaves later rather than queue for a charger. Drag a rotation to fix its take-off (dark edge); double-click to release it.<br>' +
             '<span style="display:inline-block;width:11px;height:11px;background:#0d6efd;border-radius:2px;vertical-align:middle"></span> flying' +
             ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:#198754;border-radius:2px;vertical-align:middle"></span> charging here' +
             ' &nbsp;<span style="display:inline-block;width:11px;height:11px;background:#9bd3ad;border-radius:2px;vertical-align:middle"></span> charging elsewhere' +
@@ -690,7 +833,7 @@ window.CNSScheduler = (function () {
                 // rotation's take-off, so the bars sit at globally-consistent
                 // clock positions.
                 const schedSlot = (row.schedSlot != null) ? row.schedSlot : k;
-                track.appendChild(buildInstance(trip, schedSlot, rot.takeoff, rot.phases));
+                track.appendChild(buildInstance(trip, schedSlot, rot.takeoff, rot.phases, rot.fixed));
             });
             lane.appendChild(track);
             chart.appendChild(lane);
@@ -701,10 +844,11 @@ window.CNSScheduler = (function () {
         container.appendChild(scroll);
     }
 
-    function buildInstance(trip, idx, start, ph) {
+    function buildInstance(trip, idx, start, ph, fixed) {
         const total = ph.reduce((m, p) => Math.max(m, p.start + p.dur), 0) || 30;
         const inst = document.createElement('div');
-        inst.style.cssText = `position:absolute;top:9px;height:28px;width:${total * PX}px;cursor:grab;touch-action:none`;
+        // A fixed take-off carries a dark leading edge (a shadow, so the bars don't shift).
+        inst.style.cssText = `position:absolute;top:9px;height:28px;width:${total * PX}px;cursor:grab;touch-action:none${fixed ? ';box-shadow:-3px 0 0 #212529' : ''}`;
         inst._start = start;
 
         ph.forEach(p => {
@@ -721,7 +865,7 @@ window.CNSScheduler = (function () {
             inst.style.left = ((s - DAY_START) * PX) + 'px';
             const overflow = (s + total) > DAY_END;
             inst.style.outline = overflow ? '2px solid #dc3545' : 'none';
-            const lines = [`${trip.originName} → ${trip.destName} — rotation`, `Take-off ${fmtTime(s)}`];
+            const lines = [`${trip.originName} → ${trip.destName} — rotation`, `Take-off ${fmtTime(s)} (${fixed ? 'fixed; double-click to release' : 'automatic'})`];
             ph.slice().sort((a, b) => a.start - b.start).forEach(p => {
                 const icon = p.kind === 'fly' ? '✈' : (p.kind === 'wait' ? '⏳' : (p.kind === 'waitElsewhere' ? '🅿' : '⚡'));
                 lines.push(`${icon} ${p.label}: ${fmtDur(p.dur)} (${fmtTime(s + p.start)}–${fmtTime(s + p.start + p.dur)})`);
@@ -736,10 +880,15 @@ window.CNSScheduler = (function () {
             try { inst.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
             inst.style.cursor = 'grabbing'; inst.style.opacity = '.85'; inst.style.zIndex = '5';
 
-            // Free move; on release the lane re-cascades so rotations slide along and
-            // never overlap (a single aircraft can't be in two states at once).
+            // Free move; on release the dragged take-off is FIXED there and the lane
+            // re-cascades so rotations slide along and never overlap (a single
+            // aircraft can't be in two states at once). A click (no real move) writes
+            // nothing, so a double-click can release a fixed take-off.
             const startX = e.clientX, origStart = inst._start;
+            let moved = false;
             const move = (ev) => {
+                if (!moved && Math.abs(ev.clientX - startX) < 3) return;
+                moved = true;
                 let s = origStart + (ev.clientX - startX) / PX;
                 s = Math.max(DAY_START, Math.min(DAY_END, Math.round(s / SNAP) * SNAP));
                 inst._start = s; place(s);
@@ -748,14 +897,15 @@ window.CNSScheduler = (function () {
                 inst.style.cursor = 'grab'; inst.style.opacity = '1'; inst.style.zIndex = '';
                 document.removeEventListener('pointermove', move);
                 document.removeEventListener('pointerup', up);
-                const s2 = loadSched();
-                if (!Array.isArray(s2[trip.id])) s2[trip.id] = [];
-                s2[trip.id][idx] = inst._start; saveSched(s2);
+                if (!moved) return;
+                setTakeoff(trip.id, idx, inst._start);
                 if (onChange) onChange();   // re-cascade lane + recompute charger waits / peak
             };
             document.addEventListener('pointermove', move);
             document.addEventListener('pointerup', up);
         });
+        // Double-click toggles: a fixed take-off goes back to automatic, an automatic one is fixed where it is.
+        inst.addEventListener('dblclick', () => { setTakeoff(trip.id, idx, fixed ? null : start); if (onChange) onChange(); });
         return inst;
     }
 
@@ -782,5 +932,5 @@ window.CNSScheduler = (function () {
         _stamp = null; _ctx = {}; _globalStamp = null; _globalCache = null;
     }
 
-    return { init, renderInto, summary, tripsAt, phasesAnim, instanceStarts, roleAt, runGlobal, rotationsAt, tripPhases, whatIfChargers, DAY_START, DAY_END, SPAN };
+    return { init, renderInto, summary, tripsAt, phasesAnim, instanceStarts, setTakeoff, releaseAll, fixedCount, roleAt, runGlobal, rotationsAt, tripPhases, whatIfChargers, DAY_START, DAY_END, SPAN };
 })();

@@ -379,7 +379,7 @@
     <h3>How the model works</h3>
     <p class="meth"><strong>Battery model.</strong> Per-leg energy is <code>battery × distance / range</code>. Every aircraft charges to a global charge target (default 80%), which an airport can override; with no target, the model recharges only the round-trip deficit <code>max(0, 2 × leg − battery)</code> unless Recharge-to-full tops to 100%.</p>
     <p class="meth"><strong>Multi-leg routing.</strong> When one battery can't reach the destination, an A* planner inserts charging stops minimising total distance (optionally biased to a preferred airport size); each stop charges to the target but never below the next leg plus reserve.</p>
-    <p class="meth"><strong>Rotation scheduler.</strong> A rotation is one aircraft cycle (depart → charge → return → recharge). One aircraft can't fly two rotations at once and each charger serves one aircraft at a time; contention queues and propagates the wait across the day.</p>
+    <p class="meth"><strong>Rotation scheduler.</strong> A rotation is one aircraft cycle (depart → charge → return → recharge). One aircraft can't fly two rotations at once and each charger serves one aircraft at a time. Take-offs are placed automatically: an aircraft departs later rather than queue for a charger, and waits only where the day is too full or a take-off was fixed. Delays propagate across the day.</p>
     <p class="meth"><strong>Disclaimer.</strong> Indicative figures. Real energy use varies with payload, weather, wind, taxi time, reserves, charger efficiency and grid losses — none modelled here. A strategic sizing aid, not a procurement specification.</p>
   </div>
 

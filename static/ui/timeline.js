@@ -1,7 +1,8 @@
 /* CNS v2 — ui/timeline.js: the demand timeline drawer, rendered from CNSScheduler's day.
    Airport lanes = the rotations touching an airport (its charges highlighted, waits striped);
    fleet lanes = the scheduler's aircraft lanes. Load row = concurrent charging kW per 15 min.
-   Dragging a rotation writes the desired take-off to cns_schedule, as the classic Gantt does. */
+   Take-offs are automatic (the scheduler places them) until dragged: a drag FIXES one (CNSScheduler.setTakeoff),
+   as the classic Gantt does, and a double-click hands it back to automatic placement. */
 (function () {
   const UI = window.CNSUI, S = UI.S, $ = UI.$, $$ = UI.$$, esc = UI.esc;
   const D = () => window.CNSDemand, SC = () => window.CNSScheduler;
@@ -29,6 +30,7 @@
   }
   /** Grid-side peak for display — what the rail row (network.js) and the classic card (index.html:5745) print. */
   const peakKw = (lanes, ident) => eventPeak(lanes, ident) * gridMul();
+  const fixTick = rot => rot.fixed ? `<i class="fix" style="left:${pct(rot.takeoff)}%"></i>` : '';   // a fixed take-off, marked where it leaves
   const blk = (kind, start, dur, label, title, extra) => `<div class="blk ${kind}" style="left:${pct(start)}%;width:${w(dur)}%" title="${esc(title || '')}" ${extra || ''}>${dur / SPAN * 100 > 5 ? esc(label || '') : ''}</div>`;
   function render() {
     const folder = D() ? D().loadFolder() : []; const R = UI.network ? UI.network.rows() : [];
@@ -48,7 +50,7 @@
       if (S.lanes === 'fleet') {
         const touches = t => !foc || t.originIdent === foc || t.destIdent === foc || (t.stops || []).some(x => x && x.ident === foc);
         const fleet = g.lanes.filter(L => touches(L.trip));
-        fleet.forEach((L, li) => { const t = L.trip; const blocks = L.rotations.map((rot, k) => rot.phases.map(ph => { if (ph.kind === 'charge' && ph.wait > 0) { anyWait = true; } const hd = `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}"`; return (ph.kind === 'charge' && ph.wait > 0 ? blk('wait', ph.start - ph.wait, ph.wait, '', `Waits ${Math.round(ph.wait)} min for a charger at ${ph.ident}`, hd) : '') + blk(ph.kind === 'fly' ? 'fly' : 'chg', ph.start, ph.dur, ph.kind === 'fly' ? (ph.label || '').replace(/^Fly (to|back to) /, '→ ') : (ph.ident || ''), `${ph.label || ph.kind} · ${clock(ph.start)}–${clock(ph.start + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`, hd); }).join('')).join('');
+        fleet.forEach((L, li) => { const t = L.trip; const blocks = L.rotations.map((rot, k) => { const hd = `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}" data-fixed="${rot.fixed ? 1 : 0}"`; return fixTick(rot) + rot.phases.map(ph => { if (ph.kind === 'charge' && ph.wait > 0) { anyWait = true; } return (ph.kind === 'charge' && ph.wait > 0 ? blk('wait', ph.start - ph.wait, ph.wait, '', `Waits ${Math.round(ph.wait)} min for a charger at ${ph.ident}`, hd) : '') + blk(ph.kind === 'fly' ? 'fly' : 'chg', ph.start, ph.dur, ph.kind === 'fly' ? (ph.label || '').replace(/^Fly (to|back to) /, '→ ') : (ph.ident || ''), `${ph.label || ph.kind} · ${clock(ph.start)}–${clock(ph.start + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`, hd); }).join(''); }).join('');
           rows += `<div class="grow${zebra()}"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; });
         $('#drawerSub').textContent = foc ? `${fleet.length} aircraft at ${foc} · peak ${UI.fmt.kw(netPeak)}` : `${g.lanes.length} aircraft · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
       } else {
@@ -56,8 +58,8 @@
         aps.forEach(a => { const rl = SC().rotationsAt(a.ident); if (!rl.length) return;
           const apPeak = peakKw(g.lanes, a.ident);   // = rows().peak = the classic card's peak
           rows += `<div class="grow grp"><div class="lab"><button data-act="focus" data-ap="${a.ident}" title="Isolate ${a.ident}">${a.ident}</button><small>${esc(UI.shortName(a.name))} · peak ${UI.fmt.kw(apPeak)}</small></div><div class="track">${bare}</div></div>`; lanes++;
-          rl.forEach(L => { const t = L.trip; const blocks = L.rotations.map((rot, k) => { const handle = () => `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}"`;   // every block of the strip drags the rotation
-            return rot.phases.map(ph => { const st = rot.takeoff + ph.start;
+          rl.forEach(L => { const t = L.trip; const blocks = L.rotations.map((rot, k) => { const handle = () => `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}" data-fixed="${rot.fixed ? 1 : 0}"`;   // every block of the strip drags the rotation
+            return fixTick(rot) + rot.phases.map(ph => { const st = rot.takeoff + ph.start;
               if (ph.kind === 'wait') { anyWait = true; return blk('wait', st, ph.dur, '', ph.label, handle()); }
               if (ph.kind === 'waitElsewhere') return blk('wait away', st, ph.dur, '', ph.label, handle());
               if (ph.kind === 'fly') return S.showDep ? blk('fly', st, ph.dur, (ph.label || '').replace(/^Fly (to|back to) /, '→ '), `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}`, handle()) : '';
@@ -66,10 +68,13 @@
         $('#drawerSub').textContent = foc ? `${(R.find(a => a.ident === foc) || {}).fleet?.length || 0} chargers · peak ${UI.fmt.kw(netPeak)}` : `${R.length} airport${R.length === 1 ? '' : 's'} · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
       }
     }
-    $('#gantt').innerHTML = rows + `<div class="glegend"><span><i class="c"></i>Charging here</span><span><i class="a"></i>Charging elsewhere</span>${anyWait ? '<span><i class="w"></i>Waiting for a charger</span>' : ''}${(S.showDep || S.lanes === 'fleet') ? '<span><i></i>Flying</span>' : ''}<span style="margin-left:auto">Drag a rotation to move its take-off</span></div>`;
+    const nFix = folder.length && SC() ? SC().fixedCount() : 0;
+    $('#gantt').innerHTML = rows + `<div class="glegend"><span><i class="c"></i>Charging here</span><span><i class="a"></i>Charging elsewhere</span>${anyWait ? '<span><i class="w"></i>Waiting for a charger</span>' : ''}${(S.showDep || S.lanes === 'fleet') ? '<span><i></i>Flying</span>' : ''}${nFix ? `<span><i class="fx"></i>Fixed take-off<button class="lnk" data-act="releaseAll">Release ${nFix === 1 ? '' : 'all '}${nFix}</button></span>` : ''}<span style="margin-left:auto">Drag to fix a take-off · double-click to release</span></div>`;
     $('#drawer').style.setProperty('--drawer-h', Math.min(Math.round(window.innerHeight * 0.6), 36 + 22 + (folder.length ? 44 : 60) + lanes * 28 + 44) + 'px');
   }
-  // ---- drag a rotation → desired take-off (cns_schedule) ----
+  // ---- drag a rotation → fixed take-off; double-click → back to automatic (each with an Undo) ----
+  const changed = () => { UI.folderChanged(); UI.render(); };
+  const undo = prev => ({ label: 'Undo', run: () => { try { if (prev == null) localStorage.removeItem('cns_schedule'); else localStorage.setItem('cns_schedule', prev); } catch (e) { /* private mode */ } changed(); } });
   let drag = null;
   document.addEventListener('pointerdown', e => { const b = e.target.closest('.blk[data-drag]'); if (!b) return; const track = b.parentElement; drag = { key: b.dataset.drag, takeoff: +b.dataset.takeoff, x0: e.clientX, wpx: track.getBoundingClientRect().width, el: b }; b.setPointerCapture(e.pointerId); e.preventDefault(); });
   document.addEventListener('pointermove', e => { if (!drag) return; const dm = (e.clientX - drag.x0) / drag.wpx * SPAN; drag.el.style.transform = `translateX(${(e.clientX - drag.x0)}px)`; drag.dm = dm; });
@@ -78,9 +83,13 @@
     // Gantt, static/scheduler.js:761-780, gives no feedback on a click either).
     if (Math.abs(d.dm || 0) < 2.5) return;
     const [tripId, k] = d.key.split(':'); const nt = Math.max(H0 + 60, Math.min(H1, Math.round((d.takeoff + d.dm) / 5) * 5));
-    try { const sched = CNSState.getJSON('cns_schedule', {}); const arr = sched[tripId]; if (Array.isArray(arr) && arr.length > +k) { arr[+k] = nt; sched[tripId] = arr; CNSState.setJSON('cns_schedule', sched); UI.folderChanged(); UI.render(); UI.toast(`Take-off moved to ${clock(nt)}`); } } catch (err) { console.warn('[v2] reschedule failed', err); }
+    try { const prev = localStorage.getItem('cns_schedule'); SC().setTakeoff(tripId, +k, nt); changed(); UI.toast(`Take-off fixed at ${clock(nt)}`, undo(prev)); } catch (err) { console.warn('[v2] reschedule failed', err); }
   });
-  document.addEventListener('click', e => { const t = e.target.closest('#laneSeg button,#depSw,.dep-lbl,#focChip,#drawerHead'); if (!t) return;
+  document.addEventListener('dblclick', e => { const b = e.target.closest('#gantt .blk[data-drag]'); if (!b) return;
+    const [tripId, k] = b.dataset.drag.split(':'), fixed = b.dataset.fixed === '1', at = +b.dataset.takeoff, prev = localStorage.getItem('cns_schedule');
+    SC().setTakeoff(tripId, +k, fixed ? null : at); changed(); UI.toast(fixed ? 'Take-off released' : `Take-off fixed at ${clock(at)}`, undo(prev)); });
+  document.addEventListener('click', e => { const t = e.target.closest('#laneSeg button,#depSw,.dep-lbl,#focChip,#drawerHead,#gantt [data-act=releaseAll]'); if (!t) return;
+    if (t.dataset.act === 'releaseAll') { const prev = localStorage.getItem('cns_schedule'); SC().releaseAll(); changed(); UI.toast('Take-offs released', undo(prev)); return; }
     if (t.closest('#laneSeg')) { S.lanes = t.dataset.lanes; render(); return; }
     // The caption is the switch's label — it toggles the switch, it does not collapse the drawer.
     if (t.id === 'depSw' || t.classList.contains('dep-lbl')) { S.showDep = !S.showDep; render(); return; }

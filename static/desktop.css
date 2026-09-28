@@ -416,6 +416,10 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .grow.grp .lab{font-weight:600}
 .glegend i.a{background:rgba(196,66,31,.28)}
 .blk[data-drag]{cursor:grab}.blk[data-drag]:active{cursor:grabbing}
+/* a fixed take-off: an ink stake where the rotation leaves */
+.track .fix{position:absolute;top:4px;height:20px;width:2px;margin-left:-1px;background:var(--ink);pointer-events:none;z-index:1}
+.glegend i.fx{width:2px;height:11px;vertical-align:-2px}
+.glegend .lnk{margin-left:8px;font-size:11px}
 
 /* ---- model settings dialog ---- */
 .ms .msr{padding:10px 0;border-bottom:1px solid var(--line)}.ms .msr:last-of-type{border-bottom:0}

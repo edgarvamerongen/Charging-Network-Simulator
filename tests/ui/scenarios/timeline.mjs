@@ -203,15 +203,15 @@ export default async function run(ctx) {
     const dm = 120 / b.trackW * SPAN; const nt = Math.max(H0 + 60, Math.min(H1, Math.round((b.takeoff + dm) / 5) * 5));
     await v2.eval('__toasts.length = 0; __schedWrites.length = 0; true');
     await v2.drag(b.x, b.y, b.x + 120, b.y, 12);
-    const toast = await waitToast(v2, /Take-off moved to/, 2500);
+    const toast = await waitToast(v2, /Take-off fixed at/, 2500);
     await v2.sleep(150);
     const st1 = await v2.eval(ENGINE); const after = await blockByKey(v2, b.key); const writes = await v2.eval('__schedWrites.length');
     const stored = (st1.sched[tripId] || [])[+k];
     const pr = [];
     if (stored !== nt) pr.push(`cns_schedule[${tripId}][${k}] = ${stored}, expected ${nt} (= round((${b.takeoff} + 120/${b.trackW.toFixed(1)}×${SPAN}) / 5) × 5)`);
     if (stored % 5) pr.push(`stored take-off ${stored} is not a multiple of 5`);
-    if (!toast) pr.push(`no "Take-off moved to …" toast (toasts: ${j(await toasts(v2))})`);
-    else if (toast !== `Take-off moved to ${clock(nt)}`) pr.push(`toast "${toast}" ≠ "Take-off moved to ${clock(nt)}"`);
+    if (!toast) pr.push(`no "Take-off fixed at …" toast (toasts: ${j(await toasts(v2))})`);
+    else if (!toast.startsWith(`Take-off fixed at ${clock(nt)}`)) pr.push(`toast "${toast}" ≠ "Take-off fixed at ${clock(nt)}" (+ Undo)`);
     if (!after) pr.push(`block ${b.key} vanished after the re-render`);
     else {
       // the handle block is the rotation's first RENDERED phase (a charge when departures are hidden), so its left% is
@@ -294,14 +294,14 @@ export default async function run(ctx) {
     const [tripId, k] = b.key.split(':');
     await v2.eval('__toasts.length = 0; true');
     await v2.drag(b.x, b.y, Math.max(2, b.x - 900), b.y, 14);
-    const toast = await waitToast(v2, /Take-off moved to/, 2500); await v2.sleep(150);
+    const toast = await waitToast(v2, /Take-off fixed at/, 2500); await v2.sleep(150);
     const sched = await v2.eval(`JSON.parse(localStorage.getItem('cns_schedule') || '{}')`); const after = await blockByKey(v2, b.key);
     const stored = (sched[tripId] || [])[+k];
     await ctx.screenshot(v2, 'drag-clamp');
     await ensureLanes(v2, 'airports');
     const pr = [];
     if (stored !== 420) pr.push(`stored ${stored}, expected the clamp 420 (07:00 = CNSScheduler.DAY_START)`);
-    if (toast !== 'Take-off moved to 07:00') pr.push(`toast "${toast}"`);
+    if (!(toast || '').startsWith('Take-off fixed at 07:00')) pr.push(`toast "${toast}"`);
     if (!after || after.takeoff !== 420) pr.push(`block data-takeoff ${after && after.takeoff}`);
     if (after && Math.abs(after.left - pct(420)) > 0.05) pr.push(`fleet block left ${after.left.toFixed(2)}% ≠ pct(420) ${pct(420).toFixed(2)}% (fleet lanes draw the fly phase first, at the take-off)`);
     const detail = `fleet lane "${b.lab}" key ${b.key} takeoff ${b.takeoff} → drag −${Math.min(900, b.x - 2).toFixed(0)} px → stored ${stored}, toast "${toast}", block takeoff ${after && after.takeoff} left ${after && after.left.toFixed(2)}%`;
@@ -327,7 +327,7 @@ export default async function run(ctx) {
     const ctl = await v2.eval(`({ writes: __schedWrites.length, toasts: __toasts.map(t => t.text) })`);
     await ctx.screenshot(v2, 'click-without-drag');
     const pr = [];
-    const moved = res.toasts.filter(t => /Take-off moved/.test(t));
+    const moved = res.toasts.filter(t => /Take-off (fixed|released)/.test(t));
     if (moved.length) pr.push(`a plain click toasted ${j(moved)}`);
     if (res.writes) pr.push(`a plain click wrote cns_schedule ${res.writes}× (value ${res.sched === before ? 'unchanged' : 'CHANGED'})`);
     if (res.sched !== before) pr.push(`cns_schedule changed by a plain click: ${before} → ${res.sched}`);

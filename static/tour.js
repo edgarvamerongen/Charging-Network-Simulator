@@ -479,7 +479,7 @@ window.CNSTour = (function () {
             // is brightly visible, and pin the popover to the TOP of the
             // viewport so it doesn't cover the chart.
             {
-                popover: { title: 'Rotation scheduler', description: 'Below is the time table (Gantt chart) of the airport\'s daily charging schedule. Each row is one aircraft; blue bars are flights, green bars are charging here, light-green are charges elsewhere, striped amber are queued (waiting for a charger). Drag bars to reschedule; the rest reflows to prevent overlap.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-top' },
+                popover: { title: 'Rotation scheduler', description: 'Below is the time table (Gantt chart) of the airport\'s daily charging schedule. Each row is one aircraft; blue bars are flights, green bars are charging here, light-green are charges elsewhere, striped amber are queued (waiting for a charger). Take-offs are placed automatically; drag a bar to fix one (double-click releases it) and the rest reflows around it.', side: 'over', align: 'center', popoverClass: 'cns-tour-popover cns-tour-popover-top' },
                 onHighlightStarted: async () => {
                     await _ensureDrawerOpen(); await _ensureSchedulerOpen();
                     document.body.classList.add('tour-scheduler-step');

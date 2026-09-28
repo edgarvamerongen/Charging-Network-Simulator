@@ -1,6 +1,6 @@
 /*
  * CNSScheduler.whatIfChargers — the read-only "what if this airport had N chargers" run behind the
- * v2 sizing prototype. It must answer (more chargers → shorter queue), agree with the real run for
+ * v2 sizing prototype. It must answer (more chargers → shorter queue delay), agree with the real run for
  * the real fleet, and leave storage and the scheduler's caches exactly as it found them.
  *
  * Server up on :5055 for /api/simulate geometry (like js_interim_charging). Skips when it is down.
@@ -27,7 +27,8 @@ try {
 if (skip) test('whatIfChargers', { skip }, () => {});
 else {
   const P = PLANES.beta_plane;
-  // Six separate aircraft all leave EHAM at 07:00 and turn at EHGG: one charger there makes them queue.
+  // Six separate aircraft leave EHAM and turn at EHGG. Home has a charger each, so EHGG's single charger
+  // is the queue (with one at home too, the home recharges would pace the departures instead).
   const trip = { id: 't-q', planeId: 'beta_plane', planeName: P.name, tripType: 'retour',
     originIdent: 'EHAM', originName: AP.EHAM.name, originLat: AP.EHAM.lat, originLon: AP.EHAM.lon,
     destIdent: 'EHGG', destName: AP.EHGG.name, destLat: AP.EHGG.lat, destLon: AP.EHGG.lon,
@@ -35,9 +36,9 @@ else {
     legEnergy: data.leg_energy_kwh, flightTimeH: data.flight_time_h, freqN: 6, freqUnit: 'day', fleetMode: 'separate' };
   const S = loadStack(); S.CNSSettings.reset();
   S.localStorage.setItem('cns_folder', JSON.stringify([trip]));
-  S.localStorage.setItem('cns_airport_cfg', JSON.stringify({ EHGG: { chargers: ['dc_250'] } }));
+  S.localStorage.setItem('cns_airport_cfg', JSON.stringify({ EHGG: { chargers: ['dc_250'] }, EHAM: { chargers: new Array(6).fill('dc_250') } }));
   S.CNSScheduler.init({ chargers: CHARGERS });
-  const queueAt = ident => { let q = 0; S.CNSScheduler.runGlobal().lanes.forEach(L => L.rotations.forEach(r => r.phases.forEach(ph => { if (ph.kind === 'charge' && ph.ident === ident) q += ph.wait || 0; }))); return q; };
+  const queueAt = ident => { let q = 0; S.CNSScheduler.runGlobal().lanes.forEach(L => L.rotations.forEach(r => r.phases.forEach(ph => { if (ph.kind === 'charge' && ph.ident === ident) q += ph.queue || 0; }))); return q; };
 
   S.CNSScheduler.runGlobal(); S.CNSScheduler.runGlobal();   // the first run writes the default take-off schedule, the second settles on it
   const g0 = S.CNSScheduler.runGlobal(), q1 = queueAt('EHGG');

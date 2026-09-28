@@ -732,7 +732,7 @@ export default async function run(ctx) {
     const r = ctx.state.hub || await v2.eval(`({ folder: ${FOLDER}, cfg: ${CFG}, sched: Object.keys(JSON.parse(localStorage.getItem('cns_schedule') || '{}')) })`);
     const hubAps = new Set(['EHLE', ...(await v2.eval(`CNSUI.network.SCENARIOS.hub.routes.map(x => x[1])`))]);
     const staleCfg = Object.keys(r.cfg).filter(k => !hubAps.has(k));
-    const live = new Set(r.folder.map(t => t.id)); const staleSched = r.sched.filter(id => !live.has(id));
+    const live = new Set(r.folder.map(t => t.id)); const staleSched = r.sched.filter(id => id !== '_v' && !live.has(id));
     const probs = [];
     if (staleCfg.length) probs.push(`cns_airport_cfg still holds ${J(staleCfg)} from the previous (training) network: ${J(staleCfg.map(k => r.cfg[k]))}`);
     if (staleSched.length) probs.push(`cns_schedule still holds ${staleSched.length} take-off arrays for trips that no longer exist (${J(staleSched.slice(0, 3))})`);
