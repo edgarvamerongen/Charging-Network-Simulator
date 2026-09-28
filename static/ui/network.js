@@ -212,10 +212,12 @@
     S.filter = ''; S.openAp = {};
     UI.setMode('plan'); UI.toast(`Loading ${sc.title}…`);
     // One render + one fit for the whole batch, not one per route (each simulate/add re-renders the shell).
-    const _render = UI.render, _fit = UI.map.fitNet, _drawNet = UI.map.drawNet, _drawRoute = UI.map.drawRoute;
+    // ensureRouteVisible too: each batch simulate would otherwise animate the map to its own route, and the last
+    // animation lands AFTER the network fit below (a Leaflet zoom transition re-applies its target when it ends).
+    const _render = UI.render, _fit = UI.map.fitNet, _drawNet = UI.map.drawNet, _drawRoute = UI.map.drawRoute, _ensure = UI.map.ensureRouteVisible;
     const fails = [];
     try {
-      UI.render = () => {}; UI.map.fitNet = () => {}; UI.map.drawNet = () => {}; UI.map.drawRoute = () => {};
+      UI.render = () => {}; UI.map.fitNet = () => {}; UI.map.drawNet = () => {}; UI.map.drawRoute = () => {}; UI.map.ensureRouteVisible = () => {};
       for (const [o, d, pl, fr, per, tr] of sc.routes) {
         if (!by[o] || !by[d]) { fails.push(`${o}→${d}: airport not in the catalog`); continue; }
         const planeId = resolvePlane(pl);
@@ -226,9 +228,11 @@
         await UI.plan.simulate();
         if (S.result) UI.plan.addToNetwork(); else fails.push(`${o}→${d} ${planeId}: ${S.err || 'no result'}`);
       }
-    } finally { UI.render = _render; UI.map.fitNet = _fit; UI.map.drawNet = _drawNet; UI.map.drawRoute = _drawRoute; }
+    } finally { UI.render = _render; UI.map.fitNet = _fit; UI.map.drawNet = _drawNet; UI.map.drawRoute = _drawRoute; UI.map.ensureRouteVisible = _ensure; }
     UI.plan.resetForm(); if (sc.focus) S.openAp[sc.focus] = true;
-    UI.setMode('network'); $('#drawer').classList.add('open'); UI.timeline.render();
+    // Open the timeline BEFORE Network mode fits the map, so the fit knows the drawer's height and
+    // nothing lands behind it (fitting first framed the network, then the drawer covered half of it).
+    $('#drawer').classList.add('open'); UI.timeline.render(); UI.setMode('network');
     const n = D().loadFolder().length;
     if (fails.length) console.warn('[v2] scenario ' + key + ': ' + fails.length + ' route(s) failed —', fails);
     UI.toast(`${sc.title} loaded: ${n} route${n === 1 ? '' : 's'}` + (fails.length ? ` · ${fails.length} failed: ${fails[0]}` : ''));
