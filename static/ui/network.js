@@ -82,17 +82,17 @@
     const pk = fmt.prefixFor(z.cols.map(c => c.peak)), pkOf = c => fmt.as(c.peak, pk, 'W');
     const cls = c => `${c.now ? ' now' : ''}${rec && c.n === rec.n ? ' rec' : ''}`;
     const row = (label, f) => `<tr><td>${label}</td>${z.cols.map(c => `<td class="r num${cls(c)}">${f(c)}</td>`).join('')}</tr>`;
-    const msg = !rec ? `Even ${last.n} chargers leave a wait of ${hm(last.maxWait)} h: spread the departures or use a faster charger.`
-      : rec.n === z.cur ? `The ${z.cur} charger${z.cur === 1 ? '' : 's'} here keep the longest wait under ${lim} min.`
-      : rec.n > z.cur ? `${rec.n} chargers keep the longest wait under ${lim} min (${hm(rec.maxWait)} h) at a ${pkOf(rec).n} ${pkOf(rec).u} peak.`
-      : `${rec.n} charger${rec.n === 1 ? '' : 's'} would already keep the longest wait under ${lim} min.`;
-    return `${now && now.maxWait > lim ? `<div class="alert">Aircraft wait up to ${hm(now.maxWait)} h for a charger here.</div>` : ''}
+    const msg = !rec ? `Even ${last.n} chargers leave a wait of ${hm(last.maxWait)}&nbsp;h: spread the departures or use a faster charger.`
+      : rec.n === z.cur ? `The ${z.cur} charger${z.cur === 1 ? '' : 's'} here keep the longest wait under ${lim}&nbsp;min.`
+      : rec.n > z.cur ? `${rec.n} chargers keep the longest wait under ${lim}&nbsp;min (${hm(rec.maxWait)}&nbsp;h) at a ${pkOf(rec).n}&nbsp;${pkOf(rec).u} peak.`
+      : `${rec.n} charger${rec.n === 1 ? '' : 's'} would already keep the longest wait under ${lim}&nbsp;min.`;
+    return `${now && now.maxWait > lim ? `<div class="alert">Aircraft wait up to ${hm(now.maxWait)}&nbsp;h for a charger here.</div>` : ''}
       <div class="size"><div class="lbl"><span class="cap">Chargers needed</span><span class="hint" style="margin:0">longest wait under <select class="sel" data-act="waitOk">${[5, 10, 15, 30, 60].map(v => `<option value="${v}" ${v === lim ? 'selected' : ''}>${v} min</option>`).join('')}</select></span></div>
       <table class="tbl"><tr><th>Chargers</th>${z.cols.map(c => `<th class="r${cls(c)}">${c.n}${c.now ? ' now' : ''}</th>`).join('')}</tr>
         ${row('Longest wait', c => hm(c.maxWait))}${row('Queue per day', c => hm(c.queue))}${row(`Peak load, <span class="u">${pk}W</span>`, c => pkOf(c).n)}</table>
       <div class="size-rec"><span>${msg}</span>${rec && rec.n !== z.cur ? `<button class="btn sm p" data-act="useN" data-ap="${a.ident}" data-ids="${rec.ids.join(',')}">Use ${rec.n}</button>` : ''}</div></div>`;
   }
-  const waitTag = a => { if (!SC()) return ''; const w = waitsAt(a.ident); return w.maxWait > (S.waitOk || 15) ? ` · <span style="color:var(--danger)">waits up to ${hm(w.maxWait)} h</span>` : ''; };
+  const waitTag = a => { if (!SC()) return ''; const w = waitsAt(a.ident); return w.maxWait > (S.waitOk || 15) ? ` · <span style="color:var(--danger)">waits up to ${hm(w.maxWait)}&nbsp;h</span>` : ''; };
 
   // ---- render ----
   function airportPane(a) {
