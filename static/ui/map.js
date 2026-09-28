@@ -12,7 +12,10 @@
   function popupHtml(a) {
     const rw = a.rwy_paved_m || a.rwy_grass_m || a.rwy_unknown_m; const p = UI.plane();
     const fit = (window.CNSRunway && CNSRunway.suitability && p) ? CNSRunway.suitability(p, a) : null;
-    const fitHtml = fit ? `<div class="m ${fit.state === 'ok' ? '' : fit.state === 'unknown' ? '' : 'bad'}">${UI.esc(UI.planeShort(p.name))}: ${UI.esc(fit.label || fit.state)}</div>` : '';
+    const nm = UI.esc(UI.planeShort(p ? p.name : '')), need = fit && /need (.+)$/.exec(fit.label || '');
+    const fitTxt = !fit ? '' : fit.state === 'ok' ? `Runway suits the ${nm}` : fit.state === 'unknown' ? `Runway fit for the ${nm}: no data`
+      : fit.state === 'short' ? `Runway too short for the ${nm}${need ? ' (needs ' + UI.esc(need[1]) + ')' : ''}` : `No suitable runway for the ${nm}`;
+    const fitHtml = fit ? `<div class="m ${fit.state === 'ok' || fit.state === 'unknown' ? '' : 'bad'}">${fitTxt}</div>` : '';
     return `<div class="pp"><img class="pp-photo" src="/api/airport-photo/${encodeURIComponent(a.ident)}" alt="" onerror="this.remove()"><div class="t"><span>${UI.esc(a.name)}</span><span class="ic2">${UI.esc(a.ident)}${a.iata_code ? ' · ' + UI.esc(a.iata_code) : ''}</span></div>
       <div class="m">${UI.esc(a.municipality || '')}${a.municipality ? ' · ' : ''}${UI.esc((a.type || '').replace('_', ' '))}${rw ? ' · runway ' + Math.round(rw) + ' m' : ' · no runway data'}</div>${fitHtml}
       <div class="acts"><button onclick="setOrigin(airportByIdent['${UI.esc(a.ident)}']);CNSUI.map.closePopup()">Departure</button><button onclick="setDest(airportByIdent['${UI.esc(a.ident)}']);CNSUI.map.closePopup()">Destination</button><button onclick="setStop(airportByIdent['${UI.esc(a.ident)}']);CNSUI.map.closePopup()">Stop</button></div></div>`;
@@ -24,6 +27,13 @@
     // (index.html:2486, 4310) the dots get ONE shared canvas renderer and everything else
     // draws as SVG, whose root Leaflet marks pointer-events:none — it can never cover a dot.
     map = L.map('map', { zoomControl: false, zoomSnap: .25 }).setView([51.6, 6.5], 6.25);
+    map.attributionControl.setPosition('bottomleft');   // bottom-right sat under the timeline bar; the tile terms want it visible
+    // M2: one control (and the F key) frames the route in Plan mode, the network in Network mode.
+    const FitCtl = L.Control.extend({ options: { position: 'topright' }, onAdd() {
+      const b = L.DomUtil.create('button', 'map-fit'); b.type = 'button'; b.title = 'Fit the map to the route or network (F)'; b.setAttribute('aria-label', 'Fit the map to the route or network');
+      b.innerHTML = '<svg class="ic"><use href="#i-fit"/></svg>Fit<kbd>F</kbd>';
+      L.DomEvent.disableClickPropagation(b); L.DomEvent.on(b, 'click', e => { L.DomEvent.stop(e); fit(); }); return b; } });
+    new FitCtl().addTo(map);
     const key = (UI.D && UI.D.cartoKeyQs) || '';
     BASES = {
       light: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Esri, HERE, Garmin, © OSM' }),
@@ -97,19 +107,41 @@
   }
   function drawRoute(fit) {
     routeLayer.clearLayers(); const c = UI.chain();
-    if (S.trip === 'training' && S.origin) { const p = UI.plane(); const r = ((p.training_range_km || 60) / 2) * 1000; routeLayer.addLayer(L.circle(UI.ll(S.origin), { pane: 'rt', interactive: false, radius: r, color: '#d84c26', weight: 2, fillColor: '#d84c26', fillOpacity: .06, dashArray: '4 6' })); if (fit) map.fitBounds(L.latLng(UI.ll(S.origin)).toBounds(r * 2.6), { paddingTopLeft: [360, 60], animate: false }); return; }
+    if (S.trip === 'training' && S.origin) { const p = UI.plane(); const r = ((p.training_range_km || 60) / 2) * 1000; routeLayer.addLayer(L.circle(UI.ll(S.origin), { pane: 'rt', interactive: false, radius: r, color: '#c4421f', weight: 2, fillColor: '#c4421f', fillOpacity: .06, dashArray: '4 6' })); if (fit) fitRoute(false); return; }
     if (c.length < 2) return;
     const pts = c.map(UI.ll); const path = arcPath(pts);
     routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#fff', weight: 5, opacity: .95, lineCap: 'round', lineJoin: 'round' }));
-    routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#d84c26', weight: 2, opacity: 1, lineCap: 'round', lineJoin: 'round' }));
+    routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#c4421f', weight: 2, opacity: 1, lineCap: 'round', lineJoin: 'round' }));
     if (S.trip === 'retour') routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#fff', weight: 2, opacity: .9, dashArray: '6 8', lineCap: 'butt' }));
     c.forEach((a, i) => { const stop = i > 0 && i < c.length - 1; routeLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="ep${stop ? ' stop' : ''}"></div>`, iconSize: [11, 11], iconAnchor: [5.5, 5.5] }) })); });
     const legs = UI.plan && UI.plan.legsForMap ? UI.plan.legsForMap() : null;
     for (let i = 0; S.showLabels && i < pts.length - 1; i++) { const mid = arcMid(pts[i], pts[i + 1]); /* on the arc, not the chord */ let txt = UI.fmt.dist(dispKm(pts[i], pts[i + 1]));
       if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.h(legs[i].flightMin)} h · ${UI.fmt.r(legs[i].energyKwh)} kWh`;
       routeLayer.addLayer(L.marker(mid, { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="leglbl num">${txt}</div>`, iconSize: [0, 0] }) })); }
-    if (fit) map.fitBounds(L.latLngBounds(path), { paddingTopLeft: [460, 60], paddingBottomRight: [40, drawerPad()], maxZoom: 9, animate: false });
+    if (fit) fitRoute(false);
   }
+  /** Frame the plan route (a training flight: its circuit area) into the map the rail and the timeline leave free. */
+  function fitRoute(animate) {
+    const c = UI.chain(); if (!c.length) return;
+    const pad = { paddingTopLeft: [460, 60], paddingBottomRight: [40, drawerPad()], animate: !!animate };
+    if (S.trip === 'training' && S.origin) { const r = ((UI.plane().training_range_km || 60) / 2) * 1000; map.fitBounds(L.latLng(UI.ll(S.origin)).toBounds(r * 2.6), pad); return; }
+    if (c.length < 2) { map.panTo(UI.ll(c[0]), { animate: !!animate }); return; }
+    map.fitBounds(L.latLngBounds(arcPath(c.map(UI.ll))), Object.assign({ maxZoom: 9 }, pad));
+  }
+  /** Every airport of the plan chain inside the free map: right of the rail, above the timeline, on screen. */
+  function routeInView() {
+    const c = UI.chain(); if (!c.length) return true;
+    const size = map.getSize(), bottom = size.y - drawerPad() + 24;   // drawerPad() adds 24 px of air below the drawer edge
+    return c.every(a => { const pt = map.latLngToContainerPoint(UI.ll(a)); return pt.x >= 444 && pt.x <= size.x - 12 && pt.y >= 12 && pt.y <= bottom; });
+  }
+  function ensureRouteVisible() { if (!routeInView()) fitRoute(true); }
+  function fit() { if (S.mode === 'network') fitNet(); else fitRoute(true); }
+  if (typeof document !== 'undefined') document.addEventListener('keydown', e => {
+    if ((e.key !== 'f' && e.key !== 'F') || e.metaKey || e.ctrlKey || e.altKey || !map) return;
+    if (e.target && e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
+    if (!document.getElementById('modal').hidden || !document.getElementById('cmdk').hidden) return;
+    e.preventDefault(); fit();
+  });
   function drawNet() {
     netLayer.clearLayers(); if (!S.showNet || !window.CNSDemand) return;
     CNSDemand.loadFolder().forEach(t => { const pts = [[t.originLat, t.originLon], ...(t.stops || []).map(s => [s.lat, s.lon]), [t.destLat, t.destLon]].filter(p => p[0] != null && p[1] != null);
@@ -135,6 +167,6 @@
   // which setMode has already flipped by the time it hides/shows the route layer).
   function hideRoute() { if (map.hasLayer(routeLayer)) map.removeLayer(routeLayer); drawAlternates(); }
   function showRoute() { if (!map.hasLayer(routeLayer)) routeLayer.addTo(map); drawAlternates(); }
-  UI.map = { init, drawAssets, drawRoute, drawNet, fitNet, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
+  UI.map = { init, drawAssets, drawRoute, drawNet, fitNet, fitRoute, fit, routeInView, ensureRouteVisible, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
              closePopup: () => map.closePopup(), hideRoute, showRoute, get map() { return map; } };
 })();

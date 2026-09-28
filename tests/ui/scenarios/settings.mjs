@@ -375,22 +375,23 @@ export default async function run(ctx) {
     return { detail: `label "${sl.label}", stored 1; result "${a.costV}" · "${a.costM}" (was "${b.costM}"); ledger ${led.ident}: "${led.tile}", "${led.hint}" for ${led.total.toFixed(2)} kWh; classic "${c.hlRevenueSub}"`, repro: 'v2: settings → tariff slider 100; result .cost .m; add the flight, Network mode, expand the airport: .tiles3 .s', evidence: [ctx.shot('tariff-result'), ctx.shot('tariff-ledger'), file] };
   }, { retry: 0 });
 
-  // ---- reset: confirm stub → loadAll() equals DEFAULTS; a declined confirm changes nothing ----
+  // ---- reset: acts at once (no native confirm) → loadAll() equals DEFAULTS; the toast's Undo restores the state ----
   await ctx.check('reset', async () => {
     await save({ chargerEfficiency: { enabled: true, value: 0.9 }, chargeTaper: { threshold: 0.85 }, chargeRate: { value: 1.25 }, climbModel: { enabled: false } });
     const st0 = await openDialog(); if (same(st0.loadAll, st0.defaults)) throw new Error('precondition: state already equals DEFAULTS');
-    await v2.eval(`__cns.confirmResult = false; true`); const n0 = await v2.eval('__cns.confirms.length');
+    const n0 = await v2.eval('__cns.confirms.length');
     await v2.click('#modalBox [data-ms=reset]'); await v2.sleep(250);
-    const declined = await dlg(); const n1 = await v2.eval('__cns.confirms.length');
-    await v2.eval(`__cns.confirmResult = true; true`);
+    const msg = await v2.eval(`document.querySelector('#toast').textContent`);
+    await v2.eval(`document.querySelector('#toast .toast-act').click(); true`); await v2.sleep(250);
+    const declined = await dlg();   // after Undo: the state before the reset
     await v2.click('#modalBox [data-ms=reset]'); await v2.sleep(400);
-    const st = await dlg(); const n2 = await v2.eval('__cns.confirms.length'); const msg = await v2.eval('__cns.confirms.at(-1)');
+    const st = await dlg(); const n2 = await v2.eval('__cns.confirms.length');
     await ctx.screenshot(v2, 'reset');
     const c = await classicApply();
-    const file = dump('reset', { before: { loadAll: st0.loadAll, badge: st0.badge }, declined: { loadAll: declined.loadAll, badge: declined.badge }, after: { loadAll: st.loadAll, stored: st.stored, badge: st.badge, rows: st.rows }, confirms: [n0, n1, n2, msg], classic: c });
+    const file = dump('reset', { before: { loadAll: st0.loadAll, badge: st0.badge }, undone: { loadAll: declined.loadAll, badge: declined.badge }, after: { loadAll: st.loadAll, stored: st.stored, badge: st.badge, rows: st.rows }, confirms: [n0, n2], toast: msg, classic: c });
     const fails = [];
-    if (n1 !== n0 + 1 || !same(declined.loadAll, st0.loadAll)) fails.push(`declined confirm: ${n1 - n0} prompt(s), state ${same(declined.loadAll, st0.loadAll) ? 'kept' : 'CHANGED'}`);
-    if (n2 !== n1 + 1 || !/reset/i.test(msg || '')) fails.push(`accepted confirm: ${n2 - n1} prompt(s) "${msg}"`);
+    if (!same(declined.loadAll, st0.loadAll)) fails.push('Undo did not restore the settings');
+    if (n2 !== n0 || !/reset/i.test(msg || '')) fails.push(`native confirm asked ${n2 - n0}× or no reset toast ("${msg}")`);
     if (!same(st.loadAll, st.defaults)) fails.push('loadAll() ≠ DEFAULTS after reset');
     if (!same(st.stored, st.defaults)) fails.push('stored blob ≠ DEFAULTS after reset');
     if (!st.badge || st.badge.text !== '6' || st.badge.hidden) fails.push(`badge ${j(st.badge)} (want 6 visible)`);
@@ -399,7 +400,7 @@ export default async function run(ctx) {
     if (!same(c.loadAll, st.defaults) || c.nFlags !== 6) fails.push(`classic loadAll ≠ DEFAULTS or flags ${c.nFlags}`);
     if (fails.length) throw new Error(fails.join('; ') + ' — ' + file);
     await closeDialog();
-    return { detail: `declined confirm kept the state; accepted ("${msg}") → loadAll() = DEFAULTS, blob = DEFAULTS, badge 6, rows re-rendered; classic ${c.nFlags} flags`, repro: 'v2: settings → real click [data-ms=reset] with window.confirm stubbed false, then true', evidence: [ctx.shot('reset'), file] };
+    return { detail: `reset ("${msg}") → Undo restored the state; reset again → loadAll() = DEFAULTS, blob = DEFAULTS, badge 6, rows re-rendered; classic ${c.nFlags} flags`, repro: 'v2: settings → real click [data-ms=reset], toast Undo, [data-ms=reset] again', evidence: [ctx.shot('reset'), file] };
   }, { retry: 0 });
 
   // ---- example line names the SELECTED aircraft (classic #rsClimbEg: "<name>: +N kWh per climb — full on legs ≥ M km") --

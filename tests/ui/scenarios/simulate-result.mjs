@@ -50,11 +50,11 @@ export default async function run(ctx) {
     CNSUI.plan.onFormChange(false);
     return { o: S.origin && S.origin.ident, d: S.dest && S.dest.ident, stops: S.stops.map(s => s && s.ident), planned: S.planned.stops.map(s => s.ident), closing: S.planned.closing.map(s => s.ident), trip: S.trip, plane: S.planeId, charger: S.chargerId, freq: S.freq, per: S.per, rail: S.rail, plannedError: S.planned.error }; })()`);
   const v2State = () => v2.eval(`(function(){ const S = CNSUI.S; return { rail: S.rail, mode: S.mode, o: S.origin && S.origin.ident, d: S.dest && S.dest.ident, stops: S.stops.map(s => s && s.ident), trip: S.trip, freq: S.freq, per: S.per, plane: S.planeId, charger: S.chargerId, result: !!S.result, profile: !!S.profile }; })()`);
-  /** The battery chart as rendered: circles, the "NN %" labels, charge segments (stroke #d84c26), the "lowest" label. */
+  /** The battery chart as rendered: circles, the "NN %" labels, charge segments (stroke #c4421f), the "lowest" label. */
   const socState = () => v2.eval(`(function(){ const d = CNSUI.plan.derive(); const svg = document.querySelector('#railBody .soc svg'); const ch = d ? d.charges.map(c => ({ at: c.atIndex, ident: c.ident, kwh: +(+c.energyKwh || 0).toFixed(2), role: c.role })) : [];
     if (!svg) return { present: false, legs: d ? d.legs.length : null, charges: ch };
     const vals = [...svg.querySelectorAll('text')].map(t => t.textContent.trim()).filter(t => /^-?\\d+ %/.test(t)).map(t => parseInt(t, 10));
-    const chg = [...svg.querySelectorAll('path')].filter(p => p.getAttribute('stroke') === '#d84c26').length; const fly = [...svg.querySelectorAll('path')].filter(p => p.getAttribute('stroke') === '#32326E').length;
+    const chg = [...svg.querySelectorAll('path')].filter(p => p.getAttribute('stroke') === '#c4421f').length; const fly = [...svg.querySelectorAll('path')].filter(p => p.getAttribute('stroke') === '#32326E').length;
     const low = (document.querySelector('#railBody .soc .lbl .r b') || {}).textContent;
     return { present: true, legs: d.legs.length, charges: ch, circles: svg.querySelectorAll('circle').length, vals, chgSegs: chg, flySegs: fly, low: parseInt(low, 10), lowTxt: (document.querySelector('#railBody .soc .lbl .r') || {}).textContent || '' }; })()`);
 
@@ -91,9 +91,13 @@ export default async function run(ctx) {
       // energy: v2 prints the megawatt rule (0.14 MWh for 138 kWh) — equal within that rounding (2 dp → ±5, 1 dp → ±50)
       const tolFor = k => (k === 'energyKwh' && /MWh/.test(String(v.shown.stats[0]))) ? (shown.energyKwh[1] >= 1000 ? 50 : 5) : 0;
       for (const [k, [a, b]] of Object.entries(shown)) if (!(Number.isFinite(a) && Math.abs(a - b) <= tolFor(k))) fails.push(`shown ${k}: classic ${a} vs v2 ${b}`);
-      const cRevDay = ctx.num(c.shown.hlRevenue) / (/week/.test(c.shown.hlRevenue) ? 7 : 1), vRevDay = ctx.num(v.shown.cost);
-      ev.revenueDay = { classic: cRevDay, v2: vRevDay, classicText: c.shown.hlRevenue, v2Text: v.shown.cost };
-      if (!ctx.close(cRevDay, vRevDay, 0.01)) fails.push(`revenue/day: classic ${cRevDay} ("${c.shown.hlRevenue}") vs v2 ${vRevDay} ("${v.shown.cost}")`);
+      // Design sweep 2026-09-28: v2 prices the EXACT charged kWh, like its network ledger; the classic prices the displayed,
+      // rounded-up kWh. So v2 = charged × rate × flights/day, and the classic sits at most one kWh's worth above it.
+      const rate = await v2.eval(`CNSSettings.chargeRate()`), fpd = cfg.freqUnit === 'week' ? (cfg.freqN || 1) / 7 : (cfg.freqN || 1);
+      const cRevDay = ctx.num(c.shown.hlRevenue) / (/week/.test(c.shown.hlRevenue) ? 7 : 1), vRevDay = ctx.num(v.shown.cost), vExact = v.engine.charged * rate * fpd;
+      ev.revenueDay = { classic: cRevDay, v2: vRevDay, v2Exact: +vExact.toFixed(4), classicText: c.shown.hlRevenue, v2Text: v.shown.cost };
+      if (!ctx.close(vRevDay, vExact, 0.01)) fails.push(`revenue/day: v2 ${vRevDay} ("${v.shown.cost}") vs charged × rate ${vExact.toFixed(2)}`);
+      if (!(cRevDay - vRevDay >= -0.01 && cRevDay - vRevDay <= rate * fpd + 0.01)) fails.push(`revenue/day: classic ${cRevDay} ("${c.shown.hlRevenue}") is not within one rounded kWh of v2 ${vRevDay}`);
     }
     const file = dump(label, ev);
     const summary = `classic ${c.error ? 'ERR ' + c.error : `used ${f2(c.engine.energyUsedKwh)} kWh · fly ${f2(c.engine.flightMin)} · charge ${f2(c.engine.chargeMin)} min · ${c.shown.hlUsed}/${c.shown.hlFlight}/${c.shown.hlTime} · ${c.shown.hlRevenue}`} | v2 ${v.err ? 'ERR ' + v.err : `used ${f2(v.engine.used)} · fly ${f2(v.engine.flyMin)} · charge ${f2(v.engine.chargeMin)} · ${v.shown.stats.join('/')} · ${v.shown.cost}`} | stops classic ${JSON.stringify(cPlanned.planned)} v2 ${JSON.stringify(vset.planned)} | POST ${resp && resp.status}`;
@@ -174,21 +178,22 @@ export default async function run(ctx) {
       await v2.waitFor(`CNSUI.S.freq === ${n} && CNSUI.S.per === '${per}' && !!document.querySelector('#railFoot [data-act=simulate]')`, 3000);
       const v = await ctx.v2Simulate(v2);
       if (v.err) throw new Error(`v2 simulate at ${n}/${per}: ${v.err}`);
-      const H = ctx.num(v.shown.cost), N = ctx.num(v.shown.costSub), R = rateOf(v.shown.costSub), fpd = per === 'day' ? n : n / 7;
-      const perDay = Math.abs(N * R - H) <= 0.01, perFlight = Math.abs(N * R * fpd - H) <= 0.01;
-      const calc = await v2.eval(`(function(){ const p = document.querySelector('#railBody .acc[data-acc=calc] .pane'); return p ? [...p.children].map(e => e.textContent.trim()).find(t => /^Cost/.test(t)) || '' : ''; })()`);
+      // The headline is revenue on the exact charged kWh (design sweep 2026-09-28): H = charged × R × flights/day.
+      const H = ctx.num(v.shown.cost), R = rateOf(v.shown.costSub), fpd = per === 'day' ? n : n / 7;
+      const exact = v.engine.charged * R * fpd, audits = Math.abs(exact - H) <= 0.01;
+      const calc = await v2.eval(`(function(){ const p = document.querySelector('#railBody .acc[data-acc=calc] .pane'); return p ? [...p.children].map(e => e.textContent.trim()).find(t => /^Revenue/.test(t)) || '' : ''; })()`);
       await classic.setValue('#freqN', String(n), ['input', 'change']); await classic.setValue('#freqUnit', per, ['change']);
       const c = await ctx.classicSimulate(classic);
       if (c.error) throw new Error(`classic simulate at ${n}/${per}: ${c.error}`);
       const cRev = ctx.num(c.shown.hlRevenue), cUnit = /week/.test(c.shown.hlRevenue) ? 'week' : 'day', cDay = cRev / (cUnit === 'week' ? 7 : 1);
       const cN = ctx.num(c.shown.hlRevenueSub), cR = rateOf(c.shown.hlRevenueSub), cMul = +((c.shown.hlRevenueSub.match(/(\d+)×/) || [0, 1])[1]);
       const cAudit = Math.abs(cN * cR * cMul - cRev) <= 0.01;
-      runs.push({ n, per, fpd, v2: { headline: v.shown.cost, sub: v.shown.costSub, calcLine: calc, H, N, R, NxR: +(N * R).toFixed(4), NxRxFpd: +(N * R * fpd).toFixed(4), auditPerDay: perDay, auditPerFlight: perFlight, engineCharged: v.engine.charged, engineUsed: v.engine.used }, classic: { headline: c.shown.hlRevenue, sub: c.shown.hlRevenueSub, cRev, cUnit, cDay: +cDay.toFixed(4), cN, cR, cMul, audit: cAudit }, parityDay: Math.abs(cDay - H) <= 0.01 });
+      runs.push({ n, per, fpd, v2: { headline: v.shown.cost, sub: v.shown.costSub, calcLine: calc, H, R, exact: +exact.toFixed(4), audits, engineCharged: v.engine.charged, engineUsed: v.engine.used }, classic: { headline: c.shown.hlRevenue, sub: c.shown.hlRevenueSub, cRev, cUnit, cDay: +cDay.toFixed(4), cN, cR, cMul, audit: cAudit }, parityDay: cDay - H >= -0.01 && cDay - H <= R * fpd + 0.01 });
       await ctx.screenshot(v2, `cost-${n}-${per}`);
     }
     const file = dump('cost-audit', runs);
-    const bad = runs.filter(r => !(r.v2.auditPerDay || r.v2.auditPerFlight) || !r.parityDay || !r.classic.audit);
-    const line = r => `${r.n}/${r.per}: v2 "${r.v2.headline}" sub "${r.v2.sub}" → N×r=${r.v2.NxR.toFixed(2)}, N×r×fpd=${r.v2.NxRxFpd.toFixed(2)} (${r.v2.auditPerDay || r.v2.auditPerFlight ? 'audits' : 'DOES NOT AUDIT'}); classic "${r.classic.headline}" = ${r.classic.cDay.toFixed(2)}/day (${r.classic.audit ? 'audits' : 'does not audit'}); day parity ${r.parityDay ? 'ok' : 'FAIL'}`;
+    const bad = runs.filter(r => !r.v2.audits || !r.parityDay || !r.classic.audit);
+    const line = r => `${r.n}/${r.per}: v2 "${r.v2.headline}" = ${r.v2.engineCharged.toFixed(2)} kWh × €${r.v2.R} × ${r.fpd.toFixed(3)} = ${r.v2.exact.toFixed(2)} (${r.v2.audits ? 'audits' : 'DOES NOT AUDIT'}); classic "${r.classic.headline}" = ${r.classic.cDay.toFixed(2)}/day (${r.classic.audit ? 'audits' : 'does not audit'}); within one rounded kWh ${r.parityDay ? 'ok' : 'FAIL'}`;
     if (bad.length) throw new Error(bad.map(line).join(' || ') + ' — ' + file);
     return { detail: runs.map(line).join(' || '), repro: 'v2: Edit → freq input + per segment → Simulate; read .cost .v and .cost .m; classic #freqN/#freqUnit → Simulate', evidence: [file, ...runs.map(r => ctx.shot(`cost-${r.n}-${r.per}`))] };
   }, { retry: 0 });

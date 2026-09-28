@@ -72,6 +72,7 @@
       ['Simulate the current route', () => { UI.setMode('plan'); UI.plan.simulate(); }, '↵'],
       S.result ? ['Add the result to the network', () => UI.plan.addToNetwork()] : null,
       [S.mode === 'network' ? 'Switch to Plan mode' : 'Switch to Network mode', () => UI.setMode(S.mode === 'network' ? 'plan' : 'network'), 'N'],
+      [S.mode === 'network' ? 'Fit the map to the network' : 'Fit the map to the route', () => UI.map.fit(), 'F'],
       ['Basemap: Light', () => $('#mapDd [data-base=light]').click()], ['Basemap: Street', () => $('#mapDd [data-base=street]').click()], ['Basemap: Satellite', () => $('#mapDd [data-base=sat]').click()],
       ['Units: kilometres', () => $('#unitSeg [data-u=km]').click()], ['Units: nautical miles', () => $('#unitSeg [data-u=nm]').click()],
       ['Export demand workbook (XLSX)', () => runExport('xlsx', $('#expBtn')), '⇧X'], ['Share this route', () => runExport('share'), '⇧L'], ['Share the network build', () => runExport('build')],

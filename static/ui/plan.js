@@ -30,13 +30,15 @@
   function aircraftHtml(p, reach, fits, pickHtml) {
     const AC = UI.aircraft, F = S.acFilters; const vis = AC.visible(F); const g = AC.groupOf(p.id); const idx = vis.findIndex(x => g && x.key === g.key);
     const climb = (window.CNSFlight && CNSFlight.climbParams) ? CNSFlight.climbParams(p) : { applies: false };
-    const usage = (p.battery_kwh && p.range_km) ? p.battery_kwh / p.range_km * 100 : 0;
+    // With the climb model on, the engine burns the CRUISE rate per km plus the climb overhead per leg
+    // (flight-model.js climbParams), so that is the rate to print next to '+N kWh climb' (classic index.html:3925).
+    const usage = climb.applies ? climb.cruisePerKm * 100 : (p.battery_kwh && p.range_km) ? p.battery_kwh / p.range_km * 100 : 0;
     const st = String(p.status || ''), stCls = st.toLowerCase().replace(/[^a-z0-9]+/g, '-'), cert = p.certification_year ? ' · cert. ' + esc(p.certification_year) : '';
     const hasR = r => !!g && g.entries.some(e => String(e.regime || '') === r);
     const labels = g ? [...new Set(g.entries.map(e => String(e.profile_label || '')).filter(Boolean))] : []; const modes = g ? [...new Set(g.entries.map(e => String(e.propulsion || '')).filter(Boolean))] : [];
     const dims = AC.dims(); const active = dims.map(d => F[d.key]).filter(Boolean);
     const summary = active.length ? active.map(v => esc(cap1(v))).join(' · ') : 'All aircraft';
-    const pop = S.acFilterOpen ? `<div class="ac-pop">${dims.map(d => `<div class="k">${d.key}</div><div class="chips">${d.values.map(v => { const on = F[d.key] === v; const ok = on || AC.groups().some(gg => AC.matches(gg, Object.assign({}, F, { [d.key]: v }))); return `<button class="chip ${on ? 'on' : ''} ${ok ? '' : 'dis'}" data-act="acFilter" data-dim="${d.key}" data-val="${esc(v)}" ${ok ? '' : 'disabled'}>${esc(cap1(v))}</button>`; }).join('')}</div>`).join('')}${dims.length ? '' : '<div class="hint">The catalog has nothing to filter on yet — every aircraft is the same type and propulsion.</div>'}</div>` : '';
+    const pop = S.acFilterOpen ? `<div class="ac-pop">${dims.map(d => `<div class="k">${d.key}</div><div class="chips">${d.values.map(v => { const on = F[d.key] === v; const ok = on || AC.groups().some(gg => AC.matches(gg, Object.assign({}, F, { [d.key]: v }))); return `<button class="chip ${on ? 'on' : ''} ${ok ? '' : 'dis'}" data-act="acFilter" data-dim="${d.key}" data-val="${esc(v)}" ${ok ? '' : 'disabled'}>${esc(cap1(v))}</button>`; }).join('')}</div>`).join('')}${dims.length ? '' : '<div class="hint">The catalog has nothing to filter on yet: every aircraft is the same type and propulsion.</div>'}</div>` : '';
     const img = UI.planeImg(p);
     // Regime knob: the canonical catalog values, labelled short (VFR / IFR) with the classic's
     // titles; a regime the airframe has no profile row for is greyed, never silently "off".
@@ -44,7 +46,7 @@
       const title = exists ? (r === 'IFR+reserves' ? 'Range incl. IFR reserves' : 'VFR range') : `No ${regShort(r)} profile for this aircraft in the catalog`;
       return `<button data-act="acRegime" data-v="${esc(r)}" class="${on ? 'on' : ''}" aria-pressed="${on}" title="${esc(title)}" ${exists ? '' : 'disabled'}>${esc(regShort(r))}</button>`; }).join('');
     const specLine = [p.seats != null ? p.seats + ' seats' : '', hasBatt(p) ? p.battery_kwh + ' kWh' : 'no charge', p.range_km ? fmt.r(fmt.km(p.range_km)) + ' ' + fmt.ukm() : '', p.speed_kmh ? p.speed_kmh + ' km/h' : ''].filter(Boolean).join(' · ');
-    const reachMeta = [`Reach ${fmt.r(fmt.km(reach))} of ${fmt.r(fmt.km(p.range_km || 0))} ${fmt.ukm()}`, usage ? Math.round(usage) + ' kWh/100 km' : '', climb.applies ? '+' + Math.round(climb.eMaxKwh) + ' climb' : '', S.availOverride != null ? '<b>override</b>' : ''].filter(Boolean).join(' · ');
+    const reachMeta = [`Reach ${fmt.r(fmt.km(reach))} of ${fmt.r(fmt.km(p.range_km || 0))} ${fmt.ukm()}`, usage ? Math.round(usage) + ' kWh/100 km' : '', climb.applies ? '+' + Math.round(climb.eMaxKwh) + ' kWh climb' : '', S.availOverride != null ? '<b>override</b>' : ''].filter(Boolean).join(' · ');
     return `<div class="sec acsec"><div class="lbl"><span class="cap">Aircraft</span><span class="ac-tools"><button class="fbtn" data-act="acFilters">${summary} <span class="ch">▾</span></button><button class="lnk" data-act="pick">${S.picking ? 'Close' : 'Change'}</button>${pop}</span></div>
       ${pickHtml}
       <div class="ac-stage ov"${img ? ` style="background-image:url('${esc(img)}')"` : ''}><button class="ac-arrow l" data-act="acPrev" title="Previous aircraft" ${vis.length > 1 ? '' : 'disabled'}>‹</button><button class="ac-arrow r" data-act="acNext" title="Next aircraft" ${vis.length > 1 ? '' : 'disabled'}>›</button>
@@ -116,18 +118,21 @@
     <div class="ph"><h3>Create a route</h3><div class="tools"><span class="hint" style="margin:0">${esc(regShort(p.regime || ''))}${p.range_incl_reserves ? ' · range incl. reserves' : ''}</span></div></div>
     ${aircraftHtml(p, reach, fits, pickHtml)}
     <div class="sec"><div class="lbl"><span class="cap">Route</span><button class="lnk" data-act="addStop">+ Add stop</button></div>
-      <div class="fld dr" draggable="true" data-slot="origin">${grip('origin')}<input placeholder="Departure airport" class="${acUnset('origin') ? 'ac-unset' : ''}" value="${esc(acValue('origin'))}" data-ac="origin"><span class="icao">${esc(S.origin ? S.origin.ident : '')}</span><div class="ac" id="ac-origin"></div></div>
+      <div class="fld dr${badSlot('origin')}" draggable="true" data-slot="origin">${grip('origin')}<input placeholder="Departure airport" class="${acUnset('origin') ? 'ac-unset' : ''}" value="${esc(acValue('origin'))}" data-ac="origin"><span class="icao">${esc(S.origin ? S.origin.ident : '')}</span><div class="ac" id="ac-origin"></div></div>
       ${stopsHtml}
-      ${S.trip === 'training' ? '' : `<div class="fld dr" draggable="true" data-slot="dest">${grip('dest')}<input placeholder="Destination airport" class="${acUnset('dest') ? 'ac-unset' : ''}" value="${esc(acValue('dest'))}" data-ac="dest"><span class="icao">${esc(S.dest ? S.dest.ident : '')}</span><div class="ac" id="ac-dest"></div></div>`}
+      ${S.trip === 'training' ? '' : `<div class="fld dr${badSlot('dest')}" draggable="true" data-slot="dest">${grip('dest')}<input placeholder="Destination airport" class="${acUnset('dest') ? 'ac-unset' : ''}" value="${esc(acValue('dest'))}" data-ac="dest"><span class="icao">${esc(S.dest ? S.dest.ident : '')}</span><div class="ac" id="ac-dest"></div></div>`}
       ${c.length >= 2 ? routeBlock(c, d, fits) : ''}</div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Trip type</div><div class="seg sm" data-seg="trip">${Object.keys(tripLabel).map(k => `<button data-v="${k}" class="${S.trip === k ? 'on' : ''}">${tripLabel[k]}</button>`).join('')}</div><div class="hint">${tripHint[S.trip]}</div></div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="2000" value="${S.freq}" data-act="freq" class="num"><span class="t">routes /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per === 'day' ? 'on' : ''}">day</button><button data-v="week" class="${S.per === 'week' ? 'on' : ''}">week</button></div></div></div>
     <div class="sec"><div class="lbl"><span class="cap">Charger</span><span style="display:flex;gap:10px"><button class="lnk" data-act="ccOpen">Custom</button><button class="lnk" data-act="allChargers">${S.allChargers ? 'Fewer' : 'All chargers'}</button></span></div>
       ${chList.map(x => { const im = x.image_url || (x.image ? '/pics/' + String(x.image).split('/').map(encodeURIComponent).join('/') : '');
         return `<button class="chg ${x.id === S.chargerId ? 'on' : ''}" data-act="charger" data-id="${x.id}">${im ? `<img src="${esc(im)}" alt="">` : glyph('⚡', 48, 32)}<span class="n">${esc(cName(x))}</span><span class="kw num">${kwLabel(x)}</span></button>`; }).join('')}
-      ${p.max_charge_kw && ch.power_kw > p.max_charge_kw ? `<div class="hint num">Aircraft accepts max ${p.max_charge_kw} kW — the charger is capped.</div>` : ''}</div>
-    ${S.err ? `<div class="sec err">${esc(S.err)}</div>` : ''}`;
-    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p ${S.busy ? 'busy' : ''}" data-act="simulate">${S.busy ? 'Simulating…' : 'Simulate'}</button><button class="btn i" id="planReset" data-act="reset" title="Reset"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
+      ${p.max_charge_kw && ch.power_kw > p.max_charge_kw ? `<div class="hint num">Charging is capped at ${p.max_charge_kw} kW, the aircraft's maximum.</div>` : ''}</div>
+    `;
+    // The reason Simulate cannot run sits ON the button, and any refusal sits right above it: both stay
+    // in view however far the rail is scrolled (an error at the end of the form read as a dead button).
+    const need = missingReason(), showErr = S.err && !(need && (S.errSlots || []).length);   // marked fields + the button already say it
+    $('#railFoot').innerHTML = `${showErr ? `<div class="foot-err" role="alert">${esc(S.err)}</div>` : ''}<div class="btns"><button class="btn p ${S.busy ? 'busy' : ''}" data-act="simulate"${need ? ` disabled title="${esc(need)}"` : ''}>${S.busy ? 'Simulating…' : need ? esc(need) : 'Simulate'}</button><button class="btn i" id="planReset" data-act="reset" title="Clear route" aria-label="Clear route"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
     $$('[data-ac]').forEach(inp => { const key = inp.dataset.ac; bindAc(inp, $('#ac-' + key), a => { setSlot(key, a); onFormChange(false); refocusAc(key); }); });
   }
   function routeBlock(c, d, fits) {
@@ -145,7 +150,7 @@
       ${rows}${P.error ? `<div class="err" style="margin-top:6px">${errText} ${remedyBtn} <button class="lnk" data-act="retry">Retry</button></div>` : ''}
       <div class="row" style="margin-top:8px;gap:8px"><span class="hint" style="margin:0">Prefer</span><select class="sel" data-act="bias">${BIAS.map(([k, l]) => `<option value="${k}" ${S.bias === k ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="sp" style="flex:1"></span>${S.blacklist.size ? `<button class="lnk" data-act="resuggest">Re-suggest</button>` : ''}</div></div>`;
   }
-  function onFormChange(fit) { S.acText = {}; S.result = null; S.profile = null; S.err = ''; S.rail = 'form'; if (UI.planner) UI.planner.replan(); UI.render(); UI.map.drawRoute(fit); UI.map.drawAlternates(); if (window.CNSRangeGraph && CNSRangeGraph.refresh) CNSRangeGraph.refresh(); }
+  function onFormChange(fit) { S.acText = {}; S.result = null; S.profile = null; S.err = ''; S.errSlots = []; S.rail = 'form'; if (UI.planner) UI.planner.replan(); UI.render(); UI.map.drawRoute(fit); UI.map.drawAlternates(); if (window.CNSRangeGraph && CNSRangeGraph.refresh) CNSRangeGraph.refresh(); }
 
   // ---- simulate: the classic payload + the engine profile ---------------------
   const toC = a => ({ ident: a.ident, name: a.name, lat: a.latitude_deg, lon: a.longitude_deg });
@@ -156,14 +161,24 @@
   }
   /** Every refusal clears the previous result: a stale S.result is a ghost flight waiting to be
       added with the wrong route (the classic nulls lastResult the same way, index.html:5361). */
-  function refuse(msg) { S.err = msg; S.result = null; S.profile = null; S.rail = 'form'; S.busy = false; UI.render(); }
+  function refuse(msg, slots) { S.err = msg; S.errSlots = slots || []; S.result = null; S.profile = null; S.rail = 'form'; S.busy = false; UI.render(); }
+  /** Why Simulate cannot run yet ('' when it can): the same ladder simulate() refuses on. */
+  function missingReason() {
+    if (S.trip === 'training') return S.origin ? '' : 'Set a departure airport';
+    if (!S.origin && !S.dest) return 'Set a departure and destination';
+    if (!S.origin) return 'Set a departure airport';
+    if (!S.dest) return 'Set a destination airport';
+    if (S.trip === 'circular' && !S.stops.filter(Boolean).length) return 'Add at least one stop';
+    return '';
+  }
+  const badSlot = k => (S.errSlots || []).includes(k) ? ' bad' : '';
   async function simulate() {
     // The classic's own ladder (index.html:5297-5305). Text typed over a chosen airport has already
     // dropped it (bindAc), so this is the refusal an unpicked field lands on.
     if (!S.origin || (S.trip !== 'training' && !S.dest)) {
-      return refuse(S.trip === 'training' ? 'Pick a departure airport — training flights loop around it.'
-        : S.trip === 'circular' ? 'A circular trip needs a departure and at least one stop — the last stop is the loop\'s far point.'
-        : 'Please pick both airports from the suggestions list.');
+      return refuse(S.trip === 'training' ? 'Set a departure airport. Training flights are circuits at that airport.'
+        : S.trip === 'circular' ? 'A circular trip needs a departure and at least one stop; the last stop is the far point of the loop.'
+        : 'Set a departure and a destination airport.', ['origin', 'dest'].filter(k => !S[k] && !(k === 'dest' && S.trip === 'training')));
     }
     if (S.trip === 'circular' && !S.stops.filter(Boolean).length) return refuse('A circular trip needs at least one stop.');
     // An id that is not in the catalog must be SAID, not silently swapped for another aircraft.
@@ -193,7 +208,9 @@
         j._chargerId = S.chargerId; j._freqN = Math.max(1, Math.min(2000, S.freq)); j._freqUnit = S.per; if (!j.charger) j.charger = { id: ch.id, name: ch.name, power_kw: ch.power_kw };
         S.result = j; S.profile = engineProfile(j); S.rail = 'result'; S.open = { route: true, charging: false, calc: false }; }
     } catch (e) { S.err = 'Simulate failed: ' + e.message; S.result = null; S.profile = null; S.rail = 'form'; }
-    S.busy = false; UI.render(); UI.map.drawRoute(false);   // Simulate draws the route but never re-frames the map
+    // Simulate never re-frames a map that already shows the whole route; it frames only a route that
+    // would otherwise sit under the rail, the timeline or off screen.
+    S.busy = false; UI.render(); UI.map.drawRoute(false); if (S.result) UI.map.ensureRouteVisible();
   }
   function resimulate() { if (S.result) { S.profile = engineProfile(S.result); UI.map.drawRoute(false); } }
 
@@ -206,7 +223,7 @@
   const legsForMap = () => { const d = derive(); return d ? d.legs : null; };
   function renderResult() {
     const r = S.result, d = derive(), p = UI.plane(), ch = UI.charger(); const c = UI.chain();
-    const fpd = UI.perDay({ freq: S.freq, per: S.per }); const rate = (window.CNSSettings && CNSSettings.chargeRate) ? CNSSettings.chargeRate() : 0.6; const chargedR = fmt.r(d.charged); const costDay = chargedR * fpd * rate;   // classic: revenue from the DISPLAYED (rounded-up) kWh so the sub-line audits
+    const fpd = UI.perDay({ freq: S.freq, per: S.per }); const rate = (window.CNSSettings && CNSSettings.chargeRate) ? CNSSettings.chargeRate() : 0.6; const chargedR = fmt.r(d.charged); const costDay = d.charged * fpd * rate;   // revenue on the EXACT charged kWh, like the network ledger; only the display rounds
     const climb = (window.CNSFlight && CNSFlight.climbParams) ? CNSFlight.climbParams(p) : { applies: false };
     const batt = hasBatt(p);
     const soc = batt ? UI.soc.series(d.legs, d.charges, p.battery_kwh, climb, { training: d.training }) : null;
@@ -216,33 +233,32 @@
     const X = v => 6 + v * (CW - 12) / 100, Y = v => 8 + (100 - Math.max(0, v)) * 0.62;
     // No battery = nothing to chart: a non-charging hybrid draws nothing from the network, so the
     // classic prints the fact instead of a 0 %-to-0 % curve (index.html:5153, 5190).
-    const socSvg = !batt ? `<div class="sec"><div class="hint" style="margin:0">Non-charging aircraft: no battery in the catalog, so this flight draws nothing from the charging network — the grid supplies 0 kWh.</div></div>` : `<div class="soc"><div class="lbl"><span class="cap">Battery</span><span class="r">lowest <b class="${soc.low < RES ? 'low' : ''}">${Math.round(soc.low)} %</b>${(soc.pts.find(q => q.soc === soc.low) || {}).id ? ' at ' + esc(soc.pts.find(q => q.soc === soc.low).id) : ''} · reserve ${RES} %</span></div>
-      <div class="scroll"><svg viewBox="0 0 ${CW} 84" preserveAspectRatio="none" style="width:${CW}px">${soc.zones.map(z => `<rect x="${X(z.x0).toFixed(1)}" y="4" width="${(X(z.x1) - X(z.x0)).toFixed(1)}" height="74" fill="${z.t === 'climb' ? 'rgba(216,76,38,.07)' : 'rgba(50,50,110,.05)'}"/>`).join('')}
+    const socSvg = !batt ? `<div class="sec"><div class="hint" style="margin:0">Non-charging aircraft: no battery in the catalog, so this flight draws nothing from the charging network; the grid supplies 0 kWh.</div></div>` : `<div class="soc"><div class="lbl"><span class="cap">Battery</span><span class="r">lowest <b class="${soc.low < RES ? 'low' : ''}">${Math.round(soc.low)} %</b>${(soc.pts.find(q => q.soc === soc.low) || {}).id ? ' at ' + esc(soc.pts.find(q => q.soc === soc.low).id) : ''} · reserve ${RES} %</span></div>
+      <div class="scroll"><svg viewBox="0 0 ${CW} 84" preserveAspectRatio="none" style="width:${CW}px">${soc.zones.map(z => `<rect x="${X(z.x0).toFixed(1)}" y="4" width="${(X(z.x1) - X(z.x0)).toFixed(1)}" height="74" fill="${z.t === 'climb' ? 'rgba(196,66,31,.07)' : 'rgba(50,50,110,.05)'}"/>`).join('')}
       <line x1="6" y1="${Y(RES).toFixed(1)}" x2="${CW - 6}" y2="${Y(RES).toFixed(1)}" stroke="#cfcfda" stroke-dasharray="3 4"/><line x1="6" y1="${Y(0).toFixed(1)}" x2="${CW - 6}" y2="${Y(0).toFixed(1)}" stroke="#e2e2ea"/>
-      ${soc.segs.map(s => `<path d="M${X(s.x0).toFixed(1)} ${Y(s.y0).toFixed(1)} L${X(s.x1).toFixed(1)} ${Y(s.y1).toFixed(1)}" stroke="${s.t === 'fly' ? '#32326E' : '#d84c26'}" stroke-width="${s.t === 'fly' ? 2 : 2.5}" fill="none" stroke-linecap="round"/>`).join('')}
+      ${soc.segs.map(s => `<path d="M${X(s.x0).toFixed(1)} ${Y(s.y0).toFixed(1)} L${X(s.x1).toFixed(1)} ${Y(s.y1).toFixed(1)}" stroke="${s.t === 'fly' ? '#32326E' : '#c4421f'}" stroke-width="${s.t === 'fly' ? 2 : 2.5}" fill="none" stroke-linecap="round"/>`).join('')}
       ${soc.pts.map((q, i) => `<circle cx="${X(q.x).toFixed(1)}" cy="${Y(q.soc).toFixed(1)}" r="3" fill="${q.soc < RES ? '#b3261e' : '#32326E'}"/><text x="${X(q.x).toFixed(1)}" y="${(Y(q.soc) + (i === 0 ? -8 : 14)).toFixed(1)}" font-size="10.5" font-weight="600" fill="${q.soc < RES ? '#b3261e' : '#32326E'}" text-anchor="${i === 0 ? 'start' : i === soc.pts.length - 1 ? 'end' : 'middle'}">${Math.round(q.soc)} %${q.id ? ' · ' + esc(q.id) : ''}</text>`).join('')}
-      <text x="6" y="${(Y(RES) + 11).toFixed(1)}" font-size="9.5" fill="#6f7290">reserve ${RES} %</text></svg></div></div>`;
+      <text x="6" y="${(Y(RES) + 11).toFixed(1)}" font-size="9.5" fill="#63668a">reserve ${RES} %</text></svg></div></div>`;
     $('#railBody').innerHTML = `
     <div class="rh2"><div><div class="ttl">${c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}</div></div><button class="lnk" data-act="edit">Edit</button></div>
     <div class="stats"><div><div class="cap">Energy</div><div class="v num">${fmt.parts(d.used, 'Wh').n}<small>${fmt.parts(d.used, 'Wh').u}</small></div><div class="s">${d.legs.length > 1 ? d.legs.length + ' legs' : 'per flight'}</div></div>
       <div><div class="cap">Travel</div><div class="v num">${fmt.h(d.travelMin)}<small>h</small></div><div class="s">${d.travelMin > d.flyMin + 0.5 ? 'incl. charging' : 'block time'}</div></div>
-      <div><div class="cap">Charge</div><div class="v num">${fmt.r(d.chargeMin)}<small>min</small></div><div class="s">${d.charges.length > 1 ? 'over ' + d.charges.length + ' stops' : 'at ' + esc(d.terminal.ident || 'destination')}</div></div></div>
-    <div class="cost"><div class="v num">€${fmt.eur(costDay)}<small>/ day</small></div><div class="m num">${chargedR} kWh · €${rate.toFixed(2)} / kWh${fpd === 1 ? '' : ` · ${S.freq} / ${S.per}`}</div></div>
+      <div><div class="cap">Charge</div><div class="v num">${d.chargeMin >= 60 ? fmt.h(d.chargeMin) + '<small>h</small>' : fmt.r(d.chargeMin) + '<small>min</small>'}</div><div class="s">${d.charges.length > 2 ? 'at ' + d.charges.length + ' airports' : d.charges.length === 2 ? 'at ' + d.charges.map(x => esc(x.ident || '')).join(' + ') : 'at ' + esc(d.terminal.ident || 'destination')}</div></div></div>
+    <div class="cost"><div><div class="cap">Revenue</div><div class="v num">€${fmt.eur(costDay)}<small>/ day</small></div></div><div class="m num">at €${rate.toFixed(2)} / kWh${fpd === 1 ? '' : ` · ${S.freq} / ${S.per}`}</div></div>
     <div class="split"><div class="b"><i class="f" style="flex:${(d.flyMin / 60).toFixed(3)}"></i><i class="c" style="flex:${(d.chargeMin / 60).toFixed(3)}"></i></div><div class="lg"><span><i></i>Fly ${fmt.h(d.flyMin)} h</span><span><i class="c"></i>Charge ${fmt.min(d.chargeMin)}</span><span style="margin-left:auto" class="num">${fmt.dist(d.dist)}</span></div></div>
     ${socSvg}
     <div class="acc ${S.open.route ? 'open' : ''}" data-acc="route"><button><span>Route <span class="sub">${d.legs.length} leg${d.legs.length > 1 ? 's' : ''} · ${c.length - 2 > 0 ? (c.length - 2) + ' stop' + (c.length - 2 > 1 ? 's' : '') : 'no stops'}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
-      <div class="pane"><table class="tbl"><tr><th>Leg</th><th class="r">${fmt.ukm()}</th><th class="r">Time</th><th class="r">kWh</th></tr>
+      <div class="pane"><table class="tbl"><tr><th>Leg</th><th class="r u">${fmt.ukm()}</th><th class="r">Time</th><th class="r u">kWh</th></tr>
       ${d.legs.map((l, i) => `<tr><td><span class="mu num">${String(i + 1).padStart(2, '0')}</span> ${esc(UI.shortName(l.fromName))} → ${esc(UI.shortName(l.toName))}${l.overRange ? ' <span class="mu" style="color:var(--danger)">over range</span>' : ''}</td><td class="r num">${fmt.r(fmt.km(l.distKm))}</td><td class="r num">${fmt.h(l.flightMin)}</td><td class="r num">${fmt.r(l.energyKwh)}</td></tr>`).join('')}</table>
       ${climb.applies && !d.training ? `<div class="hint num">Includes up to ${Math.round(climb.eMaxKwh)} kWh net climb per leg.</div>` : ''}</div></div>
     <div class="acc alt ${S.open.charging ? 'open' : ''}" data-acc="charging"><button><span>Charging <span class="sub">${esc(ch.name)} · ${fmt.kwh(d.charged)}</span></span><svg class="ic"><use href="#i-chev"/></svg></button>
-      <div class="pane"><table class="tbl"><tr><th>Where</th><th class="r">Arrive</th><th class="r">To</th><th class="r">kWh</th><th class="r">Time</th></tr>
+      <div class="pane"><table class="tbl"><tr><th>Where</th><th class="r">Arrive</th><th class="r">To</th><th class="r u">kWh</th><th class="r">Time</th></tr>
       ${d.charges.map(x => `<tr><td>${esc(x.ident || '')} ${esc(UI.shortName(x.name))} <span class="mu">${x.isTerminal ? 'terminal' : 'en route'}</span></td><td class="r num">${Math.round((x.arrivalSocFrac || 0) * 100)} %</td><td class="r num">${Math.round((x.targetSocFrac || 0) * 100)} %</td><td class="r num">${fmt.r(x.energyKwh)}</td><td class="r num">${fmt.min(x.chargeMin)}</td></tr>`).join('')}</table></div></div>
     <div class="acc ${S.open.calc ? 'open' : ''}" data-acc="calc"><button><span>Calculation</span><svg class="ic"><use href="#i-chev"/></svg></button>
-      <div class="pane calc num"><div><span class="mu">Battery</span> ${batt ? `${p.battery_kwh} kWh · usable ${Math.round(((window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7) * 100)} %` : '— · no battery = non-charging aircraft, the grid supplies 0 kWh'}</div>
+      <div class="pane calc num"><div><span class="mu">Battery</span> ${batt ? `${p.battery_kwh} kWh · usable ${Math.round(((window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7) * 100)} %` : 'none · a non-charging aircraft; the grid supplies 0 kWh'}</div>
       <div><span class="mu">Energy</span> ${d.legs.map(l => fmt.r(l.energyKwh)).join(' + ')} = <b>${fmt.r(d.used)} kWh</b></div>
       <div><span class="mu">Charge</span> ${chargedR} kWh at ${esc(ch.name)} = <b>${fmt.min(d.chargeMin)}</b></div>
-      <div><span class="mu">Cost</span> ${chargedR} kWh × ${fpd.toFixed(fpd % 1 ? 2 : 0)} / day × €${rate.toFixed(2)} = <b>€${fmt.eur(costDay)}</b></div>
-      <div class="mu" style="margin-top:6px">Engine audit (raw model): ${esc(String(r.leg_energy_kwh))} kWh/leg · ${esc(String(r.charge_time_min ?? r.total_charge_time_min))} min charge</div></div></div>`;
+      <div><span class="mu">Revenue</span> ${d.charged.toFixed(2)} kWh charged × ${fpd.toFixed(fpd % 1 ? 2 : 0)} / day × €${rate.toFixed(2)} = <b>€${fmt.eur(costDay)}</b></div></div></div>`;
     $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add">Add to network</button><button class="btn i" data-act="share" title="Copy a share link"><svg class="ic"><use href="#i-share"/></svg></button></div>`;
   }
   function addToNetwork() {
@@ -299,7 +315,8 @@
     const acc = t.closest('[data-acc]'); if (acc) { S.open[acc.dataset.acc] = !S.open[acc.dataset.acc]; acc.classList.toggle('open'); return; }
     switch (t.dataset.act) {
       case 'simulate': simulate(); break;
-      case 'reset': resetForm(); UI.toast('Form reset'); break;
+      case 'reset': { const snap = { origin: S.origin, dest: S.dest, stops: S.stops.slice(), trip: S.trip, freq: S.freq, per: S.per, planeId: S.planeId, chargerId: S.chargerId, availOverride: S.availOverride, divertOverrides: Object.assign({}, S.divertOverrides) }; const bl = [...S.blacklist];
+        resetForm(); UI.toast('Route cleared', { label: 'Undo', run: () => { Object.assign(S, snap); S.blacklist.clear(); bl.forEach(x => S.blacklist.add(x)); onFormChange(false); } }); break; }
       case 'edit': S.rail = 'form'; UI.render(); break;
       case 'add': addToNetwork(); break;
       case 'share': UI.share.copyRouteLink(); break;

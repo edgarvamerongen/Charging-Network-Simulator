@@ -675,18 +675,22 @@ export default async function run(ctx) {
     await click(`[data-act=rm][data-id="${victim}"]`); await v2Settle();
     const n1 = (await folderNow()).length; const probs = [];
     if (n1 !== n0 - 1) probs.push(`rm: ${n0} → ${n1}`);
-    await v2.eval(`__cns.confirms.length = 0; __cns.confirmResult = false;`);
+    // Clear acts at once and offers Undo in the toast (design sweep 2026-09-28: no native confirm()).
+    await v2.eval(`__cns.confirms.length = 0;`);
     await click('[data-act=clear]'); await v2Settle();
-    const nKeep = (await folderNow()).length; const c1 = await v2.eval(`__cns.confirms.slice()`);
-    if (nKeep !== n1) probs.push(`cancelled confirm still cleared: ${n1} → ${nKeep}`);
-    if (c1.length !== 1) probs.push('confirm not asked: ' + J(c1));
-    await v2.eval(`__cns.confirmResult = true;`);
+    const nCleared = (await folderNow()).length; const toast = await v2.eval(`document.querySelector('#toast').textContent`);
+    if (nCleared !== 0) probs.push(`clear left ${nCleared} routes`);
+    if (!/cleared/i.test(toast) || !(await v2.eval(`!!document.querySelector('#toast .toast-act')`))) probs.push('no undo toast: ' + J(toast));
+    await v2.eval(`document.querySelector('#toast .toast-act').click()`); await v2Settle();
+    const nKeep = (await folderNow()).length;
+    if (nKeep !== n1) probs.push(`undo restored ${nKeep}, expected ${n1}`);
     await click('[data-act=clear]'); await v2Settle();
+    const c1 = await v2.eval(`__cns.confirms.slice()`); if (c1.length) probs.push('native confirm still asked: ' + J(c1));
     const st = await v2.eval(`({ n: CNSDemand.loadFolder().length, cards: document.querySelectorAll('#railBody .scen .sc').length, netCount: document.querySelector('#netCount').textContent, foot: document.querySelector('#railFoot').textContent.trim() })`);
     if (st.n !== 0 || st.cards !== 3 || st.netCount !== '') probs.push('after clear: ' + J(st));
     await shotV2('remove-and-clear');
     if (probs.length) throw new Error(probs.join('; '));
-    return { detail: `rm ${n0}→${n1}; cancel kept ${nKeep}; confirm ${J(c1[0])}; cleared → ${J(st)}`, repro: '[data-act=rm] then [data-act=clear] with __cns.confirmResult false/true', evidence: [ctx.shot('remove-and-clear')] };
+    return { detail: `rm ${n0}→${n1}; clear → 0, undo → ${nKeep}; cleared → ${J(st)}`, repro: '[data-act=rm], [data-act=clear], toast Undo, [data-act=clear]', evidence: [ctx.shot('remove-and-clear')] };
   }, { retry: 0 });
 
   // ================= scenarios =================
@@ -699,7 +703,7 @@ export default async function run(ctx) {
       CNSUI.timeline.render = function () { c.renders++; return T.apply(this, arguments); }; CNSUI.map.fitNet = function () { c.fitNet++; return F.apply(this, arguments); }; CNSUI.map.drawNet = function () { c.drawNet++; return Dn.apply(this, arguments); }; CNSUI.network.rows = function () { c.rows++; return W.apply(this, arguments); };
       c.restore = () => { CNSUI.timeline.render = T; CNSUI.map.fitNet = F; CNSUI.map.drawNet = Dn; CNSUI.network.rows = W; }; document.querySelector('#toast').textContent = ''; return true; })()`);
     await click(`[data-act=scenario][data-k=${k}]`);
-    await v2.waitFor(`/loaded —/.test(document.querySelector('#toast').textContent)`, 120000, 250);
+    await v2.waitFor(`/loaded:/.test(document.querySelector('#toast').textContent)`, 120000, 250);
     await v2Settle();
     return v2.eval(`(function(){ const c = window.__cnsPerf; const perf = { renders: c.renders, fitNet: c.fitNet, drawNet: c.drawNet, rowsCalls: c.rows, ms: Math.round(performance.now() - c.t0) }; c.restore();
       return { perf, toast: document.querySelector('#toast').textContent, folder: ${FOLDER}, cfg: ${CFG}, sched: Object.keys(JSON.parse(localStorage.getItem('cns_schedule') || '{}')), aps: [...document.querySelectorAll('#railBody .ap')].map(e => e.dataset.ap), mode: CNSUI.S.mode, err: CNSUI.S.err }; })()`);

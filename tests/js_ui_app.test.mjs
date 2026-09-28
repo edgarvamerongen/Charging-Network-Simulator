@@ -48,3 +48,15 @@ test('default selection is the first beta plane and its default charger', () => 
   assert.equal(w.CNSUI.S.origin.ident, 'EHLE');
   assert.equal(w.CNSUI.S.dest.ident, 'EDDF');
 });
+
+test('units rule: aircraft-scale figures stay in kW/kWh, totals from 1,000 read in MW/MWh, a column takes one unit', () => {
+  const f = load(DATA).CNSUI.fmt;
+  assert.deepEqual({ ...f.parts(161.4, 'Wh') }, { n: '162', u: 'kWh' });   // rounds up, like CNSUnits.r
+  assert.deepEqual({ ...f.parts(999, 'W') }, { n: '999', u: 'kW' });
+  assert.deepEqual({ ...f.parts(6700, 'Wh') }, { n: '6.7', u: 'MWh' });
+  assert.equal(f.kw(320), '320 kW');
+  assert.equal(f.prefixFor([62, 320, 822]), 'k');
+  assert.equal(f.prefixFor([62, 1300]), 'M');
+  assert.deepEqual({ ...f.as(62, 'M', 'W') }, { n: '0.06', u: 'MW' });   // the whole column in MW when one row needs it
+  assert.deepEqual({ ...f.as(0, 'k', 'W') }, { n: '0', u: 'kW' });       // no dash for an airport that charges nothing
+});

@@ -66,7 +66,7 @@
     const altReserveKm = w => { if (!requireAlt || !w) return 0; const ovKm = divertOverrideKm(w); if (ovKm != null) return ovKm / route; const full = w.ident ? UI.byId()[w.ident] : null; const km = (full && full.alternate_km != null) ? +full.alternate_km : (+w.alternate_km || 0); return (isFinite(km) ? km : 0) / route; };
     const c = ringChain(t);
     for (let i = 0; i < c.length - 1; i++) { const d = R().haversineKm(c[i], c[i + 1]); if (d + altReserveKm(c[i + 1]) > maxLeg) P.legIssues.push(i); }
-    if (P.legIssues.length) { const n = P.legIssues.length; P.error = `${n} leg${n > 1 ? 's' : ''} exceed${n > 1 ? '' : 's'} the aircraft's range — add or change a stop.`; }
+    if (P.legIssues.length) { const n = P.legIssues.length; P.error = `${n} leg${n > 1 ? 's' : ''} exceed${n > 1 ? '' : 's'} the aircraft's range. Add or change a stop.`; }
   }
   function recomputeRoute() {
     const P = S.planned; P.stops = []; P.closing = []; P.error = null; P.legIssues = []; P.source = 'auto';

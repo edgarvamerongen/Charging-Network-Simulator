@@ -328,7 +328,7 @@ export default async function run(ctx) {
     const folder0 = await p.eval('CNSDemand.loadFolder().length');
     await p.waitFor(`CNSUI.S.mode === 'network' && CNSDemand.loadFolder().length >= 2`, 25000, 150);
     await p.sleep(500);
-    const hit = await waitToast(p, /Build restored — \d+ routes/, 3000);
+    const hit = await waitToast(p, /Build restored: \d+ routes/, 3000);
     const st = await p.eval(V2_STATE);
     const flights = await p.eval(`CNSDemand.loadFolder().map(t => ({ id: t.id, o: t.originIdent, d: t.destIdent, plane: t.planeId, charger: t.chargerId, trip: t.tripType, freqN: t.freqN, freqUnit: t.freqUnit }))`);
     await ctx.screenshot(p, 'build-share-open-v2');
@@ -338,7 +338,7 @@ export default async function run(ctx) {
     if (st.mode !== 'network' || !st.bodyNet) diff.push(`mode=${st.mode} body.net=${st.bodyNet}`);
     if (st.netCount !== '2') diff.push(`#netCount "${st.netCount}"`);
     if (j(flights) !== j(ctx.state.buildFolder)) diff.push(`restored flights ${j(flights)} ≠ shared ${j(ctx.state.buildFolder)}`);
-    if (!hit) diff.push(`no "Build restored — N routes" toast (toasts: ${j(st.toasts)})`);
+    if (!hit) diff.push(`no "Build restored: N routes" toast (toasts: ${j(st.toasts)})`);
     const ex = p.exceptions(); if (ex.length) diff.push('exceptions: ' + ex.map(e => e.text).join(' || '));
     if (diff.length) throw new Error(diff.join(' | '));
     return { detail: `fresh profile (folder before restore ${folder0}) → folder ${st.folder}, mode ${st.mode}, #netCount ${st.netCount}, .ap rows ${st.apRows}, toast "${hit.text}", flights ${j(flights)}`, repro: 'open the copied /v2/s/<slug> build link in a fresh Chrome profile', evidence: [ctx.shot('build-share-open-v2')] };

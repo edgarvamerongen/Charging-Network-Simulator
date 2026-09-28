@@ -142,16 +142,17 @@ export default async function run(ctx) {
     const st = await v2.eval(`({ trip: CNSUI.S.trip, o: CNSUI.S.origin && CNSUI.S.origin.ident, tr: CNSUI.plane().training_range_km })`);
     if (st.trip !== 'training') { await v2.click('[data-seg=trip] button[data-v="training"]'); await v2.waitFor(`CNSUI.S.trip === 'training'`, 3000); }
     const r = await ctx.v2Simulate(v2);
-    const dom = await v2.eval(`({ err: (document.querySelector('#railBody .sec.err') || {}).textContent || null, rail: CNSUI.S.rail, result: !!CNSUI.S.result, busy: CNSUI.S.busy })`);
+    // Refusals render above the Simulate button (#railFoot .foot-err) so they stay in view (design sweep 2026-09-28).
+    const dom = await v2.eval(`({ err: (document.querySelector('#railFoot .foot-err') || {}).textContent || null, rail: CNSUI.S.rail, result: !!CNSUI.S.result, busy: CNSUI.S.busy })`);
     await ctx.screenshot(v2, 'training-no-range');
     if (!r.err) throw new Error('simulate did not fail although beta_alia has no training_range_km (' + JSON.stringify(st) + ')');
-    if (!dom.err || !/training_range_km|training mode unavailable/i.test(dom.err)) throw new Error(`.sec.err is ${JSON.stringify(dom.err)} (S.err=${r.err})`);
+    if (!dom.err || !/training_range_km|training mode unavailable/i.test(dom.err)) throw new Error(`.foot-err is ${JSON.stringify(dom.err)} (S.err=${r.err})`);
     noNewExceptions(v2, ex0, 'training-without-range');
     // classic control: same aircraft, same trip → the same API error in #error
     const cs = await ctx.classicSetRoute(classic, { o: 'EHTE', plane: 'beta_alia', trip: 'training' });
     const c = await ctx.classicSimulate(classic);
     if (!c.error || !/training_range_km|training mode unavailable/i.test(c.error)) throw new Error('classic did not show the API error: ' + JSON.stringify(c.error));
-    return { detail: `v2 .sec.err="${dom.err}" S.rail=${dom.rail} result=${dom.result}; classic #error="${c.error}"; new console errors ${v2.errors.length - errs0}`, repro: 'v2: Change → Alia CX300, Training, Simulate; classic: classicSetRoute({plane:beta_alia, trip:training}) + .sim-btn', evidence: [ctx.shot('training-no-range')] };
+    return { detail: `v2 .foot-err="${dom.err}" S.rail=${dom.rail} result=${dom.result}; classic #error="${c.error}"; new console errors ${v2.errors.length - errs0}`, repro: 'v2: Change → Alia CX300, Training, Simulate; classic: classicSetRoute({plane:beta_alia, trip:training}) + .sim-btn', evidence: [ctx.shot('training-no-range')] };
   });
 
   // ------------------------------------------------------------------------------------------

@@ -11,17 +11,17 @@
     return st;
   }
   async function copyRouteLink() {
-    let url; try { url = v2Url(await CNSShare.createShortLink(currentState())); } catch (e) { UI.toast('Share link failed — is the server reachable?'); return; }
+    let url; try { url = v2Url(await CNSShare.createShortLink(currentState())); } catch (e) { UI.toast('Share link failed. Check the connection and try again.'); return; }
     try { await navigator.clipboard.writeText(url); UI.toast('Link copied'); } catch (e) { window.prompt('Copy this shareable link:', url); }
   }
   async function copyBuildLink() {
     if (!window.CNSBuildShare) return;
     try { await CNSBuildShare.copyBuildLink({ createShortLink: async st => v2Url(await CNSShare.createShortLink(st)), writeText: async t => { await navigator.clipboard.writeText(t); }   /* CNSBuildShare shows its own .cns-share-toast; a second toast here would double up */ }); }
-    catch (e) { UI.toast('Build link failed — ' + e.message); }
+    catch (e) { UI.toast('Build link failed: ' + e.message); }
   }
   async function applyState(st) {
     if (!st) return false;
-    if (st.k === 'build' && window.CNSBuildShare) { await CNSBuildShare.applyBuild(st); UI.folderChanged(); UI.setMode('network'); UI.map.drawNet(); UI.map.fitNet(); UI.toast(`Build restored — ${CNSDemand.loadFolder().length} routes`); return true; }
+    if (st.k === 'build' && window.CNSBuildShare) { await CNSBuildShare.applyBuild(st); UI.folderChanged(); UI.setMode('network'); UI.map.drawNet(); UI.map.fitNet(); UI.toast(`Build restored: ${CNSDemand.loadFolder().length} routes`); return true; }
     if (st.v == null) return false;
     const by = UI.byId();
     if (st.a && UI.PLANES.find(p => p.id === st.a)) S.planeId = st.a;

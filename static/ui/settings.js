@@ -27,7 +27,7 @@
           ${F.example ? `<div class="hint num" data-ms="example">${example()}</div>` : ''}${F.curve ? `<svg class="taper" data-ms-taper viewBox="0 0 320 72" preserveAspectRatio="none" role="img" aria-label="Charge power against state of charge"></svg>` : ''}</div></div></div>`; }).join('')}
         <div class="msr"><div class="row" style="align-items:flex-start;gap:10px"><span style="width:26px"></span><div style="flex:1"><div class="name" style="font-size:13px">Charge tariff</div><div class="hint" style="margin-top:2px">Price per charged kWh for the revenue figures.</div>
           <div class="msl"><span class="cap">Tariff</span><input type="range" min="0" max="200" step="5" value="${Math.round(rate * 100)}" data-ms="rate"><b class="num" data-ms-val="rate">€${(+rate).toFixed(2)} / kWh</b></div></div></div></div>
-        <div class="hint" style="margin-top:12px">Applies to every calculation and to both the classic and the v2 shell.</div></div>
+        <div class="hint" style="margin-top:12px">Applies to every calculation.</div></div>
       <div class="btns"><button class="btn" data-ms="reset">Reset to defaults</button><span style="flex:1"></span><button class="btn p" data-modal="close">Done</button></div>`;
   }
   /** Charge power against state of charge for the current knee + floor (the classic's drawTaperCurve):
@@ -40,11 +40,11 @@
     const W = 360, H = 104, mL = 40, mR = 12, mT = 24, mB = 20; const px = x => mL + x * (W - mL - mR), py = y => (H - mB) - y * (H - mT - mB);
     const pts = []; for (let i = 0; i <= 100; i++) { const soc = i / 100; const P = soc < thr ? 1 : Math.pow(floor, (soc - thr) / Math.max(1e-6, 1 - thr)); pts.push(px(soc).toFixed(1) + ',' + py(P).toFixed(1)); }
     let g = '';
-    [0, 0.5, 1].forEach(v => { g += `<line x1="${mL}" y1="${py(v)}" x2="${W - mR}" y2="${py(v)}" stroke="#e2e2ea"/><text x="${mL - 6}" y="${(py(v) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="#6f7290">${v * 100} %</text>`; });
-    [[0, '0 %', 'start'], [0.5, '50 % SoC', 'middle'], [1, '100 %', 'end']].forEach(([v, t, an]) => { g += `<text x="${px(v)}" y="${H - 6}" font-size="9" text-anchor="${an}" fill="#6f7290">${t}</text>`; });
-    g += `<line x1="${px(thr).toFixed(1)}" y1="${py(0)}" x2="${px(thr).toFixed(1)}" y2="${py(1)}" stroke="#d84c26" stroke-dasharray="3 3"/><text x="${px(thr).toFixed(1)}" y="${mT - 8}" font-size="9" font-weight="600" text-anchor="${thr > 0.85 ? 'end' : 'middle'}" fill="#d84c26">knee ${Math.round(thr * 100)} %</text>`;
+    [0, 0.5, 1].forEach(v => { g += `<line x1="${mL}" y1="${py(v)}" x2="${W - mR}" y2="${py(v)}" stroke="#e2e2ea"/><text x="${mL - 6}" y="${(py(v) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="#63668a">${v * 100} %</text>`; });
+    [[0, '0 %', 'start'], [0.5, '50 % SoC', 'middle'], [1, '100 %', 'end']].forEach(([v, t, an]) => { g += `<text x="${px(v)}" y="${H - 6}" font-size="9" text-anchor="${an}" fill="#63668a">${t}</text>`; });
+    g += `<line x1="${px(thr).toFixed(1)}" y1="${py(0)}" x2="${px(thr).toFixed(1)}" y2="${py(1)}" stroke="#c4421f" stroke-dasharray="3 3"/><text x="${px(thr).toFixed(1)}" y="${mT - 8}" font-size="9" font-weight="600" text-anchor="${thr > 0.85 ? 'end' : 'middle'}" fill="#c4421f">knee ${Math.round(thr * 100)} %</text>`;
     g += `<path d="M${px(0)},${py(0)} L${pts.join(' L')} L${px(1)},${py(0)} Z" fill="rgba(50,50,110,.10)"/><polyline fill="none" stroke="#32326E" stroke-width="1.5" points="${pts.join(' ')}"/>`;
-    g += `<text x="${mL - 6}" y="${mT - 8}" font-size="9" text-anchor="end" fill="#6f7290">power</text>`;
+    g += `<text x="${mL - 6}" y="${mT - 8}" font-size="9" text-anchor="end" fill="#63668a">power</text>`;
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = g;
   }
   function open() { UI.modal.open(body()); drawTaper(); }
@@ -54,7 +54,7 @@
     if (e.target.closest('#setBtn')) { open(); return; }   // must precede the [data-ms] guard — the gear is not a [data-ms] element
     const t = e.target.closest('[data-ms]'); if (!t) return;
     if (t.dataset.ms === 'toggle') { const cur = ST().loadAll()[t.dataset.key] || {}; ST().save({ [t.dataset.key]: { enabled: !cur.enabled } }); refresh(); badge(); }
-    if (t.dataset.ms === 'reset') { if (confirm('Reset every model setting to its default?')) { ST().reset(); refresh(); badge(); } }
+    if (t.dataset.ms === 'reset') { const prev = ST().loadAll(); ST().reset(); refresh(); badge(); UI.toast('Model settings reset to defaults', { label: 'Undo', run: () => { ST().save(prev); refresh(); badge(); } }); }
   });
   document.addEventListener('input', e => { const t = e.target; if (!t.dataset || !t.dataset.ms) return;
     if (t.dataset.ms === 'slider') { const F = FIELDS.find(f => f.key === t.dataset.key); const sl = F.sliders.find(x => x.f === t.dataset.f); const lbl = $(`[data-ms-val="${t.dataset.key}.${t.dataset.f}"]`); if (lbl) lbl.textContent = sl.show ? sl.show(+t.value) : t.value + ' ' + sl.unit; if (t.dataset.key === 'chargeTaper') drawTaper(); }

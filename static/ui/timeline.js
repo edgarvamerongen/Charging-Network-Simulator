@@ -50,7 +50,7 @@
         const fleet = g.lanes.filter(L => touches(L.trip));
         fleet.forEach((L, li) => { const t = L.trip; const blocks = L.rotations.map((rot, k) => rot.phases.map(ph => { if (ph.kind === 'charge' && ph.wait > 0) { anyWait = true; } const hd = `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}"`; return (ph.kind === 'charge' && ph.wait > 0 ? blk('wait', ph.start - ph.wait, ph.wait, '', `Waits ${Math.round(ph.wait)} min for a charger at ${ph.ident}`, hd) : '') + blk(ph.kind === 'fly' ? 'fly' : 'chg', ph.start, ph.dur, ph.kind === 'fly' ? (ph.label || '').replace(/^Fly (to|back to) /, '→ ') : (ph.ident || ''), `${ph.label || ph.kind} · ${clock(ph.start)}–${clock(ph.start + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`, hd); }).join('')).join('');
           rows += `<div class="grow${zebra()}"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; });
-        $('#drawerSub').textContent = foc ? `${fleet.length} aircraft at ${foc} · peak ${UI.fmt.kw(netPeak)}` : `${g.lanes.length} aircraft · ${flights % 1 ? flights.toFixed(1) : flights} flights / day · peak load ${UI.fmt.kw(netPeak)}`;
+        $('#drawerSub').textContent = foc ? `${fleet.length} aircraft at ${foc} · peak ${UI.fmt.kw(netPeak)}` : `${g.lanes.length} aircraft · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
       } else {
         const aps = R.filter(a => (!foc || a.ident === foc) && a.contribs.some(c => c.role));
         aps.forEach(a => { const rl = SC().rotationsAt(a.ident); if (!rl.length) return;
@@ -63,7 +63,7 @@
               if (ph.kind === 'fly') return S.showDep ? blk('fly', st, ph.dur, (ph.label || '').replace(/^Fly (to|back to) /, '→ '), `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}`, handle()) : '';
               return blk(ph.atX ? 'chg' : 'chg away', st, ph.dur, ph.atX ? (ph.power ? UI.fmt.kw(ph.power) : '') : '', `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}${ph.power ? ' · ' + UI.fmt.kw(ph.power) : ''}`, handle()); }).join(''); }).join('');
             rows += `<div class="grow sub${zebra()}"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; }); });
-        $('#drawerSub').textContent = foc ? `${(R.find(a => a.ident === foc) || {}).fleet?.length || 0} chargers · peak ${UI.fmt.kw(netPeak)}` : `${R.length} airports · ${flights % 1 ? flights.toFixed(1) : flights} flights / day · peak load ${UI.fmt.kw(netPeak)}`;
+        $('#drawerSub').textContent = foc ? `${(R.find(a => a.ident === foc) || {}).fleet?.length || 0} chargers · peak ${UI.fmt.kw(netPeak)}` : `${R.length} airport${R.length === 1 ? '' : 's'} · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
       }
     }
     $('#gantt').innerHTML = rows + `<div class="glegend"><span><i class="c"></i>Charging here</span><span><i class="a"></i>Charging elsewhere</span>${anyWait ? '<span><i class="w"></i>Waiting for a charger</span>' : ''}${(S.showDep || S.lanes === 'fleet') ? '<span><i></i>Flying</span>' : ''}<span style="margin-left:auto">Drag a rotation to move its take-off</span></div>`;

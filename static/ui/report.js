@@ -3,7 +3,7 @@
   const UI = window.CNSUI, $ = UI.$, esc = UI.esc;
   function pick() {
     const R = UI.network ? UI.network.rows() : [];
-    if (!R.length) { UI.toast('Add a route to the network first — the report is per airport.'); return; }
+    if (!R.length) { UI.toast('Add a route to the network first. Each report covers one airport.'); return; }
     UI.modal.open(`<div class="mh"><h3>Advisory report</h3><button class="tb icon" data-modal="close"><svg class="ic"><use href="#i-x"/></svg></button></div>
       <div class="mb"><div class="hint" style="margin-bottom:8px">One airport per report. Pick the site the advice is for.</div>
       ${R.map((a, i) => `<label class="fl rp" style="grid-template-columns:18px auto 1fr auto;cursor:pointer"><input type="radio" name="rp" value="${a.ident}" ${i === 0 ? 'checked' : ''}><b>${a.ident}</b><span>${esc(UI.shortName(a.name))}</span><span class="mu num">${a.flights % 1 ? a.flights.toFixed(1) : a.flights} flights / day · ${UI.fmt.kw(a.peak)} peak</span></label>`).join('')}

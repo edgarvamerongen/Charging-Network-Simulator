@@ -33,10 +33,14 @@ window.CNSUI = (function () {
     h: min => { const m = r(min); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); },
     min: m => m >= 60 ? fmt.h(m) + ' h' : r(m) + ' min',
     eur: v => v.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    // Operator's rule: over 99 kW / 99 kWh the figure reads in MW / MWh — two decimals below 1 MW,
-    // one decimal from 1 MW up (320 kW → 0.32 MW, 1,403 kWh → 1.40 MWh, 1,320 kW → 1.3 MW).
-    // `parts` splits number and unit for the big tiles; `kw`/`kwh` join them for running text.
-    parts: (v, u) => { const n = +v || 0; if (n > 99) return n >= 1000 ? { n: (+(n / 1000).toFixed(1)).toLocaleString('en', { minimumFractionDigits: 1, maximumFractionDigits: 1 }), u: 'M' + u } : { n: (n / 1000).toFixed(2), u: 'M' + u }; return { n: String(r(n)), u: 'k' + u }; },
+    // Units rule (design sweep 2026-09-28, narrowing the round-three megawatt rule): aircraft-scale
+    // figures stay in kW / kWh (162 kWh, 320 kW); from 1,000 they read in MW / MWh with one decimal
+    // (1,320 kW → 1.3 MW, 6,700 kWh → 6.7 MWh). `parts` splits number and unit for the big tiles;
+    // `kw`/`kwh` join them for running text. A COLUMN takes one unit for all its rows: `prefixFor`
+    // picks it from the column's largest value and `as` formats a row in it (62 kW never sits above 0.82 MW).
+    parts: (v, u) => { const n = +v || 0; return n >= 1000 ? { n: (+(n / 1000).toFixed(1)).toLocaleString('en', { minimumFractionDigits: 1, maximumFractionDigits: 1 }), u: 'M' + u } : { n: String(r(n)), u: 'k' + u }; },
+    prefixFor: vals => Math.max(0, ...vals.map(v => +v || 0)) >= 1000 ? 'M' : 'k',
+    as: (v, prefix, u) => { const n = +v || 0; return prefix === 'M' ? { n: (n / 1000).toFixed(n >= 10000 ? 1 : 2), u: 'M' + u } : { n: String(r(n)), u: 'k' + u }; },
     kw: v => { const q = fmt.parts(v, 'W'); return q.n + ' ' + q.u; },
     kwh: v => { const q = fmt.parts(v, 'Wh'); return q.n + ' ' + q.u; }
   };
@@ -93,10 +97,15 @@ window.CNSUI = (function () {
   // would silently CHANGE a persisted model value on the first arrow key (the classic focuses the
   // dialog container instead). Nothing typable → focus the box itself so Escape/Tab still work.
   const TYPABLE = '#modalBox input[type=text],#modalBox input[type=number],#modalBox input[type=search],#modalBox input:not([type]),#modalBox textarea';
-  const modal = { open(html) { const m = $('#modal'); const box = $('#modalBox'); box.innerHTML = html; m.hidden = false; const f = $(TYPABLE); setTimeout(() => { if (f) f.focus(); else { box.setAttribute('tabindex', '-1'); box.focus(); } }, 30); }, close() { $('#modal').hidden = true; $('#modalBox').innerHTML = ''; }, isOpen() { return !$('#modal').hidden; } };
+  const modal = { open(html) { const m = $('#modal'); const box = $('#modalBox'); box.innerHTML = html; m.hidden = false; const h = box.querySelector('h3'); if (h) m.setAttribute('aria-label', h.textContent.trim()); const f = $(TYPABLE); setTimeout(() => { if (f) f.focus(); else { box.setAttribute('tabindex', '-1'); box.focus(); } }, 30); }, close() { $('#modal').hidden = true; $('#modalBox').innerHTML = ''; }, isOpen() { return !$('#modal').hidden; } };
   if (hasDoc) document.addEventListener('click', e => { if (e.target.closest('[data-modal=close]') || e.target.classList.contains('modal-dim')) modal.close(); });
   if (hasDoc) document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.isOpen()) modal.close(); });
-  function toast(t) { if (!hasDoc) return; const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), 2200); }
+  /** `act` = { label, run } adds one action (Undo) to the toast; it stays up long enough to reach. */
+  function toast(t, act) {
+    if (!hasDoc) return; const e = $('#toast'); e.textContent = t; e.classList.toggle('act', !!act);
+    if (act) { const b = document.createElement('button'); b.type = 'button'; b.className = 'toast-act'; b.textContent = act.label; b.addEventListener('click', () => { clearTimeout(toast._t); e.classList.remove('show', 'act'); act.run(); }); e.appendChild(b); }
+    e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show', 'act'), act ? 6000 : 2200);
+  }
 
   // ---- aircraft catalog model: airframe groups (profile rows), filters, knobs ----
   // Mirrors the classic picker (index.html AIRCRAFT_GROUPS): rows sharing aircraft_id are one

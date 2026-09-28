@@ -5,9 +5,9 @@
    ====================================================================== */
 :root{
   --canvas:#f3f3f7; --surface:#fff; --raised:#fff;
-  --line:#e2e2ea; --line-2:#cfcfda;
-  --ink:#32326E; --muted:#6f7290; --faint:#a3a6bb;
-  --accent:#d84c26; --on-accent:#fff;
+  --line:#e2e2ea; --line-2:#cfcfda; --control:#8e91a8;   /* --control: 3.1:1 boundary for inputs, selects, segments, switches (WCAG 1.4.11) */
+  --ink:#32326E; --muted:#63668a; --faint:#8e91a8;   /* muted 5.5:1 on white, 5.0:1 on canvas; faint only for icons, placeholders, disabled */
+  --accent:#c4421f; --on-accent:#fff;   /* 5.1:1 under white 13 px semibold */
   --danger:#b3261e; --success:#1f7a55;
   --r:3px;
   --fs-cap:11px; --fs:13px; --fs-lg:14px; --fs-num:22px;
@@ -19,11 +19,16 @@
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 html,body{height:100%}
-body{font:var(--fs)/1.4 Inter,system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--canvas);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum","cv11";overflow:hidden}
+body{font:var(--fs)/1.4 Inter,system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--canvas);-webkit-font-smoothing:antialiased;font-feature-settings:"cv11";overflow:hidden}   /* no global "tnum": it gives every hyphen digit width ("One - way"); .num opts numbers in */
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 input,select{font:inherit;color:inherit}
 a{color:inherit}
 .num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.seg button:focus-visible{outline-color:var(--accent);outline-offset:-2px}
+.modal-box:focus,.cmdk-box:focus{outline:none}   /* the box takes focus only so Escape/Tab work; it is not a control */
+input[type=checkbox],input[type=radio],input[type=range]{accent-color:var(--ink)}
+.u{text-transform:none;letter-spacing:0}   /* unit symbols keep their case inside uppercase captions (kWh, km/h) */
 svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .cap{font-size:var(--fs-cap);font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .lnk{font-size:11.5px;font-weight:500;color:var(--ink);text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--line-2)}
@@ -60,7 +65,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .topbar .brand img{height:22px;display:block}
 .topbar .brand .t{font-size:12.5px;font-weight:500;color:var(--muted);white-space:nowrap}
 .topbar .sp{flex:1}
-.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;height:28px}
+.seg{display:inline-flex;border:1px solid var(--control);border-radius:var(--r);overflow:hidden;height:28px}
 .seg button{padding:0 12px;font-size:12px;font-weight:500;border-right:1px solid var(--line-2);display:flex;align-items:center;gap:6px}
 .seg button:last-child{border-right:0}
 .seg button.on{background:var(--ink);color:#fff}
@@ -71,7 +76,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .tb.icon{width:28px;padding:0;justify-content:center;color:var(--muted)}
 .tb.icon:hover{color:var(--ink)}
 .search{position:relative}
-.search input{height:28px;width:220px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 8px 0 28px;font-size:12px;background:var(--surface);outline:none}
+.search input{height:28px;width:220px;border:1px solid var(--control);border-radius:var(--r);padding:0 8px 0 28px;font-size:12px;background:var(--surface);outline:none}
 .search input:focus{border-color:var(--ink)}
 .search svg{position:absolute;left:8px;top:7px;color:var(--muted)}
 .units{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}
@@ -94,7 +99,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .ac .id{font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--ink)}
 .ac .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ac .nm small{color:var(--muted);margin-left:6px;font-size:11px}
-.ac .ty{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+.ac .ty{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 
 /* ---------- rail ---------- */
 .rail{position:absolute;top:calc(var(--topbar-h) + 12px);left:12px;width:var(--rail-w);max-height:calc(100vh - var(--topbar-h) - 24px - 36px);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);z-index:10;display:flex;flex-direction:column;overflow:hidden}
@@ -104,8 +109,8 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .ph h3{font-size:var(--fs-lg);font-weight:600;letter-spacing:-.005em}
 .ph .sub{font-size:11px;color:var(--muted);margin-top:1px}
 .ph .tools{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:11.5px}
-.sw{width:26px;height:14px;border:1px solid var(--line-2);border-radius:var(--r);position:relative;background:var(--surface);cursor:pointer;flex:none}
-.sw::after{content:"";position:absolute;left:2px;top:2px;width:8px;height:8px;background:var(--line-2);transition:transform .15s var(--ease),background .15s}
+.sw{width:26px;height:14px;border:1px solid var(--control);border-radius:var(--r);position:relative;background:var(--surface);cursor:pointer;flex:none}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:8px;height:8px;background:var(--control);transition:transform .15s var(--ease),background .15s}
 .sw.on{border-color:var(--ink)}
 .sw.on::after{transform:translateX(12px);background:var(--ink)}
 .sec{padding:10px var(--pad) 12px;border-bottom:1px solid var(--line)}
@@ -119,7 +124,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .bar i.over{background:var(--danger)}
 .fld{position:relative}
 .fld+.fld{margin-top:6px}
-.fld input{height:var(--field-h);width:100%;border:1px solid var(--line-2);border-radius:var(--r);padding:0 52px 0 10px;background:var(--surface);outline:none}
+.fld input{height:var(--field-h);width:100%;border:1px solid var(--control);border-radius:var(--r);padding:0 52px 0 10px;background:var(--surface);outline:none}
 .fld input:focus{border-color:var(--ink)}
 .fld input::placeholder{color:var(--faint)}
 .fld .icao{position:absolute;right:10px;top:0;height:var(--field-h);display:flex;align-items:center;font-size:11px;font-weight:500;letter-spacing:.04em;color:var(--muted)}
@@ -134,7 +139,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .stop .d{font-size:11px;color:var(--muted)}
 .stop+.stop::before{content:"";position:absolute;left:5px;top:-6px;height:8px;border-left:1px solid var(--line-2)}
 .freq{display:flex;align-items:center;gap:8px}
-.freq input{width:56px;height:var(--field-h);border:1px solid var(--line-2);border-radius:var(--r);text-align:center;outline:none;background:var(--surface)}
+.freq input{width:56px;height:var(--field-h);border:1px solid var(--control);border-radius:var(--r);text-align:center;outline:none;background:var(--surface)}
 .freq input:focus{border-color:var(--ink)}
 .freq .seg{width:110px}
 .freq .t{font-size:12px;color:var(--muted)}
@@ -149,7 +154,9 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .btn{height:36px;flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;border-radius:var(--r);border:1px solid var(--line-2);background:var(--surface);color:var(--ink);transition:background .12s,border-color .12s}
 .btn:hover{border-color:var(--ink)}
 .btn.p{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
-.btn.p:hover{background:#c4421f;border-color:#c4421f}
+.btn.p:hover{background:#a8391a;border-color:#a8391a}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.p:disabled,.btn.p:disabled:hover{opacity:1;background:var(--canvas);border-color:var(--line-2);color:var(--muted)}   /* a blocked action is neutral, not a faded accent */
 .btn.i{flex:0 0 36px;padding:0;color:var(--muted)}
 .btn.i:hover{color:var(--ink)}
 .btn.q{border-color:transparent;color:var(--muted);font-weight:500}
@@ -178,7 +185,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .stats .v{font-size:var(--fs-num);font-weight:600;letter-spacing:-.02em;line-height:1.15;margin-top:4px}
 .stats .v small,.cost .v small{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:2px}
 .stats .s{font-size:11px;color:var(--muted);margin-top:2px}
-.cost{display:flex;align-items:baseline;justify-content:space-between;padding:10px var(--pad);border-bottom:1px solid var(--line)}
+.cost{display:flex;align-items:flex-end;justify-content:space-between;padding:10px var(--pad);border-bottom:1px solid var(--line)}
 .cost .v{font-size:var(--fs-num);font-weight:600;letter-spacing:-.02em}
 .cost .m{font-size:11px;color:var(--muted)}
 .split{padding:10px var(--pad);border-bottom:1px solid var(--line)}
@@ -212,7 +219,7 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .tiles .v small{font-size:11px;font-weight:500;color:var(--muted);margin-left:2px;white-space:nowrap}
 .tiles .cap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ntool{display:flex;align-items:center;gap:8px;padding:8px var(--pad);border-bottom:1px solid var(--line)}
-.ntool select{height:28px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 8px;background:var(--surface);font-size:12px;outline:none}
+.ntool select{height:28px;border:1px solid var(--control);border-radius:var(--r);padding:0 8px;background:var(--surface);font-size:12px;outline:none}
 .ntool .sp{flex:1}
 .ap{border-bottom:1px solid var(--line)}
 .ap>button{display:grid;grid-template-columns:52px 1fr auto auto auto 18px;gap:10px;align-items:center;width:100%;padding:9px var(--pad);text-align:left;font-size:12.5px}
@@ -258,8 +265,10 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .glegend i.c{background:var(--accent)}
 
 /* ---------- toast ---------- */
-.toast{position:absolute;left:50%;bottom:52px;transform:translate(-50%,8px);background:var(--ink);color:#fff;font-size:12.5px;padding:8px 14px;border-radius:var(--r);opacity:0;transition:opacity .18s,transform .18s var(--ease);z-index:60;pointer-events:none;box-shadow:var(--shadow)}
+.toast{position:absolute;left:50%;bottom:52px;transform:translate(-50%,8px);background:var(--ink);color:#fff;font-size:12.5px;padding:8px 14px;border-radius:var(--r);opacity:0;transition:opacity .18s,transform .18s var(--ease);z-index:120;pointer-events:none;box-shadow:var(--shadow);white-space:nowrap}
 .toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.act.show{pointer-events:auto}
+.toast .toast-act{margin-left:14px;color:#fff;font-weight:600;text-decoration:underline;text-underline-offset:2px}
 /* drawer sits beside the rail, never under it; grows with the airport count */
 .drawer{position:absolute;left:calc(var(--rail-w) + 24px);right:12px;transform:none;bottom:0;width:auto;background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0;box-shadow:var(--shadow);z-index:15;transition:height .22s var(--ease);height:36px;overflow:hidden}
 body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
@@ -290,7 +299,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .cmdk-in input{flex:1;height:44px;border:0;outline:none;font-size:14px;background:transparent;color:var(--ink)}
 .cmdk-in input::placeholder{color:var(--faint)}
 .cmdk-list{max-height:min(52vh,420px);overflow:auto;padding:6px 0}
-.cmdk-list .grp{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:8px 14px 3px}
+.cmdk-list .grp{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:8px 14px 3px}
 .cmdk-list .it{display:flex;align-items:center;gap:10px;padding:7px 14px;font-size:13px;cursor:pointer}
 .cmdk-list .it.on{background:var(--canvas);box-shadow:inset 2px 0 0 var(--ink)}
 .cmdk-list .it b{font-weight:600;letter-spacing:.03em}
@@ -316,15 +325,15 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .soc svg{width:100%;height:92px;display:block;margin-bottom:2px}
 
 /* v2 preview tag in the topbar */
-.v2tag{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:var(--r);padding:1px 6px;margin-left:8px;text-decoration:none}
-.v2tag:hover{background:var(--accent);color:#fff}
+.v2tag{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line-2);border-radius:var(--r);padding:1px 6px;margin-left:8px;text-decoration:none;white-space:nowrap}
+.v2tag:hover{color:var(--ink);border-color:var(--ink)}   /* neutral: the accent is for the primary action and the live route */
 
 /* ---- aircraft section · option 3 "Instrument" (static/proto/aircraft-options.html) ---- */
 .acsec .ac-tools{display:flex;gap:8px;align-items:center;position:relative}
 .fbtn{height:22px;padding:0 8px;border:1px solid var(--line-2);border-radius:var(--r);font-size:11px;font-weight:500;display:inline-flex;align-items:center;gap:6px;background:var(--surface);color:var(--ink);white-space:nowrap}
 .fbtn .ch{color:var(--muted);font-size:9px}.fbtn:hover{border-color:var(--ink)}
 .ac-pop{position:absolute;right:0;top:26px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:8px;width:236px;z-index:30;text-align:left}
-.ac-pop .k{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:4px 0}
+.ac-pop .k{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:4px 0}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .chip.dis{color:var(--faint);border-style:dashed}
@@ -351,7 +360,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .ac-ov{position:absolute;left:0;right:0;bottom:0;background:rgba(50,50,110,.78);color:#fff;padding:8px var(--pad) 9px}
 .ac-ov .nm{font-weight:700;font-size:14px;letter-spacing:-.005em;line-height:1.2}
 .ac-ov .nm .mk{font-weight:400;color:rgba(255,255,255,.78)}
-.ac-ov .sp{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.78);margin-top:3px;white-space:nowrap}
+.ac-ov .sp{font-size:11px;font-weight:500;color:rgba(255,255,255,.85);margin-top:3px;white-space:nowrap}   /* sentence case: 225 kWh, 250 km/h */
 
 /* ---- planner: stop rows with actions, type tags, diverts, bias select ---- */
 .stop{display:grid;grid-template-columns:18px 1fr auto 18px;align-items:center;gap:8px;font-size:12px;padding:3px 0;position:relative}
@@ -362,7 +371,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .stop .alt{font-size:10.5px;color:var(--muted);margin-left:6px}
 .route .err{font-size:11.5px;color:var(--danger)}
 .route .err .lnk{color:var(--ink)}
-.sel{height:24px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 6px;background:var(--surface);font-size:11.5px;color:var(--ink)}
+.sel{height:24px;border:1px solid var(--control);border-radius:var(--r);padding:0 6px;background:var(--surface);font-size:11.5px;color:var(--ink)}
 .pp .m.bad{color:var(--danger)}
 .pp-photo{display:block;width:calc(100% + 24px);margin:-10px -12px 8px;height:96px;object-fit:cover}
 /* divert editor furniture from static/divert-edit.js (it injects its own markers) */
@@ -376,7 +385,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .modal-box .mh h3{font-size:14px;font-weight:600}
 .modal-box .mb{padding:14px 16px}
 .modal-box .btns{border-top:1px solid var(--line);padding:12px 16px}
-.modal-box .fld input{height:32px;width:100%;border:1px solid var(--line-2);border-radius:var(--r);padding:0 10px;background:var(--surface);outline:none}
+.modal-box .fld input{height:32px;width:100%;border:1px solid var(--control);border-radius:var(--r);padding:0 10px;background:var(--surface);outline:none}
 .modal-box .fld input:focus{border-color:var(--ink)}
 
 /* ---- network ledger: pane tiles, chargers, charge target, flights ---- */
@@ -386,7 +395,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .ap .pane .tiles3 .s{font-size:10.5px;color:var(--muted);margin-top:1px}
 .seg.xs{height:18px;margin-left:6px;vertical-align:middle}.seg.xs button{padding:0 6px;font-size:10px}
 .alert{margin-top:8px;padding:8px 10px;border:1px solid var(--danger);border-radius:var(--r);color:var(--danger);font-size:12px}
-.fleet .slot{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line-2);border-radius:var(--r);padding:2px 4px 2px 6px}
+.fleet .slot{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--control);border-radius:var(--r);padding:2px 4px 2px 6px}
 .fleet .slot .sel{border:0;height:20px;padding:0 2px;font-size:11.5px}
 .fleet .slot .rm{width:16px;height:16px}
 .socp{border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;font-size:12px;display:grid;gap:6px}
@@ -395,17 +404,17 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .fl.bad .t{color:var(--danger)}
 .fl .tag{display:inline-block;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 4px;margin-right:4px;vertical-align:1px}
 .fl .freq{display:inline-flex;gap:4px;align-items:center}
-.fl .freq input{width:52px;height:24px;border:1px solid var(--line-2);border-radius:var(--r);padding:0 6px;text-align:right;background:var(--surface)}
+.fl .freq input{width:52px;height:24px;border:1px solid var(--control);border-radius:var(--r);padding:0 6px;text-align:right;background:var(--surface)}
 .fl .freq .sel{height:24px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
 .grid2 label{display:flex;flex-direction:column;gap:4px;font-size:12px}
 .grid2 .sel{height:30px;font-size:12.5px}
 /* ---- timeline kinds ---- */
-.track .blk.chg.away{background:rgba(216,76,38,.28);color:var(--ink)}
+.track .blk.chg.away{background:rgba(196,66,31,.28);color:var(--ink)}
 .track .blk.wait.away{background:repeating-linear-gradient(135deg,#d6d9e4 0 3px,#eceef4 3px 6px);color:var(--ink)}
 .grow.grp{height:26px;background:var(--canvas)}
 .grow.grp .lab{font-weight:600}
-.glegend i.a{background:rgba(216,76,38,.28)}
+.glegend i.a{background:rgba(196,66,31,.28)}
 .blk[data-drag]{cursor:grab}.blk[data-drag]:active{cursor:grabbing}
 
 /* ---- model settings dialog ---- */
@@ -455,6 +464,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .tbl th:last-child,.tbl td:last-child{padding-right:0}
 .tbl td.r,.tbl th.r{font-variant-numeric:tabular-nums}
 .tbl th{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;border-bottom:1px solid var(--line)}
+.tbl th.u{text-transform:none;letter-spacing:.02em}
 .acc.alt{background:rgba(50,50,110,.035)}
 /* battery chart: one lane per leg, scrolls sideways when the route is long */
 .soc .scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
@@ -469,3 +479,16 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .fld.over-bottom{box-shadow:0 2px 0 0 var(--ink)}
 /* charge-taper curve in Model settings */
 .ms .taper{display:block;width:100%;height:104px;margin-top:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--canvas)}
+
+/* ---- design sweep (2026-09-28): map Fit control, missing-input errors, a topbar that never wraps ---- */
+.map-fit{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;background:var(--surface);border:1px solid var(--control);border-radius:var(--r);box-shadow:var(--shadow);font-size:12px;font-weight:500;color:var(--ink);cursor:pointer}
+.map-fit:hover{border-color:var(--ink)}
+.map-fit kbd{font:10px Inter,system-ui,sans-serif;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 4px}
+.fld.bad input{border-color:var(--danger)}
+.foot-err{padding:10px var(--pad) 0;font-size:12px;color:var(--danger);border-top:1px solid var(--line);background:var(--surface)}
+.foot-err+.btns{border-top:0}
+#modeSeg{flex:none}
+.topbar .brand{flex:none}
+.ntool select{min-width:0;flex:0 1 auto}.ntool .hint{white-space:nowrap}
+@media (max-width:1180px){.topbar .brand .t{display:none}}
+@media (max-width:1120px){.units>span{display:none}.search input{width:170px}}
