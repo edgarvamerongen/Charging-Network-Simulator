@@ -72,8 +72,8 @@
     assetLayer.clearLayers(); if (!S.showAssets) return;
     Object.values(UI.assets()).forEach(x => { const a = UI.byId()[x.icao]; if (!a) return;
       const construction = x.status === 'construction';
-      const m = L.marker(UI.ll(a), { pane: 'pins', icon: L.divIcon({ className: '', html: `<div class="nrg-pin${construction ? ' construction' : ''}"><div class="head"><img src="/pics/logos/NRG2fly_icon_circle_inv.png" alt=""></div><div class="tail"></div></div>`, iconSize: [0, 0], iconAnchor: [0, 0] }) });
-      m.bindPopup(`<div class="pp"><div class="t"><span>${UI.esc(x.name)}</span><span class="ic2">${UI.esc(x.icao)}</span></div><div class="m">${UI.esc(x.network || 'NRG2FLY')} charging${construction ? ' · under construction' : ''} · ${(x.plugs || []).length} plug${(x.plugs || []).length === 1 ? '' : 's'}</div>
+      const m = L.marker(UI.ll(a), { pane: 'pins', title: x.name, icon: L.divIcon({ className: '', html: `<div class="asset${construction ? ' con' : ''}"></div>`, iconSize: [10, 10], iconAnchor: [5, 5] }) });
+      m.bindPopup(`<div class="pp"><div class="t"><span><img class="pp-logo" src="/pics/logos/NRG2fly_icon_circle_inv.png" alt="">${UI.esc(x.name)}</span><span class="ic2">${UI.esc(x.icao)}</span></div><div class="m">${UI.esc(x.network || 'NRG2FLY')} charging${construction ? ' · under construction' : ''} · ${(x.plugs || []).length} plug${(x.plugs || []).length === 1 ? '' : 's'}</div>
         <div class="plugs">${(x.plugs || []).map(p => `<div><span>${UI.esc(p.label)} · ${UI.esc(p.connector)}</span><b class="num">${p.power_kw} kW</b></div>`).join('')}</div></div>`);
       assetLayer.addLayer(m); });
   }
@@ -151,13 +151,23 @@
     if (!document.getElementById('modal').hidden || !document.getElementById('cmdk').hidden) return;
     e.preventDefault(); fit();
   });
+  /** The network on the map. In Network mode it encodes the network (audit P5): a route is as wide as it
+      is busy and every network airport is an ink disc sized by its flights per day, with its ICAO code;
+      the airports around it fade (CSS). In Plan mode the routes stay a thin backdrop. */
   function drawNet() {
     netLayer.clearLayers(); if (!S.showNet || !window.CNSDemand) return;
+    const net = S.mode === 'network', perAp = {}, lit = new Set();
     CNSDemand.loadFolder().forEach(t => { const pts = [[t.originLat, t.originLon], ...(t.stops || []).map(s => [s.lat, s.lon]), [t.destLat, t.destLon]].filter(p => p[0] != null && p[1] != null);
       if (t.tripType === 'retour' || t.tripType === 'circular') pts.push([t.originLat, t.originLon]);
-      if (pts.length < 2) return; const idents = [t.originIdent, ...(t.stops || []).map(s => s.ident), t.destIdent];
-      const hit = !S.filter || idents.includes(S.filter);
-      netLayer.addLayer(L.polyline(arcPath(pts), { pane: 'net', interactive: false, color: '#32326E', weight: hit && S.filter ? 2 : 1.5, opacity: S.filter ? (hit ? .8 : .12) : .45 })); });
+      if (pts.length < 2) return; const idents = [t.originIdent, ...(t.stops || []).map(s => s.ident), t.destIdent].filter(Boolean);
+      const hit = !S.filter || idents.includes(S.filter), f = CNSDemand.flightsPerDay ? CNSDemand.flightsPerDay(t) : 1;
+      idents.forEach(id => { perAp[id] = (perAp[id] || 0) + f; if (hit) lit.add(id); });
+      const w = net ? Math.min(6, 1 + 1.1 * Math.sqrt(f)) : 1.5;
+      netLayer.addLayer(L.polyline(arcPath(pts), { pane: 'net', interactive: false, color: '#32326E', weight: hit && S.filter ? w + .5 : w, opacity: S.filter ? (hit ? .8 : .12) : (net ? .55 : .45), lineCap: 'round' })); });
+    if (!net) return;
+    Object.entries(perAp).forEach(([id, f]) => { const a = UI.byId()[id]; if (!a) return; const on = lit.has(id), r = Math.min(12, 3.5 + 1.6 * Math.sqrt(f));
+      netLayer.addLayer(L.circleMarker(UI.ll(a), { pane: 'net', interactive: false, radius: r, fillColor: '#32326E', fillOpacity: on ? .9 : .25, color: '#fff', weight: 1.5, opacity: on ? 1 : .4 }));
+      netLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="netlbl${on ? '' : ' dim'}" style="left:${Math.round(r + 3)}px">${UI.esc(id)}</div>`, iconSize: [0, 0] }) })); });
   }
   function highlightAirports(idents) {
     if (!hiLayer) return;

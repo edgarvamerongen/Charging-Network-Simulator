@@ -56,6 +56,12 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .pp .acts button:hover{border-color:var(--ink)}
 .leglbl{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:3px 7px;font-size:11px;font-weight:500;color:var(--ink);white-space:nowrap;box-shadow:var(--shadow);transform:translate(-50%,-50%);display:inline-block}
 .asset{width:10px;height:10px;background:var(--ink);border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(50,50,110,.35)}
+.asset.con{background:var(--surface);box-shadow:0 0 0 1.5px var(--ink)}   /* under construction */
+.pp-logo{width:14px;height:14px;vertical-align:-2px;margin-right:6px}
+/* Network mode (audit P5): the network's airports carry their code; the rest of Europe fades back */
+.netlbl{position:absolute;top:0;transform:translateY(-50%);font:600 10.5px Inter,system-ui,sans-serif;letter-spacing:.02em;color:var(--ink);background:rgba(255,255,255,.86);padding:0 3px;border-radius:2px;white-space:nowrap}
+.netlbl.dim{opacity:.4}
+body.net .leaflet-dots-pane{opacity:.3}
 .ep{width:11px;height:11px;border-radius:50%;background:var(--ink);border:2px solid #fff;box-shadow:0 0 0 1px rgba(50,50,110,.35)}
 .ep.stop{background:#fff;border-color:var(--ink)}
 
@@ -283,10 +289,10 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .grow.load .track svg{position:absolute;left:0;right:0;bottom:0;width:100%;height:40px;display:block}
 .grow.load .track path{fill:rgba(50,50,110,.16);stroke:var(--ink);stroke-width:1;vector-effect:non-scaling-stroke}
 /* queueing: waiting blocks + per-charger lanes */
-.blk.wait{background:repeating-linear-gradient(135deg,#e6c149 0 3px,#f6e6a6 3px 6px);color:var(--ink)}
+.blk.wait{background:repeating-linear-gradient(135deg,rgba(50,50,110,.6) 0 2px,rgba(50,50,110,.1) 2px 5px);color:var(--ink)}
 .blk.wait.over{background:repeating-linear-gradient(135deg,#c33d3d 0 3px,#f0b3b3 3px 6px);color:#fff}
 .grow.sub .lab{padding-left:14px;color:var(--muted);font-weight:400;font-size:11.5px}
-.glegend i.w{background:repeating-linear-gradient(135deg,#e6c149 0 2px,#f6e6a6 2px 4px)}
+.glegend i.w{background:repeating-linear-gradient(135deg,rgba(50,50,110,.6) 0 1.5px,rgba(50,50,110,.1) 1.5px 3.5px)}
 .step{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r);height:26px;align-items:center}
 .step button{width:26px;height:100%;font-size:15px;color:var(--muted);line-height:1}
 .step button:hover{color:var(--ink)}
@@ -345,11 +351,6 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#9aa1b5;vertical-align:-.5px;margin-right:5px}
 .dot.s-certified{background:#2f9e6e}.dot.s-prototype-flying{background:#5aa9e6}.dot.s-in-development{background:#c98a4b}.dot.s-under-construction{background:#ff9d4d}.dot.s-concept{background:#b7bdd1}
 /* ---- NRG2FLY charger pins: the classic teardrop, kept flat ---- */
-.nrg-pin{position:absolute;transform:translate(-50%,-100%) translateY(-5px);display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 1px 2px rgba(50,50,110,.35))}
-.nrg-pin .head{width:26px;height:26px;border-radius:50%;overflow:hidden;background:#fff;border:2px solid #fff;display:flex;align-items:center;justify-content:center}
-.nrg-pin .head img{width:116%;height:116%;flex:none;object-fit:cover}
-.nrg-pin .tail{width:0;height:0;margin-top:-1px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #fff}
-.nrg-pin.construction .head{opacity:.55}
 
 /* ---- aircraft section · caption on the photo (the classic card, flattened) ---- */
 .ac-stage.ov{height:196px}

@@ -207,7 +207,7 @@ window.CNSUI = (function () {
     S.mode = m; document.body.classList.toggle('net', m === 'network');
     if (m === 'network') CNSUI.map.hideRoute(); else CNSUI.map.showRoute();
     CNSUI.map.drawAlternates();               // the divert overlay follows the route it belongs to
-    render(); if (m === 'network') { CNSUI.map.drawNet(); CNSUI.map.fitNet(); }
+    render(); CNSUI.map.drawNet(); if (m === 'network') CNSUI.map.fitNet();   // the network is drawn per mode (P5)
     else if (CNSUI.map.highlightAirports) CNSUI.map.highlightAirports([]);   // the open-airport ring belongs to the ledger
   }
   // A failed catalog/airport fetch used to leave the rail blank forever with an unhandled
