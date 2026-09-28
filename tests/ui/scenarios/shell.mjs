@@ -116,6 +116,7 @@ export default async function run(ctx) {
     await v2.waitFor(`localStorage.getItem('cns_units') === 'metric'`, 2000, 50);
     await v2.sleep(200);
     const km = await v2.eval(`({ raw: localStorage.getItem('cns_units'), on: [...document.querySelectorAll('#unitSeg button.on')].map(b => b.dataset.u), d: ${ROUTE_D} })`);
+    await v2.click('#modalBox [data-modal=close]'); await v2.waitFor(`document.querySelector('#modal').hidden`, 2000, 50);   // Model settings closes again
     await classic.reload({ boot: 'classic' });
     const classicKm = await classic.eval(CLASSIC_STATE);
     if (km.raw !== 'metric' || !km.d.some(t => / km$/.test(t)) || km.d.some(t => / NM$/.test(t))) problems.push(`back to km: cns_units=${km.raw} .route .d=${j(km.d)}`);

@@ -139,7 +139,7 @@ export default async function run(ctx) {
     await ctx.screenshot(v2, 'dialog');
     const file = dump('dialog', { v2: st, classic: c });
     if (fails.length) throw new Error(fails.join('; ') + ' — ' + file);
-    return { detail: `9 rows (8 model + tariff), switches/off/disabled ↔ stored, ${Object.keys(expect).length + 1} slider labels, badge "${st.badge.text}" = ${st.nFlags} flags (classic ${c.nFlags}, #modelBadge ${j(c.badge)})`, repro: 'v2: CNSUI.settings.open(); read #modalBox .msr rows, #setBadge, CNSSettings.loadAll()', evidence: [ctx.shot('dialog'), file] };
+    return { detail: `10 rows (8 model + tariff + distance units), switches/off/disabled ↔ stored, ${Object.keys(expect).length + 1} slider labels, chip "Model: ${st.badge.text}", ${st.nFlags} flags (classic ${c.nFlags}, #modelBadge ${j(c.badge)})`, repro: 'v2: CNSUI.settings.open(); read #modalBox .msr rows, #setBadge, CNSSettings.loadAll()', evidence: [ctx.shot('dialog'), file] };
   });
 
   // ---- gear: a REAL click on the topbar gear must open the dialog (the classic gear opens #modelSettingsModal) --
