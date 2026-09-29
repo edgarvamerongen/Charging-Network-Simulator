@@ -15,6 +15,11 @@ import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Tests run on the tracked fixture catalog, never the Notion sync in data/ (the dev
+# servers' catalog), so a Notion edit can't move a test. run_all.sh exports the same
+# default for the modules that import app before this one.
+os.environ.setdefault("CNS_PLANES_FILE", os.path.join(REPO_ROOT, "tests", "fixtures", "planes.fixture.json"))
+
 # Make `import sim` work regardless of the CWD unittest is launched from.
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)

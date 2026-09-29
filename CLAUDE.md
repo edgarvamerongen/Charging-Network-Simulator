@@ -65,6 +65,16 @@ subagents over many human-driven sessions.
   is retired. `NOTION_CATALOG_PLAN.md` (repo root — `docs/` is gitignored,
   don't move it there) is the design record — read it before touching
   catalog code.
+- **Local dev servers run the Notion catalog too.** The three `CNS_NOTION_*`
+  secrets live in `~/.config/cns/notion.env` (mode 600, never in the repo).
+  Each checkout has its own `data/`, so sync each one you serve from:
+  `set -a; . ~/.config/cns/notion.env; set +a; ./venv/bin/python notion_sync.py`.
+  Running servers pick the new file up on their next request.
+- **Tests never read `data/`.** `CNS_PLANES_FILE` pins the tracked
+  `tests/fixtures/planes.fixture.json` (`tests/_helpers.py`, `run_all.sh`), and
+  `run_all.sh` starts its own fixture-catalog server on :5098 for the API tests,
+  golden check and DES gate. The `tests/ui` browser harness is the exception: it
+  runs against a real server, so it sees whatever catalog that server has.
 
 ## Guided tour
 
