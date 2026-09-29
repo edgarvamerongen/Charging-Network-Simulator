@@ -499,8 +499,8 @@ export default async function run(ctx) {
       repro: 'v2: ⌘K satellite → Enter on "Basemap: Satellite"', evidence: [ctx.shot('actions-basemap-sat')] };
   });
 
-  // Both shells persist the basemap under cns_map_options.basemap, but v2 writes light|street|sat while the classic
-  // reads/writes satellite|voyager (index.html:6464-6477): a palette choice never reaches the classic and vice versa.
+  // Both shells persist the basemap under cns_map_options.basemap (v2 writes the classic's tokens: voyager for Street),
+  // so a choice in either shell must survive a reload of the other.
   await check('actions-basemap-shared-key-parity', async () => {
     const st = await query(v2, 'street');
     await runItem(v2, st, /^Basemap: Street$/);
@@ -508,13 +508,14 @@ export default async function run(ctx) {
     const s = await v2s(v2);
     const c = await reloadClassic();
     await ctx.screenshot(classic, 'actions-basemap-street-classic');
-    // reverse direction: the classic picks Street (voyager) → v2 reload
+    // reverse direction: the classic picks Street (voyager) → v2 boots in a FRESH tab of the same profile. Reloading `v2`
+    // cannot show it: its launch seed (cns_map_options.basemap = 'sat', above) runs again on every navigation.
     const cw = await classic.eval(`(function(){ var b = document.querySelector('.seg-btn[data-basemap=voyager]'); if (b) b.click(); var mo = {}; try { mo = JSON.parse(localStorage.getItem('cns_map_options') || '{}'); } catch (e) {} var a = document.querySelector('.seg-btn[data-basemap].active'); return { active: a ? a.dataset.basemap : null, basemap: mo.basemap }; })()`);
-    await settle(v2); await bounded(v2.send('Page.navigate', { url: v2.url }), 90000, 'Page.navigate (v2 reload)'); await v2.waitFor(Page.BOOT.v2, 90000, 100); await v2.eval(Page.MAP_HOOK); await tourSpy(v2);
-    const s2 = await v2s(v2);
-    const detail = `v2 palette "Basemap: Street" → S.base=${s.base}, cns_map_options.basemap=${s.mapOpts.basemap}; classic after reload: active=${c.basemap} (expected voyager = Street); classic clicks Street → writes basemap=${cw.basemap} (active ${cw.active}); v2 after reload: S.base=${s2.base} (expected street), tiles=${j(s2.tiles)}`;
+    const fresh = await ctx.v2Page({ browser: v2.browser }); const s2 = await v2s(fresh);
+    ctx.pages.splice(ctx.pages.indexOf(fresh), 1); await fresh.send('Page.navigate', { url: 'about:blank' }).catch(() => {});   // idle it: a third live map tab starves the renderers
+    const detail = `v2 palette "Basemap: Street" → S.base=${s.base}, cns_map_options.basemap=${s.mapOpts.basemap}; classic after reload: active=${c.basemap} (expected voyager = Street); classic clicks Street → writes basemap=${cw.basemap} (active ${cw.active}); a fresh v2 tab: S.base=${s2.base} (expected street), tiles=${j(s2.tiles)}`;
     if (c.basemap !== 'voyager' || s2.base !== 'street') throw new Error('basemap choice does not cross the shells through the shared cns_map_options key — ' + detail);
-    return { detail, repro: 'v2: ⌘K street → Enter; reload the classic → .seg-btn[data-basemap].active; classic: click Street; reload v2 → CNSUI.S.base', evidence: [ctx.shot('actions-basemap-street-classic')] };
+    return { detail, repro: 'v2: ⌘K street → Enter; reload the classic → .seg-btn[data-basemap].active; classic: click Street; open a fresh v2 tab → CNSUI.S.base', evidence: [ctx.shot('actions-basemap-street-classic')] };
   });
 
   await check('actions-scenario-training', async () => {

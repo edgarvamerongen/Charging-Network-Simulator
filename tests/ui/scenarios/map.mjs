@@ -156,7 +156,8 @@ export default async function run(ctx) {
       if (!c.ic2.startsWith(ident)) probs.push(`ICAO "${c.ic2}" ≠ ${ident}`);
       if (!(c.meta[0] || '').includes(a.type)) probs.push(`type line "${c.meta[0]}" lacks "${a.type}"`);
       const rwTxt = a.rw ? `runway ${a.rw} m` : 'no runway data'; if (!(c.meta[0] || '').includes(rwTxt)) probs.push(`runway text "${c.meta[0]}" lacks "${rwTxt}"`);
-      if (!c.meta.some(m => m.startsWith(a.plane + ':'))) probs.push(`no aircraft suitability line for "${a.plane}" in ${JSON.stringify(c.meta)}`);
+      // the fit line reads as a sentence since the 2026-09-28 design sweep ("Runway suits the Alia CX300"), not "Alia CX300: ok"
+      if (!c.meta.some(m => /runway/i.test(m) && m.includes('the ' + a.plane))) probs.push(`no runway-fit line for the "${a.plane}" in ${JSON.stringify(c.meta)}`);
       if (c.acts.join('|') !== 'Departure|Destination|Stop') probs.push(`actions ${JSON.stringify(c.acts)}`);
     }
     if (probs.length) throw new Error(`popup for ${ident} (${how.method}): ` + probs.join('; '));

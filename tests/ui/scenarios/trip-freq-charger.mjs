@@ -1,6 +1,7 @@
 /* trip-freq-charger: the trip-type segment, training (Velis at EHTE parity; an aircraft without a
    published training range → API error in the rail, no exception), the frequency normalisation
-   (3 / week → per-day cost = ceil(kWh) × 3/7 × tariff, the classic's weekly headline / 7), the charger
+   (3 / week → per-day revenue = exact charged kWh × 3/7 × tariff; the classic's weekly headline / 7 prices the
+   rounded-up kWh, so it sits at most one kWh's worth above), the charger
    shortlist / 'All chargers' / the acceptance-cap hint, a custom-charger round-trip through the dialog
    (POST 201 → used by simulate → listed n / 5 → DELETE 200) and a network edit of a flight that sits
    on a custom charger (the classic sends the charger object; network.js:120 sends only charger_id).
@@ -168,9 +169,10 @@ export default async function run(ctx) {
     await v2.waitFor(`CNSUI.S.freq === 3 && CNSUI.S.per === 'week'`, 3000);
     const r = await ctx.v2Simulate(v2);
     if (r.err) throw new Error('v2 simulate error: ' + r.err);
-    const st = await v2.eval(`(function(){ const d = CNSUI.plan.derive(); const rate = CNSSettings.chargeRate(); return { charged: d.charged, used: d.used, chargedR: CNSUI.fmt.r(d.charged), rate, fpd: CNSUI.perDay({ freq: CNSUI.S.freq, per: CNSUI.S.per }), freqN: CNSUI.S.result._freqN, freqUnit: CNSUI.S.result._freqUnit, cost: (document.querySelector('#railBody .cost .v') || {}).textContent, sub: (document.querySelector('#railBody .cost .m') || {}).textContent, head: (document.querySelector('#railBody .rh2 .m') || {}).textContent }; })()`);
-    const expected = st.chargedR * 3 / 7 * st.rate; const shown = ctx.num(st.cost);
-    if (!ctx.close(shown, expected, 0.01)) throw new Error(`cost .v ${st.cost} → ${shown}, expected ceil(${st.charged})=${st.chargedR} × 3/7 × ${st.rate} = ${expected.toFixed(4)}`);
+    const st = await v2.eval(`(function(){ const d = CNSUI.plan.derive(); const rate = CNSSettings.chargeRate(); return { charged: d.charged, used: d.used, rate, fpd: CNSUI.perDay({ freq: CNSUI.S.freq, per: CNSUI.S.per }), freqN: CNSUI.S.result._freqN, freqUnit: CNSUI.S.result._freqUnit, cost: (document.querySelector('#railBody .cost .v') || {}).textContent, sub: (document.querySelector('#railBody .cost .m') || {}).textContent, head: (document.querySelector('#railBody .rh2 .m') || {}).textContent }; })()`);
+    // Design sweep 2026-09-28: v2 prices the EXACT charged kWh, like its network ledger (simulate-result cost-audit).
+    const expected = st.charged * 3 / 7 * st.rate; const shown = ctx.num(st.cost);
+    if (!ctx.close(shown, expected, 0.01)) throw new Error(`cost .v ${st.cost} → ${shown}, expected charged ${st.charged.toFixed(3)} × 3/7 × ${st.rate} = ${expected.toFixed(4)}`);
     if (st.freqN !== 3 || st.freqUnit !== 'week') throw new Error(`result annotations _freqN=${st.freqN} _freqUnit=${st.freqUnit}`);
     if (!/\/ day/.test(st.cost)) throw new Error('cost unit is not "/ day": ' + st.cost);
     // classic: 3 / week → weekly headline = rate × kWh × 3; per day = / 7
@@ -179,10 +181,11 @@ export default async function run(ctx) {
     if (c.error) throw new Error('classic simulate error: ' + c.error);
     const weekly = ctx.num(c.shown.hlRevenue); const perDay = weekly / 7;
     if (!/week/.test(c.shown.hlRevenue)) throw new Error('classic headline is not per week: ' + c.shown.hlRevenue);
-    if (!ctx.close(perDay, shown, 0.01)) throw new Error(`classic ${c.shown.hlRevenue} (${c.shown.hlRevenueSub}) / 7 = ${perDay.toFixed(4)} vs v2 ${shown}`);
+    const oneKwh = st.rate * 3 / 7;   // the classic prices ceil(kWh): at most one kWh's worth per day above v2
+    if (!(perDay - shown >= -0.01 && perDay - shown <= oneKwh + 0.01)) throw new Error(`classic ${c.shown.hlRevenue} (${c.shown.hlRevenueSub}) / 7 = ${perDay.toFixed(4)} is not within one rounded kWh (${oneKwh.toFixed(4)}) above v2 ${shown}`);
     await ctx.screenshot(v2, 'frequency');
     noNewExceptions(v2, ex0, 'frequency');
-    return { detail: `v2 cost "${st.cost}" sub "${st.sub}" head "${st.head}" = ceil(charged ${st.charged.toFixed(3)}; used ${st.used.toFixed(3)})=${st.chargedR} × 3/7 × €${st.rate} = ${expected.toFixed(4)}; typed ${JSON.stringify(typed)}; classic ${c.shown.hlRevenue} · ${c.shown.hlRevenueSub} → /7 = ${perDay.toFixed(4)}; classic warnings ${JSON.stringify(cs.warnings)}`, repro: 'v2: Reset, type 3 in [data-act=freq], click week, Simulate; classic: freqN 3 / week', evidence: [ctx.shot('frequency')] };
+    return { detail: `v2 cost "${st.cost}" sub "${st.sub}" head "${st.head}" = charged ${st.charged.toFixed(3)} (used ${st.used.toFixed(3)}) × 3/7 × €${st.rate} = ${expected.toFixed(4)}; typed ${JSON.stringify(typed)}; classic ${c.shown.hlRevenue} · ${c.shown.hlRevenueSub} → /7 = ${perDay.toFixed(4)}; classic warnings ${JSON.stringify(cs.warnings)}`, repro: 'v2: Reset, type 3 in [data-act=freq], click week, Simulate; classic: freqN 3 / week', evidence: [ctx.shot('frequency')] };
   });
 
   // ------------------------------------------------------------------------------------------
@@ -204,7 +207,7 @@ export default async function run(ctx) {
     await v2.click('.chg[data-id="dc_1000"]'); await v2.waitFor(`CNSUI.S.chargerId === 'dc_1000'`, 3000);
     const hint = await v2.eval(`(function(){ const h = [...document.querySelectorAll('#railBody .hint.num')].map(e => e.textContent.trim()); return { hints: h, on: (document.querySelector('#railBody .chg.on') || {}).dataset && document.querySelector('#railBody .chg.on').dataset.id, max: CNSUI.plane().max_charge_kw, eff: CNSSettings.effectiveChargePower ? CNSSettings.effectiveChargePower(1000, CNSUI.plane().battery_kwh, CNSUI.plane().c_rate, CNSUI.plane().max_charge_kw) : null }; })()`);
     if (hint.on !== 'dc_1000') throw new Error('.chg.on after clicking dc_1000 is ' + hint.on);
-    if (!hint.hints.some(h => /accepts max 400 kW/i.test(h))) throw new Error('no acceptance-cap hint for dc_1000 on the Alia: ' + JSON.stringify(hint.hints));
+    if (!hint.hints.some(h => /capped at 400 kW/i.test(h))) throw new Error('no acceptance-cap hint for dc_1000 on the Alia: ' + JSON.stringify(hint.hints));
     const r = await ctx.v2Simulate(v2); if (r.err) throw new Error('simulate with dc_1000: ' + r.err);
     const pw = await v2.eval(`(CNSUI.S.profile.charges || []).map(c => c.powerKw)`);
     if (!pw.length || pw.some(p => p > 400 + 1e-9)) throw new Error('engine charge power not capped at 400 kW: ' + JSON.stringify(pw));

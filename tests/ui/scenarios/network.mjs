@@ -337,28 +337,33 @@ export default async function run(ctx) {
     if (!st.socp) throw new Error('no .socp panel after [data-act=socToggle]');
     const kw = async id => (await v2.eval(V2_ROWS)).find(r => r.ident === id).kwh;
     const k0 = await kw(AP), h0 = await kw('EHLE');
+    // A target is a floor (flight-model.js: departTo = max(target × battery, next leg + reserve)): it moves the energy only above
+    // the SoC the deficit charge already departs at. EHLE⇄EDDF on the Alia leaves EDDF at 91.7 %, so 80 % and 90 % cannot bind;
+    // take the first 5 % slider step above both that SoC and the radio's 80 %.
+    const dep = await v2.eval(`(function(){ const t = CNSDemand.loadFolder().find(x => x.id === ${J(ids.retour)}); const p = CNSFlight.profileForTrip(t, { getTargetSoc: id => CNSDemand.resolveTargetSoc(CNSDemand.loadCfg()[id] || null) }); return p.charges.find(c => c.ident === ${J(AP)}).departSocFrac; })()`);
+    const hi = Math.min(100, 5 * Math.floor(Math.max(80, dep * 100) / 5) + 5), binds = hi / 100 > dep + 1e-9;
     await click(`input[data-act=socMode][data-ap=${AP}][value=target]`); await v2Settle();
     let cfg = await v2.eval(CFG); const probs = [];
     if (!cfg[AP] || cfg[AP].targetDepartureSoc !== 0.8) probs.push('after radio target: targetDepartureSoc = ' + J(cfg[AP] && cfg[AP].targetDepartureSoc));
     const k80 = await kw(AP);
-    await v2.setValue(`[data-act=socSlider][data-ap=${AP}]`, '90', ['input', 'change']); await v2Settle();
+    await v2.setValue(`[data-act=socSlider][data-ap=${AP}]`, String(hi), ['input', 'change']); await v2Settle();
     cfg = await v2.eval(CFG);
-    if (!cfg[AP] || cfg[AP].targetDepartureSoc !== 0.9) probs.push('after slider 90: targetDepartureSoc = ' + J(cfg[AP] && cfg[AP].targetDepartureSoc));
-    const k90 = await kw(AP), h90 = await kw('EHLE');
-    if (!(k90 > k80)) probs.push(`${AP} kWh did not rise with the target: auto ${k0.toFixed(2)} → 80% ${k80.toFixed(2)} → 90% ${k90.toFixed(2)}`);
+    if (!cfg[AP] || cfg[AP].targetDepartureSoc !== hi / 100) probs.push(`after slider ${hi}: targetDepartureSoc = ` + J(cfg[AP] && cfg[AP].targetDepartureSoc));
+    const kHi = await kw(AP), hHi = await kw('EHLE');
+    if (binds ? !(kHi > k80) : kHi !== k80) probs.push(`${AP} kWh ${binds ? 'did not rise' : 'moved'} with a ${hi}% target (the deficit charge departs at ${(100 * dep).toFixed(1)}%): auto ${k0.toFixed(2)} → 80% ${k80.toFixed(2)} → ${hi}% ${kHi.toFixed(2)}`);
     st = await v2.eval(V2_STATS(AP));
-    if (!/90 ?%/.test(st.socChip || '')) probs.push('v2 chip reads ' + J(st.socChip));
-    const how = await classicSync(`(document.querySelector('#folder [data-dest=${AP}] .soc-chip strong') || {}).textContent === '90%'`);
+    if (!new RegExp(hi + ' ?%').test(st.socChip || '')) probs.push('v2 chip reads ' + J(st.socChip));
+    const how = await classicSync(`(document.querySelector('#folder [data-dest=${AP}] .soc-chip strong') || {}).textContent === '${hi}%'`);
     const cl = (await classic.eval(CL_CARDS)).find(c => c.ident === AP);
-    if (cl.soc !== '90%') probs.push('classic chip reads ' + J(cl.soc));
+    if (cl.soc !== hi + '%') probs.push('classic chip reads ' + J(cl.soc));
     const clK = classicVal(cl.heroes[1]); const v2K = (await v2.eval(V2_ROWS)).find(r => r.ident === AP).rKwh;
-    if (!sameNum(clK, v2K)) probs.push(`at 90%: classic ${AP} energy ${cl.heroes[1]} vs v2 ${v2K}`);
+    if (!sameNum(clK, v2K)) probs.push(`at ${hi}%: classic ${AP} energy ${cl.heroes[1]} vs v2 ${v2K}`);
     await click(`input[data-act=socMode][data-ap=${AP}][value=auto]`); await v2Settle();
     cfg = await v2.eval(CFG);
     if (cfg[AP] && 'targetDepartureSoc' in cfg[AP]) probs.push('auto did not delete targetDepartureSoc: ' + J(cfg[AP]));
     await shotV2('charge-target');
     if (probs.length) throw new Error(probs.join('; '));
-    return { detail: `${AP}: target 0.8 → 0.9 → auto; kWh auto ${k0.toFixed(2)} / 80% ${k80.toFixed(2)} / 90% ${k90.toFixed(2)} (classic ${cl.heroes[1]} at 90%); EHLE home stays ${h0.toFixed(1)} → ${h90.toFixed(1)} (D6: terminus refills to 100%); classic chip via ${how}`, repro: `${AP} pane: socToggle → radio target → slider 90 → radio auto`, evidence: [ctx.shot('charge-target')] };
+    return { detail: `${AP}: deficit departs at ${(100 * dep).toFixed(1)}%; target 0.8 → ${hi / 100} → auto; kWh auto ${k0.toFixed(2)} / 80% ${k80.toFixed(2)} / ${hi}% ${kHi.toFixed(2)} (classic ${cl.heroes[1]} at ${hi}%); EHLE home stays ${h0.toFixed(1)} → ${hHi.toFixed(1)} (D6: terminus refills to 100%); classic chip via ${how}`, repro: `${AP} pane: socToggle → radio target → slider ${hi} → radio auto`, evidence: [ctx.shot('charge-target')] };
   }, { retry: 0 });
 
   // ================= frequency edit =================
@@ -419,15 +424,16 @@ export default async function run(ctx) {
     await click(`[data-act=editTrip][data-id="${ids.retour}"]`);
     await v2.waitFor(MODAL_OPEN('#efPlane'), 3000);
     const v = await v2.eval(`[...document.querySelectorAll('#efPlane option')].map(o => o.textContent.trim())`);
+    const n = await v2.eval(`CNSUI.PLANES.length`);   // whatever catalog the server has (the Notion sync differs per checkout)
     await closeModal();
     const c = await classicEdit(ids.retour, 'EHLE', `return [...document.querySelectorAll('#efPlane option')].map(x => x.textContent.trim());`);
     const dup = a => [...new Set(a.filter((x, i) => a.indexOf(x) !== i))];
     const dv = dup(v), dc = dup(c);
     const probs = [];
-    if (v.length !== 18) probs.push('v2 lists ' + v.length + ' aircraft');
+    if (v.length !== n) probs.push(`v2 lists ${v.length} aircraft, the catalog has ${n}`);
     if (dv.length && !dc.length) probs.push('v2 has duplicate labels the classic disambiguates: ' + J(dv));
     if (probs.length) throw new Error(probs.join('; '));
-    return { detail: `v2 ${v.length} options, duplicates ${J(dv)}; classic ${c.length} options ("name — battery"), duplicates ${J(dc)} — same catalog collision in both shells (heart_es30 / heart_es30_30_pax)`, repro: 'open Edit; compare #efPlane option labels with the classic openFlightEdit' };
+    return { detail: `v2 ${v.length} options (catalog ${n}), duplicates ${J(dv)}; classic ${c.length} options ("name — battery"), duplicates ${J(dc)} — same catalog collision in both shells (heart_es30 / heart_es30_30_pax)`, repro: 'open Edit; compare #efPlane option labels with the classic openFlightEdit' };
   }, { retry: 0 });
 
   // ================= edit dialog: training → return must be blocked =================
