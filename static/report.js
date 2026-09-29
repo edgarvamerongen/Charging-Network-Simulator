@@ -13,6 +13,8 @@ window.CNSReport = (function () {
     const DAY_START = 7 * 60, DAY_END = 23 * 60;
     const _short = (s, n = 18) => (s && s.length > n) ? s.slice(0, n - 1) + '…' : (s || '');
     const _flightsPerDay = CNSDemand.flightsPerDay;   // single source of truth in demand.js
+    // Grid side (charger losses included) for power, as the app prints it; 1 while efficiency is off.
+    const _gridMul = () => (window.CNSSettings && CNSSettings.gridDemandFactor) ? CNSSettings.gridDemandFactor() : 1;
 
     // ---------- charger lookup (catalog: window.CHARGERS_BY_ID set by index.html) -
     function _chargerById(id, fallbackName, fallbackPower) {
@@ -129,7 +131,7 @@ window.CNSReport = (function () {
         });
 
         const sInfo = CNSScheduler.summary(ident);
-        const peakKw = sInfo.peakKw || plan.peakPower || 0;
+        const peakKw = (sInfo.peakKw || plan.peakPower || 0) * _gridMul();   // grid side, as the app prints it
         // Daily charging hours come from the DES summary (chargeMin = Σ charge-phase
         // minutes here — the very bars the Gantt below draws), so the PDF figure always
         // matches the scheduler. The old per-trip estimate it replaced priced
@@ -252,29 +254,11 @@ window.CNSReport = (function () {
     }
 
     // ---------- time-of-day load curve -------------------------------------
-    // Step series [{t: <abs minute>, kw}] of total on-airport charging power,
-    // built from the SAME scheduler phases summary() sweeps for the peak — so
-    // the curve's maximum equals the reported peak by construction.
+    // Step series [{t: <abs minute>, kw}] of on-airport charging power, grid side: the scheduler's
+    // loadCurve (CC-CV taper included), whose maximum IS the reported peak.
     function _loadCurveAt(ident) {
-        const rows = (window.CNSScheduler && CNSScheduler.rotationsAt) ? CNSScheduler.rotationsAt(ident) : [];
-        const evs = [];
-        rows.forEach(row => (row.rotations || []).forEach(rot => (rot.phases || []).forEach(p => {
-            if (p.kind === 'charge' && p.atX && p.power > 0 && p.dur > 0) {
-                const start = rot.takeoff + p.start;
-                evs.push({ t: start, d: +p.power });
-                evs.push({ t: start + p.dur, d: -p.power });
-            }
-        })));
-        if (!evs.length) return [];
-        evs.sort((a, b) => a.t - b.t || a.d - b.d);
-        const pts = [];
-        let cur = 0;
-        evs.forEach(e => {
-            cur += e.d;
-            if (pts.length && pts[pts.length - 1].t === e.t) pts[pts.length - 1].kw = cur;
-            else pts.push({ t: e.t, kw: Math.max(0, cur) });
-        });
-        return pts;
+        const c = (window.CNSScheduler && CNSScheduler.loadCurve) ? CNSScheduler.loadCurve(ident) : { pts: [] }, gm = _gridMul();
+        return c.pts.map(p => ({ t: p.t, kw: p.kw * gm }));
     }
 
     // ---------- energy mix by aircraft type --------------------------------

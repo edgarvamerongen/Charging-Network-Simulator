@@ -1,6 +1,6 @@
 /* CNS v2 — ui/timeline.js: the demand timeline drawer, rendered from CNSScheduler's day.
    Airport lanes = the rotations touching an airport (its charges highlighted, waits striped);
-   fleet lanes = the scheduler's aircraft lanes. Load row = concurrent charging kW per 15 min.
+   fleet lanes = the scheduler's aircraft lanes. Load row = charging power over the day, taper included (CNSScheduler.loadCurve), on a kW axis.
    Take-offs are automatic (the scheduler places them) until dragged: a drag FIXES one (CNSScheduler.setTakeoff),
    as the classic Gantt does, and a double-click hands it back to automatic placement. */
 (function () {
@@ -10,26 +10,23 @@
   const pct = m => Math.max(0, Math.min(100, (m - H0) / SPAN * 100)), w = m => Math.max(.4, m / SPAN * 100);
   const clock = CNSUnits.fmtClock;   // units.js:45 — one hh:mm formatter (rounds the WHOLE minute, so 07:59.7 reads 08:00, not 07:60)
   const gridMul = () => (window.CNSSettings && CNSSettings.gridDemandFactor) ? CNSSettings.gridDemandFactor() : 1;
-  /** 15-min bins of concurrent charging power — the SHADING under the load row. A bin sums every charge that
-      touches it, so two consecutive charges sharing one bin add up: `peak` here is an upper bound, NOT the peak.
-      Every printed peak comes from eventPeak() / CNSScheduler.summary() instead (aircraft side; × gridMul to print). */
-  function loadProfile(lanes, ident) {
-    const N = SPAN / 15, load = new Array(N).fill(0);
-    lanes.forEach(L => L.rotations.forEach(rot => rot.phases.forEach(ph => { if (ph.kind !== 'charge' || !ph.power || (ident && ph.ident !== ident)) return; const a = Math.max(0, Math.floor((ph.start - H0) / 15)), b = Math.min(N, Math.ceil((ph.start + ph.dur - H0) / 15)); for (let i = a; i < b; i++) load[i] += ph.power; })));
-    return { load, peak: load.reduce((m, v) => Math.max(m, v), 0), N };
+  /** Grid-side coincident peak, taper included (CNSScheduler.loadCurve): at `ident`, or the whole network. */
+  const peakKw = ident => (ident ? SC().summary(ident).peakKw || 0 : SC().loadCurve(null).peakKw) * gridMul();
+  /** A round axis top ≥ v (1, 2, 2.5 or 5 × 10ⁿ steps, as the PDF's load curve). */
+  const niceMax = v => { if (!(v > 0)) return 1; const raw = v / 4, mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw - 1e-9); return Math.ceil(v / step - 1e-9) * step; };
+  /** The load row: charging power over the day on a kW axis. An isolated airport's axis tops at its installed
+      chargers, so a full strip reads as every charger drawing full power. */
+  function loadRow(foc, R, bare) {
+    const gm = gridMul(), lc = SC().loadCurve(foc || null), peak = lc.peakKw * gm, H = 52;
+    const inst = foc ? ((R.find(a => a.ident === foc) || {}).fleet || []).reduce((s, c) => s + (+c.power_kw || 0), 0) * gm : 0;
+    const top = inst >= peak - 1e-6 && inst > 0 ? inst : niceMax(peak), pk = UI.fmt.prefixFor([top]);
+    const X = t => Math.max(0, Math.min(SPAN, t - H0)).toFixed(1), Y = kw => (H - kw * gm / top * (H - 1)).toFixed(2);
+    let d = `M0 ${H}`, prev = 0; lc.pts.forEach(p => { d += `L${X(p.t)} ${Y(prev)}L${X(p.t)} ${Y(p.kw)}`; prev = p.kw; });
+    d += `L${SPAN} ${Y(prev)}L${SPAN} ${H}Z`;
+    const at = v => `bottom:${(v / top * (H - 1)).toFixed(1)}px`, q = v => UI.fmt.as(v, pk, 'W');
+    const yax = `<i class="yg" style="${at(top)}"></i><i class="yg" style="${at(top / 2)}"></i><span class="yl" style="${at(top)}">${q(top).n} ${q(top).u}</span><span class="yl" style="${at(top / 2)}">${q(top / 2).n}</span><span class="yl z" style="bottom:0">0</span>`;
+    return { peak, html: `<div class="grow load"><div class="lab">${foc ? foc + ' load' : 'Network load'}<small>peak ${UI.fmt.kw(peak)}</small></div><div class="track">${bare}${yax}<svg viewBox="0 0 ${SPAN} ${H}" preserveAspectRatio="none"><path d="${d}"/></svg></div></div>` };
   }
-  /** Event-based concurrent peak (the algorithm CNSScheduler.summary uses, scheduler.js:606-633) over every charge
-      phase — with `ident` it equals summary(ident).peakKw exactly; without one it is the whole network's peak. */
-  function eventPeak(lanes, ident) {
-    if (ident && SC() && SC().summary) return SC().summary(ident).peakKw || 0;
-    const evs = [];
-    lanes.forEach(L => L.rotations.forEach(rot => rot.phases.forEach(ph => { if (ph.kind !== 'charge' || !ph.power || !(ph.dur > 0)) return; evs.push({ tm: ph.start, d: ph.power }); evs.push({ tm: ph.start + ph.dur, d: -ph.power }); })));
-    evs.sort((a, b) => a.tm - b.tm || a.d - b.d);
-    let cur = 0, peak = 0; evs.forEach(e => { cur += e.d; if (cur > peak) peak = cur; });
-    return peak;
-  }
-  /** Grid-side peak for display — what the rail row (network.js) and the classic card (index.html:5745) print. */
-  const peakKw = (lanes, ident) => eventPeak(lanes, ident) * gridMul();
   const fixTick = rot => rot.fixed ? `<i class="fix" style="left:${pct(rot.takeoff)}%"></i>` : '';   // a fixed take-off, marked where it leaves
   const blk = (kind, start, dur, label, title, extra) => `<div class="blk ${kind}" style="left:${pct(start)}%;width:${w(dur)}%" title="${esc(title || '')}" ${extra || ''}>${dur / SPAN * 100 > 5 ? esc(label || '') : ''}</div>`;
   function render() {
@@ -44,9 +41,8 @@
     let laneN = 0; const zebra = () => (laneN++ % 2) ? ' alt' : '';   // banded lanes: a wide network is unreadable without them
     if (!folder.length || !SC()) { rows += `<div class="empty">Add a route to the network to see its charging sessions on the day.</div>`; $('#drawerSub').textContent = 'no flights yet'; }
     else {
-      const g = SC().runGlobal(); const prof = loadProfile(g.lanes, foc); const netPeak = peakKw(g.lanes, foc); const flights = folder.reduce((s, t) => s + D().flightsPerDay(t), 0);
-      const path = prof.load.map((v, i) => { const y = (40 - (prof.peak ? v / prof.peak * 36 : 0)).toFixed(1); return `L${i} ${y} L${i + 1} ${y}`; }).join(' ');
-      rows += `<div class="grow load"><div class="lab">${foc ? foc + ' load' : 'Network load'}<small>peak ${UI.fmt.kw(netPeak)}</small></div><div class="track">${bare}<svg viewBox="0 0 ${prof.N} 40" preserveAspectRatio="none"><path d="M0 40 ${path} L${prof.N} 40 Z"/></svg></div></div>`;
+      const g = SC().runGlobal(); const load = loadRow(foc, R, bare), netPeak = load.peak; const flights = folder.reduce((s, t) => s + D().flightsPerDay(t), 0);
+      rows += load.html;
       if (S.lanes === 'fleet') {
         const touches = t => !foc || t.originIdent === foc || t.destIdent === foc || (t.stops || []).some(x => x && x.ident === foc);
         const fleet = g.lanes.filter(L => touches(L.trip));
@@ -56,7 +52,7 @@
       } else {
         const aps = R.filter(a => (!foc || a.ident === foc) && a.contribs.some(c => c.role));
         aps.forEach(a => { const rl = SC().rotationsAt(a.ident); if (!rl.length) return;
-          const apPeak = peakKw(g.lanes, a.ident);   // = rows().peak = the classic card's peak
+          const apPeak = peakKw(a.ident);   // = rows().peak = the classic card's peak
           rows += `<div class="grow grp"><div class="lab"><button data-act="focus" data-ap="${a.ident}" title="Isolate ${a.ident}">${a.ident}</button><small>${esc(UI.shortName(a.name))} · peak ${UI.fmt.kw(apPeak)}</small></div><div class="track">${bare}</div></div>`; lanes++;
           rl.forEach(L => { const t = L.trip; const blocks = L.rotations.map((rot, k) => { const handle = () => `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}" data-fixed="${rot.fixed ? 1 : 0}"`;   // every block of the strip drags the rotation
             return fixTick(rot) + rot.phases.map(ph => { const st = rot.takeoff + ph.start;
@@ -65,7 +61,8 @@
               if (ph.kind === 'fly') return S.showDep ? blk('fly', st, ph.dur, (ph.label || '').replace(/^Fly (to|back to) /, '→ '), `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}`, handle()) : '';
               return blk(ph.atX ? 'chg' : 'chg away', st, ph.dur, ph.atX ? (ph.power ? UI.fmt.kw(ph.power) : '') : '', `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}${ph.power ? ' · ' + UI.fmt.kw(ph.power) : ''}`, handle()); }).join(''); }).join('');
             rows += `<div class="grow sub${zebra()}"><div class="lab" data-trip="${esc(t.id)}" role="button" tabindex="0" title="Open this route in Plan">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; }); });
-        $('#drawerSub').textContent = foc ? `${(R.find(a => a.ident === foc) || {}).fleet?.length || 0} chargers · peak ${UI.fmt.kw(netPeak)}` : `${R.length} airport${R.length === 1 ? '' : 's'} · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
+        const nCh = ((R.find(a => a.ident === foc) || {}).fleet || []).length;
+        $('#drawerSub').textContent = foc ? `${nCh} ${UI.fmt.pl(nCh, 'charger')} · peak ${UI.fmt.kw(netPeak)}` : `${R.length} airport${R.length === 1 ? '' : 's'} · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
       }
     }
     const nFix = folder.length && SC() ? SC().fixedCount() : 0;
@@ -99,5 +96,5 @@
     if (t.id === 'depSw' || t.classList.contains('dep-lbl')) { S.showDep = !S.showDep; render(); return; }
     if (t.id === 'focChip') { S.filter = ''; UI.render(); UI.map.drawNet(); UI.map.fitNet(); return; }
     if (t.id === 'drawerHead' && !e.target.closest('button')) $('#drawer').classList.toggle('open'); });
-  UI.timeline = { render, loadProfile, peak: ident => (SC() ? peakKw(SC().runGlobal().lanes, ident) : 0) };   // grid side, coincident
+  UI.timeline = { render, peak: ident => (SC() ? peakKw(ident) : 0) };   // grid side, coincident
 })();

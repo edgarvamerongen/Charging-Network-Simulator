@@ -67,7 +67,7 @@ const ENGINE = `(function(){ const R = CNSUI.network.rows(); const g = CNSSchedu
   return { rows: R.map(a => a.ident), withRot: R.filter(a => a.contribs.some(c => c.role) && CNSScheduler.rotationsAt(a.ident).length).map(a => a.ident), lanes: g.lanes.length,
     laneKeys: g.lanes.map(L => L.trip.originIdent + '→' + L.trip.destIdent + ':' + (L.schedSlot != null ? L.schedSlot : '*') + ' rot=' + L.rotations.length), subRows: R.filter(a => a.contribs.some(c => c.role)).reduce((s, a) => s + CNSScheduler.rotationsAt(a.ident).length, 0),
     folder: folder.length, flights: folder.reduce((s, t) => s + D.flightsPerDay(t), 0), chargePhases: g.lanes.reduce((s, L) => s + L.rotations.reduce((q, r) => q + r.phases.filter(p => p.kind === 'charge' && p.dur > 0).length, 0), 0),
-    sched: JSON.parse(localStorage.getItem('cns_schedule') || '{}'), peaks: Object.fromEntries(R.map(a => [a.ident, { rail: a.peak, engine: CNSScheduler.summary(a.ident).peakKw, binned: CNSUI.timeline.loadProfile(g.lanes, a.ident).peak, latestEnd: a.latestEnd }])),
+    sched: JSON.parse(localStorage.getItem('cns_schedule') || '{}'), peaks: Object.fromEntries(R.map(a => [a.ident, { rail: a.peak, engine: CNSScheduler.summary(a.ident).peakKw, curve: CNSScheduler.loadCurve(a.ident).peakKw, latestEnd: a.latestEnd }])),
     gridMul: CNSSettings.gridDemandFactor(), effOn: !!CNSSettings.loadAll().chargerEfficiency.enabled }; })()`;
 /** Every draggable block: geometry, the track it lives in, what is on top of its centre, and its group row. */
 const BLOCKS = `(function(){ const gr = document.querySelector('#gantt').getBoundingClientRect(); const out = [];
@@ -120,8 +120,8 @@ export default async function run(ctx) {
     if (dr.subRows < 3) pr.push(`sub rows ${dr.subRows} < 3`);
     if (dr.subRows !== st.subRows) pr.push(`sub rows ${dr.subRows} ≠ Σ rotationsAt(ident).length ${st.subRows}`);
     if (!(dr.chg > 0)) pr.push(`.blk.chg ${dr.chg} (engine has ${st.chargePhases} charge phases)`);
-    if (!dr.path || !/^M0 40 L/.test(dr.path)) pr.push(`load row path missing/odd: ${j(dr.path)}`);
-    if (!/Charging here/.test(dr.legend) || !/Charging elsewhere/.test(dr.legend) || !/Drag a rotation/.test(dr.legend)) pr.push(`legend "${dr.legend}"`);
+    if (!dr.path || !/^M0 52L/.test(dr.path)) pr.push(`load row path missing/odd: ${j(dr.path)}`);
+    if (!/Charging here/.test(dr.legend) || !/Charging elsewhere/.test(dr.legend) || !/Drag to fix a take-off/.test(dr.legend)) pr.push(`legend "${dr.legend}"`);
     if (dr.wait > 0 && !/Waiting for a charger/.test(dr.legend)) pr.push('wait blocks drawn but the legend lacks "Waiting for a charger"');
     if (!(new RegExp(`^${st.rows.length} airports · ${st.flights % 1 ? st.flights.toFixed(1) : st.flights} flights / day · peak load`)).test(dr.sub)) pr.push(`#drawerSub "${dr.sub}" vs ${st.rows.length} airports · ${st.flights} flights / day`);
     if (dr.drag < 1) pr.push('no draggable block (.blk[data-drag])');
@@ -363,15 +363,15 @@ export default async function run(ctx) {
   // ---- the drawer's per-airport peak equals the rail's peak, with charger efficiency off and on -----------
   const setEff = async on => { await v2.eval(`CNSSettings.save({ chargerEfficiency: { enabled: ${on} } }); true`); await v2.sleep(700); await prepared(v2); };
   const parseKw = s => { const m = String(s).match(/peak\s+([\d.,]+)\s*(kW|MW)/i); return m ? parseFloat(m[1].replace(/,/g, '')) * (/MW/i.test(m[2]) ? 1000 : 1) : NaN; };
-  /** Per airport: the drawer's group-row "peak", the rail row's "peak kW", rows().peak, the engine's event peak, the drawer's
-      15-min binned peak, the classic card's peak (summary × gridMul) and the installed charger power (the physical ceiling). */
+  /** Per airport: the drawer's group-row "peak", the rail row's "peak kW", rows().peak, the engine's peak, the load
+      curve's maximum, the classic card's peak (summary × gridMul) and the installed charger power (the physical ceiling). */
   const readPeaks = async () => { const dr = await v2.eval(DRAWER), st = await v2.eval(ENGINE);
     const rail = await v2.eval(`Object.fromEntries([...document.querySelectorAll('#railBody .ap[data-ap]')].map(ap => [ap.dataset.ap, (ap.querySelectorAll('button > .st')[1] || { textContent: '' }).textContent.trim()]))`);
     const installed = await v2.eval(`Object.fromEntries(CNSUI.network.rows().map(r => [r.ident, r.fleet.reduce((s, c) => s + c.power_kw, 0)]))`);
     const classicPeak = await classic.eval(`(function(){ const g = CNSSettings.gridDemandFactor(); return Object.fromEntries(${j(['EHLE', 'EDDF', 'EHAM', 'EDDL'])}.map(id => [id, { peak: CNSScheduler.summary(id).peakKw * g, text: (document.querySelector('#folder .sched-toggle[data-ident="' + id + '"] .sched-card-summary') || { textContent: '' }).textContent.trim() }])); })()`);
-    const per = {}; dr.grp.forEach((id, i) => { per[id] = { drawer: parseKw(dr.grpPeak[i]), drawerText: dr.grpPeak[i].replace(/^.*· /, ''), railText: rail[id], rail: /MW/i.test(rail[id]) ? ctx.num(rail[id]) * 1000 : ctx.num(rail[id]), rows: st.peaks[id] && st.peaks[id].rail, engine: st.peaks[id] && st.peaks[id].engine, binned: st.peaks[id] && st.peaks[id].binned, classic: classicPeak[id] && classicPeak[id].peak, classicText: classicPeak[id] && classicPeak[id].text, installed: installed[id] }; });
+    const per = {}; dr.grp.forEach((id, i) => { per[id] = { drawer: parseKw(dr.grpPeak[i]), drawerText: dr.grpPeak[i].replace(/^.*· /, ''), railText: rail[id], rail: /MW/i.test(rail[id]) ? ctx.num(rail[id]) * 1000 : ctx.num(rail[id]), rows: st.peaks[id] && st.peaks[id].rail, engine: st.peaks[id] && st.peaks[id].engine, curve: st.peaks[id] && st.peaks[id].curve, classic: classicPeak[id] && classicPeak[id].peak, classicText: classicPeak[id] && classicPeak[id].text, installed: installed[id] }; });
     return { per, gridMul: st.gridMul, effOn: st.effOn, sub: dr.sub }; };
-  const fmtPer = (id, p) => `${id}: drawer "${p.drawerText}" rail "${p.railText}" | rows().peak ${p.rows.toFixed(1)}, engine peakKw ${p.engine.toFixed(1)}, drawer 15-min binned ${p.binned.toFixed(1)}, classic card ${p.classic.toFixed(1)} ("${p.classicText}"), installed ${p.installed} kW`;
+  const fmtPer = (id, p) => `${id}: drawer "${p.drawerText}" rail "${p.railText}" | rows().peak ${p.rows.toFixed(1)}, engine peakKw ${p.engine.toFixed(1)}, load curve max ${p.curve.toFixed(1)}, classic card ${p.classic.toFixed(1)} ("${p.classicText}"), installed ${p.installed} kW`;
   const tolOf = p => (/MW/i.test(p.drawerText) || p.rail >= 1000) ? 50 : (/MW/i.test(p.railText || '') ? 5 : 1);   // MW: one decimal from 1 MW, two below
   ctx.cleanup(async () => { try { await v2.eval(`CNSSettings.save({ chargerEfficiency: { enabled: false } }); true`); } catch (e) {} });
 
@@ -381,7 +381,8 @@ export default async function run(ctx) {
     const pr = [];
     if (r.effOn || r.gridMul !== 1) pr.push(`efficiency still on (gridMul ${r.gridMul})`);
     for (const [id, p] of Object.entries(r.per)) {
-      if (!(Math.abs(p.drawer - p.rail) <= tolOf(p))) pr.push(`${id}: drawer "${p.drawerText}" ≠ rail "${p.railText}" (engine event peak ${p.engine.toFixed(1)} = classic card ${p.classic.toFixed(1)}; the drawer's 15-min binned peak is ${p.binned.toFixed(1)}; installed chargers ${p.installed} kW)`);
+      if (!(Math.abs(p.drawer - p.rail) <= tolOf(p))) pr.push(`${id}: drawer "${p.drawerText}" ≠ rail "${p.railText}" (engine peak ${p.engine.toFixed(1)} = classic card ${p.classic.toFixed(1)}; installed chargers ${p.installed} kW)`);
+      if (Math.abs(p.curve - p.engine) > 0.5) pr.push(`${id}: the load curve tops at ${p.curve.toFixed(1)} kW but the engine peak is ${p.engine.toFixed(1)} kW`);
       if (p.drawer > p.installed + 1) pr.push(`${id}: drawer peak ${p.drawer} kW exceeds the installed charger power ${p.installed} kW`);
     }
     const detail = `gridMul ${r.gridMul}: ` + Object.entries(r.per).map(([id, p]) => fmtPer(id, p)).join(' || ');
@@ -396,8 +397,7 @@ export default async function run(ctx) {
     const pr = [];
     if (!(r.gridMul > 1.05)) pr.push(`gridDemandFactor with efficiency on = ${r.gridMul} (settings save did not apply?)`);
     for (const [id, p] of Object.entries(r.per)) {
-      if (Math.abs(p.binned - p.engine) > 0.5) continue;   // airports where the binning already disagrees are covered by peak-consistency-eff-off
-      if (!(Math.abs(p.drawer - p.rail) <= tolOf(p))) pr.push(`${id}: drawer "${p.drawerText}" ≠ rail "${p.railText}" (rail = engine ${p.engine.toFixed(1)} × gridMul ${r.gridMul.toFixed(4)} = ${(p.engine * r.gridMul).toFixed(1)} = classic card ${p.classic.toFixed(1)}; the drawer stays at the aircraft-side ${p.binned.toFixed(1)})`);
+      if (!(Math.abs(p.drawer - p.rail) <= tolOf(p))) pr.push(`${id}: drawer "${p.drawerText}" ≠ rail "${p.railText}" (rail = engine ${p.engine.toFixed(1)} × gridMul ${r.gridMul.toFixed(4)} = ${(p.engine * r.gridMul).toFixed(1)} = classic card ${p.classic.toFixed(1)}; aircraft side ${p.engine.toFixed(1)})`);
     }
     const detail = `gridMul ${r.gridMul.toFixed(4)}: ` + Object.entries(r.per).map(([id, p]) => fmtPer(id, p)).join(' || ');
     if (pr.length) throw new Error(pr.join('; ') + ' — ' + detail);
