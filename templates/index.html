@@ -2807,6 +2807,8 @@
         // stay untouched; the ring chain below splices them in after the destination.
         let closingStops = [];
         const _isCircularTrip = () => document.getElementById('tripType').value === 'circular';
+        // A return trip flies each leg back too, landing where it left from: the origin needs its alternate as well.
+        const _isRetourTrip = () => document.getElementById('tripType').value === 'retour';
         // The full chain the planner validates/renders: circular closes the loop
         // back to the departure, with any closing-leg auto-stops in between.
         const _ringChain = (t) => _isCircularTrip()
@@ -2929,7 +2931,7 @@
             const chain = _ringChain(t);
             for (let i = 0; i < chain.length - 1; i++) {
                 const d = CNSRouting.haversineKm(chain[i], chain[i + 1]);
-                if (d + altReserveKm(chain[i + 1]) > maxLeg) plannedLegIssues.push(i);   // arrival node carries the divert reserve
+                if (d + Math.max(altReserveKm(chain[i + 1]), _isRetourTrip() ? altReserveKm(chain[i]) : 0) > maxLeg) plannedLegIssues.push(i);   // arrival node carries the divert reserve (both ends on a return trip)
             }
             if (plannedLegIssues.length) {
                 const n = plannedLegIssues.length;
@@ -2980,7 +2982,7 @@
                 allowedIdents: _plannerAllowedIdents(),
                 blacklist: _blacklistedStopIdents,
                 maxLegKm: _availableRangeKm(plane),
-                options: _routingOptions(),
+                options: { ..._routingOptions(), bothWays: _isRetourTrip() },
             });
             if (chainRes.error && manual.length === 0) { plannedError = chainRes.error; renderStops(); return; }
             plannedStops = chainRes.stops;
@@ -3090,7 +3092,7 @@
                         origin: a, destination: b, plane,
                         allAirports: filtered, allowedTypes: types,
                         allowedIdents: idents,
-                        options: { ..._routingOptions(), maxLegKm: maxLeg },
+                        options: { ..._routingOptions(), maxLegKm: maxLeg, bothWays: _isRetourTrip() },
                     });
                     return !r.error;
                 });
@@ -3146,7 +3148,7 @@
                 document.querySelector('.stops-title').textContent = 'Suggested route';
                 summaryEl.textContent = `Direct flight · ${fmtDist(_dispKm(t.origin, t.dest))}`;
                 listEl.innerHTML = `
-                    <li class="terminus"><span class="step">0</span><strong>${escHtml(t.origin.name)}</strong><span></span><span></span><span class="leg-dist">→ ${fmtDist(_dispKm(t.origin, t.dest))}</span></li>
+                    <li class="terminus"><span class="step">0</span><strong>${escHtml(t.origin.name)}</strong>${(_isRetourTrip() && _altHint(t.origin).badge) || '<span></span>'}<span></span><span class="leg-dist">→ ${fmtDist(_dispKm(t.origin, t.dest))}</span></li>
                     <li class="terminus"><span class="step">1</span>${_altHint(t.dest).open}${escHtml(t.dest.name)}</strong>${_altHint(t.dest).badge || '<span></span>'}<span></span><span></span></li>`;
                 hintEl.innerHTML = `Direct leg fits the aircraft's range — no stops needed. Use <strong>+ Add stop</strong> in the form above to insert one manually.`;
                 _wireStopRowActions(t);
@@ -3166,7 +3168,7 @@
                     const bad = plannedLegIssues.includes(i);
                     legDist = `<span class="leg-dist${bad ? ' over-range' : ''}">→ ${fmtDist(d)}${bad ? ' ⚠' : ''}</span>`;
                 }
-                const ah = i >= 1 ? _altHint(wp) : { open: '<strong>', badge: '' };   // arrival nodes only (not the origin)
+                const ah = (i >= 1 || _isRetourTrip()) ? _altHint(wp) : { open: '<strong>', badge: '' };   // arrival nodes only (the origin on a return trip)
                 // Removable stops (non-terminus): the NAME is the remove control — click to remove,
                 // strike-through on hover (replaces the old × button). Only nodes that map into
                 // plannedStops are removable — on a circular ring the destination and closing-leg
@@ -4773,7 +4775,7 @@
                 // fix to keep this migration behaviour-neutral. One-way single-leg uses the engine.
                 addFlightLabel(p1, p2, (_prof && data.trip_type !== 'retour' && _prof.legs[0]) || (data.legs && data.legs[0]) || { distance_km: data.leg_distance_km, flight_time_h: data.flight_time_h, energy_kwh: data.leg_energy_kwh });
             }
-            lastRouteChain = [selected.origin, ...plannedStops, selected.destination, ...(_isCircularTrip() ? closingStops : [])].filter(p => p && p.ident);
+            lastRouteChain = [selected.origin, ...plannedStops, selected.destination, ...(_isCircularTrip() ? closingStops : []), ...(_isRetourTrip() ? [selected.origin] : [])].filter(p => p && p.ident);   // a return lands at home too
             refreshAlternates();
         }
         // Fit-bounds padding aware of the side rails (planner left, result

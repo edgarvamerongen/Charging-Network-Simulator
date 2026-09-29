@@ -122,6 +122,16 @@ test('alternate ON: direct flight allowed when destination alternate is near', (
   assert.equal(res.legCount, 1);
   assert.equal(res.stops.length, 0);
 });
+// 5b. A return trip (bothWays) lands back at the ORIGIN, so the origin's alternate gates the leg too.
+//     O->D = 111.19 km, maxLeg = 130, altO = 30: one-way flies direct; the return needs stop S (lon 0.5).
+test('bothWays: the origin alternate adds a stop only when the trip returns', () => {
+  const O = node('O', 0.0, 30), D = node('D', 1.0, 0);
+  const R = loadRouting({ requireAlt: true });
+  const plan = bothWays => R.planRoute({ origin: O, destination: D, plane: PLANE(130),
+    allowedTypes: ['medium_airport'], allAirports: [ap('S', 0.5, 0)], options: { bothWays } });
+  assert.deepEqual(idents(plan(false)), []);
+  assert.deepEqual(idents(plan(true)), ['S']);
+});
 
 // 6. The divert reserve is NOT padded: it is alternate_km / route. Hold
 //    maxLeg = 200 in both runs (range = 200*route, so maxLeg = range/route = 200).

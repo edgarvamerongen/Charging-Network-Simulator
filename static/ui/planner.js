@@ -49,7 +49,8 @@
     return R().haversineKm(from, { lat: +alt.latitude_deg, lon: +alt.longitude_deg });
   }
   function stampDiverts(nodes) { (nodes || []).forEach(n => { if (!n || !n.ident) return; const ov = S.divertOverrides[n.ident]; if (ov) { n.divertOverride = ov; const km = divertOverrideKm(n); if (km != null) n.divertOverrideKm = km; } else { delete n.divertOverride; delete n.divertOverrideKm; } }); return nodes; }
-  function alternatesChain() { const t = terminus(); if (!t || S.trip === 'training') return []; return stampDiverts(ringChain(t).map(n => Object.assign({}, n))); }
+  // A return trip lands back at the origin: append it, since the overlay skips the first node (it departs).
+  function alternatesChain() { const t = terminus(); if (!t || S.trip === 'training') return []; const c = ringChain(t); if (S.trip === 'retour') c.push(t.origin); return stampDiverts(c.map(n => Object.assign({}, n))); }
 
   // ---- pools ----
   const allowedTypes = () => S.allowedTypes.slice();
@@ -64,8 +65,8 @@
     const route = ST() ? ST().routingFactor(p) : 1; const maxLeg = availableRangeKm(p);
     const requireAlt = !!(ST() && ST().alternateReserveEnabled && ST().alternateReserveEnabled(p));
     const altReserveKm = w => { if (!requireAlt || !w) return 0; const ovKm = divertOverrideKm(w); if (ovKm != null) return ovKm / route; const full = w.ident ? UI.byId()[w.ident] : null; const km = (full && full.alternate_km != null) ? +full.alternate_km : (+w.alternate_km || 0); return (isFinite(km) ? km : 0) / route; };
-    const c = ringChain(t);
-    for (let i = 0; i < c.length - 1; i++) { const d = R().haversineKm(c[i], c[i + 1]); if (d + altReserveKm(c[i + 1]) > maxLeg) P.legIssues.push(i); }
+    const c = ringChain(t), back = S.trip === 'retour';   // a return trip flies each leg back too, landing at c[i]
+    for (let i = 0; i < c.length - 1; i++) { const d = R().haversineKm(c[i], c[i + 1]); if (d + Math.max(altReserveKm(c[i + 1]), back ? altReserveKm(c[i]) : 0) > maxLeg) P.legIssues.push(i); }
     if (P.legIssues.length) { const n = P.legIssues.length; P.error = `${n} leg${n > 1 ? 's' : ''} exceed${n > 1 ? '' : 's'} the aircraft's range. Add or change a stop.`; }
   }
   function recomputeRoute() {
@@ -75,7 +76,7 @@
     const manual = S.stops.filter(Boolean).map(a => wp(UI.byId()[a.ident] || a));
     P.source = manual.length ? 'user' : 'auto';
     stampDiverts([t.origin, t.dest, ...manual]);
-    const chainRes = R().planChain({ origin: t.origin, dest: t.dest, manualStops: manual, plane: p, allowedTypes: allowedTypes(), allAirports: UI.airports(), allowedIdents: plannerAllowedIdents(), blacklist: S.blacklist, maxLegKm: availableRangeKm(p), options: routingOptions() });
+    const chainRes = R().planChain({ origin: t.origin, dest: t.dest, manualStops: manual, plane: p, allowedTypes: allowedTypes(), allAirports: UI.airports(), allowedIdents: plannerAllowedIdents(), blacklist: S.blacklist, maxLegKm: availableRangeKm(p), options: Object.assign(routingOptions(), { bothWays: S.trip === 'retour' }) });
     // The ROUTER's message is the truthful one when it could not chain the route at all — the
     // classic shows plannedError (with a remedy) or its hard-fail copy, never the leg-gate line
     // ('add or change a stop' is meaningless when no stop exists that would fix it).
@@ -96,7 +97,7 @@
     const segments = (S.planned.stops.length || isCircular()) ? S.planned.legIssues.map(i => [c[i], c[i + 1]]) : [[t.origin, t.dest]];
     if (!segments.length) return null;
     const used = new Set(c.map(x => x && x.ident).filter(Boolean)); const filtered = UI.airports().filter(ap => !used.has(ap.ident) && !S.blacklist.has(ap.ident));
-    const probe = (types, idents) => segments.every(([a, b]) => { if (!a || !b) return false; const r = R().planRoute({ origin: a, destination: b, plane: p, allAirports: filtered, allowedTypes: types, allowedIdents: idents, options: Object.assign({}, routingOptions(), { maxLegKm: maxLeg }) }); return !r.error; });
+    const probe = (types, idents) => segments.every(([a, b]) => { if (!a || !b) return false; const r = R().planRoute({ origin: a, destination: b, plane: p, allAirports: filtered, allowedTypes: types, allowedIdents: idents, options: Object.assign(routingOptions(), { maxLegKm: maxLeg, bothWays: S.trip === 'retour' }) }); return !r.error; });
     if (disabled.length && probe(allTypes, plannerAllowedIdents())) return 'types';
     if (!netOn && probe(enabled, fullNetworkIdents())) return 'network';
     if (disabled.length && !netOn && probe(allTypes, fullNetworkIdents())) return 'both';
