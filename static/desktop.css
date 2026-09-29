@@ -420,7 +420,7 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .grow.grp{height:26px;background:var(--canvas)}
 .grow.grp .lab{font-weight:600}
 .glegend i.a{background:rgba(196,66,31,.28)}
-button.rt{font:inherit;color:inherit;padding:0;text-align:left;cursor:pointer}button.rt:hover{text-decoration:underline;text-underline-offset:2px}
+.fl button.t{font:inherit;font-weight:500;color:inherit;padding:0;text-align:left;cursor:pointer;min-width:0}.fl button.t .r{white-space:nowrap}.fl button.t:hover .r{text-decoration:underline;text-underline-offset:2px}
 .grow .lab[data-trip]{cursor:pointer}.grow .lab[data-trip]:hover{text-decoration:underline;text-underline-offset:2px}
 .blk[data-drag]{cursor:grab}.blk[data-drag]:active{cursor:grabbing}
 /* a fixed take-off: an ink stake where the rotation leaves */
