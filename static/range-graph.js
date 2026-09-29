@@ -122,5 +122,5 @@ window.CNSRangeGraph = (function () {
         _layer.addLayer(L.circleMarker(hub, { radius: 6.5, color: '#fff', weight: 2, fillColor: NAVY, fillOpacity: 1, opacity: 1, pane: PANE, interactive: false }));
     }
 
-    return { init, show, refresh, airportsInRange };
+    return { init, show, refresh, clear, airportsInRange };
 })();

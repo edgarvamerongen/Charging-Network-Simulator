@@ -72,8 +72,9 @@
     assetLayer.clearLayers(); if (!S.showAssets) return;
     Object.values(UI.assets()).forEach(x => { const a = UI.byId()[x.icao]; if (!a) return;
       const construction = x.status === 'construction';
-      const m = L.marker(UI.ll(a), { pane: 'pins', title: x.name, icon: L.divIcon({ className: '', html: `<div class="asset${construction ? ' con' : ''}"></div>`, iconSize: [10, 10], iconAnchor: [5, 5] }) });
-      m.bindPopup(`<div class="pp"><div class="t"><span><img class="pp-logo" src="/pics/logos/NRG2fly_icon_circle_inv.png" alt="">${UI.esc(x.name)}</span><span class="ic2">${UI.esc(x.icao)}</span></div><div class="m">${UI.esc(x.network || 'NRG2FLY')} charging${construction ? ' · under construction' : ''} · ${(x.plugs || []).length} plug${(x.plugs || []).length === 1 ? '' : 's'}</div>
+      // The teardrop stands ABOVE its airport (anchor at the tail's tip), so the airfield dot under it stays clickable.
+      const m = L.marker(UI.ll(a), { pane: 'pins', title: x.name, icon: L.divIcon({ className: '', html: `<div class="nrg-pin${construction ? ' construction' : ''}"><div class="head"><img src="/pics/logos/NRG2fly_icon_circle_inv.png" alt=""></div><div class="tail"></div></div>`, iconSize: [0, 0], iconAnchor: [0, 0] }) });
+      m.bindPopup(`<div class="pp"><div class="t"><span>${UI.esc(x.name)}</span><span class="ic2">${UI.esc(x.icao)}</span></div><div class="m">${UI.esc(x.network || 'NRG2FLY')} charging${construction ? ' · under construction' : ''} · ${(x.plugs || []).length} plug${(x.plugs || []).length === 1 ? '' : 's'}</div>
         <div class="plugs">${(x.plugs || []).map(p => `<div><span>${UI.esc(p.label)} · ${UI.esc(p.connector)}</span><b class="num">${p.power_kw} kW</b></div>`).join('')}</div></div>`);
       assetLayer.addLayer(m); });
   }
@@ -125,7 +126,7 @@
     c.forEach((a, i) => { const stop = i > 0 && i < c.length - 1; routeLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="ep${stop ? ' stop' : ''}"></div>`, iconSize: [11, 11], iconAnchor: [5.5, 5.5] }) })); });
     const legs = UI.plan && UI.plan.legsForMap ? UI.plan.legsForMap() : null;
     for (let i = 0; S.showLabels && i < pts.length - 1; i++) { const mid = arcMid(pts[i], pts[i + 1]); /* on the arc, not the chord */ let txt = UI.fmt.dist(dispKm(pts[i], pts[i + 1]));
-      if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.h(legs[i].flightMin)} h · ${UI.fmt.r(legs[i].energyKwh)} kWh`;
+      if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.min(legs[i].flightMin)} · ${UI.fmt.r(legs[i].energyKwh)} kWh`;
       routeLayer.addLayer(L.marker(mid, { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="leglbl num">${txt}</div>`, iconSize: [0, 0] }) })); }
     if (fit) fitRoute(false);
   }

@@ -216,6 +216,7 @@
     // Simulate never re-frames a map that already shows the whole route; it frames only a route that
     // would otherwise sit under the rail, the timeline or off screen.
     S.busy = false; UI.render(); UI.map.drawRoute(false); if (S.result) UI.map.ensureRouteVisible();
+    if (S.result && !live && window.CNSRangeGraph && CNSRangeGraph.clear) CNSRangeGraph.clear();   // the result, not the reach, is what the map shows now
   }
   function resimulate() { if (S.result) { S.profile = engineProfile(S.result); UI.map.drawRoute(false); } }
 
@@ -259,7 +260,7 @@
     const tC = `<div><div class="cap">Charge</div><div class="v num">${durV(d.chargeMin)}</div><div class="s">${d.charges.length > 2 ? 'at ' + d.charges.length + ' airports' : d.charges.length === 2 ? 'at ' + d.charges.map(x => esc(x.ident || '')).join(' + ') : 'at ' + esc(d.terminal.ident || 'destination')}</div></div>`;
     const tR = `<div><div class="cap">Revenue</div><div class="v num">€${Math.round(costDay).toLocaleString('en')}<small>/ day</small></div><div class="s num">at €${rate.toFixed(2)} / kWh</div></div>`;
     return { p, ch, c,
-      head: `<div class="rh2"><div><div class="ttl">${c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}</div></div><button class="lnk" data-act="edit">Edit</button></div>`,
+      head: `<div class="rh2"><div><div class="ttl">${c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${S.editId ? '<b>Network route</b> · ' : ''}${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}</div></div><button class="lnk" data-act="edit">Edit</button></div>`,
       stats: `<div class="stats">${tE}
       ${tT}
       ${tC}</div>`,
@@ -289,7 +290,7 @@
     ${R.split}
     ${R.soc}
     ${R.details}`;
-    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add">Add to network</button><button class="btn i" data-act="share" title="Copy a share link"><svg class="ic"><use href="#i-share"/></svg></button></div>`;
+    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add">${S.editId ? 'Update route' : 'Add to network'}</button>${S.editId ? '<button class="btn" data-act="stopEdit">Cancel</button>' : ''}<button class="btn i" data-act="share" title="Copy a share link"><svg class="ic"><use href="#i-share"/></svg></button></div>`;
   }
 
   // ---- prototype (?proto; design audit P2 + P6): the result heads the form and follows every change ----
@@ -319,7 +320,7 @@
     const body = $('#railBody');
     if (pr) {
       const R = resultParts(derive(pr));
-      body.insertAdjacentHTML('afterbegin', `<div class="live${stale ? ' stale' : ''}"><div class="live-hd"><div class="ttl">${R.c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${esc(UI.planeShort(R.p.name))} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per}</div></div>${R.live}</div>${R.soc}${assumptions(R.p)}`);
+      body.insertAdjacentHTML('afterbegin', `<div class="live${stale ? ' stale' : ''}"><div class="live-hd"><div class="ttl">${R.c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${S.editId ? '<b>Network route</b> · ' : ''}${esc(UI.planeShort(R.p.name))} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per}</div></div>${R.live}</div>${R.soc}${assumptions(R.p)}`);
       body.insertAdjacentHTML('beforeend', R.details);
     } else {
       const need = missingReason(); const msg = need ? need + '. Energy, time, charging and revenue appear here as you plan.' : S.err || 'Calculating…';
@@ -327,7 +328,7 @@
       if (!need && !S.err && !S.pending && S.mode === 'plan') scheduleLive();   // a route that never changed (the boot demo) still gets its figures
     }
     const why = S.result ? '' : missingReason() || (S.err ? 'Fix the route first' : 'Calculating…');
-    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add"${why ? ` disabled title="${esc(why)}"` : ''}>Add to network</button><button class="btn i" data-act="share" title="Copy a share link" aria-label="Copy a share link"${S.result ? '' : ' disabled'}><svg class="ic"><use href="#i-share"/></svg></button><button class="btn i" id="planReset" data-act="reset" title="Clear route" aria-label="Clear route"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
+    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add"${why ? ` disabled title="${esc(why)}"` : ''}>${S.editId ? 'Update route' : 'Add to network'}</button>${S.editId ? '<button class="btn" data-act="stopEdit">Cancel</button>' : ''}<button class="btn i" data-act="share" title="Copy a share link" aria-label="Copy a share link"${S.result ? '' : ' disabled'}><svg class="ic"><use href="#i-share"/></svg></button><button class="btn i" id="planReset" data-act="reset" title="Clear route" aria-label="Clear route"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
     restoreFocus(f);
   }
   function addToNetwork() {
@@ -346,8 +347,13 @@
       const ref = (S.trip === 'circular' && r._namedDestIdent) ? [...planned, { ident: r._namedDestIdent, _manual: true }] : planned;
       entry.stops = CNSRecompute.mergeManualFlags(entry.stops, ref);
     }
-    const folder = CNSDemand.loadFolder(); folder.push(entry); CNSDemand.saveFolder(folder); UI.folderChanged();
-    UI.toast(`Added ${UI.chain().map(a => a.ident).join(' → ')} to the network`);
+    if (S.trip === 'circular' && r._namedDestIdent) entry.namedDestIdent = r._namedDestIdent;   // openTrip puts the far point back in Destination
+    // A network route opened in the planner (openTrip) is UPDATED in place: same id, so its fixed take-offs and
+    // its place in the list stay; the aircraft-per-flight choice and a charger pin carry over.
+    const folder = CNSDemand.loadFolder(), at = S.editId ? folder.findIndex(x => x.id === S.editId) : -1;
+    if (at >= 0) { const prev = folder[at]; entry.id = prev.id; ['fleetMode', 'chargerOverride'].forEach(k => { if (prev[k] != null) entry[k] = prev[k]; }); folder[at] = entry; } else folder.push(entry);
+    CNSDemand.saveFolder(folder); S.editId = null; UI.folderChanged();
+    UI.toast(`${at >= 0 ? 'Updated' : 'Added'} ${UI.chain().map(a => a.ident).join(' → ')} ${at >= 0 ? 'in' : 'to'} the network`);
     // Adding is the hand-off from planning to the network: follow the flight into Network mode, where
     // setMode() draws and frames the network for us. Simulating alone stays in the Plan rail.
     if (S.mode !== 'network') UI.setMode('network'); else { UI.map.drawNet(); UI.render(); }
@@ -360,7 +366,27 @@
     if (network) { const t = $('#nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change', { bubbles: true })); hit = true; } }
     if (!hit) onFormChange(false);   // nothing to tick (no menu in the DOM) — still re-plan
   }
-  function resetForm() { UI._applyDefaults({ seedRoute: false }); S.stops = []; S.acText = {}; S.trip = 'one-way'; S.freq = 1; S.per = 'day'; S.picking = false; S.allChargers = false; S.availOverride = null; S.blacklist.clear(); S.divertOverrides = {}; onFormChange(false); }
+  function resetForm() { S.editId = null; UI._applyDefaults({ seedRoute: false }); S.stops = []; S.acText = {}; S.trip = 'one-way'; S.freq = 1; S.per = 'day'; S.picking = false; S.allChargers = false; S.availOverride = null; S.blacklist.clear(); S.divertOverrides = {}; onFormChange(false); }
+  /** Open a network route in the planner, as it was planned: its airports, the operator's own stops, trip type,
+      aircraft, charger and frequency, simulated. "Update route" then replaces it in the network (same id). */
+  function openTrip(id) {
+    const t = (window.CNSDemand ? CNSDemand.loadFolder() : []).find(x => x.id === id); if (!t) return;
+    const by = UI.byId(), ap = (i, n, la, lo) => by[i] || { ident: i, name: n, latitude_deg: +la, longitude_deg: +lo, type: '' };
+    cancelLive();
+    S.trip = t.tripType || 'one-way';
+    // A circular ring saves its LAST node as dest; the far point the operator named rides along (namedDestIdent).
+    const far = S.trip === 'circular' && t.namedDestIdent ? (t.stops || []).find(s => s && s.ident === t.namedDestIdent) : null;
+    S.origin = ap(t.originIdent, t.originName, t.originLat, t.originLon);
+    S.dest = S.trip === 'training' ? null : far ? ap(far.ident, far.name, far.lat, far.lon) : ap(t.destIdent, t.destName, t.destLat, t.destLon);
+    S.stops = (t.stops || []).filter(s => s && s._manual && s.ident !== (S.dest && S.dest.ident)).map(s => ap(s.ident, s.name, s.lat, s.lon));
+    const pid = UI.PLANES.some(p => p.id === t.planeId) ? t.planeId : UI.resolvePlaneId(t.planeId); if (pid) S.planeId = pid;
+    if (UI.CHARGERS.some(c => c.id === t.chargerId)) S.chargerId = t.chargerId;
+    S.freq = Math.max(1, +t.freqN || 1); S.per = t.freqUnit === 'week' ? 'week' : 'day';
+    S.availOverride = null; S.picking = false; S.acText = {}; S.blacklist.clear();
+    S.editId = t.id; S.editFrom = S.mode;
+    if (S.mode !== 'plan') UI.setMode('plan');
+    onFormChange(true); simulate();
+  }
   function render() { if (UI.PROTO) return renderLive(); if (S.rail === 'result' && S.profile) renderResult(); else renderForm(); }
 
   // Any field can be dragged to a new place in the chain. The sequence [origin, ...stops, dest] is
@@ -386,6 +412,7 @@
       case 'simulate': simulate(); break;
       case 'reset': { const snap = { origin: S.origin, dest: S.dest, stops: S.stops.slice(), trip: S.trip, freq: S.freq, per: S.per, planeId: S.planeId, chargerId: S.chargerId, availOverride: S.availOverride, divertOverrides: Object.assign({}, S.divertOverrides) }; const bl = [...S.blacklist];
         resetForm(); UI.toast('Route cleared', { label: 'Undo', run: () => { Object.assign(S, snap); S.blacklist.clear(); bl.forEach(x => S.blacklist.add(x)); onFormChange(false); } }); break; }
+      case 'stopEdit': { const back = S.editFrom === 'network'; S.editId = null; if (back) UI.setMode('network'); else UI.render(); break; }
       case 'edit': S.rail = 'form'; UI.render(); break;
       case 'add': addToNetwork(); break;
       case 'share': UI.share.copyRouteLink(); break;
@@ -423,5 +450,5 @@
   document.addEventListener('mousedown', e => { if (S.acFilterOpen && !e.target.closest('.ac-pop,[data-act=acFilters]')) { S.acFilterOpen = false; UI.render(); } });
   document.addEventListener('input', e => { if (e.target.dataset.act === 'freq') { S.freq = Math.max(1, Math.min(2000, +e.target.value || 1)); if (UI.PROTO && S.result) UI.render(); } });
 
-  UI.plan = { render, simulate, resimulate, addToNetwork, derive, legsForMap, onFormChange, resetForm, cancelLive };
+  UI.plan = { openTrip, render, simulate, resimulate, addToNetwork, derive, legsForMap, onFormChange, resetForm, cancelLive };
 })();

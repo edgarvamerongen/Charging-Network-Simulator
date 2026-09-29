@@ -51,7 +51,7 @@
         const touches = t => !foc || t.originIdent === foc || t.destIdent === foc || (t.stops || []).some(x => x && x.ident === foc);
         const fleet = g.lanes.filter(L => touches(L.trip));
         fleet.forEach((L, li) => { const t = L.trip; const blocks = L.rotations.map((rot, k) => { const hd = `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}" data-fixed="${rot.fixed ? 1 : 0}"`; return fixTick(rot) + rot.phases.map(ph => { if (ph.kind === 'charge' && ph.wait > 0) { anyWait = true; } return (ph.kind === 'charge' && ph.wait > 0 ? blk('wait', ph.start - ph.wait, ph.wait, '', `Waits ${Math.round(ph.wait)} min for a charger at ${ph.ident}`, hd) : '') + blk(ph.kind === 'fly' ? 'fly' : (!foc || ph.ident === foc ? 'chg' : 'chg away'), ph.start, ph.dur, ph.kind === 'fly' ? (ph.label || '').replace(/^Fly (to|back to) /, '→ ') : (ph.ident || ''), `${ph.label || ph.kind} · ${clock(ph.start)}–${clock(ph.start + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`, hd); }).join(''); }).join('');
-          rows += `<div class="grow${zebra()}"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; });
+          rows += `<div class="grow${zebra()}"><div class="lab" data-trip="${esc(t.id)}" role="button" tabindex="0" title="Open this route in Plan">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; });
         $('#drawerSub').textContent = foc ? `${fleet.length} aircraft at ${foc} · peak ${UI.fmt.kw(netPeak)}` : `${g.lanes.length} aircraft · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
       } else {
         const aps = R.filter(a => (!foc || a.ident === foc) && a.contribs.some(c => c.role));
@@ -64,7 +64,7 @@
               if (ph.kind === 'waitElsewhere') return blk('wait away', st, ph.dur, '', ph.label, handle());
               if (ph.kind === 'fly') return S.showDep ? blk('fly', st, ph.dur, (ph.label || '').replace(/^Fly (to|back to) /, '→ '), `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}`, handle()) : '';
               return blk(ph.atX ? 'chg' : 'chg away', st, ph.dur, ph.atX ? (ph.power ? UI.fmt.kw(ph.power) : '') : '', `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}${ph.power ? ' · ' + UI.fmt.kw(ph.power) : ''}`, handle()); }).join(''); }).join('');
-            rows += `<div class="grow sub${zebra()}"><div class="lab">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; }); });
+            rows += `<div class="grow sub${zebra()}"><div class="lab" data-trip="${esc(t.id)}" role="button" tabindex="0" title="Open this route in Plan">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; }); });
         $('#drawerSub').textContent = foc ? `${(R.find(a => a.ident === foc) || {}).fleet?.length || 0} chargers · peak ${UI.fmt.kw(netPeak)}` : `${R.length} airport${R.length === 1 ? '' : 's'} · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
       }
     }
@@ -90,7 +90,9 @@
   document.addEventListener('dblclick', e => { const b = e.target.closest('#gantt .blk[data-drag]'); if (!b) return;
     const [tripId, k] = b.dataset.drag.split(':'), fixed = b.dataset.fixed === '1', at = +b.dataset.takeoff, prev = localStorage.getItem('cns_schedule');
     SC().setTakeoff(tripId, +k, fixed ? null : at); changed(); UI.toast(fixed ? 'Take-off released' : `Take-off fixed at ${clock(at)}`, undo(prev)); });
-  document.addEventListener('click', e => { const t = e.target.closest('#laneSeg button,#depSw,.dep-lbl,#focChip,#drawerHead,#gantt [data-act=releaseAll]'); if (!t) return;
+  const openLane = e => { const lab = e.target.closest && e.target.closest('#gantt .lab[data-trip]'); if (!lab) return false; UI.plan.openTrip(lab.dataset.trip); return true; };
+  document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && openLane(e)) e.preventDefault(); });
+  document.addEventListener('click', e => { if (openLane(e)) return; const t = e.target.closest('#laneSeg button,#depSw,.dep-lbl,#focChip,#drawerHead,#gantt [data-act=releaseAll]'); if (!t) return;
     if (t.dataset.act === 'releaseAll') { const prev = localStorage.getItem('cns_schedule'); SC().releaseAll(); changed(); UI.toast('Take-offs released', undo(prev)); return; }
     if (t.closest('#laneSeg')) { S.lanes = t.dataset.lanes; render(); return; }
     // The caption is the switch's label — it toggles the switch, it does not collapse the drawer.

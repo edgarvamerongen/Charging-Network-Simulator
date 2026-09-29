@@ -56,8 +56,11 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .pp .acts button:hover{border-color:var(--ink)}
 .leglbl{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:3px 7px;font-size:11px;font-weight:500;color:var(--ink);white-space:nowrap;box-shadow:var(--shadow);transform:translate(-50%,-50%);display:inline-block}
 .asset{width:10px;height:10px;background:var(--ink);border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(50,50,110,.35)}
-.asset.con{background:var(--surface);box-shadow:0 0 0 1.5px var(--ink)}   /* under construction */
-.pp-logo{width:14px;height:14px;vertical-align:-2px;margin-right:6px}
+.nrg-pin{position:absolute;transform:translate(-50%,-100%) translateY(-5px);display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 1px 2px rgba(50,50,110,.35))}
+.nrg-pin .head{width:26px;height:26px;border-radius:50%;overflow:hidden;background:#fff;border:2px solid #fff;display:flex;align-items:center;justify-content:center}
+.nrg-pin .head img{width:116%;height:116%;flex:none;object-fit:cover}
+.nrg-pin .tail{width:0;height:0;margin-top:-1px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #fff}
+.nrg-pin.construction .head{opacity:.55}
 /* Network mode (audit P5): the network's airports carry their code; the rest of Europe fades back */
 .netlbl{position:absolute;top:0;transform:translateY(-50%);font:600 10.5px Inter,system-ui,sans-serif;letter-spacing:.02em;color:var(--ink);background:rgba(255,255,255,.86);padding:0 3px;border-radius:2px;white-space:nowrap}
 .netlbl{cursor:pointer}.netlbl:hover{background:var(--ink);color:#fff}
@@ -417,6 +420,8 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .grow.grp{height:26px;background:var(--canvas)}
 .grow.grp .lab{font-weight:600}
 .glegend i.a{background:rgba(196,66,31,.28)}
+button.rt{font:inherit;color:inherit;padding:0;text-align:left;cursor:pointer}button.rt:hover{text-decoration:underline;text-underline-offset:2px}
+.grow .lab[data-trip]{cursor:pointer}.grow .lab[data-trip]:hover{text-decoration:underline;text-underline-offset:2px}
 .blk[data-drag]{cursor:grab}.blk[data-drag]:active{cursor:grabbing}
 /* a fixed take-off: an ink stake where the rotation leaves */
 .track .fix{position:absolute;top:4px;height:20px;width:2px;margin-left:-1px;background:var(--ink);pointer-events:none;z-index:1}

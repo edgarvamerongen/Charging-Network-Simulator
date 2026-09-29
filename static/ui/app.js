@@ -6,7 +6,7 @@ window.CNSUI = (function () {
   const CHARGERS = (D.chargers || []).slice();
   const SEED = { origin: 'EHLE', dest: 'EDDF' };
   const S = {
-    mode: 'plan', rail: 'form', planeId: null, chargerId: null,
+    mode: 'plan', rail: 'form', planeId: null, chargerId: null, editId: null, editFrom: null,
     origin: null, dest: null, stops: [], trip: 'one-way', freq: 1, per: 'day',
     result: null, profile: null, busy: false, err: '',
     filter: '', lanes: 'airports', showDep: false,
