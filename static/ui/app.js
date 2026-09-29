@@ -6,7 +6,7 @@ window.CNSUI = (function () {
   const CHARGERS = (D.chargers || []).slice();
   const SEED = { origin: 'EHLE', dest: 'EDDF' };
   const S = {
-    mode: 'plan', rail: 'form', planeId: null, chargerId: null, editId: null, editFrom: null,
+    mode: 'plan', rail: 'form', planeId: null, chargerId: null, editId: null,
     origin: null, dest: null, stops: [], trip: 'one-way', freq: 1, per: 'day',
     result: null, profile: null, busy: false, err: '',
     filter: '', lanes: 'airports', showDep: false,
@@ -172,6 +172,7 @@ window.CNSUI = (function () {
     if (CNSUI.map && CNSUI.map.closePopup) { try { CNSUI.map.closePopup(); } catch (e) {} }
     if (S.mode === 'network') {   // planning starts in the planner; setMode('plan') never re-frames the map
       S.stops = []; if (S.blacklist && S.blacklist.clear) S.blacklist.clear(); S.divertOverrides = {}; S.acText = {};   // the previous session's stops do not ride along
+      S.editId = null;   // a new route, not an edit of the network route last opened in Plan
       const dr = $('#drawer'); if (dr) dr.classList.remove('open');                                                   // the timeline gets out of the way
       setMode('plan');
     }

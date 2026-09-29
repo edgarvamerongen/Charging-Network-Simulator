@@ -130,7 +130,7 @@ export default async function run(ctx) {
   // ---- 2. result panel: structure, battery chart, accordions on REAL clicks, Edit keeps the form -----
   await ctx.check('result-panel', async () => {
     const st = await v2.eval(`(function(){ const q = s => document.querySelectorAll(s).length; const d = CNSUI.plan.derive(); const stats = [...document.querySelectorAll('#railBody .stats > div')].map(e => (e.querySelector('.cap') || {}).textContent + '=' + (e.querySelector('.v') || {}).textContent);
-      return { rail: CNSUI.S.rail, tiles: q('#railBody .stats > div'), stats, cost: q('#railBody .cost'), costV: (document.querySelector('#railBody .cost .v') || {}).textContent, split: q('#railBody .split'), splitLg: (document.querySelector('#railBody .split .lg') || {}).textContent, soc: q('#railBody .soc svg'), accs: [...document.querySelectorAll('#railBody .acc')].map(a => a.dataset.acc + ':' + (a.classList.contains('open') ? 'open' : 'closed')), edit: q('#railBody [data-act=edit]'), add: q('#railFoot [data-act=add]'), legs: d.legs.length, nan: /NaN|undefined/.test(document.getElementById('railBody').textContent) }; })()`);
+      return { rail: CNSUI.S.rail, tiles: q('#railBody .stats > div'), stats, cost: q('#railBody .cost'), costV: (document.querySelector('#railBody .cost .v') || {}).textContent, split: q('#railBody .split'), splitLg: (document.querySelector('#railBody .split .lg') || {}).textContent, soc: q('#railBody .soc svg'), accs: [...document.querySelectorAll('#railBody .acc')].map(a => a.dataset.acc + ':' + (a.classList.contains('open') ? 'open' : 'closed')), edit: q('#railFoot [data-act=edit]'), add: q('#railFoot [data-act=add]'), legs: d.legs.length, nan: /NaN|undefined/.test(document.getElementById('railBody').textContent) }; })()`);
     const fails = [];
     if (st.rail !== 'result') fails.push('rail ' + st.rail);
     if (st.tiles !== 3) fails.push(`${st.tiles} .stats tiles (want 3)`);
@@ -152,7 +152,7 @@ export default async function run(ctx) {
     await ctx.screenshot(v2, 'result-panel');
     // Edit → back to the form with every field intact
     const before = await v2State();
-    await v2.click('#railBody [data-act=edit]');
+    await v2.click('#railFoot [data-act=edit]');
     await v2.waitFor(`CNSUI.S.rail === 'form' && !!document.querySelector('[data-ac=origin]')`, 3000);
     const form = await v2.eval(`(function(){ const S = CNSUI.S; const val = s => { const e = document.querySelector(s); return e ? e.value : null; }; const on = s => { const e = document.querySelector(s + ' button.on'); return e ? e.dataset.v : null; }; const chg = document.querySelector('#railBody .chg.on');
       return { rail: S.rail, originInput: val('[data-ac=origin]'), originIcao: (document.querySelector('[data-ac=origin] + .icao') || {}).textContent, destInput: val('[data-ac=dest]'), destIcao: (document.querySelector('[data-ac=dest] + .icao') || {}).textContent, trip: on('[data-seg=trip]'), freq: val('[data-act=freq]'), per: on('[data-seg=per]'), charger: chg ? chg.dataset.id : null, plane: S.planeId, o: S.origin && S.origin.ident, d: S.dest && S.dest.ident, stops: S.stops.map(s => s && s.ident), result: !!S.result, simulateBtn: !!document.querySelector('#railFoot [data-act=simulate]'), originName: S.origin.name, destName: S.dest.name }; })()`);
@@ -172,7 +172,7 @@ export default async function run(ctx) {
   await ctx.check('cost-audit', async () => {
     const runs = [];
     for (const [n, per] of [[1, 'day'], [3, 'day'], [1, 'week'], [1, 'day']]) {
-      if (await v2.eval(`CNSUI.S.rail`) === 'result') { await v2.click('#railBody [data-act=edit]'); await v2.waitFor(`CNSUI.S.rail === 'form' && !!document.querySelector('[data-act=freq]')`, 3000); }
+      if (await v2.eval(`CNSUI.S.rail`) === 'result') { await v2.click('#railFoot [data-act=edit]'); await v2.waitFor(`CNSUI.S.rail === 'form' && !!document.querySelector('[data-act=freq]')`, 3000); }
       await v2.setValue('[data-act=freq]', String(n), ['input', 'change']);
       await v2.click(`[data-seg=per] button[data-v=${per}]`);
       await v2.waitFor(`CNSUI.S.freq === ${n} && CNSUI.S.per === '${per}' && !!document.querySelector('#railFoot [data-act=simulate]')`, 3000);

@@ -58,8 +58,10 @@ class Simulator:
         # Aircraft catalog: the Notion-synced data/planes.generated.json is the
         # single source of truth (see NOTION_CATALOG_PLAN.md). There is no
         # planes.json fallback — a missing catalog fails fast with an actionable
-        # error rather than silently serving stale data.
-        self._generated_planes_path = os.path.join(base_dir, "data", "planes.generated.json")
+        # error rather than silently serving stale data. CNS_PLANES_FILE points it
+        # elsewhere: the test suite pins tests/fixtures/planes.fixture.json this way.
+        self._generated_planes_path = (os.environ.get("CNS_PLANES_FILE")
+                                       or os.path.join(base_dir, "data", "planes.generated.json"))
         self._planes_lock = threading.Lock()
         self._gen_seen_mtime = None
         self.planes = self._load_planes()
@@ -112,9 +114,9 @@ class Simulator:
         if gen is None:
             raise RuntimeError(
                 f"No aircraft catalog at {self._generated_planes_path}. Run "
-                f"notion_sync.py to generate it (or restore data/snapshots/…). "
-                f"Local dev/tests: "
-                f"cp tests/fixtures/planes.fixture.json {self._generated_planes_path}")
+                f"notion_sync.py to generate it (or restore data/snapshots/…); "
+                f"see CLAUDE.md > Data for the local sync. Without Notion access: "
+                f"CNS_PLANES_FILE=tests/fixtures/planes.fixture.json")
         try:
             self._gen_seen_mtime = os.path.getmtime(self._generated_planes_path)
         except OSError:

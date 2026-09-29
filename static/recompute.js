@@ -59,7 +59,7 @@ window.CNSRecompute = (function () {
             // recompute diverges from the live planner: a hard-coded {} applies the DEFAULT
             // small-airport penalty, which can push a small-field route over maxStops and wrongly
             // flag a planner-feasible flight as "no route".
-            maxLegKm: ctx.availableRangeKm(plane), options: ctx.routingOptions || {},
+            maxLegKm: ctx.availableRangeKm(plane), options: Object.assign({}, ctx.routingOptions || {}, { bothWays: trip.tripType === 'retour' }),
         });
         if (chain.error) { t.feasible = false; t.infeasibleReason = chain.error; return t; }
 

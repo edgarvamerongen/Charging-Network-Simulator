@@ -142,7 +142,7 @@
     const title = P.error ? 'No route' : P.stops.length || P.closing.length ? (P.source === 'user' ? 'Edited route' : 'Suggested route') : 'Direct';
     const legs = c.length - 1;
     const rows = c.map((a, i) => { const bad = i > 0 && P.legIssues.includes(i - 1); const isAuto = i > 0 && i < c.length - 1 && autoIdents.has(a.ident); const ov = S.divertOverrides[a.ident];
-      return `<div class="stop ${bad ? 'bad' : ''}"><span class="n num">${String(i + 1).padStart(2, '0')}</span><span>${esc(a.name)}${TYPE_TAG[a.type] ? ` <i class="tt">${TYPE_TAG[a.type]}</i>` : ''}${S.showAlternates && i > 0 ? (ov ? ` <span class="alt">ALT ${esc(ov)} <button class="lnk" data-act="altReset" data-ident="${esc(a.ident)}">reset</button></span>` : ` <button class="lnk alt" data-act="altPick" data-ident="${esc(a.ident)}">divert…</button>`) : ''}</span><span class="d num">${i === 0 ? esc(a.ident) : fmt.dist(dispKm(c[i - 1], a))}${bad ? ' <b style="color:var(--danger)">⚠</b>' : ''}</span>${isAuto ? `<button class="x" data-act="rmPlanned" data-ident="${esc(a.ident)}" title="Remove this stop and plan around it"><svg class="ic"><use href="#i-x"/></svg></button>` : '<span></span>'}</div>`; }).join('');
+      return `<div class="stop ${bad ? 'bad' : ''}"><span class="n num">${String(i + 1).padStart(2, '0')}</span><span>${esc(a.name)}${TYPE_TAG[a.type] ? ` <i class="tt">${TYPE_TAG[a.type]}</i>` : ''}${S.showAlternates && (i > 0 || S.trip === 'retour') ? (ov ? ` <span class="alt">ALT ${esc(ov)} <button class="lnk" data-act="altReset" data-ident="${esc(a.ident)}">reset</button></span>` : ` <button class="lnk alt" data-act="altPick" data-ident="${esc(a.ident)}">divert…</button>`) : ''}</span><span class="d num">${i === 0 ? esc(a.ident) : fmt.dist(dispKm(c[i - 1], a))}${bad ? ' <b style="color:var(--danger)">⚠</b>' : ''}</span>${isAuto ? `<button class="x" data-act="rmPlanned" data-ident="${esc(a.ident)}" title="Remove this stop and plan around it"><svg class="ic"><use href="#i-x"/></svg></button>` : '<span></span>'}</div>`; }).join('');
     const remedyBtn = remedy === 'types' ? `<button class="lnk" data-act="remedyTypes">Enable all airfield sizes</button>` : remedy === 'network' ? `<button class="lnk" data-act="remedyNet">Show charger sites</button>` : remedy === 'both' ? `<button class="lnk" data-act="remedyBoth">Enable all sizes + network</button>` : '';
     // No remedy would fix it → the classic's hard-fail copy (index.html:3211, 3290), which names the
     // real levers; the router's own message only makes sense next to a button that acts on it.
@@ -260,7 +260,7 @@
     const tC = `<div><div class="cap">Charge</div><div class="v num">${durV(d.chargeMin)}</div><div class="s">${d.charges.length > 2 ? 'at ' + d.charges.length + ' airports' : d.charges.length === 2 ? 'at ' + d.charges.map(x => esc(x.ident || '')).join(' + ') : 'at ' + esc(d.terminal.ident || 'destination')}</div></div>`;
     const tR = `<div><div class="cap">Revenue</div><div class="v num">€${Math.round(costDay).toLocaleString('en')}<small>/ day</small></div><div class="s num">at €${rate.toFixed(2)} / kWh</div></div>`;
     return { p, ch, c,
-      head: `<div class="rh2"><div><div class="ttl">${c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${S.editId ? '<b>Network route</b> · ' : ''}${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}</div></div><button class="lnk" data-act="edit">Edit</button></div>`,
+      head: `<div class="rh2"><div><div class="ttl">${c.map(a => esc(a.ident)).join(' <span class="ar">→</span> ')}</div><div class="m">${S.editId ? '<b>Network route</b> · ' : ''}${esc(p.name)} · ${tripLabel[S.trip]} · ${S.freq} / ${S.per} · ${esc(ch.name)}</div></div></div>`,
       stats: `<div class="stats">${tE}
       ${tT}
       ${tC}</div>`,
@@ -290,7 +290,7 @@
     ${R.split}
     ${R.soc}
     ${R.details}`;
-    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add">${S.editId ? 'Update route' : 'Add to network'}</button>${S.editId ? '<button class="btn" data-act="stopEdit">Cancel</button>' : ''}<button class="btn i" data-act="share" title="Copy a share link"><svg class="ic"><use href="#i-share"/></svg></button></div>`;
+    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add">${S.editId ? 'Update route' : 'Add to network'}</button><button class="btn" data-act="edit">Edit</button><button class="btn i" data-act="share" title="Copy a share link"><svg class="ic"><use href="#i-share"/></svg></button></div>`;
   }
 
   // ---- prototype (?proto; design audit P2 + P6): the result heads the form and follows every change ----
@@ -328,7 +328,7 @@
       if (!need && !S.err && !S.pending && S.mode === 'plan') scheduleLive();   // a route that never changed (the boot demo) still gets its figures
     }
     const why = S.result ? '' : missingReason() || (S.err ? 'Fix the route first' : 'Calculating…');
-    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add"${why ? ` disabled title="${esc(why)}"` : ''}>${S.editId ? 'Update route' : 'Add to network'}</button>${S.editId ? '<button class="btn" data-act="stopEdit">Cancel</button>' : ''}<button class="btn i" data-act="share" title="Copy a share link" aria-label="Copy a share link"${S.result ? '' : ' disabled'}><svg class="ic"><use href="#i-share"/></svg></button><button class="btn i" id="planReset" data-act="reset" title="Clear route" aria-label="Clear route"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
+    $('#railFoot').innerHTML = `<div class="btns"><button class="btn p" data-act="add"${why ? ` disabled title="${esc(why)}"` : ''}>${S.editId ? 'Update route' : 'Add to network'}</button><button class="btn i" data-act="share" title="Copy a share link" aria-label="Copy a share link"${S.result ? '' : ' disabled'}><svg class="ic"><use href="#i-share"/></svg></button><button class="btn i" id="planReset" data-act="reset" title="Clear route" aria-label="Clear route"><svg class="ic"><use href="#i-reset"/></svg></button></div>`;
     restoreFocus(f);
   }
   function addToNetwork() {
@@ -383,7 +383,7 @@
     if (UI.CHARGERS.some(c => c.id === t.chargerId)) S.chargerId = t.chargerId;
     S.freq = Math.max(1, +t.freqN || 1); S.per = t.freqUnit === 'week' ? 'week' : 'day';
     S.availOverride = null; S.picking = false; S.acText = {}; S.blacklist.clear();
-    S.editId = t.id; S.editFrom = S.mode;
+    S.editId = t.id;
     if (S.mode !== 'plan') UI.setMode('plan');
     onFormChange(true); simulate();
   }
@@ -412,7 +412,6 @@
       case 'simulate': simulate(); break;
       case 'reset': { const snap = { origin: S.origin, dest: S.dest, stops: S.stops.slice(), trip: S.trip, freq: S.freq, per: S.per, planeId: S.planeId, chargerId: S.chargerId, availOverride: S.availOverride, divertOverrides: Object.assign({}, S.divertOverrides) }; const bl = [...S.blacklist];
         resetForm(); UI.toast('Route cleared', { label: 'Undo', run: () => { Object.assign(S, snap); S.blacklist.clear(); bl.forEach(x => S.blacklist.add(x)); onFormChange(false); } }); break; }
-      case 'stopEdit': { const back = S.editFrom === 'network'; S.editId = null; if (back) UI.setMode('network'); else UI.render(); break; }
       case 'edit': S.rail = 'form'; UI.render(); break;
       case 'add': addToNetwork(); break;
       case 'share': UI.share.copyRouteLink(); break;

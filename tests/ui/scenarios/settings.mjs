@@ -236,7 +236,7 @@ export default async function run(ctx) {
     await ctx.screenshot(v2, 'slider-30-result');
     // the reach bar lives on the form rail: Done (real click) then Edit (real click), read, then Simulate again (real click)
     await v2.click('#modalBox .btns [data-modal=close]'); await v2.waitFor(`document.querySelector('#modal').hidden`, 1500, 30);
-    await v2.click('#railBody [data-act=edit]'); await v2.waitFor(`CNSUI.S.rail === 'form' && !!document.querySelector('#railBody .meta')`, 2000, 50);
+    await v2.click('#railFoot [data-act=edit]'); await v2.waitFor(`CNSUI.S.rail === 'form' && !!document.querySelector('#railBody .meta')`, 2000, 50);
     const form = await res(); await ctx.screenshot(v2, 'slider-30-form');
     const sim = await ctx.v2Simulate(v2); if (sim.err) throw new Error('re-simulate failed: ' + sim.err);
     const c1 = await classicApply(); const cm = await classicModalSync();

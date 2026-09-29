@@ -238,6 +238,21 @@ window.CNSSettings = (function () {
         return Math.min(p, cr * batt);
     }
 
+    // A charge's place on the taper curve, shared by chargeTimeMin and chargePowerAt so the two
+    // can't drift. Above `thr` SoC the accepted power decays EXPONENTIALLY to floor·peak at 100%:
+    // P(SoC) = p · floor^((SoC−thr)/(1−thr)) — a CV-phase current taper. The charge sits at its
+    // true SoC range when known (R7), else the legacy top slice (ends at 100%).
+    function _taperBand(e, batteryKwh, startSocFrac) {
+        const s = loadAll().chargeTaper;
+        const thr   = Math.max(0.5, Math.min(0.95, +s.threshold || 0.75));
+        const floor = Math.max(0.05, Math.min(0.95, +s.taperPower || 0.30));
+        const batt  = Math.max(1e-9, +batteryKwh);
+        const start = (startSocFrac != null && isFinite(+startSocFrac))
+            ? Math.max(0, Math.min(1, +startSocFrac))
+            : Math.max(0, 1 - e / batt);
+        return { thr, b: -Math.log(floor), batt, start, end: Math.min(1, start + e / batt) };   // b: decay constant (> 0)
+    }
+
     /** Minutes to deliver `energyKwh` from a charger rated `powerKw`, against a battery
      *  of size `batteryKwh`, starting at `startSocFrac` (0..1). Linear when the taper toggle
      *  is off. When on: full power up to `threshold` SoC, then an EXPONENTIAL roll-off to
@@ -252,17 +267,7 @@ window.CNSSettings = (function () {
         if (e === 0) return 0;
         const s = loadAll().chargeTaper;
         if (!s.enabled || !batteryKwh) return 60 * e / p;
-        const thr   = Math.max(0.5, Math.min(0.95, +s.threshold || 0.75));
-        const floor = Math.max(0.05, Math.min(0.95, +s.taperPower || 0.30));
-        const batt  = Math.max(1e-9, +batteryKwh);
-        const b = -Math.log(floor);                 // decay constant (> 0)
-        // Above `thr` SoC the accepted power decays EXPONENTIALLY to floor·peak at 100%:
-        // P(SoC) = p · floor^((SoC−thr)/(1−thr)) — a CV-phase current taper. Place the charge
-        // at its true SoC range when known (R7), else the legacy top-slice (ends at 100%).
-        const start = (startSocFrac != null && isFinite(+startSocFrac))
-            ? Math.max(0, Math.min(1, +startSocFrac))
-            : Math.max(0, 1 - e / batt);
-        const end = Math.min(1, start + e / batt);
+        const { thr, b, batt, start, end } = _taperBand(e, batteryKwh, startSocFrac);
         let hours = 0;
         const flatEnd = Math.min(end, thr);          // below the knee → full power
         if (flatEnd > start) hours += batt * (flatEnd - start) / p;
@@ -272,6 +277,19 @@ window.CNSSettings = (function () {
             hours += batt * (1 - thr) / (p * b) * (Math.exp(u1 * b) - Math.exp(u0 * b));
         }
         return 60 * hours;
+    }
+
+    /** Power (kW) `tMin` minutes into the charge chargeTimeMin times: the same curve in time, so it
+     *  ends exactly when chargeTimeMin says. Full power up to the knee; above it P = p·floor^u, which
+     *  in time is P(τ) = p / (e^(b·u0) + b·k·τ), k = p / (batt·(1 − thr)) per hour. Flat when the
+     *  taper is off. Callers keep 0 ≤ tMin < duration. */
+    function chargePowerAt(tMin, energyKwh, powerKw, batteryKwh, startSocFrac) {
+        const p = Math.max(0, +powerKw || 0), e = Math.max(0, +energyKwh || 0);
+        if (!loadAll().chargeTaper.enabled || !batteryKwh || !p || !e) return p;
+        const { thr, b, batt, start, end } = _taperBand(e, batteryKwh, startSocFrac);
+        const h = Math.max(0, +tMin || 0) / 60, hFull = start < thr ? batt * (Math.min(end, thr) - start) / p : 0;
+        if (end <= thr || h < hFull) return p;
+        return p / (Math.exp(b * Math.max(0, (start - thr) / (1 - thr))) + b * p / (batt * (1 - thr)) * (h - hFull));
     }
 
     /** Convenience: state-of-the-world flags for UI badges / explanations. */
@@ -298,7 +316,7 @@ window.CNSSettings = (function () {
     return {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
-        usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin,
+        usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin, chargePowerAt,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
         alternateReserveEnabled, climbOverheadPct, climbSatFrac,
     };

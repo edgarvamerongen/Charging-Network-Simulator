@@ -184,6 +184,9 @@ window.CNSScheduler = (function () {
         if (!_rs() || !power) return power ? energy / power * 60 : 0;
         return CNSSettings.chargeTimeMin(energy, power, batt, soc);
     };
+    // The draw `t` minutes into that charge (the taper _chargeMin integrates); flat without settings.
+    const _powerAt = (t, energy, power, batt, soc) =>
+        (_rs() && CNSSettings.chargePowerAt) ? CNSSettings.chargePowerAt(t, energy, power, batt, soc) : power;
     // Chargers this trip's aircraft draws AT ONCE (catalog simultaneous_charging;
     // 1 for everyone else). Single source: CNSFlight.nChargers — the engine applies
     // the same count to its charge times, planCharging books this many bays, and
@@ -722,9 +725,30 @@ window.CNSScheduler = (function () {
         return out;
     }
 
+    // Charging power over the day at `ident` (the whole network without one), aircraft side, with
+    // the CC-CV taper: a step series [{ t, kw }] (kw holds until the next point) exact at every
+    // charge start and end and following each taper minute by minute. The sum only rises when a
+    // charge starts, so its maximum IS the coincident peak: every printed peak comes from here.
+    // ponytail: O(points × charges), fine for a day of a few hundred charges; sweep if that grows.
+    function loadCurve(ident) {
+        const ch = [];
+        runGlobal().lanes.forEach(L => L.rotations.forEach(rot => rot.phases.forEach((ph, i) => {
+            if (ph.kind !== 'charge' || !(ph.dur > 0) || !ph.power || (ident && ph.ident !== ident)) return;
+            const soc = (rot.tpl.ph[i] || {}).arrivalFrac;
+            ch.push({ s: ph.start, e: ph.start + ph.dur, kw: t => _powerAt(t - ph.start, ph.energy, ph.power, L.cap, soc) });
+        })));
+        const ts = new Set();
+        ch.forEach(c => { ts.add(c.s); ts.add(c.e); for (let m = Math.ceil(c.s); m < c.e; m++) ts.add(m); });
+        const pts = [];
+        [...ts].sort((a, b) => a - b).forEach(t => {
+            const kw = ch.reduce((sum, c) => sum + (t >= c.s && t < c.e ? c.kw(t) : 0), 0);
+            if (!pts.length || Math.abs(pts[pts.length - 1].kw - kw) > 1e-6) pts.push({ t, kw });
+        });
+        return { pts, peakKw: pts.reduce((m, p) => Math.max(m, p.kw), 0) };
+    }
+
     function summary(ident) {
         const g = runGlobal();
-        const evs = [];
         let latest = DAY_START;
         let chargeMin = 0;   // Σ charge-phase minutes here — the SAME bars the Gantt draws
         g.lanes.forEach(L => {
@@ -732,11 +756,7 @@ window.CNSScheduler = (function () {
             if (!role) return;
             L.rotations.forEach(rot => {
                 rot.phases.forEach(ph => {
-                    if (ph.kind === 'charge' && ph.ident === ident && ph.dur > 0 && ph.power) {
-                        evs.push({ tm: ph.start, d: ph.power });
-                        evs.push({ tm: ph.start + ph.dur, d: -ph.power });
-                        chargeMin += ph.dur;
-                    }
+                    if (ph.kind === 'charge' && ph.ident === ident && ph.dur > 0 && ph.power) chargeMin += ph.dur;
                 });
                 // A one-way ORIGIN only sees the take-off here (the plane departs and
                 // lands elsewhere), so its on-airport activity ends at departure — not
@@ -745,10 +765,7 @@ window.CNSScheduler = (function () {
                 if (endHere > latest) latest = endHere;
             });
         });
-        evs.sort((a, b) => a.tm - b.tm || a.d - b.d);
-        let cur = 0, peak = 0;
-        evs.forEach(e => { cur += e.d; if (cur > peak) peak = cur; });
-        return { peakKw: peak, latestEnd: latest, overflow: latest > DAY_END, chargeMin };
+        return { peakKw: loadCurve(ident).peakKw, latestEnd: latest, overflow: latest > DAY_END, chargeMin };
     }
 
     // ---------- rendering ----------
@@ -932,5 +949,5 @@ window.CNSScheduler = (function () {
         _stamp = null; _ctx = {}; _globalStamp = null; _globalCache = null;
     }
 
-    return { init, renderInto, summary, tripsAt, phasesAnim, instanceStarts, setTakeoff, releaseAll, fixedCount, roleAt, runGlobal, rotationsAt, tripPhases, whatIfChargers, DAY_START, DAY_END, SPAN };
+    return { init, renderInto, summary, loadCurve, tripsAt, phasesAnim, instanceStarts, setTakeoff, releaseAll, fixedCount, roleAt, runGlobal, rotationsAt, tripPhases, whatIfChargers, DAY_START, DAY_END, SPAN };
 })();

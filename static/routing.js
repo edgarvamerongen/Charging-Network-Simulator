@@ -134,6 +134,9 @@ window.CNSRouting = (function () {
                      : (+n.alternate_km || 0);
             return km / route;
         };
+        // A return trip flies every leg back too, landing at the airport it left from, so with
+        // options.bothWays a leg must fit the LARGER of its two ends' divert reserves.
+        const legAltKm = (a, b) => options.bothWays ? Math.max(altReserveKm(a), altReserveKm(b)) : altReserveKm(b);
         // Caller may pass an explicit max straight-line leg (the planner's "available
         // range", already incl. reserve + routing padding, or a per-flight override).
         const maxLeg = options.maxLegKm != null ? options.maxLegKm
@@ -143,7 +146,7 @@ window.CNSRouting = (function () {
         const O = { lat: origin.lat, lon: origin.lon };
         const D = { lat: destination.lat, lon: destination.lon };
         const direct = haversineKm(O, D);
-        if (direct <= maxLeg - altReserveKm(destination)) return { stops: [], totalDistanceKm: direct, legCount: 1 };
+        if (direct <= maxLeg - legAltKm(origin, destination)) return { stops: [], totalDistanceKm: direct, legCount: 1 };
 
         const skip = new Set();
         if (origin.ident) skip.add(origin.ident);
@@ -191,7 +194,7 @@ window.CNSRouting = (function () {
                     const relax = (j) => {
                         if (done[j]) return;
                         const d = haversineKm(from, pos(j));
-                        if (d + altReserveKm(obj(j)) > maxLeg) return;   // not flyable incl. divert reserve
+                        if (d + legAltKm(obj(i), obj(j)) > maxLeg) return;   // not flyable incl. divert reserve
                         const pen = (j === DEST) ? 0 : options.stopPenaltyKm + (typePen[type(j)] || 0);
                         const t = g[i] + d + pen;
                         if (t < g[j]) { g[j] = t; came[j] = i; open.push({ i: j, f: t + haversineKm(pos(j), D) }); }
