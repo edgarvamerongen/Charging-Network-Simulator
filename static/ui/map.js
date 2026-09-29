@@ -27,6 +27,9 @@
     // (index.html:2486, 4310) the dots get ONE shared canvas renderer and everything else
     // draws as SVG, whose root Leaflet marks pointer-events:none — it can never cover a dot.
     map = L.map('map', { zoomControl: false, zoomSnap: .25 }).setView([51.6, 6.5], 6.25);
+    // The arrowhead a one-way leg ends in, just short of the airport it flies to: an SVG line-end marker, so it keeps
+    // its size and the leg's heading at every zoom and never sits under the leg label (mid-leg).
+    document.body.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="cnsDir" viewBox="0 0 14 12" markerWidth="14" markerHeight="12" refX="21" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M2 2 12 6 2 10Z" fill="#c4421f" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></marker></defs></svg>');
     map.attributionControl.setPosition('bottomleft');   // bottom-right sat under the timeline bar; the tile terms want it visible
     // M2: one control (and the F key) frames the route in Plan mode, the network in Network mode.
     const FitCtl = L.Control.extend({ options: { position: 'topright' }, onAdd() {
@@ -97,6 +100,10 @@
   }
   const arcPath = pts => { const o = []; for (let i = 0; i < pts.length - 1; i++) { const seg = arc(pts[i], pts[i + 1]); o.push(...(i ? seg.slice(1) : seg)); } return o; };
   const arcMid = (a, b) => arc(a, b, 2)[1];
+  /** Initial great-circle TRUE course a → b in whole degrees, printed as charts do (001–360°). */
+  const trk = (a, b) => { const R = Math.PI / 180, la1 = a[0] * R, la2 = b[0] * R, dl = (b[1] - a[1]) * R;
+    const c = Math.round(Math.atan2(Math.sin(dl) * Math.cos(la2), Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dl)) / R + 360) % 360;
+    return String(c || 360).padStart(3, '0') + '°'; };
   /** Bottom padding so a fit never hides behind the timeline drawer (open: its height; closed: its bar). */
   function drawerPad() {
     const d = document.getElementById('drawer'); if (!d) return 80;
@@ -122,11 +129,18 @@
     const pts = c.map(UI.ll); const path = arcPath(pts);
     routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#fff', weight: 5, opacity: .95, lineCap: 'round', lineJoin: 'round' }));
     routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#c4421f', weight: 2, opacity: 1, lineCap: 'round', lineJoin: 'round' }));
-    if (S.trip === 'retour') routeLayer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#fff', weight: 2, opacity: .9, dashArray: '6 8', lineCap: 'butt' }));
     c.forEach((a, i) => { const stop = i > 0 && i < c.length - 1; routeLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="ep${stop ? ' stop' : ''}"></div>`, iconSize: [11, 11], iconAnchor: [5.5, 5.5] }) })); });
     const legs = UI.plan && UI.plan.legsForMap ? UI.plan.legsForMap() : null;
-    for (let i = 0; S.showLabels && i < pts.length - 1; i++) { const mid = arcMid(pts[i], pts[i + 1]); /* on the arc, not the chord */ let txt = UI.fmt.dist(dispKm(pts[i], pts[i + 1]));
+    // Charted as ICAO Annex 4 draws routes: a leg flown one way carries an arrowhead in the direction of flight; a
+    // return flies every leg both ways, a two-way route, so no arrow and the track in both directions on its label.
+    const back = S.trip === 'retour';
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (!back) { const leg = L.polyline(arc(pts[i], pts[i + 1]), { pane: 'rt', interactive: false, opacity: 0 });   // carries the arrowhead where it arrives (#cnsDir)
+        leg.on('add', () => leg._path.setAttribute('marker-end', 'url(#cnsDir)')); routeLayer.addLayer(leg); }
+      if (!S.showLabels) continue;
+      const mid = arcMid(pts[i], pts[i + 1]); /* on the arc, not the chord */ let txt = UI.fmt.dist(dispKm(pts[i], pts[i + 1]));
       if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.min(legs[i].flightMin)} · ${UI.fmt.r(legs[i].energyKwh)} kWh`;
+      txt = `${trk(pts[i], pts[i + 1])}${back ? '/' + trk(pts[i + 1], pts[i]) : ''}T · ${txt}`;
       routeLayer.addLayer(L.marker(mid, { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="leglbl num">${txt}</div>`, iconSize: [0, 0] }) })); }
     if (fit) fitRoute(false);
   }

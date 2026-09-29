@@ -13,7 +13,7 @@ const POP_ID = `(function(){ const e = document.querySelector('.leaflet-popup .p
 const CPOP = `!!document.querySelector('.leaflet-popup .ap-card-meta')`;                    // the classic airport card
 const CPOP_ID = `(function(){ const e = document.querySelector('.leaflet-popup .ap-card-meta'); return e ? e.textContent.trim() : ''; })()`;
 const OVERRIDE_CSS = '.leaflet-rt-pane canvas, .leaflet-net-pane canvas, .leaflet-overlay-pane canvas { pointer-events: none !important; }';
-const LABEL_RE = /^[\d,]+ (km|NM) · \d+:\d\d h · [\d,]+ kWh$/;
+const LABEL_RE = /^\d{3}°T · [\d,]+ (km|NM) · (\d+:\d\d h|\d+ min) · [\d,]+ kWh$/;   // true track first, as charted
 
 // ---- in-page helpers (v2) ---------------------------------------------------------------------
 const LAYERS = `(function(kind, pane){ const m = CNSUI.map.map; let n = 0; Object.values(m._layers).forEach(l => { if (pane && (l.options || {}).pane !== pane) return;
@@ -188,19 +188,20 @@ export default async function run(ctx) {
   // ---- route drawing ----------------------------------------------------------------------
   await ctx.check('route-drawing', async () => {
     const chain = await v2.eval(`(function(){ const S = CNSUI.S, by = CNSUI.byId(); S.origin = by.EHLE; S.dest = by.EDDM; S.stops = [by.EDDF]; S.trip = 'one-way'; S.blacklist.clear(); S.divertOverrides = {}; CNSUI.plan.onFormChange(true); return CNSUI.chain().map(a => a.ident); })()`);
-    const read = () => v2.eval(`(function(){ const m = CNSUI.map.map; const lines = Object.values(m._layers).filter(l => (l instanceof L.Polyline) && !(l instanceof L.Polygon) && (l.options || {}).pane === 'rt').map(l => ({ dash: l.options.dashArray || null, w: l.options.weight, c: l.options.color }));
-      return { chain: CNSUI.chain().map(a => a.ident), ep: document.querySelectorAll('.ep').length, stop: document.querySelectorAll('.ep.stop').length, labels: [...document.querySelectorAll('.leglbl')].map(e => e.textContent.trim()), lines, circles: Object.values(m._layers).filter(l => l instanceof L.Circle && (l.options || {}).pane === 'rt').map(l => l.getRadius()), showLabels: CNSUI.S.showLabels }; })()`);
+    const read = () => v2.eval(`(function(){ const m = CNSUI.map.map; const lines = Object.values(m._layers).filter(l => (l instanceof L.Polyline) && !(l instanceof L.Polygon) && (l.options || {}).pane === 'rt' && l.options.opacity !== 0)   /* opacity 0: a leg's arrowhead carrier */.map(l => ({ dash: l.options.dashArray || null, w: l.options.weight, c: l.options.color }));
+      return { chain: CNSUI.chain().map(a => a.ident), ep: document.querySelectorAll('.ep').length, stop: document.querySelectorAll('.ep.stop').length, labels: [...document.querySelectorAll('.leglbl')].map(e => e.textContent.trim()), arrows: document.querySelectorAll('.leaflet-rt-pane path[marker-end]').length, lines, circles: Object.values(m._layers).filter(l => l instanceof L.Circle && (l.options || {}).pane === 'rt').map(l => l.getRadius()), showLabels: CNSUI.S.showLabels }; })()`);
     const pre = await read();
     const sim = await ctx.v2Simulate(v2); if (sim.err) throw new Error('simulate failed: ' + sim.err);
     await v2.waitForMapIdle(); const post = await read();
-    const expect = await v2.eval(`(function(){ const legs = CNSUI.plan.legsForMap() || []; const f = CNSUI.fmt; return legs.map(l => f.dist(l.distKm) + ' · ' + f.h(l.flightMin) + ' h · ' + f.r(l.energyKwh) + ' kWh'); })()`);
+    const expect = await v2.eval(`(function(){ const legs = CNSUI.plan.legsForMap() || []; const f = CNSUI.fmt; return legs.map(l => f.dist(l.distKm) + ' · ' + f.min(l.flightMin) + ' · ' + f.r(l.energyKwh) + ' kWh'); })()`);
     await ctx.screenshot(v2, 'route');
     const probs = [];
     const n = post.chain.length; if (n < 3) probs.push('chain ' + JSON.stringify(post.chain));
     if (post.ep !== n) probs.push(`.ep ${post.ep} ≠ chain ${n}`); if (post.stop !== n - 2) probs.push(`.ep.stop ${post.stop} ≠ ${n - 2}`);
     if (post.labels.length !== n - 1) probs.push(`.leglbl ${post.labels.length} ≠ legs ${n - 1}`);
-    post.labels.forEach((t, i) => { if (!LABEL_RE.test(t)) probs.push(`label[${i}] "${t}" not 'km · h:mm h · kWh'`); else if (t !== expect[i]) probs.push(`label[${i}] "${t}" ≠ engine "${expect[i]}"`); });
-    if (pre.labels.length !== n - 1 || pre.labels.some(t => !/^[\d,]+ (km|NM)$/.test(t))) probs.push(`pre-simulate labels ${JSON.stringify(pre.labels)} (expected distance-only per leg)`);
+    post.labels.forEach((t, i) => { if (!LABEL_RE.test(t)) probs.push(`label[${i}] "${t}" not 'ddd°T · km · time · kWh'`); else if (t.replace(/^\d{3}°T · /, '') !== expect[i]) probs.push(`label[${i}] "${t}" ≠ engine "${expect[i]}"`); });
+    if (post.arrows !== n - 1) probs.push(`one-way: ${post.arrows} direction arrows ≠ legs ${n - 1}`);
+    if (pre.labels.length !== n - 1 || pre.labels.some(t => !/^\d{3}°T · [\d,]+ (km|NM)$/.test(t))) probs.push(`pre-simulate labels ${JSON.stringify(pre.labels)} (expected distance-only per leg)`);
     if (post.lines.length !== 2 || post.lines.some(l => l.dash)) probs.push(`one-way route lines ${JSON.stringify(post.lines)} (expected casing + accent, no dash)`);
     // labels toggle (Map menu → Leg labels)
     await openMenu(v2); await v2.click('#flightLabelToggle'); await v2.sleep(150); const off = await read(); await v2.click('#flightLabelToggle'); await v2.sleep(150); const on = await read(); await closeMenu(v2);
@@ -208,13 +209,14 @@ export default async function run(ctx) {
     if (on.labels.length !== n - 1) probs.push(`#flightLabelToggle on again → ${on.labels.length} labels`);
     // return trip → dashed overlay; training → circle
     await v2.eval(`(function(){ CNSUI.S.trip = 'retour'; CNSUI.plan.onFormChange(false); return true; })()`); const ret = await read();
-    if (!(ret.lines.length === 3 && ret.lines.some(l => l.dash))) probs.push(`return trip lines ${JSON.stringify(ret.lines)} (expected a dashed overlay)`);
+    // a return is a two-way route, as charted: no arrowhead, the track both ways on each label, no dashed overlay
+    if (ret.lines.length !== 2 || ret.lines.some(l => l.dash) || ret.arrows !== 0 || !ret.labels.every(t => /^\d{3}°\/\d{3}°T · /.test(t))) probs.push(`return trip: lines ${JSON.stringify(ret.lines)}, ${ret.arrows} arrows, labels ${JSON.stringify(ret.labels)} (expected two-way: 2 lines, no arrow, both tracks)`);
     await ctx.screenshot(v2, 'route-return');
     await v2.eval(`(function(){ CNSUI.S.trip = 'training'; CNSUI.plan.onFormChange(false); return true; })()`); const tr = await read();
     if (!(tr.circles.length === 1 && tr.circles[0] > 0 && tr.ep === 0 && tr.lines.length === 0)) probs.push(`training → circles ${JSON.stringify(tr.circles)} ep ${tr.ep} lines ${tr.lines.length}`);
     await v2.eval(`(function(){ CNSUI.S.trip = 'one-way'; CNSUI.plan.onFormChange(true); return true; })()`);
     if (probs.length) throw new Error(probs.join('; '));
-    return { detail: `chain ${post.chain.join('→')}: ${post.ep} .ep (${post.stop} stop), labels ${JSON.stringify(post.labels)} = engine; toggle off→0/on→${on.labels.length}; return ${ret.lines.length} lines (dash ${ret.lines.filter(l => l.dash).map(l => l.dash)}); training circle r=${tr.circles[0]} m`, repro: 'node tests/ui/run.mjs map --only route-drawing', evidence: [ctx.shot('route'), ctx.shot('route-return')] };
+    return { detail: `chain ${post.chain.join('→')}: ${post.ep} .ep (${post.stop} stop), labels ${JSON.stringify(post.labels)} = engine; toggle off→0/on→${on.labels.length}; return ${ret.lines.length} lines, ${ret.arrows} arrows, ${JSON.stringify(ret.labels)}; training circle r=${tr.circles[0]} m`, repro: 'node tests/ui/run.mjs map --only route-drawing', evidence: [ctx.shot('route'), ctx.shot('route-return')] };
   }, { retry: 0 });
 
   // ---- Map menu: small airfields + zoom 8 -------------------------------------------------
