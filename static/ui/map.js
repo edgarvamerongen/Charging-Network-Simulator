@@ -159,7 +159,7 @@
     netLayer.clearLayers(); if (!S.showNet || !window.CNSDemand) return;
     const net = S.mode === 'network', perAp = {}, lit = new Set();
     CNSDemand.loadFolder().forEach(t => { const pts = [[t.originLat, t.originLon], ...(t.stops || []).map(s => [s.lat, s.lon]), [t.destLat, t.destLon]].filter(p => p[0] != null && p[1] != null);
-      if (t.tripType === 'retour' || t.tripType === 'circular') pts.push([t.originLat, t.originLon]);
+      if (t.tripType === 'circular') pts.push([t.originLat, t.originLon]);   // a ring closes home; a return flies its stops back, the line it already has
       if (pts.length < 2) return; const idents = [t.originIdent, ...(t.stops || []).map(s => s.ident), t.destIdent].filter(Boolean);
       const hit = !S.filter || idents.includes(S.filter), f = CNSDemand.flightsPerDay ? CNSDemand.flightsPerDay(t) : 1;
       idents.forEach(id => { perAp[id] = (perAp[id] || 0) + f; if (hit) lit.add(id); });
