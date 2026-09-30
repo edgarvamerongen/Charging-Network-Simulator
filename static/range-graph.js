@@ -26,7 +26,10 @@ window.CNSRangeGraph = (function () {
     'use strict';
     const PANE = 'rangeGraphPane';
     const NAVY = '#2b2f5a';                 // --brand-ink: the map's "world" hue
-    const SPOKE_MAX = 250;                  // density guard — nearest N reachable airports (perf backstop)
+    const SPOKE_MAX = 200;                  // density guard: large fields first, then medium, then small (longest runway first)
+    const RANK = { large_airport: 0, medium_airport: 1 };   // everything else ranks after these
+    const RWY = ['paved', 'grass', 'gravel', 'dirt', 'water', 'unknown'];
+    const longestRwy = (a) => Math.max(0, ...RWY.map((c) => +a['rwy_' + c + '_m'] || 0));
     const LABEL_TYPES = { large_airport: 1 };               // ICAO labels on the big hubs only (readability)
 
     let _map = null, _layer = null, _getReachKm = null, _getAirports = null, _allowedFor = null, _activeIdent = null, _lastIdent = null;
@@ -69,6 +72,7 @@ window.CNSRangeGraph = (function () {
         if (reset) reset.addEventListener('click', () => { _lastIdent = null; clear(); });   // route cleared → graph cleared
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') clear(); });
         _map.on('click', clear);   // click anywhere on the map (not an airport) → dismiss the graph
+        _map.on('moveend', refresh);   // spokes cover what is in view, so a pan or zoom redraws them
     }
 
     function clear() { if (_layer) _layer.clearLayers(); _activeIdent = null; }
@@ -104,9 +108,12 @@ window.CNSRangeGraph = (function () {
         // WYSIWYG: spoke to EXACTLY the airports the live A* router may use — the same
         // allowed pool (size filter OR NRG network). No type exceptions.
         const allowed = (typeof _allowedFor === 'function') ? _allowedFor() : () => true;
+        // Only airports in view get a spoke (off-screen ones can't be seen); if more than SPOKE_MAX are, the
+        // bigger fields win: large, medium, then small by longest runway, nearest first within a class.
+        const view = _map.getBounds().pad(0.05), rank = (a) => RANK[a.type] ?? 2;
         const reach = airportsInRange(from, reachKm, airports)
-            .filter((r) => allowed(r.ap))
-            .sort((a, b) => a.km - b.km)
+            .filter((r) => allowed(r.ap) && view.contains([+r.ap.latitude_deg, +r.ap.longitude_deg]))
+            .sort((a, b) => rank(a.ap) - rank(b.ap) || (rank(a.ap) === 2 ? longestRwy(b.ap) - longestRwy(a.ap) : 0) || a.km - b.km)
             .slice(0, SPOKE_MAX);
         reach.forEach(({ ap }) => {
             const to = [+ap.latitude_deg, +ap.longitude_deg];
