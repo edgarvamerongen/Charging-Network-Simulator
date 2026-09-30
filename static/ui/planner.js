@@ -111,7 +111,7 @@
     // `airports: () => allAirports, isSuitable: () => _divertSuitable()` (index.html:6616-6620).
     // Passing values instead threw on every drag and made an ALT pick impossible.
     if (window.CNSDivertEdit) CNSDivertEdit.init({ map: UI.map.map, airportByIdent: UI.byId(), airports: () => UI.airports(), isSuitable: () => divertSuitable(), onChange: onDivertChange });
-    if (window.CNSRangeGraph) CNSRangeGraph.init({ map: UI.map.map, getReachKm: () => availableRangeKm(plane()) || 0, airports: () => UI.airports(), allowedFor: () => { const types = allowedTypes(); const ids = plannerAllowedIdents(); return ap => types.includes(ap.type) || ids.has(ap.ident); } });
+    if (window.CNSRangeGraph) CNSRangeGraph.init({ map: UI.map.map, getReachKm: () => availableRangeKm(plane()) || 0, airports: () => UI.airports(), allowedFor: () => { const types = allowedTypes(); const ids = plannerAllowedIdents(), lands = divertSuitable(); return ap => lands(ap) && (types.includes(ap.type) || ids.has(ap.ident)); } });   // the router's pool: size or network, AND a runway this aircraft can use (as the classic)
   }
   function altPick(ident) { const full = UI.byId()[ident]; if (!full || !window.CNSDivertEdit) return; CNSDivertEdit.startAltPick({ ident, lat: +full.latitude_deg, lon: +full.longitude_deg }); UI.toast('Click an airport on the map to use it as the divert for ' + ident); }
   function altReset(ident) { delete S.divertOverrides[ident]; replan(); UI.render(); UI.map.drawRoute(false); UI.map.drawAlternates(); }
