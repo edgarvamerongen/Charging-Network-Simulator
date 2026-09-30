@@ -140,7 +140,7 @@
       if (!S.showLabels) continue;
       const mid = arcMid(pts[i], pts[i + 1]); /* on the arc, not the chord */ let txt = UI.fmt.dist(dispKm(pts[i], pts[i + 1]));
       if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.min(legs[i].flightMin)} · ${UI.fmt.r(legs[i].energyKwh)} kWh`;
-      txt = `${trk(pts[i], pts[i + 1])}${back ? '/' + trk(pts[i + 1], pts[i]) : ''}T · ${txt}`;
+      if (S.showTracks) txt = `${trk(pts[i], pts[i + 1])}${back ? '/' + trk(pts[i + 1], pts[i]) : ''}T · ${txt}`;   // Map › Tracks, off by default
       routeLayer.addLayer(L.marker(mid, { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', html: `<div class="leglbl num">${txt}</div>`, iconSize: [0, 0] }) })); }
     if (fit) fitRoute(false);
   }
@@ -172,13 +172,15 @@
   function drawNet() {
     netLayer.clearLayers(); if (!S.showNet || !window.CNSDemand) return;
     const net = S.mode === 'network', perAp = {}, lit = new Set();
+    // An isolated airport lights its routes; Plan mode with no route drawn lights nothing (a reset plan is a clean slate).
+    const fl = net || UI.chain().length > 1 ? S.filter : '';
     CNSDemand.loadFolder().forEach(t => { const pts = [[t.originLat, t.originLon], ...(t.stops || []).map(s => [s.lat, s.lon]), [t.destLat, t.destLon]].filter(p => p[0] != null && p[1] != null);
       if (t.tripType === 'circular') pts.push([t.originLat, t.originLon]);   // a ring closes home; a return flies its stops back, the line it already has
       if (pts.length < 2) return; const idents = [t.originIdent, ...(t.stops || []).map(s => s.ident), t.destIdent].filter(Boolean);
-      const hit = !S.filter || idents.includes(S.filter), f = CNSDemand.flightsPerDay ? CNSDemand.flightsPerDay(t) : 1;
+      const hit = !fl || idents.includes(fl), f = CNSDemand.flightsPerDay ? CNSDemand.flightsPerDay(t) : 1;
       idents.forEach(id => { perAp[id] = (perAp[id] || 0) + f; if (hit) lit.add(id); });
       const w = net ? Math.min(6, 1 + 1.1 * Math.sqrt(f)) : 1.5;
-      netLayer.addLayer(L.polyline(arcPath(pts), { pane: 'net', interactive: false, color: '#32326E', weight: hit && S.filter ? w + .5 : w, opacity: S.filter ? (hit ? .8 : .12) : (net ? .55 : .45), lineCap: 'round' })); });
+      netLayer.addLayer(L.polyline(arcPath(pts), { pane: 'net', interactive: false, color: '#32326E', weight: hit && fl ? w + .5 : w, opacity: fl ? (hit ? .8 : .12) : (net ? .55 : .45), lineCap: 'round' })); });
     if (!net) return;
     const isolate = id => { S.filter = S.filter === id ? '' : id; if (S.filter) S.openAp[id] = true; UI.render(); drawNet(); fitNet(); };
     const aps = Object.entries(perAp).map(([id, f]) => ({ id, f, a: UI.byId()[id] })).filter(x => x.a).sort((x, y) => y.f - x.f);
@@ -189,7 +191,7 @@
     aps.forEach(x => { x.r = Math.min(12, 3.5 + 1.6 * Math.sqrt(x.f)); x.pt = map.latLngToContainerPoint(UI.ll(x.a)); taken.push([x.pt.x - x.r, x.pt.y - x.r, x.pt.x + x.r, x.pt.y + x.r]); });
     aps.forEach(x => { const w = 7 * x.id.length + 8, R = [x.pt.x + x.r + 3, x.pt.y - 8, x.pt.x + x.r + 3 + w, x.pt.y + 8], Lb = [x.pt.x - x.r - 3 - w, x.pt.y - 8, x.pt.x - x.r - 3, x.pt.y + 8];
       x.side = clear(R) ? 'left' : clear(Lb) ? 'right' : null; if (x.side) taken.push(x.side === 'left' ? R : Lb); });
-    aps.forEach(({ id, a, r, side }) => { const on = lit.has(id), tip = S.filter === id ? 'Show all airports' : 'Show ' + id + ' in the network';
+    aps.forEach(({ id, a, r, side }) => { const on = !!fl && lit.has(id), tip = S.filter === id ? 'Show all airports' : 'Show ' + id + ' in the network';
       netLayer.addLayer(L.circleMarker(UI.ll(a), { pane: 'net', radius: r, fillColor: '#32326E', fillOpacity: on ? .9 : .25, color: '#fff', weight: 1.5, opacity: on ? 1 : .4, bubblingMouseEvents: false }).on('click', () => isolate(id)).bindTooltip(side ? tip : id + ': ' + tip.toLowerCase(), { direction: 'top', offset: [0, -r] }));
       if (side) netLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', keyboard: false, title: tip, icon: L.divIcon({ className: '', html: `<div class="netlbl${on ? '' : ' dim'}" style="${side}:${Math.round(r + 3)}px">${UI.esc(id)}</div>`, iconSize: [0, 0] }) }).on('click', () => isolate(id))); });
   }

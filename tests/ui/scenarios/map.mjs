@@ -187,7 +187,7 @@ export default async function run(ctx) {
 
   // ---- route drawing ----------------------------------------------------------------------
   await ctx.check('route-drawing', async () => {
-    const chain = await v2.eval(`(function(){ const S = CNSUI.S, by = CNSUI.byId(); S.origin = by.EHLE; S.dest = by.EDDM; S.stops = [by.EDDF]; S.trip = 'one-way'; S.blacklist.clear(); S.divertOverrides = {}; CNSUI.plan.onFormChange(true); return CNSUI.chain().map(a => a.ident); })()`);
+    const chain = await v2.eval(`(function(){ const S = CNSUI.S, by = CNSUI.byId(); S.showTracks = true; S.origin = by.EHLE; S.dest = by.EDDM; S.stops = [by.EDDF]; S.trip = 'one-way'; S.blacklist.clear(); S.divertOverrides = {}; CNSUI.plan.onFormChange(true); return CNSUI.chain().map(a => a.ident); })()`);
     const read = () => v2.eval(`(function(){ const m = CNSUI.map.map; const lines = Object.values(m._layers).filter(l => (l instanceof L.Polyline) && !(l instanceof L.Polygon) && (l.options || {}).pane === 'rt' && l.options.opacity !== 0)   /* opacity 0: a leg's arrowhead carrier */.map(l => ({ dash: l.options.dashArray || null, w: l.options.weight, c: l.options.color }));
       return { chain: CNSUI.chain().map(a => a.ident), ep: document.querySelectorAll('.ep').length, stop: document.querySelectorAll('.ep.stop').length, labels: [...document.querySelectorAll('.leglbl')].map(e => e.textContent.trim()), arrows: document.querySelectorAll('.leaflet-rt-pane path[marker-end]').length, lines, circles: Object.values(m._layers).filter(l => l instanceof L.Circle && (l.options || {}).pane === 'rt').map(l => l.getRadius()), showLabels: CNSUI.S.showLabels }; })()`);
     const pre = await read();

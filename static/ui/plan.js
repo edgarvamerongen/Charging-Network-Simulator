@@ -152,7 +152,7 @@
       <div class="row" style="margin-top:8px;gap:8px"><span class="hint" style="margin:0">Prefer</span><select class="sel" data-act="bias">${BIAS.map(([k, l]) => `<option value="${k}" ${S.bias === k ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="sp" style="flex:1"></span>${S.blacklist.size ? `<button class="lnk" data-act="resuggest">Re-suggest</button>` : ''}</div></div>`;
   }
   function onFormChange(fit) { if (UI.PROTO && S.profile) S.prevLive = { result: S.result, profile: S.profile };
-    S.acText = {}; S.result = null; S.profile = null; S.err = ''; S.errSlots = []; S.rail = 'form'; if (UI.planner) UI.planner.replan(); if (UI.PROTO) scheduleLive(); UI.render(); UI.map.drawRoute(fit); UI.map.drawAlternates(); if (window.CNSRangeGraph && CNSRangeGraph.refresh) CNSRangeGraph.refresh(); }
+    S.acText = {}; S.result = null; S.profile = null; S.err = ''; S.errSlots = []; S.rail = 'form'; if (UI.planner) UI.planner.replan(); if (UI.PROTO) scheduleLive(); UI.render(); UI.map.drawRoute(fit); UI.map.drawNet(); UI.map.drawAlternates(); if (window.CNSRangeGraph && CNSRangeGraph.refresh) CNSRangeGraph.refresh(); }
 
   // ---- simulate: the classic payload + the engine profile ---------------------
   const toC = a => ({ ident: a.ident, name: a.name, lat: a.latitude_deg, lon: a.longitude_deg });
