@@ -116,3 +116,19 @@ class AuthTestCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class MultiPasswordTestCase(unittest.TestCase):
+    """CNS_PASSWORD_HASH may hold several comma-separated hashes; any one logs in."""
+
+    def test_any_listed_hash_logs_in(self):
+        from werkzeug.security import generate_password_hash
+        saved = cns_app._PASSWORD_HASHES
+        try:
+            cns_app._PASSWORD_HASHES = [generate_password_hash('first-pw'), generate_password_hash('second-pw')]
+            self.assertTrue(cns_app._password_ok('first-pw'))
+            self.assertTrue(cns_app._password_ok('second-pw'))
+            self.assertFalse(cns_app._password_ok('wrong-pw'))
+            self.assertFalse(cns_app._password_ok(''))
+        finally:
+            cns_app._PASSWORD_HASHES = saved
