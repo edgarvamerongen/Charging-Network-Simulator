@@ -56,7 +56,7 @@
       add('Airports', `Set <b>${esc(a.ident)}</b> as departure`, () => { S.origin = a; UI.setMode('plan'); UI.plan.onFormChange(false); }, 'D');
       add('Airports', `Set <b>${esc(a.ident)}</b> as destination`, () => { S.dest = a; UI.setMode('plan'); UI.plan.onFormChange(false); }, 'A');
       add('Airports', `Add <b>${esc(a.ident)}</b> as a stop`, () => { S.stops.push(a); UI.setMode('plan'); UI.plan.onFormChange(false); }, 'S');
-      if (window.CNSDemand && CNSDemand.computeAirports()[a.ident]) add('Airports', `Isolate <b>${esc(a.ident)}</b> in the network`, () => { UI.setMode('network'); S.filter = a.ident; S.openAp[a.ident] = true; UI.render(); UI.map.drawNet(); UI.map.fitNet(); $('#drawer').classList.add('open'); }, 'I'); });
+      if (window.CNSDemand && CNSDemand.computeAirports()[a.ident]) add('Airports', `Isolate <b>${esc(a.ident)}</b> in the network`, () => { UI.setMode('network'); S.filter = a.ident; S.openAp = { [a.ident]: true }; UI.render(); UI.map.drawNet(); UI.map.fitNet(); $('#drawer').classList.add('open'); }, 'I'); });
     UI.PLANES.filter(p => ql && hit(`${p.oem || ''} ${p.name} ${p.id || ''}`)).slice(0, 3).forEach(p => add('Aircraft', `Aircraft: ${esc(p.name)}`, () => { S.planeId = p.id; const dc = p.default_charger_id; if (dc && UI.CHARGERS.find(c => c.id === dc)) S.chargerId = dc; UI.setMode('plan'); UI.plan.onFormChange(false); }, '', `${UI.fmt.dist(p.range_km)} · ${p.battery_kwh > 0 ? UI.fmt.ekwh(p.battery_kwh) : 'no charge'}`));
     UI.CHARGERS.filter(c => ql && hit(c.name)).slice(0, 3).forEach(c => add('Chargers', `Charger: ${esc(c.name)}`, () => { S.chargerId = c.id; UI.setMode('plan'); UI.plan.onFormChange(false); }));
     if (!actsFirst) pushActs();

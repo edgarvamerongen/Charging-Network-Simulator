@@ -246,7 +246,7 @@ window.CNSUI = (function () {
     if (h === 'big') await CNSUI.network.loadScenario('regional');
     if (h === 'hub') await CNSUI.network.loadScenario('hub');
     if (h === 'training') await CNSUI.network.loadScenario('training');
-    if (focusAp && AP_BY_ID[focusAp]) { S.filter = focusAp; S.openAp[focusAp] = true; setMode('network'); }
+    if (focusAp && AP_BY_ID[focusAp]) { S.filter = focusAp; S.openAp = { [focusAp]: true }; setMode('network'); }
     if (view === 'fleet') { S.lanes = 'fleet'; $('#drawer').classList.add('open'); CNSUI.timeline.render(); }
     if (h === 'filters') { S.acFilterOpen = true; render(); }
     if (h === 'settings') CNSUI.settings.open();

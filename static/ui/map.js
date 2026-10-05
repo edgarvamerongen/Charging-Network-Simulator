@@ -173,7 +173,9 @@
     netLayer.clearLayers(); if (!S.showNet || !window.CNSDemand) return;
     const net = S.mode === 'network', perAp = {}, lit = new Set();
     // An isolated airport lights its routes; Plan mode with no route drawn lights nothing (a reset plan is a clean slate).
-    const fl = net || UI.chain().length > 1 ? S.filter : '';
+    // ONE selected airport: the isolated one, else the open ledger row. It gets the ring, its network lights up.
+    const sel = S.filter || Object.keys(S.openAp).find(k => S.openAp[k]) || '';
+    const fl = net ? sel : UI.chain().length > 1 ? S.filter : '';
     CNSDemand.loadFolder().forEach(t => { const pts = [[t.originLat, t.originLon], ...(t.stops || []).map(s => [s.lat, s.lon]), [t.destLat, t.destLon]].filter(p => p[0] != null && p[1] != null);
       if (t.tripType === 'circular') pts.push([t.originLat, t.originLon]);   // a ring closes home; a return flies its stops back, the line it already has
       if (pts.length < 2) return; const idents = [t.originIdent, ...(t.stops || []).map(s => s.ident), t.destIdent].filter(Boolean);
@@ -181,14 +183,15 @@
       idents.forEach(id => { perAp[id] = (perAp[id] || 0) + f; if (hit) lit.add(id); });
       const w = net ? Math.min(6, 1 + 1.1 * Math.sqrt(f)) : 1.5;
       netLayer.addLayer(L.polyline(arcPath(pts), { pane: 'net', interactive: false, color: '#32326E', weight: hit && fl ? w + .5 : w, opacity: fl ? (hit ? .8 : .12) : (net ? .55 : .45), lineCap: 'round' })); });
+    highlightAirports(net && sel ? [sel] : []);
     if (!net) return;
-    const isolate = id => { S.filter = S.filter === id ? '' : id; if (S.filter) S.openAp[id] = true; UI.render(); drawNet(); fitNet(); };
+    const isolate = id => { S.filter = S.filter === id ? '' : id; if (S.filter) S.openAp = { [id]: true }; UI.render(); drawNet(); fitNet(); };
     const aps = Object.entries(perAp).map(([id, f]) => ({ id, f, a: UI.byId()[id] })).filter(x => x.a).sort((x, y) => y.f - x.f);
     // Labels never cover one another or another airport's disc (a click must reach the airport it names): the
     // busiest airports label first, a label that would collide goes to the other side of its disc, else it is
     // left out and the disc's tooltip names the airport. Placed in screen space, so zoomend re-runs this.
     const taken = [], clear = b => !taken.some(q => b[0] < q[2] && q[0] < b[2] && b[1] < q[3] && q[1] < b[3]);
-    aps.forEach(x => { x.r = Math.min(12, 3.5 + 1.6 * Math.sqrt(x.f)); x.pt = map.latLngToContainerPoint(UI.ll(x.a)); taken.push([x.pt.x - x.r, x.pt.y - x.r, x.pt.x + x.r, x.pt.y + x.r]); });
+    aps.forEach(x => { x.r = 5;   /* one size: a route's width carries its traffic */ x.pt = map.latLngToContainerPoint(UI.ll(x.a)); taken.push([x.pt.x - x.r, x.pt.y - x.r, x.pt.x + x.r, x.pt.y + x.r]); });
     aps.forEach(x => { const w = 7 * x.id.length + 8, R = [x.pt.x + x.r + 3, x.pt.y - 8, x.pt.x + x.r + 3 + w, x.pt.y + 8], Lb = [x.pt.x - x.r - 3 - w, x.pt.y - 8, x.pt.x - x.r - 3, x.pt.y + 8];
       x.side = clear(R) ? 'left' : clear(Lb) ? 'right' : null; if (x.side) taken.push(x.side === 'left' ? R : Lb); });
     aps.forEach(({ id, a, r, side }) => { const on = !!fl && lit.has(id), tip = S.filter === id ? 'Show all airports' : 'Show ' + id + ' in the network';

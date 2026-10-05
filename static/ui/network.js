@@ -120,7 +120,7 @@
   }
   function render() {
     const R = rows(); const folder = D() ? D().loadFolder() : [];
-    const foc = S.filter && R.find(a => a.ident === S.filter) || null; if (foc) S.openAp[foc.ident] = true;
+    const foc = S.filter && R.find(a => a.ident === S.filter) || null; if (foc) S.openAp = { [foc.ident]: true };
     const flights = folder.reduce((s, t) => s + D().flightsPerDay(t), 0); const kwh = R.reduce((s, a) => s + a.kwh, 0); const kwhAc = R.reduce((s, a) => s + a.kwhAircraft, 0); const peak = R.reduce((s, a) => s + a.peak, 0); const netPeak = UI.timeline && UI.timeline.peak ? UI.timeline.peak() : peak; const bad = infeasibleCount(R);
     const grid = gridMul() > 1 ? ' (grid)' : '';
     const pk = fmt.prefixFor(R.map(a => a.peak));   // the ledger's peak column reads in ONE unit (T1)
@@ -143,7 +143,7 @@
   }
 
   /** Ring the open airports on the map so the expanded ledger row is findable in the view. */
-  function syncHighlight() { if (UI.map && UI.map.highlightAirports) UI.map.highlightAirports(Object.keys(S.openAp).filter(k => S.openAp[k])); }
+  function syncHighlight() { if (UI.map && UI.map.drawNet) UI.map.drawNet(); }   // drawNet rings the selected airport
 
   // ---- cfg + folder edits ----
   const cfgPatch = (ap, patch) => { const c = D().loadCfg(); c[ap] = Object.assign({}, c[ap] || {}, patch); D().saveCfg(c); UI.folderChanged(); UI.render(); };
@@ -272,7 +272,7 @@
         if (S.result) UI.plan.addToNetwork(); else fails.push(`${o}→${d} ${planeId}: ${S.err || 'no result'}`);
       }
     } finally { UI.render = _render; UI.map.fitNet = _fit; UI.map.drawNet = _drawNet; UI.map.drawRoute = _drawRoute; UI.map.ensureRouteVisible = _ensure; }
-    UI.plan.resetForm(); if (sc.focus) S.openAp[sc.focus] = true;
+    UI.plan.resetForm(); if (sc.focus) S.openAp = { [sc.focus]: true };
     // Open the timeline BEFORE Network mode fits the map, so the fit knows the drawer's height and
     // nothing lands behind it (fitting first framed the network, then the drawer covered half of it).
     $('#drawer').classList.add('open'); UI.timeline.render(); UI.setMode('network');
@@ -291,7 +291,7 @@
     // The demand drawer renders in BOTH modes, so its 'Isolate <ICAO>' buttons must work in Plan mode too — they
     // switch to Network mode, where the isolation lives. Everything else stays Network-only.
     if (S.mode !== 'network' && !['scenario', 'focus'].includes(t.dataset.act)) return;
-    const ap = t.closest('[data-ap]'); if (ap && !t.dataset.act && t.tagName === 'BUTTON' && t.parentElement === ap) { S.openAp[ap.dataset.ap] = !S.openAp[ap.dataset.ap]; ap.classList.toggle('open'); syncHighlight(); return; }
+    const ap = t.closest('[data-ap]'); if (ap && !t.dataset.act && t.tagName === 'BUTTON' && t.parentElement === ap) { S.openAp = S.openAp[ap.dataset.ap] ? {} : { [ap.dataset.ap]: true }; UI.render(); syncHighlight(); return; }
     switch (t.dataset.act) {
       case 'rm': remove(t.dataset.id); break;
       case 'clear': { const prev = D().loadFolder(); const redraw = () => { UI.folderChanged(); UI.map.drawNet(); UI.render(); };
@@ -299,7 +299,7 @@
       case 'build': UI.share.copyBuildLink(); break;
       case 'xlsx': if (window.CNSSpreadsheet) CNSSpreadsheet.export(t); break;
       case 'pdf': UI.report && UI.report.pick(); break;
-      case 'focus': S.filter = t.dataset.ap || ''; if (S.filter) S.openAp[S.filter] = true;
+      case 'focus': S.filter = t.dataset.ap || ''; if (S.filter) S.openAp = { [S.filter]: true };
         if (S.mode !== 'network') { UI.setMode('network'); } else { UI.render(); UI.map.drawNet(); UI.map.fitNet(); } break;
       case 'fleetAdd': { const ids = fleetOf(t.dataset.ap); ids.push(ids[ids.length - 1] || (UI.CHARGERS[0] && UI.CHARGERS[0].id)); cfgPatch(t.dataset.ap, { chargers: ids }); break; }
       case 'fleetRm': { const ids = fleetOf(t.dataset.ap); ids.splice(+t.dataset.i, 1); cfgPatch(t.dataset.ap, { chargers: ids }); break; }
