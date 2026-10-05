@@ -62,7 +62,8 @@ def _refresh_catalog():
 # (one client + a handful of trusted friends — no per-user accounts needed).
 # Configure it via the environment so no secret is ever committed:
 #
-#   CNS_PASSWORD_HASH  preferred — a werkzeug hash. Generate one with:
+#   CNS_PASSWORD_HASH  preferred — one or more werkzeug hashes, comma-separated
+#                      (one per password; any of them logs in). Generate one with:
 #                      python -c "from werkzeug.security import generate_password_hash; \
 #                                 print(generate_password_hash('your-password'))"
 #   CNS_APP_PASSWORD   fallback — the plaintext password (kept only in the
@@ -75,13 +76,13 @@ def _refresh_catalog():
 # When NEITHER password var is set, auth is DISABLED (open app) and a loud
 # warning is logged — this keeps local dev and the offline test suite working
 # unchanged, but means a public deploy MUST set one of the two vars.
-_PASSWORD_HASH = os.environ.get('CNS_PASSWORD_HASH') or ''
+_PASSWORD_HASHES = [h.strip() for h in (os.environ.get('CNS_PASSWORD_HASH') or '').split(',') if h.strip()]
 _PASSWORD_PLAIN = os.environ.get('CNS_APP_PASSWORD') or ''
 _IMPORT_TOKEN = os.environ.get('CNS_IMPORT_TOKEN') or ''
 # Bearer token for the headless catalog-sync trigger (POST /api/admin/sync-catalog);
 # the settings-panel button uses the session instead. Loaded like _IMPORT_TOKEN.
 _SYNC_TOKEN = os.environ.get('CNS_SYNC_TOKEN') or ''
-AUTH_ENABLED = bool(_PASSWORD_HASH or _PASSWORD_PLAIN)
+AUTH_ENABLED = bool(_PASSWORD_HASHES or _PASSWORD_PLAIN)
 
 # Carto basemap key (optional). The Voyager raster endpoint serves fine WITHOUT
 # a key, so absent = unchanged behaviour; setting it attributes tile usage to
@@ -145,11 +146,14 @@ def _hits(bucket, ip, window_s, inc=1):
 def _password_ok(candidate):
     """Constant-time check of a submitted password against the configured one."""
     candidate = candidate or ''
-    if _PASSWORD_HASH:
-        try:
-            return check_password_hash(_PASSWORD_HASH, candidate)
-        except Exception:
-            return False
+    if _PASSWORD_HASHES:
+        ok = False
+        for h in _PASSWORD_HASHES:   # check every hash: no early exit, no timing hint at which matched
+            try:
+                ok = check_password_hash(h, candidate) or ok
+            except Exception:
+                pass
+        return ok
     if _PASSWORD_PLAIN:
         return hmac.compare_digest(candidate, _PASSWORD_PLAIN)
     return False
