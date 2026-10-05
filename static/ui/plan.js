@@ -115,9 +115,11 @@
     // follow the unit toggle like the card does; a battery-less hybrid reads 'no charge'.
     // The hangar (picker concept A + B's reach bar): photo cards, a spec band, the reach against this route's
     // distance (the tick) and how each aircraft would fly it, from the planner's own chain-build.
+    // One card per airframe (its default profile, or the selected one); the profile knobs live on the aircraft card.
     const pickHtml = S.picking ? (() => { const PL = UI.planner, reachOf = x => (PL && PL.availRangeShownKm(x)) || 0;
-      const top = Math.max(1, ...UI.PLANES.map(reachOf)), tick = c.length >= 2 && d ? Math.min(100, d / top * 100) : null;
-      return `<div class="hangar">${UI.PLANES.map(x => { const im = UI.planeImg(x), fit = PL && PL.fitFor ? PL.fitFor(x) : null, rch = reachOf(x);
+      const list = UI.aircraft.visible(S.acFilters).map(g => g.entries.find(e => e.id === S.planeId) || g.entries[0]);
+      const top = Math.max(1, ...list.map(reachOf)), tick = c.length >= 2 && d ? Math.min(100, d / top * 100) : null;
+      return `<div class="hangar">${list.map(x => { const im = UI.planeImg(x), fit = PL && PL.fitFor ? PL.fitFor(x) : null, rch = reachOf(x);
         const verdict = !fit ? '' : fit.none ? '<span class="v no">No route</span>' : `<span class="v ok">${fit.stops ? fmt.pl(fit.stops, fit.stops + ' stop', fit.stops + ' stops') : 'Direct'}</span>`;
         const st = String(x.status || ''), stCls = st.toLowerCase().replace(/[^a-z0-9]+/g, '-');
         return `<button data-act="plane" data-id="${x.id}" class="${x.id === S.planeId ? 'on' : ''}"><span class="img">${im ? `<img src="${esc(im)}" alt="" loading="lazy">` : glyph('✈', 180, 96)}${st ? `<span class="st ${stCls}">${esc(st.charAt(0).toUpperCase() + st.slice(1))}</span>` : ''}<span class="rg">${esc(regShort(x.regime || ''))}</span></span>
