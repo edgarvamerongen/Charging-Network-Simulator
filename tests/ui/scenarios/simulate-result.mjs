@@ -200,7 +200,7 @@ export default async function run(ctx) {
 
   // ---- 4. a Model-settings change moves both shells identically (climb model off, then restored) ----
   await ctx.check('settings-effect', async () => {
-    const readV2 = () => v2.eval(`(function(){ const d = CNSUI.plan.derive(); const t = document.querySelector('#railBody .stats .v'); return { used: d ? d.used : null, shown: t ? t.textContent.trim() : null, rail: CNSUI.S.rail, climb: CNSSettings.loadAll().climbModel.enabled, badge: !document.getElementById('setBadge').hidden }; })()`);
+    const readV2 = () => v2.eval(`(function(){ const d = CNSUI.plan.derive(); const t = document.querySelector('#railBody .stats .v'); return { used: d ? d.used : null, shown: t ? t.textContent.trim() : null, rail: CNSUI.S.rail, climb: CNSSettings.loadAll().climbModel.enabled, model: (document.getElementById('modelState') || {}).textContent || null }; })()`);
     const readClassic = () => classic.eval(`(function(){ const bd = _breakdownFromProfile(_engineProfile(lastResult)); return { used: bd ? bd.energyUsedKwh : null, shown: document.getElementById('hlUsed').textContent.trim(), climb: CNSSettings.loadAll().climbModel.enabled }; })()`);
     ctx.cleanup(async () => { for (const p of [v2, classic]) await p.eval(`CNSSettings.save({ climbModel: { enabled: true } }); true`).catch(() => {}); });
     const b1 = await readV2(), b2 = await readClassic();
@@ -218,7 +218,8 @@ export default async function run(ctx) {
     if (!ctx.close(a1.used, a2.used, 1e-6)) fails.push(`after: v2 ${a1.used} vs classic ${a2.used}`);
     if (Math.abs(kwhShown(a1.shown) - kwhShown(a2.shown)) > (/MWh/.test(String(a1.shown)) ? (kwhShown(a1.shown) >= 1000 ? 50 : 5) : 0)) fails.push(`shown after: v2 "${a1.shown}" vs classic "${a2.shown}"`);
     if (a1.rail !== 'result') fails.push('v2 left the result rail: ' + a1.rail);
-    if (!a1.badge) fails.push('settings badge not shown while a non-default flag is active');
+    // the topbar's "Model: default | N changes" chip replaced the gear badge (#setBadge) in the P6 topbar (23b74be)
+    if (!a1.model || a1.model.trim() === 'default') fails.push(`Model chip reads ${JSON.stringify(a1.model)} while the climb model is off`);
     if (!ctx.close(r1.used, b1.used, 1e-6) || !ctx.close(r2.used, b2.used, 1e-6)) fails.push(`restore: v2 ${r1.used} (was ${b1.used}) classic ${r2.used} (was ${b2.used})`);
     const file = dump('settings-effect', { b1, b2, a1, a2auto, a2, r1, r2 });
     if (fails.length) throw new Error(fails.join(' || ') + ' — ' + file);

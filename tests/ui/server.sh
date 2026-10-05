@@ -21,7 +21,8 @@ start() {
   if [ "$(health)" = "200" ]; then echo "port $PORT already serves /healthz but no pidfile — not starting another"; return 1; fi
   mkdir -p "$SCRATCH"
   cd "$W" || exit 1
-  nohup ./venv/bin/python app.py > "$LOG" 2>&1 &
+  # nohup is SIP-protected, so macOS drops DYLD_* as it starts; env re-sets it for python (WeasyPrint needs libgobject).
+  nohup env DYLD_FALLBACK_LIBRARY_PATH="$DYLD_FALLBACK_LIBRARY_PATH" ./venv/bin/python app.py > "$LOG" 2>&1 &
   echo $! > "$PIDFILE"
   for _ in $(seq 1 60); do [ "$(health)" = "200" ] && { echo "started pid $(cat "$PIDFILE") on :$PORT"; return 0; }; sleep 0.25; done
   echo "server did not answer /healthz within 15 s — see $LOG"; tail -20 "$LOG"; return 1
