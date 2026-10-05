@@ -176,6 +176,23 @@ body.net .leaflet-dots-pane{opacity:.3}
 .btn.busy{opacity:.6;pointer-events:none}
 .btn.sm{height:30px;font-size:12px}
 /* picker (aircraft) */
+.hangar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px var(--pad);border-bottom:1px solid var(--line)}
+.hangar button{display:flex;flex-direction:column;text-align:left;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface);transition:border-color .12s}
+.hangar button:hover{border-color:var(--ink)}
+.hangar button.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.hangar .img{position:relative;display:block;height:96px;background:#dfe0e8}
+.hangar .img img,.hangar .img svg{width:100%;height:100%;object-fit:cover;display:block}
+.hangar .st,.hangar .rg{position:absolute;top:6px;font-size:10px;font-weight:600;padding:1px 5px;border-radius:2px;background:rgba(255,255,255,.92);color:var(--ink)}
+.hangar .st{left:6px}.hangar .rg{right:6px}
+.hangar .b{display:flex;flex-direction:column;gap:2px;padding:8px}
+.hangar .n{font-weight:600;font-size:12.5px;line-height:1.25}
+.hangar .m{font-size:11px;color:var(--muted)}
+.hangar .spec{display:grid;grid-template-columns:auto auto 1fr;gap:8px;margin-top:4px;font-size:11.5px;font-weight:600}
+.hangar .spec i{display:block;font-style:normal;font-weight:400;font-size:10px;color:var(--muted)}
+.hangar .bar{position:relative;display:block;height:4px;margin-top:6px;background:var(--line);border-radius:2px}
+.hangar .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink);border-radius:2px}
+.hangar .bar b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--accent)}
+.hangar .v{font-size:11px;font-weight:600;margin-top:4px}.hangar .v.ok{color:var(--success)}.hangar .v.no{color:var(--danger)}
 .pick{border-bottom:1px solid var(--line)}
 .pick button{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;width:100%;padding:8px var(--pad);text-align:left;border-bottom:1px solid var(--line)}
 .pick button:last-child{border-bottom:0}
@@ -545,3 +562,18 @@ body.proto .drawer.open{height:var(--tl-h,40vh)}
 .size .tbl th.rec,.size .tbl td.rec{background:rgba(196,66,31,.08)}
 .size-rec{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;font-size:12px}
 .size-rec .btn{flex:none;padding:0 12px}
+/* wind: topbar control + the drift over the map */
+.tb.wind{white-space:nowrap}.tb.wind.on{color:var(--ink)}.tb.wind.on b{color:var(--accent)}
+.wdd{min-width:280px;padding:8px 10px}
+.wdd .won{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:4px 0 8px}
+.wdd .wrow{display:flex;gap:12px;align-items:center}
+.wdd .rose{width:56px;height:56px;flex:none}
+.wdd .rose circle{fill:none;stroke:var(--line-2)}.wdd .rose text{font-size:7px;text-anchor:middle;fill:var(--muted)}
+.wdd .rose path{fill:none;stroke:var(--ink);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.wdd #windRose{transform-origin:20px 20px;transition:transform .2s}
+.wdd .wsl{flex:1;display:flex;flex-direction:column;gap:6px}
+.wdd .wsl label{display:flex;flex-direction:column;align-items:stretch;text-align:left;font-size:11px;color:var(--muted)}
+.wdd .wsl label b{position:absolute;right:10px;font-weight:600;color:var(--ink)}
+.wdd .wsl label{position:relative}
+.wdd .hint{margin:8px 0 2px;font-size:11px;line-height:1.4}
+#windDrift{position:absolute;inset:0;z-index:450;pointer-events:none}

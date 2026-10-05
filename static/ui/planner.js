@@ -120,5 +120,20 @@
   function pickPending() { return !!(window.CNSDivertEdit && CNSDivertEdit.pickPending && CNSDivertEdit.pickPending()); }
   function notifyAirportPick(ap) { if (window.CNSDivertEdit && CNSDivertEdit.notifyAirportPick) CNSDivertEdit.notifyAirportPick(ap); }
 
-  UI.planner = { availableRangeKm, availRangeShownKm, terminus, chain, replan, noRouteRemedy, divertSuitable, alternatesChain, plannerAllowedIdents, routingOptions, initMap, altPick, altReset, pickPending, notifyAirportPick, wp };
+  /** How aircraft `p` would fly the route on the form: { stops } or { none }, from the same chain-build the planner
+      runs (memoised: the picker asks for every aircraft at once). null with no route, or for training/circular. */
+  const _fit = new Map();
+  function fitFor(p) {
+    const t = terminus(); if (!t || !p || !R() || S.trip === 'training' || S.trip === 'circular') return null;
+    const key = [t.origin.ident, t.dest.ident, S.trip, p.id, S.planeId === p.id ? S.availOverride : '', allowedTypes().join(), S.showAssets, [...S.blacklist].join(), JSON.stringify(ST() ? ST().loadAll() : 0)].join('|');
+    if (_fit.has(key)) return _fit.get(key);
+    const keep = S.availOverride; if (p.id !== S.planeId) S.availOverride = null;   // a per-flight override belongs to the selected aircraft only
+    let out;
+    try { const r = R().planChain({ origin: t.origin, dest: t.dest, manualStops: [], plane: p, allowedTypes: allowedTypes(), allAirports: UI.airports(), allowedIdents: plannerAllowedIdents(), blacklist: S.blacklist, maxLegKm: availableRangeKm(p), options: Object.assign(routingOptions(), { bothWays: S.trip === 'retour' }) });
+      out = r.error ? { none: true } : { stops: (r.stops || []).length }; }
+    finally { S.availOverride = keep; }
+    if (_fit.size > 500) _fit.clear(); _fit.set(key, out); return out;
+  }
+
+  UI.planner = { fitFor, availableRangeKm, availRangeShownKm, terminus, chain, replan, noRouteRemedy, divertSuitable, alternatesChain, plannerAllowedIdents, routingOptions, initMap, altPick, altReset, pickPending, notifyAirportPick, wp };
 })();

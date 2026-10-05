@@ -113,8 +113,17 @@
     const chList = S.allChargers ? UI.CHARGERS.slice().sort((a, b) => b.power_kw - a.power_kw) : [ch, ...UI.CHARGERS.filter(x => x.id !== ch.id).sort((a, b) => Math.abs(a.power_kw - ch.power_kw) - Math.abs(b.power_kw - ch.power_kw)).slice(0, 2)].sort((a, b) => b.power_kw - a.power_kw);
     // Photo precedence + no photo = no <img> (a bare /pics/ is a 404 per row per render); ranges
     // follow the unit toggle like the card does; a battery-less hybrid reads 'no charge'.
-    const pickHtml = S.picking ? `<div class="pick">${UI.PLANES.map(x => { const im = UI.planeImg(x);
-      return `<button data-act="plane" data-id="${x.id}" class="${x.id === S.planeId ? 'on' : ''}">${im ? `<img src="${esc(im)}" alt="">` : glyph('✈', 56, 36)}<span><span class="n">${esc(x.name)}</span><br><span class="m">${esc(x.oem || '')} · ${x.seats} seats · ${hasBatt(x) ? fmt.ekwh(x.battery_kwh) : 'no charge'} · ${esc(x.status || '')}</span></span><span class="r num">${fmt.r(fmt.km(x.range_km))} ${fmt.ukm()}<small>${esc(regShort(x.regime || ''))}${x.max_charge_kw ? ' · ' + x.max_charge_kw + ' kW max' : ''}</small></span></button>`; }).join('')}</div>` : '';
+    // The hangar (picker concept A + B's reach bar): photo cards, a spec band, the reach against this route's
+    // distance (the tick) and how each aircraft would fly it, from the planner's own chain-build.
+    const pickHtml = S.picking ? (() => { const PL = UI.planner, reachOf = x => (PL && PL.availRangeShownKm(x)) || 0;
+      const top = Math.max(1, ...UI.PLANES.map(reachOf)), tick = c.length >= 2 && d ? Math.min(100, d / top * 100) : null;
+      return `<div class="hangar">${UI.PLANES.map(x => { const im = UI.planeImg(x), fit = PL && PL.fitFor ? PL.fitFor(x) : null, rch = reachOf(x);
+        const verdict = !fit ? '' : fit.none ? '<span class="v no">No route</span>' : `<span class="v ok">${fit.stops ? fmt.pl(fit.stops, fit.stops + ' stop', fit.stops + ' stops') : 'Direct'}</span>`;
+        const st = String(x.status || ''), stCls = st.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        return `<button data-act="plane" data-id="${x.id}" class="${x.id === S.planeId ? 'on' : ''}"><span class="img">${im ? `<img src="${esc(im)}" alt="" loading="lazy">` : glyph('✈', 180, 96)}${st ? `<span class="st ${stCls}">${esc(st.charAt(0).toUpperCase() + st.slice(1))}</span>` : ''}<span class="rg">${esc(regShort(x.regime || ''))}</span></span>
+          <span class="b"><span class="n">${esc(x.name)}</span><span class="m">${esc(x.oem || '')}</span>
+          <span class="spec num"><span><i>Seats</i>${x.seats ?? '–'}</span><span><i>Battery</i>${hasBatt(x) ? fmt.r(x.battery_kwh) + ' kWh' : '–'}</span><span><i>Reach</i>${fmt.r(fmt.km(rch))} ${fmt.ukm()}</span></span>
+          <span class="bar"><i style="width:${(rch / top * 100).toFixed(1)}%"></i>${tick != null ? `<b style="left:${tick.toFixed(1)}%" title="This route: ${fmt.dist(d)}"></b>` : ''}</span>${verdict}</span></button>`; }).join('')}</div>`; })() : '';
     $('#railBody').innerHTML = `
     ${UI.PROTO ? '' : `<div class="ph"><h3>Create a route</h3><div class="tools"><span class="hint" style="margin:0">${esc(regShort(p.regime || ''))}${p.range_incl_reserves ? ' · range incl. reserves' : ''}</span></div></div>`}
     ${aircraftHtml(p, reach, fits, pickHtml)}

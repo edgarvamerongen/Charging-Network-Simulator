@@ -25,6 +25,7 @@
 <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
 <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" stroke-width="3" stroke-linecap="round"/></symbol>
+<symbol id="i-wind" viewBox="0 0 24 24"><path d="M5 8h8.5a2.5 2.5 0 1 0-2.5-2.5"/><path d="M3 12h15.5a2.5 2.5 0 1 1-2.5 2.5"/><path d="M4 16h5"/></symbol>
 <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
 <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 20h16"/></symbol>
 <symbol id="i-plane" viewBox="0 0 24 24"><path d="M10.5 13.5 3 11l1-2 6 1 5-5 2 1-3 5 4 5-1 2-5-3-4 4-1-1z"/></symbol>
@@ -40,6 +41,13 @@
   <div class="search" id="cmdkWrap"><svg class="ic"><use href="#i-search"/></svg><input id="cmdkIn" placeholder="Airports, aircraft, actions" aria-label="Search airports, aircraft or actions" autocomplete="off" spellcheck="false"><span class="kbd" id="kbdHint" title="Search and commands">⌘K</span>
     <div class="cmdk" id="cmdk" hidden><div class="cmdk-list" id="cmdkList" role="listbox" aria-label="Results"></div><div class="cmdk-foot"><span>↑↓ move</span><span>↵ run</span><span>esc close</span></div></div></div>
   <button class="tb model" id="setBtn" title="Model settings">Model: <b id="modelState">default</b></button>
+  <div style="position:relative"><button class="tb wind" id="windBtn" title="Wind for the whole plan"><svg class="ic"><use href="#i-wind"/></svg>Wind <b id="windState">off</b></button>
+    <div class="dd wdd" id="windDd"><div class="h">Wind</div>
+      <label class="won"><input type="checkbox" id="windOn"> Apply a wind to the whole plan</label>
+      <div class="wrow"><svg class="rose" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18"/><text x="20" y="8">N</text><g id="windRose"><path d="M20 30V11M20 11l-4 5M20 11l4 5"/></g></svg>
+        <div class="wsl"><label>From <b id="windDirV" class="num"></b><input type="range" id="windDir" min="0" max="350" step="10"></label>
+        <label>Speed <b id="windKtV" class="num"></b><input type="range" id="windKt" min="5" max="50" step="5"></label></div></div>
+      <p class="hint">Direction it blows from (°T) and speed, as forecasts give it. Aircraft hold their cruise airspeed: legs into the wind take longer and use more energy.</p></div></div>
   <div style="position:relative"><button class="tb" id="mapBtn"><svg class="ic"><use href="#i-layers"/></svg>Map</button>
     <div class="dd" id="mapDd"><div class="h">Basemap</div>
       <button data-base="light" class="on">Light</button><button data-base="street">Street</button><button data-base="sat">Satellite</button>
@@ -112,6 +120,7 @@ window.CNS_DATA = {
 <script src="/static/ui/network.js?v={{ asset_version }}"></script>
 <script src="/static/ui/timeline.js?v={{ asset_version }}"></script>
 <script src="/static/ui/palette.js?v={{ asset_version }}"></script>
+<script src="/static/ui/wind.js?v={{ asset_version }}"></script>
 <script src="/static/ui/settings.js?v={{ asset_version }}"></script>
 <script src="/static/ui/report.js?v={{ asset_version }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
