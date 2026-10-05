@@ -135,7 +135,7 @@
       ${S.trip === 'training' ? '' : `<div class="fld dr${badSlot('dest')}" draggable="true" data-slot="dest">${grip('dest')}<input placeholder="Destination airport" class="${acUnset('dest') ? 'ac-unset' : ''}" value="${esc(acValue('dest'))}" data-ac="dest"><span class="icao">${esc(S.dest ? S.dest.ident : '')}</span><div class="ac" id="ac-dest"></div></div>`}
       ${c.length >= 2 ? routeBlock(c, d, fits) : ''}`}</div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Trip type</div><div class="seg sm" data-seg="trip">${Object.keys(tripLabel).map(k => `<button data-v="${k}" class="${S.trip === k ? 'on' : ''}">${tripLabel[k]}</button>`).join('')}</div><div class="hint">${tripHint[S.trip]}</div></div>
-    <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="2000" value="${S.freq}" data-act="freq" class="num"><span class="t">${fmt.pl(S.freq, 'flight')} /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per === 'day' ? 'on' : ''}">day</button><button data-v="week" class="${S.per === 'week' ? 'on' : ''}">week</button></div></div></div>
+    <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="2000" value="${S.freq}" data-act="freq" class="num"><span class="t">${fmt.pl(S.freq, 'flight')} /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per === 'day' ? 'on' : ''}">day</button><button data-v="week" class="${S.per === 'week' ? 'on' : ''}">week</button></div></div>${fleetChoice()}</div>
     <div class="sec"><div class="lbl"><span class="cap">Charger</span><span style="display:flex;gap:10px"><button class="lnk" data-act="ccOpen">Custom</button><button class="lnk" data-act="allChargers">${S.allChargers ? 'Fewer' : 'All chargers'}</button></span></div>
       ${chList.map(x => { const im = x.image_url || (x.image ? '/pics/' + String(x.image).split('/').map(encodeURIComponent).join('/') : '');
         return `<button class="chg ${x.id === S.chargerId ? 'on' : ''}" data-act="charger" data-id="${x.id}">${im ? `<img src="${esc(im)}" alt="">` : glyph('⚡', 48, 32)}<span class="n">${esc(cName(x))}</span><span class="kw num">${kwLabel(x)}</span></button>`; }).join('')}
@@ -186,6 +186,15 @@
     return '';
   }
   const badSlot = k => (S.errSlots || []).includes(k) ? ' bad' : '';
+  /** Repeated flights that come home (return, circular, training, a closed waypoints loop) can be flown by
+      one aircraft per flight or by one aircraft in rotations; a one-way flight always needs its own aircraft. */
+  const fleetMode = () => S.fleetMode || (S.trip === 'training' ? 'shared' : 'separate');
+  function fleetChoice() {
+    const homing = ['retour', 'circular', 'training'].includes(S.trip) || (S.trip === 'waypoints' && S.wpClosed);
+    if (!(S.freq > 1) || !homing) return '';
+    const fm = fleetMode(), opt = (v, l) => `<label><input type="radio" name="fleetMode" value="${v}" data-act="fleetMode" ${fm === v ? 'checked' : ''}> ${l}</label>`;
+    return `<div class="fleetm">${opt('separate', 'One aircraft per flight')}${opt('shared', 'One aircraft, flights in rotation')}</div>`;
+  }
   async function simulate(opts) {
     const live = !!(opts && opts.live), seq = ++_seq;   // live = the prototype's quiet re-run after a form change
     if (S.trip === 'waypoints') { if (UI.waypoints) UI.waypoints.simulate(); return; }   // the engine alone: the server model has no turning points
@@ -361,12 +370,13 @@
       const ref = (S.trip === 'circular' && r._namedDestIdent) ? [...planned, { ident: r._namedDestIdent, _manual: true }] : planned;
       entry.stops = CNSRecompute.mergeManualFlags(entry.stops, ref);
     }
+    entry.fleetMode = fleetMode();   // the planner's choice (Frequency)
     if (r._custom) Object.assign(entry, { custom: true, legVias: r._custom.legVias, closed: r._custom.closed, customPoints: r._custom.points });   // a waypoints route: kept as drawn, never re-routed
     if (S.trip === 'circular' && r._namedDestIdent) entry.namedDestIdent = r._namedDestIdent;   // openTrip puts the far point back in Destination
     // A network route opened in the planner (openTrip) is UPDATED in place: same id, so its fixed take-offs and
     // its place in the list stay; the aircraft-per-flight choice and a charger pin carry over.
     const folder = CNSDemand.loadFolder(), at = S.editId ? folder.findIndex(x => x.id === S.editId) : -1;
-    if (at >= 0) { const prev = folder[at]; entry.id = prev.id; ['fleetMode', 'chargerOverride'].forEach(k => { if (prev[k] != null) entry[k] = prev[k]; }); folder[at] = entry; } else folder.push(entry);
+    if (at >= 0) { const prev = folder[at]; entry.id = prev.id; ['chargerOverride'].forEach(k => { if (prev[k] != null) entry[k] = prev[k]; }); folder[at] = entry; } else folder.push(entry);
     CNSDemand.saveFolder(folder); S.editId = null; UI.folderChanged();
     UI.toast(`${at >= 0 ? 'Updated' : 'Added'} ${UI.chain().map(a => a.ident).join(' → ')} ${at >= 0 ? 'in' : 'to'} the network`);
     // Adding is the hand-off from planning to the network: follow the flight into Network mode, where
@@ -381,7 +391,7 @@
     if (network) { const t = $('#nrgChargerToggle'); if (t && !t.checked) { t.checked = true; t.dispatchEvent(new Event('change', { bubbles: true })); hit = true; } }
     if (!hit) onFormChange(false);   // nothing to tick (no menu in the DOM) — still re-plan
   }
-  function resetForm() { S.editId = null; UI._applyDefaults({ seedRoute: false }); S.stops = []; S.acText = {}; S.trip = 'one-way'; S.freq = 1; S.per = 'day'; S.picking = false; S.allChargers = false; S.availOverride = null; S.blacklist.clear(); S.divertOverrides = {}; onFormChange(false); }
+  function resetForm() { S.editId = null; S.fleetMode = null; UI._applyDefaults({ seedRoute: false }); S.stops = []; S.acText = {}; S.trip = 'one-way'; S.freq = 1; S.per = 'day'; S.picking = false; S.allChargers = false; S.availOverride = null; S.blacklist.clear(); S.divertOverrides = {}; onFormChange(false); }
   /** Open a network route in the planner, as it was planned: its airports, the operator's own stops, trip type,
       aircraft, charger and frequency, simulated. "Update route" then replaces it in the network (same id). */
   function openTrip(id) {
@@ -397,7 +407,7 @@
     S.stops = (t.stops || []).filter(s => s && s._manual && s.ident !== (S.dest && S.dest.ident)).map(s => ap(s.ident, s.name, s.lat, s.lon));
     const pid = UI.PLANES.some(p => p.id === t.planeId) ? t.planeId : UI.resolvePlaneId(t.planeId); if (pid) S.planeId = pid;
     if (UI.CHARGERS.some(c => c.id === t.chargerId)) S.chargerId = t.chargerId;
-    S.freq = Math.max(1, +t.freqN || 1); S.per = t.freqUnit === 'week' ? 'week' : 'day';
+    S.freq = Math.max(1, +t.freqN || 1); S.per = t.freqUnit === 'week' ? 'week' : 'day'; S.fleetMode = t.fleetMode || null;
     S.availOverride = null; S.picking = false; S.acText = {}; S.blacklist.clear();
     S.editId = t.id;
     if (S.mode !== 'plan') UI.setMode('plan');
@@ -444,6 +454,7 @@
       case 'acEdit': { const pl = UI.plane(); const shown = (UI.planner && UI.planner.availRangeShownKm(pl)) || reachKm(pl);
         S.availOverride = S.availOverride != null ? null : shown / routeFactor(pl); onFormChange(false); break; }
       case 'charger': S.chargerId = t.dataset.id; onFormChange(false); break;
+      case 'fleetMode': S.fleetMode = t.value; UI.render(); break;
       case 'allChargers': S.allChargers = !S.allChargers; UI.render(); break;
       case 'addStop': S.stops.push(null); UI.render(); setTimeout(() => { const i = $$('[data-ac^=stop]').pop(); i && i.focus(); }, 0); break;
       case 'rmStop': S.stops.splice(+t.dataset.i, 1); onFormChange(false); break;
@@ -461,7 +472,7 @@
       case 'model': UI.settings.open(); break;
     }
   });
-  document.addEventListener('change', e => { const t = e.target; if (t.dataset.act === 'bias') { S.bias = t.value; onFormChange(false); } if (t.dataset.act === 'freq') { S.freq = Math.max(1, Math.min(2000, +t.value || 1)); if (S.result) UI.render(); } if (t.dataset.act === 'acOverride') { S.availOverride = Math.max(1, +t.value || 1) / routeFactor(UI.plane()); onFormChange(false); } });
+  document.addEventListener('change', e => { const t = e.target; if (t.dataset.act === 'bias') { S.bias = t.value; onFormChange(false); } if (t.dataset.act === 'freq') { S.freq = Math.max(1, Math.min(2000, +t.value || 1)); UI.render(); }   /* the aircraft choice shows from 2 flights */ if (t.dataset.act === 'acOverride') { S.availOverride = Math.max(1, +t.value || 1) / routeFactor(UI.plane()); onFormChange(false); } });
   document.addEventListener('mousedown', e => { if (S.acFilterOpen && !e.target.closest('.ac-pop,[data-act=acFilters]')) { S.acFilterOpen = false; UI.render(); } });
   document.addEventListener('input', e => { if (e.target.dataset.act === 'freq') { S.freq = Math.max(1, Math.min(2000, +e.target.value || 1)); if (UI.PROTO && S.result) UI.render(); } });
 

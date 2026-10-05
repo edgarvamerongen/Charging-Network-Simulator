@@ -115,7 +115,7 @@
       <div class="lbl" style="margin-top:12px"><span class="cap">Flights</span><button class="lnk" data-act="replay" data-ap="${a.ident}">View flights on map</button></div>
       ${a.contribs.map(c => { const t = c.t; const bad = t.feasible === false; return `<div class="fl ${bad ? 'bad' : ''}"><button class="t" data-act="openTrip" data-id="${esc(t.id)}" title="Open this route in Plan"><span class="tag">${ROLE[c.role] || c.role}</span> <span class="r">${esc(t.originIdent)} → ${esc(t.destIdent)}</span>${t.multiLeg && (t.stops || []).length ? ' <span class="mu">via ' + t.stops.map(s => esc(s.ident)).join(', ') + '</span>' : ''}${t.chargerOverride ? ' <span class="mu" title="Pinned to a charger">📌</span>' : ''}<small>${esc(UI.planeShort(t.planeName))} · ${(t.custom ? 'Waypoints' : tripLabel[t.tripType] || t.tripType)}${bad ? ' · <span style="color:var(--danger)">no route at current settings' + (t.infeasibleReason ? ': ' + esc(t.infeasibleReason) : '') + '</span>' : ''}</small></button>
         <span class="mu num freq"><input type="number" min="1" max="2000" value="${t.freqN}" data-act="tripFreq" data-id="${esc(t.id)}"><select class="sel" data-act="tripUnit" data-id="${esc(t.id)}"><option value="day" ${t.freqUnit === 'day' ? 'selected' : ''}>/ day</option><option value="week" ${t.freqUnit === 'week' ? 'selected' : ''}>/ week</option></select></span>
-        <button class="lnk" data-act="editTrip" data-id="${esc(t.id)}" data-ap="${a.ident}">Edit</button><button class="rm" data-act="rm" data-id="${esc(t.id)}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button></div>`; }).join('')}
+        <button class="rm" data-act="rm" data-id="${esc(t.id)}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button></div>`; }).join('')}
       ${S.filter ? '' : `<div class="row" style="justify-content:flex-end;margin-top:8px"><button class="lnk" data-act="focus" data-ap="${a.ident}">Isolate ${a.ident}</button></div>`}</div>`;
   }
   function render() {
@@ -149,64 +149,6 @@
   const cfgPatch = (ap, patch) => { const c = D().loadCfg(); c[ap] = Object.assign({}, c[ap] || {}, patch); D().saveCfg(c); UI.folderChanged(); UI.render(); };
   function remove(id) { D().saveFolder(D().loadFolder().filter(t => t.id !== id)); UI.folderChanged(); UI.map.drawNet(); UI.render(); }
   function fleetOf(a) { const R = rows().find(x => x.ident === a); return R ? R.fleetIds.slice() : []; }
-
-  // ---- edit flight (classic openFlightEdit / _rebuildEditedTrip) ----
-  function rebuildEditedTrip(prev, d, o) {
-    const isTraining = d.trip_type === 'training';
-    const trip = { id: prev.id, destIdent: isTraining ? prev.originIdent : prev.destIdent, destName: isTraining ? prev.originName : prev.destName, destLat: isTraining ? prev.originLat : prev.destLat, destLon: isTraining ? prev.originLon : prev.destLon,
-      originIdent: prev.originIdent, originName: prev.originName, originLat: prev.originLat, originLon: prev.originLon, planeName: d.plane.name, planeId: d.plane.id, planeSvg: d.plane.svg, tripType: d.trip_type,
-      chargerId: prev.chargerId, chargerName: d.charger.name, chargerPower: d.charger.power_kw, legEnergy: d.leg_energy_kwh, battery: d.plane.battery_kwh, range_km: d.plane.range_km, speed_kmh: d.plane.speed_kmh,
-      freqN: o.freqN, freqUnit: o.freqUnit, fleetMode: o.fleetMode, chargerOverride: o.chargerOverride || undefined };
-    if (d.multi_leg) Object.assign(trip, { multiLeg: true, flightTimeH: d.total_flight_time_h, rechargeEnergy: d.total_recharge_energy_kwh, stops: (window.CNSRecompute && CNSRecompute.mergeManualFlags) ? CNSRecompute.mergeManualFlags(d.stops, prev.stops) : d.stops, charges: d.charges, legs: d.legs, totalDistanceKm: d.total_distance_km, totalFlightTimeH: d.total_flight_time_h, totalChargeMin: d.total_charge_time_min, totalRechargeKwh: d.total_recharge_energy_kwh });
-    else if (isTraining) Object.assign(trip, { rechargeEnergy: d.recharge_energy_kwh, flightTimeH: d.flight_time_h, trainingRangeKm: d.training_range_km, rawPatternEnergyKwh: d.raw_pattern_energy_kwh });
-    else Object.assign(trip, { rechargeEnergy: d.recharge_energy_kwh, flightTimeH: d.flight_time_h });
-    return trip;
-  }
-  function openEdit(id, ap) {
-    const t = D().loadFolder().find(x => x.id === id); if (!t) return;
-    // Charger options: the airport's fleet, deduped, plus the current pin even when it is no longer in the
-    // fleet — labelled '(not in fleet)' and selected, so the choice stays visible (classic index.html:6046-6060).
-    const seen = new Set(); const chOpts = [];
-    fleetOf(ap).forEach(cid => { const c = window.CHARGERS_BY_ID[cid]; if (!c || seen.has(c.id)) return; seen.add(c.id); chOpts.push({ id: c.id, label: c.name }); });
-    if (t.chargerOverride && !seen.has(t.chargerOverride) && window.CHARGERS_BY_ID[t.chargerOverride]) { seen.add(t.chargerOverride); chOpts.push({ id: t.chargerOverride, label: window.CHARGERS_BY_ID[t.chargerOverride].name + ' (not in fleet)' }); }
-    const chSel = (t.chargerOverride && seen.has(t.chargerOverride)) ? t.chargerOverride : '';
-    const fm = t.fleetMode || (t.tripType === 'training' ? 'shared' : 'separate');
-    UI.modal.open(`<div class="mh"><h3>Edit flight · ${esc(t.originIdent)} → ${esc(t.destIdent)}</h3><button class="tb icon" data-modal="close"><svg class="ic"><use href="#i-x"/></svg></button></div>
-      <div class="mb" id="efBox" data-id="${esc(t.id)}" data-ap="${esc(ap)}">
-        <div class="grid2"><label><span class="cap">Trip type</span><select class="sel" id="efTripType">${Object.keys(tripLabel).map(k => `<option value="${k}" ${t.tripType === k ? 'selected' : ''}>${tripLabel[k]}</option>`).join('')}</select></label>
-          <label><span class="cap">Aircraft</span><select class="sel" id="efPlane">${UI.PLANES.map(p => `<option value="${p.id}" ${p.id === t.planeId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
-          <label><span class="cap">Charger at ${esc(ap)}</span><select class="sel" id="efCharger"><option value="" ${chSel ? '' : 'selected'}>Automatic (largest aircraft on the fastest charger)</option>${chOpts.map(c => `<option value="${esc(c.id)}" ${chSel === c.id ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></label>
-          <label><span class="cap">Frequency</span><span class="row" style="gap:6px"><input type="number" min="1" max="2000" id="efFreqN" value="${t.freqN || 1}" class="num sel" style="width:80px"><select class="sel" id="efFreqUnit"><option value="day" ${t.freqUnit !== 'week' ? 'selected' : ''}>/ day</option><option value="week" ${t.freqUnit === 'week' ? 'selected' : ''}>/ week</option></select></span></label></div>
-        <div id="efFleetRow" style="margin-top:12px" ${t.tripType === 'training' ? 'hidden' : ''}><span class="cap">Aircraft for repeated flights</span><div class="row" style="gap:14px;margin-top:6px"><label><input type="radio" name="efFleetMode" value="separate" ${fm === 'separate' ? 'checked' : ''}> One aircraft per flight (fleet)</label><label><input type="radio" name="efFleetMode" value="shared" ${fm === 'shared' ? 'checked' : ''}> One aircraft, sequential rotations</label></div></div>
-        <div class="err" id="efError" hidden></div></div>
-      <div class="btns"><button class="btn p" data-act="efSave">Save</button><button class="btn" data-modal="close">Cancel</button></div>`);
-  }
-  async function saveEdit() {
-    const box = $('#efBox'); const id = box.dataset.id; const trips = D().loadFolder(); const idx = trips.findIndex(t => t.id === id); if (idx < 0) return; const prev = trips[idx];
-    const tripType = $('#efTripType').value, planeId = $('#efPlane').value, freqN = Math.min(2000, Math.max(1, parseInt($('#efFreqN').value || '1', 10))), freqUnit = $('#efFreqUnit').value === 'week' ? 'week' : 'day';
-    const fleetMode = ($('input[name=efFleetMode]:checked') || {}).value || prev.fleetMode || 'separate'; const chargerOverride = $('#efCharger').value || '';
-    const err = $('#efError');
-    // A training flight has no separate destination — it cannot become a routed trip (classic index.html:6135).
-    if (tripType !== 'training' && (!prev.destIdent || prev.destIdent === prev.originIdent)) {
-      err.textContent = 'This flight loops around a single airport (no destination). Add a new flight to give it a route.'; err.hidden = false; return;
-    }
-    // Metadata-only (frequency / fleet mode / charger pin): save + re-render, no recompute, no backend round-trip
-    // (classic index.html:6141-6147).
-    if (tripType === prev.tripType && planeId === prev.planeId) { err.hidden = true; trips[idx] = Object.assign({}, prev, { freqN, freqUnit, fleetMode, chargerOverride: chargerOverride || undefined }); D().saveFolder(trips); UI.modal.close(); UI.folderChanged(); UI.render(); UI.map.drawNet(); return; }
-    const btn = $('[data-act=efSave]'); btn.classList.add('busy');
-    const o = { ident: prev.originIdent, name: prev.originName, lat: prev.originLat, lon: prev.originLon }, dd = { ident: prev.destIdent, name: prev.destName, lat: prev.destLat, lon: prev.destLon };
-    const payload = { origin: o, destination: tripType === 'training' ? o : dd, plane_id: planeId, charger_id: prev.chargerId, trip_type: tripType };
-    // A custom charger only exists client-side: send the object so the backend can size the charge (classic index.html:6161).
-    const custom = (window.CNSChargers && CNSChargers.get) ? CNSChargers.get(prev.chargerId) : null;
-    if (custom) payload.charger = custom; else if (window.CHARGERS_BY_ID && window.CHARGERS_BY_ID[prev.chargerId]) payload.charger = window.CHARGERS_BY_ID[prev.chargerId];
-    if (tripType === 'training') payload.training_range_km = cat(planeId).training_range_km || 0;
-    const manual = (prev.stops || []).filter(s => s && s._manual).map(s => ({ name: s.name, lat: s.lat, lon: s.lon, ident: s.ident, type: s.type }));
-    if (tripType === 'circular') { const ring = [...manual, dd]; payload.destination = ring[ring.length - 1]; payload.stops = ring.slice(0, -1); } else if (manual.length && tripType !== 'training') payload.stops = manual;
-    try { const r = await fetch('/api/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const d = await r.json();
-      if (!r.ok || d.error) throw new Error(d.error || ('Simulate failed (' + r.status + ')'));
-      trips[idx] = rebuildEditedTrip(prev, d, { freqN, freqUnit, fleetMode, chargerOverride }); D().saveFolder(trips); UI.modal.close(); recomputeAll(); UI.render(); UI.map.drawNet(); UI.toast('Flight updated');
-    } catch (e) { err.textContent = e.message; err.hidden = false; btn.classList.remove('busy'); }
-  }
 
   // ---- replay map (classic flightsMapModal + CNSAnimation) ----
   let replayMap = null, _replayT = null;
@@ -284,7 +226,6 @@
   // ---- events ----
   document.addEventListener('click', e => {
     const t = e.target.closest('[data-act],[data-ap]>button'); if (!t) return;
-    if (t.dataset.act === 'efSave') { saveEdit(); return; }
     // #focChip carries data-act="focus" in the markup but is owned by timeline.js — handling it here as well would
     // run two full renders and two map fits per click.
     if (t.id === 'focChip') return;
@@ -306,7 +247,6 @@
       case 'useN': cfgPatch(t.dataset.ap, { chargers: t.dataset.ids.split(',') }); UI.toast(`${t.dataset.ap}: ${t.dataset.ids.split(',').length} chargers`); break;
       case 'socToggle': S.socOpen[t.dataset.ap] = !S.socOpen[t.dataset.ap]; UI.render(); break;
       case 'openTrip': UI.plan.openTrip(t.dataset.id); break;
-      case 'editTrip': openEdit(t.dataset.id, t.dataset.ap); break;
       case 'replay': openReplay(t.dataset.ap); break;
       case 'scenario': loadScenario(t.dataset.k); break;
     }
