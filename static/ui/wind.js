@@ -36,17 +36,17 @@
   const drift = (function () {
     let cv, ctx, raf = 0, w = null, P = [];
     function size() { const m = document.getElementById('map'); if (!cv || !m) return; const r = m.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
-    function seed() { const W = cv.clientWidth, H = cv.clientHeight; P = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: Math.random() * W, y: Math.random() * H, a: Math.random() * 120 })); }
+    function seed() { const W = cv.clientWidth, H = cv.clientHeight; P = Array.from({ length: Math.round(W * H / 6000) }, () => ({ x: Math.random() * W, y: Math.random() * H, a: Math.random() * 120 })); }
     function frame() {
       raf = requestAnimationFrame(frame); if (document.hidden || !w) return;
       const W = cv.clientWidth, H = cv.clientHeight, to = (+w.fromDeg + 180) * Math.PI / 180;
-      const v = 0.35 + w.kt / 50 * 1.4, dx = Math.sin(to) * v, dy = -Math.cos(to) * v, L = 6 + w.kt / 50 * 14;   // north up: screen y grows southward
-      ctx.clearRect(0, 0, W, H); ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+      const v = 0.5 + w.kt / 50 * 1.8, dx = Math.sin(to) * v, dy = -Math.cos(to) * v, L = 9 + w.kt / 50 * 18;   // north up: screen y grows southward
+      ctx.clearRect(0, 0, W, H); ctx.lineWidth = 1.6; ctx.lineCap = 'round';
       for (const p of P) {
         p.x += dx; p.y += dy; p.a += 1;
         if (p.a > 120 || p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) { p.x = Math.random() * W; p.y = Math.random() * H; p.a = 0; }
         const fade = Math.sin(Math.PI * p.a / 120);   // each streak fades in and out over its short life
-        ctx.strokeStyle = `rgba(50,50,110,${(0.22 * fade).toFixed(3)})`;
+        ctx.strokeStyle = `rgba(50,50,110,${(0.38 * fade).toFixed(3)})`;
         ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - dx / v * L, p.y - dy / v * L); ctx.stroke();
       }
     }
