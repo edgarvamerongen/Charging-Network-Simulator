@@ -62,7 +62,8 @@ window.CNSSettings = (function () {
         sidStarPadding:    { enabled: true,  km: 10 },                // fixed km added to EACH leg (SID+STAR terminal track miles); additive on top of routingPadding
         climbModel:        { enabled: true,  overheadPct: 0.10, satFrac: 0.15 },  // NET climb overhead (% of battery) per leg, ramping to full by satFrac×range_km; wing-borne only (the engine gates VTOL + training); calibrated so a full-range mission still uses exactly one battery (design doc CLIMB_ENERGY_MODEL.md retired — this code is the record)
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
-        chargeRate:        { value: 0.60 },                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
+        chargeRate:        { value: 0.60 },
+        wind:              { enabled: false, fromDeg: 270, kt: 20 },  // one wind for the whole plan: direction it blows FROM (°T) and speed (kt), as forecasts give it                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
     });
 
     // Cloned so call sites can't mutate the frozen defaults via the returned object.
@@ -292,6 +293,28 @@ window.CNSSettings = (function () {
         return p / (Math.exp(b * Math.max(0, (start - thr) / (1 - thr))) + b * p / (batt * (1 - thr)) * (h - hFull));
     }
 
+    /** The wind triangle for one leg: the aircraft holds its catalog cruise speed THROUGH THE AIR (true airspeed),
+     *  the air moves over the ground. Headwind = V·cos(wind − course), crosswind = V·sin(…); the heading correction
+     *  WCA = asin(crosswind / TAS) and the ground speed GS = TAS·cos(WCA) − headwind. `factor` = TAS / GS is the air
+     *  distance flown per ground km: time and energy scale with it. Identity when the wind is off. `ok` false: the
+     *  crosswind is at least the airspeed or the ground speed is (near) zero, so the leg can't be flown. */
+    function windLeg(courseDeg, tasKmh) {
+        const w = loadAll().wind, tas = +tasKmh || 0;
+        if (!w || !w.enabled || !(tas > 0) || !(+w.kt > 0)) return { factor: 1, gsKmh: tas, headKt: 0, wcaDeg: 0, ok: true };
+        const V = +w.kt * 1.852, th = ((+w.fromDeg || 0) - (+courseDeg || 0)) * Math.PI / 180;
+        const head = V * Math.cos(th), cross = V * Math.sin(th);
+        if (Math.abs(cross) >= tas) return { factor: 10, gsKmh: 0, headKt: head / 1.852, wcaDeg: 90, ok: false };
+        const wca = Math.asin(cross / tas), gs = tas * Math.cos(wca) - head;
+        if (!(gs > tas / 10)) return { factor: 10, gsKmh: Math.max(0, gs), headKt: head / 1.852, wcaDeg: wca * 180 / Math.PI, ok: false };
+        return { factor: tas / gs, gsKmh: gs, headKt: head / 1.852, wcaDeg: wca * 180 / Math.PI, ok: true };
+    }
+    /** The worst air-km per ground-km in any direction (a straight headwind): for reserves whose direction isn't modelled. */
+    function windWorstFactor(tasKmh) {
+        const w = loadAll().wind, tas = +tasKmh || 0;
+        if (!w || !w.enabled || !(tas > 0) || !(+w.kt > 0)) return 1;
+        const V = +w.kt * 1.852; return V < tas * 0.9 ? tas / (tas - V) : 10;
+    }
+
     /** Convenience: state-of-the-world flags for UI badges / explanations. */
     function activeFlags() {
         const s = loadAll();
@@ -304,19 +327,21 @@ window.CNSSettings = (function () {
             chargeTarget:      !!(s.chargeTarget && s.chargeTarget.enabled),
             alternateReserve:  !!(s.alternateReserve && s.alternateReserve.enabled),
             climbModel:        !!(s.climbModel && s.climbModel.enabled),
+            wind:              !!(s.wind && s.wind.enabled),
             anyOn: !!(s.landingReserve.enabled || s.chargerEfficiency.enabled ||
                       s.chargeTaper.enabled || s.routingPadding.enabled ||
                       (s.sidStarPadding && s.sidStarPadding.enabled) ||
                       (s.chargeTarget && s.chargeTarget.enabled) ||
                       (s.alternateReserve && s.alternateReserve.enabled) ||
-                      (s.climbModel && s.climbModel.enabled)),
+                      (s.climbModel && s.climbModel.enabled) ||
+                      (s.wind && s.wind.enabled)),
         };
     }
 
     return {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
-        usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin, chargePowerAt,
+        usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin, chargePowerAt, windLeg, windWorstFactor,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
         alternateReserveEnabled, climbOverheadPct, climbSatFrac,
     };

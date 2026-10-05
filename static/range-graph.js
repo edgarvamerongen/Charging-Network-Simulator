@@ -32,7 +32,7 @@ window.CNSRangeGraph = (function () {
     const longestRwy = (a) => Math.max(0, ...RWY.map((c) => +a['rwy_' + c + '_m'] || 0));
     const LABEL_TYPES = { large_airport: 1 };               // ICAO labels on the big hubs only (readability)
 
-    let _map = null, _layer = null, _getReachKm = null, _getAirports = null, _allowedFor = null, _activeIdent = null, _lastIdent = null;
+    let _map = null, _layer = null, _getReachKm = null, _getAirports = null, _allowedFor = null, _windAt = null, _activeIdent = null, _lastIdent = null;
 
     // ---- pure + testable: airports within `reachKm` great-circle of `from` (excl. self) ----
     function airportsInRange(from, reachKm, airports) {
@@ -52,7 +52,7 @@ window.CNSRangeGraph = (function () {
 
     function init(opts) {
         opts = opts || {};
-        _map = opts.map; _getReachKm = opts.getReachKm; _getAirports = opts.airports; _allowedFor = opts.allowedFor;
+        _map = opts.map; _getReachKm = opts.getReachKm; _getAirports = opts.airports; _allowedFor = opts.allowedFor; _windAt = opts.windAt || null;   // windAt(courseDeg) → air km per ground km
         if (!_map || !window.L) return;
         if (!_map.getPane(PANE)) {
             _map.createPane(PANE);
@@ -86,6 +86,13 @@ window.CNSRangeGraph = (function () {
         });
     }
 
+    // The point `km` along true course `deg` from p (great circle) as [lat, lon].
+    function _dest(p, deg, km) {
+        const R = Math.PI / 180, d = km / 6371.0088, b = deg * R, la1 = p.lat * R, lo1 = p.lon * R;
+        const la2 = Math.asin(Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(b));
+        const lo2 = lo1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la1), Math.cos(d) - Math.sin(la1) * Math.sin(la2));
+        return [la2 / R, lo2 / R];
+    }
     function show(ident) {
         if (!_map || !_layer || !window.L) return;
         _lastIdent = ident;
@@ -98,11 +105,18 @@ window.CNSRangeGraph = (function () {
         _activeIdent = ident;
         const hub = [+from.latitude_deg, +from.longitude_deg];
 
-        // faint dashed range ring (the true reach boundary)
-        _layer.addLayer(L.circle(hub, {
-            radius: reachKm * 1000, color: NAVY, weight: 1.2, opacity: 0.30, dashArray: '5 6',
-            fill: false, pane: PANE, interactive: false,
-        }));
+        // faint dashed reach boundary. In wind the reach is AIR km: over the ground it is reachKm × GS/TAS per
+        // bearing (short upwind, long downwind), so the ring becomes that shape; still air keeps the circle.
+        const F = { lat: hub[0], lon: hub[1] }, fAt = (c) => (_windAt ? _windAt(c) : 1);
+        const groundReach = (c) => reachKm / fAt(c);
+        const ringStyle = { color: NAVY, weight: 1.2, opacity: 0.30, dashArray: '5 6', fill: false, pane: PANE, interactive: false };
+        let maxGround = reachKm;
+        const windy = !!_windAt && [0, 90, 180, 270].some((c) => Math.abs(fAt(c) - 1) > 1e-9);
+        if (windy) {
+            const ring = [];
+            for (let c = 0; c < 360; c += 5) { const g = groundReach(c); maxGround = Math.max(maxGround, g); ring.push(_dest(F, c, g)); }
+            _layer.addLayer(L.polygon(ring, ringStyle));
+        } else _layer.addLayer(L.circle(hub, Object.assign({ radius: reachKm * 1000 }, ringStyle)));
 
         // spokes + halos + labels.
         // WYSIWYG: spoke to EXACTLY the airports the live A* router may use — the same
@@ -111,7 +125,8 @@ window.CNSRangeGraph = (function () {
         // Only airports in view get a spoke (off-screen ones can't be seen); if more than SPOKE_MAX are, the
         // bigger fields win: large, medium, then small by longest runway, nearest first within a class.
         const view = _map.getBounds().pad(0.05), rank = (a) => RANK[a.type] ?? 2;
-        const reach = airportsInRange(from, reachKm, airports)
+        const reach = airportsInRange(from, maxGround, airports)
+            .filter((r) => r.km <= groundReach(CNSRouting.courseDeg(F, { lat: +r.ap.latitude_deg, lon: +r.ap.longitude_deg })))
             .filter((r) => allowed(r.ap) && view.contains([+r.ap.latitude_deg, +r.ap.longitude_deg]))
             .sort((a, b) => rank(a.ap) - rank(b.ap) || (rank(a.ap) === 2 ? longestRwy(b.ap) - longestRwy(a.ap) : 0) || a.km - b.km)
             .slice(0, SPOKE_MAX);

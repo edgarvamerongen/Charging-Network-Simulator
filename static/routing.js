@@ -136,7 +136,11 @@ window.CNSRouting = (function () {
         };
         // A return trip flies every leg back too, landing at the airport it left from, so with
         // options.bothWays a leg must fit the LARGER of its two ends' divert reserves.
-        const legAltKm = (a, b) => options.bothWays ? Math.max(altReserveKm(a), altReserveKm(b)) : altReserveKm(b);
+        // In the plan's wind (CNSSettings.windLeg) a leg needs its AIR km: ground km × TAS/GS for its course, plus the
+        // arrival's divert reserve at the worst-case headwind (the divert's own direction isn't modelled). Still air: 1.
+        const wWorst = (window.CNSSettings && CNSSettings.windWorstFactor) ? CNSSettings.windWorstFactor(+plane.speed_kmh || 0) : 1;
+        const need = (pa, na, pb, nb, d) => d * windFactor(pa, pb, plane) + altReserveKm(nb) * wWorst;
+        const legNeed = (pa, na, pb, nb, d) => options.bothWays ? Math.max(need(pa, na, pb, nb, d), need(pb, nb, pa, na, d)) : need(pa, na, pb, nb, d);
         // Caller may pass an explicit max straight-line leg (the planner's "available
         // range", already incl. reserve + routing padding, or a per-flight override).
         const maxLeg = options.maxLegKm != null ? options.maxLegKm
@@ -146,7 +150,7 @@ window.CNSRouting = (function () {
         const O = { lat: origin.lat, lon: origin.lon };
         const D = { lat: destination.lat, lon: destination.lon };
         const direct = haversineKm(O, D);
-        if (direct <= maxLeg - legAltKm(origin, destination)) return { stops: [], totalDistanceKm: direct, legCount: 1 };
+        if (legNeed(O, origin, D, destination, direct) <= maxLeg) return { stops: [], totalDistanceKm: direct, legCount: 1 };
 
         const skip = new Set();
         if (origin.ident) skip.add(origin.ident);
@@ -194,7 +198,7 @@ window.CNSRouting = (function () {
                     const relax = (j) => {
                         if (done[j]) return;
                         const d = haversineKm(from, pos(j));
-                        if (d + legAltKm(obj(i), obj(j)) > maxLeg) return;   // not flyable incl. divert reserve
+                        if (legNeed(from, obj(i), pos(j), obj(j), d) > maxLeg) return;   // not flyable incl. wind + divert reserve
                         const pen = (j === DEST) ? 0 : options.stopPenaltyKm + (typePen[type(j)] || 0);
                         const t = g[i] + d + pen;
                         if (t < g[j]) { g[j] = t; came[j] = i; open.push({ i: j, f: t + haversineKm(pos(j), D) }); }
@@ -288,5 +292,16 @@ window.CNSRouting = (function () {
         return { stops, legCount: stops.length + 1, error: null };
     }
 
-    return { planRoute, planChain, haversineKm, routedKm };
+    // Initial great-circle TRUE course a -> b in degrees (0-360); a and b are {lat, lon}.
+    function courseDeg(a, b) {
+        const R = Math.PI / 180, la1 = +a.lat * R, la2 = +b.lat * R, dl = (+b.lon - +a.lon) * R;
+        return (Math.atan2(Math.sin(dl) * Math.cos(la2), Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dl)) / R + 360) % 360;
+    }
+    // Air km flown per ground km on a -> b in the plan's wind (CNSSettings.windLeg); 1 in still air.
+    function windFactor(a, b, plane) {
+        const S = window.CNSSettings;
+        return (S && S.windLeg && plane) ? S.windLeg(courseDeg(a, b), +plane.speed_kmh || 0).factor : 1;
+    }
+
+    return { planRoute, planChain, haversineKm, routedKm, courseDeg, windFactor };
 })();

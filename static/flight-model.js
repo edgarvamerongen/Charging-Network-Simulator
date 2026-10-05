@@ -197,11 +197,15 @@ window.CNSFlight = (function () {
             const a = chain[i], b = chain[i + 1];
             const rawKm = CNSRouting.haversineKm(_pt(a), _pt(b));   // great-circle (geographic) — routing.js loads first everywhere
             const distKm = rawKm * route + sidStar;              // ROUTED length: airways multiplier, then fixed SID/STAR terminal km
-            const energyKwh = legEnergy(distKm);                 // flown — derives from the routed length (climb ramp + cruise; linear when the model is off/gated)
-            const flightMin = speed > 0 ? distKm / speed * 60 : 0;   // flown — derives from the routed length
-            const overRange = energyKwh > usable + 1e-9;          // [R5] padded energy > usable
+            // Wind: the aircraft holds its cruise airspeed; over the ground it covers distKm at GS, so it flies
+            // airKm = distKm × TAS/GS through the air. Time and energy follow the air km (identity in still air).
+            const S = _settings(), w = (S && S.windLeg) ? S.windLeg(CNSRouting.courseDeg(_pt(a), _pt(b)), speed) : null;
+            const airKm = distKm * (w ? w.factor : 1);
+            const energyKwh = legEnergy(airKm);                  // flown — the routed length in the air (climb ramp + cruise; linear when the model is off/gated)
+            const flightMin = speed > 0 ? airKm / speed * 60 : 0;   // = distKm / GS
+            const overRange = (w && !w.ok) || energyKwh > usable + 1e-9;   // [R5] padded energy > usable, or a wind the aircraft can't fly
             if (overRange) errors.push({ kind: 'over-range', legIndex: i, energyKwh, usable });
-            profile.legs.push({ fromIdent: a.ident, fromName: a.name, toIdent: b.ident, toName: b.name, rawKm, distKm, flightMin, energyKwh, socStartFrac: 0, socEndFrac: 0, overRange, legIndex: i });
+            profile.legs.push({ fromIdent: a.ident, fromName: a.name, toIdent: b.ident, toName: b.name, rawKm, distKm, airKm, gsKmh: w ? w.gsKmh : speed, headKt: w ? w.headKt : 0, flightMin, energyKwh, socStartFrac: 0, socEndFrac: 0, overRange, legIndex: i });
         }
         const turnIdx = (tripType === 'retour' || tripType === 'circular') ? (waypoints.length - 1) : -1;   // chain index of the turnaround (dest); for circular only the closing leg lies past it
 

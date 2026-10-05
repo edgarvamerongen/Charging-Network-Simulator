@@ -66,7 +66,9 @@
     const requireAlt = !!(ST() && ST().alternateReserveEnabled && ST().alternateReserveEnabled(p));
     const altReserveKm = w => { if (!requireAlt || !w) return 0; const ovKm = divertOverrideKm(w); if (ovKm != null) return ovKm / route; const full = w.ident ? UI.byId()[w.ident] : null; const km = (full && full.alternate_km != null) ? +full.alternate_km : (+w.alternate_km || 0); return (isFinite(km) ? km : 0) / route; };
     const c = ringChain(t), back = S.trip === 'retour';   // a return trip flies each leg back too, landing at c[i]
-    for (let i = 0; i < c.length - 1; i++) { const d = R().haversineKm(c[i], c[i + 1]); if (d + Math.max(altReserveKm(c[i + 1]), back ? altReserveKm(c[i]) : 0) > maxLeg) P.legIssues.push(i); }
+    // In the plan's wind a leg needs its air km (routing.js windFactor) + the arrival's divert at the worst-case headwind.
+    const ww = ST() && ST().windWorstFactor ? ST().windWorstFactor(+p.speed_kmh || 0) : 1, need = (a, b, d) => d * R().windFactor(a, b, p) + altReserveKm(b) * ww;
+    for (let i = 0; i < c.length - 1; i++) { const d = R().haversineKm(c[i], c[i + 1]); if (Math.max(need(c[i], c[i + 1], d), back ? need(c[i + 1], c[i], d) : 0) > maxLeg) P.legIssues.push(i); }
     if (P.legIssues.length) { const n = P.legIssues.length; P.error = `${n} leg${n > 1 ? 's' : ''} exceed${n > 1 ? '' : 's'} the aircraft's range. Add or change a stop.`; }
   }
   function recomputeRoute() {
@@ -111,7 +113,7 @@
     // `airports: () => allAirports, isSuitable: () => _divertSuitable()` (index.html:6616-6620).
     // Passing values instead threw on every drag and made an ALT pick impossible.
     if (window.CNSDivertEdit) CNSDivertEdit.init({ map: UI.map.map, airportByIdent: UI.byId(), airports: () => UI.airports(), isSuitable: () => divertSuitable(), onChange: onDivertChange });
-    if (window.CNSRangeGraph) CNSRangeGraph.init({ map: UI.map.map, getReachKm: () => availableRangeKm(plane()) || 0, airports: () => UI.airports(), allowedFor: () => { const types = allowedTypes(); const ids = plannerAllowedIdents(), lands = divertSuitable(); return ap => lands(ap) && (types.includes(ap.type) || ids.has(ap.ident)); } });   // the router's pool: size or network, AND a runway this aircraft can use (as the classic)
+    if (window.CNSRangeGraph) CNSRangeGraph.init({ map: UI.map.map, getReachKm: () => availableRangeKm(plane()) || 0, windAt: c => (ST() && ST().windLeg ? ST().windLeg(c, +(plane() || {}).speed_kmh || 0).factor : 1), airports: () => UI.airports(), allowedFor: () => { const types = allowedTypes(); const ids = plannerAllowedIdents(), lands = divertSuitable(); return ap => lands(ap) && (types.includes(ap.type) || ids.has(ap.ident)); } });   // the router's pool: size or network, AND a runway this aircraft can use (as the classic)
   }
   function altPick(ident) { const full = UI.byId()[ident]; if (!full || !window.CNSDivertEdit) return; CNSDivertEdit.startAltPick({ ident, lat: +full.latitude_deg, lon: +full.longitude_deg }); UI.toast('Click an airport on the map to use it as the divert for ' + ident); }
   function altReset(ident) { delete S.divertOverrides[ident]; replan(); UI.render(); UI.map.drawRoute(false); UI.map.drawAlternates(); }
