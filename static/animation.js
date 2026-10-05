@@ -65,6 +65,7 @@ window.CNSAnimation = (function () {
     // Build the full waypoint chain for a trip (handles single-leg + multi-leg).
     function _chain(t) {
         const o = [+t.originLat, +t.originLon], d = [+t.destLat, +t.destLon];
+        if (t.custom && window.CNSUI && CNSUI.waypoints) return CNSUI.waypoints.tripPath(t);   // a waypoints route flies through its turning points
         if (!t.multiLeg) {
             return t.tripType === 'retour' ? [o, d, o] : [o, d];
         }

@@ -38,6 +38,16 @@ window.CNSRecompute = (function () {
         const t = { ...trip };
         if (trip.tripType === 'training') { t.feasible = true; t.infeasibleReason = null; return t; }
         const plane = ctx.planeFor(trip);
+        // A custom (waypoints) route is flown as drawn: re-check it under current settings, never re-route it.
+        if (trip.custom) {
+            const prof = window.CNSFlight.profileForTrip(trip, { getChargerKw: () => +trip.chargerPower || 0 });
+            if (!prof) { t.feasible = false; t.infeasibleReason = 'route could not be flown'; return t; }
+            const over = (prof.legs || []).findIndex(l => l.overRange);
+            if (over >= 0) { t.feasible = false; t.infeasibleReason = `leg ${over + 1} is too long for the aircraft at the current settings`; return t; }
+            t.charges = (prof.charges || []).filter(c => (c.energyKwh || 0) > 0).map(_storeCharge);
+            t.legs = (prof.legs || []).map(_storeLeg); t.legEnergy = prof.legs[0] ? prof.legs[0].energyKwh : trip.legEnergy;
+            t.feasible = true; t.infeasibleReason = null; return t;
+        }
         const mk = (ident, name, lat, lon) => {
             const full = ident && ctx.allAirports.find(a => a.ident === ident);
             return { ident, name, lat: +lat, lon: +lon, alternate_km: full ? full.alternate_km : undefined };

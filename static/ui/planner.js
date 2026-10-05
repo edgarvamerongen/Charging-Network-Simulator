@@ -33,9 +33,10 @@
   function availRangeShownKm(p) { p = p || plane(); const a = availableRangeKm(p); if (a == null) return null; const route = ST() ? ST().routingFactor(p) : 1; const sid = (ST() && ST().sidStarPaddingKm) ? ST().sidStarPaddingKm(p) : 0; return a * route + sid; }
 
   // ---- terminus + chain ----
-  function terminus() { if (!S.origin || (S.trip !== 'training' && !S.dest)) return null; return { origin: wp(S.origin), dest: wp(S.trip === 'training' ? S.origin : S.dest) }; }
+  function terminus() { if (!S.origin || S.trip === 'waypoints' || (S.trip !== 'training' && !S.dest)) return null; /* a custom route is never auto-routed */ return { origin: wp(S.origin), dest: wp(S.trip === 'training' ? S.origin : S.dest) }; }
   function ringChain(t) { return isCircular() ? [t.origin, ...S.planned.stops, t.dest, ...S.planned.closing, t.origin] : [t.origin, ...S.planned.stops, t.dest]; }
   function chain() {   // airport records (with latitude_deg) for the map and the rail
+    if (S.trip === 'waypoints') return UI.waypoints ? UI.waypoints.chainRecords() : [S.origin].filter(Boolean);
     if (S.trip === 'training') return S.origin ? [S.origin] : [];
     const t = terminus(); if (!t) return [S.origin].filter(Boolean);
     return ringChain(t).map(n => UI.byId()[n.ident] || n);
@@ -73,7 +74,7 @@
   }
   function recomputeRoute() {
     const P = S.planned; P.stops = []; P.closing = []; P.error = null; P.legIssues = []; P.source = 'auto';
-    if (S.trip === 'training') return;
+    if (S.trip === 'training' || S.trip === 'waypoints') return;
     const t = terminus(); const p = plane(); if (!t || !p || !R()) { validateRoute(); return; }
     const manual = S.stops.filter(Boolean).map(a => wp(UI.byId()[a.ident] || a));
     P.source = manual.length ? 'user' : 'auto';

@@ -1,8 +1,8 @@
 /* CNS v2 — ui/plan.js: the Plan rail (form → simulate → result). Numbers come from CNSFlight. */
 (function () {
   const UI = window.CNSUI, S = UI.S, $ = UI.$, $$ = UI.$$, esc = UI.esc, fmt = UI.fmt;
-  const tripLabel = { 'one-way': 'One-way', retour: 'Return', circular: 'Circular', training: 'Training' };
-  const tripHint = { 'one-way': 'A to B · charge to full at the destination', retour: 'A to B and back · charge at both ends', circular: 'A → stops → A · needs at least one stop', training: 'Circuits at the departure airport' };
+  const tripLabel = { 'one-way': 'One-way', retour: 'Return', circular: 'Circular', training: 'Training', waypoints: 'Waypoints' };
+  const tripHint = { 'one-way': 'A to B · charge to full at the destination', retour: 'A to B and back · charge at both ends', circular: 'A → stops → A · needs at least one stop', waypoints: 'A → points → A · click the map to add turning points', training: 'Circuits at the departure airport' };
   const usableKm = p => { if (UI.planner) { const a = UI.planner.availRangeShownKm(p); if (a != null) return Math.round(a); } const f = (window.CNSSettings && CNSSettings.usableFraction) ? CNSSettings.usableFraction(p) : 0.7; return (window.CNSFlight && CNSFlight.maxFlownLegKm) ? Math.round(CNSFlight.maxFlownLegKm(p)) : Math.round(p.range_km * f); };
   const TYPE_TAG = { small_airport: 'S', medium_airport: 'M', large_airport: 'L' };
   const BIAS = [['medium-large-small', 'Medium → Large → Small'], ['large-medium-small', 'Large → Medium → Small'], ['small-medium-large', 'Small → Medium → Large'], ['none', 'No preference']];
@@ -129,11 +129,11 @@
     $('#railBody').innerHTML = `
     ${UI.PROTO ? '' : `<div class="ph"><h3>Create a route</h3><div class="tools"><span class="hint" style="margin:0">${esc(regShort(p.regime || ''))}${p.range_incl_reserves ? ' · range incl. reserves' : ''}</span></div></div>`}
     ${aircraftHtml(p, reach, fits, pickHtml)}
-    <div class="sec"><div class="lbl"><span class="cap">Route</span><button class="lnk" data-act="addStop">+ Add stop</button></div>
+    <div class="sec"><div class="lbl"><span class="cap">Route</span>${S.trip === 'waypoints' ? '' : '<button class="lnk" data-act="addStop">+ Add stop</button>'}</div>
       <div class="fld dr${badSlot('origin')}" draggable="true" data-slot="origin">${grip('origin')}<input placeholder="Departure airport" class="${acUnset('origin') ? 'ac-unset' : ''}" value="${esc(acValue('origin'))}" data-ac="origin"><span class="icao">${esc(S.origin ? S.origin.ident : '')}</span><div class="ac" id="ac-origin"></div></div>
-      ${stopsHtml}
+      ${S.trip === 'waypoints' ? (UI.waypoints ? UI.waypoints.formHtml() : '') : `${stopsHtml}
       ${S.trip === 'training' ? '' : `<div class="fld dr${badSlot('dest')}" draggable="true" data-slot="dest">${grip('dest')}<input placeholder="Destination airport" class="${acUnset('dest') ? 'ac-unset' : ''}" value="${esc(acValue('dest'))}" data-ac="dest"><span class="icao">${esc(S.dest ? S.dest.ident : '')}</span><div class="ac" id="ac-dest"></div></div>`}
-      ${c.length >= 2 ? routeBlock(c, d, fits) : ''}</div>
+      ${c.length >= 2 ? routeBlock(c, d, fits) : ''}`}</div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Trip type</div><div class="seg sm" data-seg="trip">${Object.keys(tripLabel).map(k => `<button data-v="${k}" class="${S.trip === k ? 'on' : ''}">${tripLabel[k]}</button>`).join('')}</div><div class="hint">${tripHint[S.trip]}</div></div>
     <div class="sec"><div class="cap" style="margin-bottom:8px">Frequency</div><div class="freq"><input type="number" min="1" max="2000" value="${S.freq}" data-act="freq" class="num"><span class="t">${fmt.pl(S.freq, 'flight')} /</span><div class="seg sm" data-seg="per"><button data-v="day" class="${S.per === 'day' ? 'on' : ''}">day</button><button data-v="week" class="${S.per === 'week' ? 'on' : ''}">week</button></div></div></div>
     <div class="sec"><div class="lbl"><span class="cap">Charger</span><span style="display:flex;gap:10px"><button class="lnk" data-act="ccOpen">Custom</button><button class="lnk" data-act="allChargers">${S.allChargers ? 'Fewer' : 'All chargers'}</button></span></div>
@@ -169,8 +169,8 @@
   const toC = a => ({ ident: a.ident, name: a.name, lat: a.latitude_deg, lon: a.longitude_deg });
   function engineProfile(data) {
     const p = UI.plane(); const o = data._origin, d = data._dest; const wp = x => ({ ident: x.ident, name: x.name, lat: x.lat, lon: x.lon });
-    const waypoints = data.trip_type === 'training' ? [wp(o)] : [wp(o), ...(data.stops || []).map(wp), wp(d)];
-    return CNSFlight.simulateTrip(p, waypoints, { tripType: data.trip_type, getTargetSoc: () => (window.CNSDemand && CNSDemand.resolveTargetSoc ? CNSDemand.resolveTargetSoc({}) : null), getChargerKw: () => (data.charger && data.charger.power_kw) || UI.charger().power_kw || 0, trainingRangeKm: data.training_range_km });
+    const waypoints = data._wps ? data._wps.map(wp) : data.trip_type === 'training' ? [wp(o)] : [wp(o), ...(data.stops || []).map(wp), wp(d)];
+    return CNSFlight.simulateTrip(p, waypoints, { tripType: data.trip_type, legVias: data._legVias, getTargetSoc: () => (window.CNSDemand && CNSDemand.resolveTargetSoc ? CNSDemand.resolveTargetSoc({}) : null), getChargerKw: () => (data.charger && data.charger.power_kw) || UI.charger().power_kw || 0, trainingRangeKm: data.training_range_km });
   }
   /** Every refusal clears the previous result: a stale S.result is a ghost flight waiting to be
       added with the wrong route (the classic nulls lastResult the same way, index.html:5361). */
@@ -178,6 +178,7 @@
   /** Why Simulate cannot run yet ('' when it can): the same ladder simulate() refuses on. */
   function missingReason() {
     if (S.trip === 'training') return S.origin ? '' : 'Set a departure airport';
+    if (S.trip === 'waypoints') { const m = UI.waypoints ? UI.waypoints.model() : { error: 'Set a departure airport' }; return m.error || ''; }
     if (!S.origin && !S.dest) return 'Set a departure and destination';
     if (!S.origin) return 'Set a departure airport';
     if (!S.dest) return 'Set a destination airport';
@@ -187,6 +188,7 @@
   const badSlot = k => (S.errSlots || []).includes(k) ? ' bad' : '';
   async function simulate(opts) {
     const live = !!(opts && opts.live), seq = ++_seq;   // live = the prototype's quiet re-run after a form change
+    if (S.trip === 'waypoints') { if (UI.waypoints) UI.waypoints.simulate(); return; }   // the engine alone: the server model has no turning points
     // The classic's own ladder (index.html:5297-5305). Text typed over a chosen airport has already
     // dropped it (bindAc), so this is the refusal an unpicked field lands on.
     if (!S.origin || (S.trip !== 'training' && !S.dest)) {
@@ -359,6 +361,7 @@
       const ref = (S.trip === 'circular' && r._namedDestIdent) ? [...planned, { ident: r._namedDestIdent, _manual: true }] : planned;
       entry.stops = CNSRecompute.mergeManualFlags(entry.stops, ref);
     }
+    if (r._custom) Object.assign(entry, { custom: true, legVias: r._custom.legVias, closed: r._custom.closed, customPoints: r._custom.points });   // a waypoints route: kept as drawn, never re-routed
     if (S.trip === 'circular' && r._namedDestIdent) entry.namedDestIdent = r._namedDestIdent;   // openTrip puts the far point back in Destination
     // A network route opened in the planner (openTrip) is UPDATED in place: same id, so its fixed take-offs and
     // its place in the list stay; the aircraft-per-flight choice and a charger pin carry over.
@@ -385,7 +388,8 @@
     const t = (window.CNSDemand ? CNSDemand.loadFolder() : []).find(x => x.id === id); if (!t) return;
     const by = UI.byId(), ap = (i, n, la, lo) => by[i] || { ident: i, name: n, latitude_deg: +la, longitude_deg: +lo, type: '' };
     cancelLive();
-    S.trip = t.tripType || 'one-way';
+    S.trip = t.custom ? 'waypoints' : (t.tripType || 'one-way');
+    if (t.custom && UI.waypoints) UI.waypoints.restore(t);
     // A circular ring saves its LAST node as dest; the far point the operator named rides along (namedDestIdent).
     const far = S.trip === 'circular' && t.namedDestIdent ? (t.stops || []).find(s => s && s.ident === t.namedDestIdent) : null;
     S.origin = ap(t.originIdent, t.originName, t.originLat, t.originLon);

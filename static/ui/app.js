@@ -181,7 +181,7 @@ window.CNSUI = (function () {
   }
   window.setOrigin = ap => { S.origin = ap; afterPick(ap); };
   window.setDest = ap => { S.dest = ap; afterPick(ap); };
-  window.setStop = ap => { S.stops.push(ap); afterPick(ap); };
+  window.setStop = ap => { if (S.trip === 'waypoints' && CNSUI.waypoints && S.mode === 'plan') { CNSUI.map.closePopup && CNSUI.map.closePopup(); CNSUI.waypoints.addAirport(ap); return; } S.stops.push(ap); afterPick(ap); };
   rebuildIndexes();
 
   function _setAirports(list) { AIRPORTS = list.filter(a => a.ident && a.latitude_deg != null); AP_BY_ID = {}; AIRPORTS.forEach(a => AP_BY_ID[a.ident] = a); rebuildIndexes(); }

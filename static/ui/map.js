@@ -60,7 +60,7 @@
       const m = L.circleMarker(UI.ll(a), { renderer: dotRenderer, pane: 'dots', radius: d.r * s, fillColor: '#4a4d6e', fillOpacity: d.o, color: '#fff', weight: 1.25, opacity: .45 });
       m._dotR = d.r;   // base radius — rescaled on zoom by rescaleDots()
       m.bindPopup(() => popupHtml(a), { offset: [0, -2] });
-      m.on('click', () => { if (UI.planner && UI.planner.pickPending()) { UI.planner.notifyAirportPick(a); map.closePopup(); } });
+      m.on('click', () => { if (UI.waypoints) UI.waypoints.noteDotClick(); if (UI.planner && UI.planner.pickPending()) { UI.planner.notifyAirportPick(a); map.closePopup(); } });
       (dots[a.type] || dots.small_airport).addLayer(m); });
     applyVisibility();
   }
@@ -124,6 +124,7 @@
   }
   function drawRoute(fit) {
     routeLayer.clearLayers(); const c = UI.chain();
+    if (S.trip === 'waypoints' && UI.waypoints) { UI.waypoints.draw(routeLayer, fit); return; }   // custom route: its own drawing
     if (S.trip === 'training' && S.origin) { const p = UI.plane(); const r = ((p.training_range_km || 60) / 2) * 1000; routeLayer.addLayer(L.circle(UI.ll(S.origin), { pane: 'rt', interactive: false, radius: r, color: '#c4421f', weight: 2, fillColor: '#c4421f', fillOpacity: .06, dashArray: '4 6' })); if (fit) fitRoute(false); return; }
     if (c.length < 2) return;
     const pts = c.map(UI.ll); const path = arcPath(pts);
@@ -176,8 +177,9 @@
     // ONE selected airport: the isolated one, else the open ledger row. It gets the ring, its network lights up.
     const sel = S.filter || Object.keys(S.openAp).find(k => S.openAp[k]) || '';
     const fl = net ? sel : UI.chain().length > 1 ? S.filter : '';
-    CNSDemand.loadFolder().forEach(t => { const pts = [[t.originLat, t.originLon], ...(t.stops || []).map(s => [s.lat, s.lon]), [t.destLat, t.destLon]].filter(p => p[0] != null && p[1] != null);
-      if (t.tripType === 'circular') pts.push([t.originLat, t.originLon]);   // a ring closes home; a return flies its stops back, the line it already has
+    CNSDemand.loadFolder().forEach(t => { const cp = UI.waypoints && UI.waypoints.tripPath(t);   // a custom route: through its turning points
+      const pts = cp || [[t.originLat, t.originLon], ...(t.stops || []).map(s => [s.lat, s.lon]), [t.destLat, t.destLon]].filter(p => p[0] != null && p[1] != null);
+      if (!cp && t.tripType === 'circular') pts.push([t.originLat, t.originLon]);   // a ring closes home; a return flies its stops back, the line it already has
       if (pts.length < 2) return; const idents = [t.originIdent, ...(t.stops || []).map(s => s.ident), t.destIdent].filter(Boolean);
       const hit = !fl || idents.includes(fl), f = CNSDemand.flightsPerDay ? CNSDemand.flightsPerDay(t) : 1;
       idents.forEach(id => { perAp[id] = (perAp[id] || 0) + f; if (hit) lit.add(id); });
@@ -215,6 +217,6 @@
   // which setMode has already flipped by the time it hides/shows the route layer).
   function hideRoute() { if (map.hasLayer(routeLayer)) map.removeLayer(routeLayer); drawAlternates(); }
   function showRoute() { if (!map.hasLayer(routeLayer)) routeLayer.addTo(map); drawAlternates(); }
-  UI.map = { init, drawAssets, drawRoute, drawNet, fitNet, fitRoute, fit, routeInView, ensureRouteVisible, ensureVisible, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
+  UI.map = { arcPath, init, drawAssets, drawRoute, drawNet, fitNet, fitRoute, fit, routeInView, ensureRouteVisible, ensureVisible, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
              closePopup: () => map.closePopup(), hideRoute, showRoute, get map() { return map; } };
 })();

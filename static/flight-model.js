@@ -195,11 +195,18 @@ window.CNSFlight = (function () {
         // flown distance (single-count), so distKm, energyKwh and flightMin reconcile. (R5)
         for (let i = 0; i < nLegs; i++) {
             const a = chain[i], b = chain[i + 1];
-            const rawKm = CNSRouting.haversineKm(_pt(a), _pt(b));   // great-circle (geographic) — routing.js loads first everywhere
+            // A custom (waypoints) route turns over points between landings (opts.legVias[i]): the leg is the
+            // path through them, segment by segment; an ordinary leg is the one great circle a -> b.
+            const path = [_pt(a), ...((opts.legVias && opts.legVias[i]) || []).map(_pt), _pt(b)];
+            const segs = path.slice(1).map((q, k) => ({ km: CNSRouting.haversineKm(path[k], q), from: path[k], to: q }));
+            const rawKm = segs.reduce((t, g) => t + g.km, 0);   // great-circle (geographic) — routing.js loads first everywhere
             const distKm = rawKm * route + sidStar;              // ROUTED length: airways multiplier, then fixed SID/STAR terminal km
             // Wind: the aircraft holds its cruise airspeed; over the ground it covers distKm at GS, so it flies
-            // airKm = distKm × TAS/GS through the air. Time and energy follow the air km (identity in still air).
-            const S = _settings(), w = (S && S.windLeg) ? S.windLeg(CNSRouting.courseDeg(_pt(a), _pt(b)), speed) : null;
+            // airKm = distKm × TAS/GS through the air (per segment course, distance-weighted). Identity in still air.
+            const S = _settings(), ws = (S && S.windLeg) ? segs.map(g => ({ g, w: S.windLeg(CNSRouting.courseDeg(g.from, g.to), speed) })) : null;
+            const w = ws && ws.length ? { ok: ws.every(x => x.w.ok), factor: rawKm > 0 ? ws.reduce((t, x) => t + x.g.km * x.w.factor, 0) / rawKm : ws[0].w.factor,
+                headKt: rawKm > 0 ? ws.reduce((t, x) => t + x.g.km * x.w.headKt, 0) / rawKm : 0 } : null;
+            if (w) w.gsKmh = speed / w.factor;
             const airKm = distKm * (w ? w.factor : 1);
             const energyKwh = legEnergy(airKm);                  // flown — the routed length in the air (climb ramp + cruise; linear when the model is off/gated)
             const flightMin = speed > 0 ? airKm / speed * 60 : 0;   // = distKm / GS
@@ -296,8 +303,11 @@ window.CNSFlight = (function () {
             const o = { ident: trip.originIdent, name: trip.originName, lat: trip.originLat, lon: trip.originLon };
             const d = { ident: trip.destIdent, name: trip.destName, lat: trip.destLat, lon: trip.destLon };
             const stops = (trip.stops || []).map(wp);
-            const waypoints = (trip.tripType === 'training') ? [wp(o)] : [wp(o), ...stops, wp(d)];
+            // A custom (waypoints) loop with no airport stop closes on its own origin: [O] + the circular ring.
+            const loopOnly = trip.custom && trip.tripType === 'circular' && trip.destIdent === trip.originIdent;
+            const waypoints = (trip.tripType === 'training') ? [wp(o)] : loopOnly ? [wp(o), ...stops] : [wp(o), ...stops, wp(d)];
             return simulateTrip(plane, waypoints, {
+                legVias: trip.legVias,
                 tripType: trip.tripType,
                 getTargetSoc: opts.getTargetSoc,
                 getChargerKw: opts.getChargerKw || (() => 0),

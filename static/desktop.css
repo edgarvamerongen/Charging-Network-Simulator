@@ -577,3 +577,14 @@ body.proto .drawer.open{height:var(--tl-h,40vh)}
 .wdd .wsl label{position:relative}
 .wdd .hint{margin:8px 0 2px;font-size:11px;line-height:1.4}
 #windDrift{position:absolute;inset:0;z-index:450;pointer-events:none}
+/* waypoints (custom routes): the points list, the loop toggle, the turning-point markers */
+.wpt-row{display:grid;grid-template-columns:18px 1fr auto 22px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.wpt-row .k{color:var(--muted);text-align:center;font-size:11px}.wpt-row .k.ap{color:var(--ink)}.wpt-row .k .ic{width:14px;height:14px}
+.wpt-row .n small{color:var(--muted);margin-left:4px;font-size:11px}
+.wpt-row .icao{font-size:11px;color:var(--muted)}
+.wpt-row .x{color:var(--faint);display:flex;align-items:center;justify-content:center}.wpt-row .x:hover{color:var(--danger)}
+.wpt-row.bad .n{color:var(--danger)}
+.wpclose{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:8px 0}
+.wpt-mk{position:relative;width:12px;height:12px;transform:rotate(45deg);background:#fff;border:2px solid var(--ink);box-sizing:border-box;cursor:grab}
+.wpt-mk span{position:absolute;left:14px;top:-12px;transform:rotate(-45deg);transform-origin:left top;font:600 10.5px Inter,system-ui,sans-serif;color:var(--ink);background:rgba(255,255,255,.86);padding:0 3px;border-radius:2px;white-space:nowrap}
+.leglbl.bad{color:var(--danger);border-color:var(--danger)}
