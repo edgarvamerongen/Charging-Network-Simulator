@@ -139,7 +139,23 @@ window.CNSRouting = (function () {
         // In the plan's wind (CNSSettings.windLeg) a leg needs its AIR km: ground km × TAS/GS for its course, plus the
         // arrival's divert reserve at the worst-case headwind (the divert's own direction isn't modelled). Still air: 1.
         const wWorst = (window.CNSSettings && CNSSettings.windWorstFactor) ? CNSSettings.windWorstFactor(+plane.speed_kmh || 0) : 1;
-        const need = (pa, na, pb, nb, d) => d * windFactor(pa, pb, plane) + altReserveKm(nb) * wWorst;
+        // The divert is flown from the arrival to ITS alternate, so its air km scale with the wind on that course (a
+        // tailwind helps, a headwind costs, a wind the aircraft can't make headway against rules the leg out). Only an
+        // alternate whose position is unknown falls back to the worst case, a straight headwind.
+        const windOn = wWorst !== 1 && !options.divertStillAir;   // divertStillAir: the planner's "would it fly without the wind on the diverts?" probe
+        const apById = new Map();
+        if (requireAlt && windOn) for (const a of allAirports) if (a && a.ident != null) apById.set(a.ident, a);
+        const dwCache = new Map();
+        const divertWind = (pb, nb) => {
+            if (!windOn || !nb) return 1;
+            if (dwCache.has(nb)) return dwCache.get(nb);
+            const rec = nb.ident != null ? apById.get(nb.ident) : null;
+            const altId = nb.divertOverride || nb.alternate_ident || (rec && rec.alternate_ident);
+            const alt = altId ? apById.get(altId) : null;
+            const f = alt ? divertWindFactor(pb, { lat: +alt.latitude_deg, lon: +alt.longitude_deg }, plane).factor : wWorst;
+            dwCache.set(nb, f); return f;
+        };
+        const need = (pa, na, pb, nb, d) => { const ak = altReserveKm(nb); return d * windFactor(pa, pb, plane) + (ak > 0 ? ak * divertWind(pb, nb) : 0); };
         const legNeed = (pa, na, pb, nb, d) => options.bothWays ? Math.max(need(pa, na, pb, nb, d), need(pb, nb, pa, na, d)) : need(pa, na, pb, nb, d);
         // Caller may pass an explicit max straight-line leg (the planner's "available
         // range", already incl. reserve + routing padding, or a per-flight override).
@@ -360,5 +376,14 @@ window.CNSRouting = (function () {
         return (S && S.windLeg && plane) ? S.windLeg(courseDeg(a, b), +plane.speed_kmh || 0).factor : 1;
     }
 
-    return { planRoute, planChain, haversineKm, routedKm, courseDeg, windFactor };
+    /** The wind on a divert from `from` to its alternate `alt` ({lat, lon}): { factor (air km per ground km; Infinity
+     *  when the aircraft can't make the divert in this wind), ok, course (°T) }. Still air: factor 1. */
+    function divertWindFactor(from, alt, plane) {
+        const S = window.CNSSettings, course = courseDeg(from, alt);
+        if (!(S && S.windLeg && plane)) return { factor: 1, ok: true, course };
+        const w = S.windLeg(course, +plane.speed_kmh || 0);
+        return { factor: w.ok ? w.factor : Infinity, ok: !!w.ok, course };
+    }
+
+    return { planRoute, planChain, haversineKm, routedKm, courseDeg, windFactor, divertWindFactor };
 })();

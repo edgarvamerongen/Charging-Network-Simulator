@@ -67,10 +67,33 @@
     const requireAlt = !!(ST() && ST().alternateReserveEnabled && ST().alternateReserveEnabled(p));
     const altReserveKm = w => { if (!requireAlt || !w) return 0; const ovKm = divertOverrideKm(w); if (ovKm != null) return ovKm / route; const full = w.ident ? UI.byId()[w.ident] : null; const km = (full && full.alternate_km != null) ? +full.alternate_km : (+w.alternate_km || 0); return (isFinite(km) ? km : 0) / route; };
     const c = ringChain(t), back = S.trip === 'retour';   // a return trip flies each leg back too, landing at c[i]
-    // In the plan's wind a leg needs its air km (routing.js windFactor) + the arrival's divert at the worst-case headwind.
-    const ww = ST() && ST().windWorstFactor ? ST().windWorstFactor(+p.speed_kmh || 0) : 1, need = (a, b, d) => d * R().windFactor(a, b, p) + altReserveKm(b) * ww;
-    for (let i = 0; i < c.length - 1; i++) { const d = R().haversineKm(c[i], c[i + 1]); if (Math.max(need(c[i], c[i + 1], d), back ? need(c[i + 1], c[i], d) : 0) > maxLeg) P.legIssues.push(i); }
-    if (P.legIssues.length) { const n = P.legIssues.length; P.error = `${n} leg${n > 1 ? 's' : ''} exceed${n > 1 ? '' : 's'} the aircraft's range. Add or change a stop.`; }
+    // In the plan's wind a leg needs its air km (routing.js windFactor) + the arrival's divert in the wind ON ITS OWN
+    // COURSE, to that airport's alternate (the manual pick, else the catalog's); the worst-case headwind only when the
+    // alternate is unknown. A leg that only fails on its divert in this wind says so: change the wind or the divert.
+    const ww = ST() && ST().windWorstFactor ? ST().windWorstFactor(+p.speed_kmh || 0) : 1;
+    const divertOf = b => { const id = (b && b.ident && S.divertOverrides[b.ident]) || ((b && UI.byId()[b.ident]) || {}).alternate_ident || (b && b.alternate_ident); return id ? UI.byId()[id] : null; };
+    const legNeed = (a, b, d) => { const ak = altReserveKm(b), alt = divertOf(b), air = d * R().windFactor(a, b, p);
+      const w = alt ? R().divertWindFactor(b, { lat: +alt.latitude_deg, lon: +alt.longitude_deg }, p) : { factor: ww, ok: true };
+      return { total: air + (ak > 0 ? ak * w.factor : 0), still: air + ak, ak, alt, w, b }; };
+    const windy = [];
+    for (let i = 0; i < c.length - 1; i++) { const d = R().haversineKm(c[i], c[i + 1]), out = legNeed(c[i], c[i + 1], d), ret = back ? legNeed(c[i + 1], c[i], d) : null;
+      const worst = ret && ret.total > out.total ? ret : out;
+      if (worst.total > maxLeg) { P.legIssues.push(i); if (worst.still <= maxLeg && worst.ak > 0 && worst.alt) windy.push(worst); } }
+    if (P.legIssues.length) { const n = P.legIssues.length; P.error = windy.length ? divertWindNote(windy[0]) : `${n} leg${n > 1 ? 's' : ''} exceed${n > 1 ? '' : 's'} the aircraft's range. Add or change a stop.`; }
+  }
+  /** When the router finds no route in wind: would it find one with the diverts flown in still air? Then the wind on
+      the diverts is what rules the route out, and the operator should hear that (one extra search, only on failure). */
+  function divertWindHint(t, manual, p) {
+    const w = (ST() && ST().loadAll) ? ST().loadAll().wind : null;
+    if (!w || !w.enabled || !(+w.kt > 0) || !(ST().alternateReserveEnabled && ST().alternateReserveEnabled(p))) return '';
+    const r = R().planChain({ origin: t.origin, dest: t.dest, manualStops: manual, plane: p, allowedTypes: allowedTypes(), allAirports: UI.airports(), allowedIdents: plannerAllowedIdents(), blacklist: S.blacklist, maxLegKm: availableRangeKm(p), options: Object.assign(routingOptions(), { bothWays: S.trip === 'retour', divertStillAir: true }) });
+    return r && !r.error ? `No route in this wind: it flies in still air, but ${Math.round(+w.kt)} kt from ${String(Math.round(+w.fromDeg) % 360).padStart(3, '0')}° makes the diverts too costly. Change the wind, or pick other diverts (Map › Alternates).` : '';
+  }
+  /** The notice for a leg that only fails on its divert in the plan's wind. */
+  function divertWindNote(x) {
+    const w = (ST() && ST().loadAll) ? ST().loadAll().wind : {}, fmt = UI.fmt, wind = `${Math.round(+w.kt || 0)} kt from ${String(Math.round(+w.fromDeg || 0) % 360).padStart(3, '0')}°`;
+    const what = x.w.ok ? `needs ${fmt.dist(x.ak * x.w.factor)} of range into the wind (${fmt.dist(x.ak)} in still air)` : `can't be flown: the aircraft can't make headway against it`;
+    return `In this wind (${wind}) the divert from ${x.b.ident} to ${x.alt.ident} ${what}. Change the wind, or pick another divert for ${x.b.ident} (Map › Alternates).`;
   }
   function recomputeRoute() {
     const P = S.planned; P.stops = []; P.closing = []; P.error = null; P.legIssues = []; P.source = 'auto';
@@ -83,7 +106,7 @@
     // The ROUTER's message is the truthful one when it could not chain the route at all — the
     // classic shows plannedError (with a remedy) or its hard-fail copy, never the leg-gate line
     // ('add or change a stop' is meaningless when no stop exists that would fix it).
-    if (chainRes.error && manual.length === 0) { validateRoute(); P.error = chainRes.error; return; }
+    if (chainRes.error && manual.length === 0) { validateRoute(); P.error = divertWindHint(t, manual, p) || chainRes.error; return; }
     P.stops = chainRes.stops || []; stampDiverts(P.stops);
     if (isCircular()) {
       const used = new Set([t.origin.ident, t.dest.ident, ...P.stops.map(s => s && s.ident)].filter(Boolean));

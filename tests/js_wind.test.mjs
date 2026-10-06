@@ -54,3 +54,25 @@ test('router: a direct leg that fits in still air needs a stop into a headwind, 
   assert.deepEqual(Array.from(plan({ fromDeg: 90, kt: KT(50) }).stops, s => s.ident), ['S']);   // 111 × 1.25 > 120
   assert.deepEqual(Array.from(plan({ fromDeg: 270, kt: KT(50) }).stops, s => s.ident), []);
 });
+
+// The divert reserve is flown from the arrival to ITS alternate, so the wind on that course is what it costs: a tailwind
+// divert is cheap, a headwind one dear, one the aircraft can't make headway against rules the leg out. (It used to be
+// the worst-case headwind for every divert, which ruled out short legs in a tailwind.)
+test('router: the divert reserve pays the wind on the divert course, not a worst-case headwind', () => {
+  const S = stack({ fromDeg: 270, kt: KT(50) });                      // westerly: eastbound is a tailwind (×0.83), westbound a headwind (×1.25)
+  if (!S.CNSSettings.alternateReserveEnabled(P)) return;              // the fixture plane must carry divert reserves
+  const O = { ident: 'O', lat: 0, lon: 0 };
+  const plan = (altLon, s) => {
+    const A = { ident: 'A', name: 'A', type: 'medium_airport', latitude_deg: 0, longitude_deg: altLon, alternate_km: 50, rwy_paved_m: 2000 };
+    const D = { ident: 'D', name: 'D', type: 'medium_airport', latitude_deg: 0, longitude_deg: 1.0, alternate_km: 111.19, alternate_ident: 'A', rwy_paved_m: 2000 };
+    return (s || S).CNSRouting.planRoute({ origin: O, destination: { ident: 'D', lat: 0, lon: 1.0, alternate_km: 111.19, alternate_ident: 'A' }, plane: P, allowedTypes: ['medium_airport'], allAirports: [A, D], options: { maxLegKm: 200 } });
+  };
+  // 111 km east in a tailwind (92.6 air km) + a 111 km divert further east, also downwind (92.6): 185 ≤ 200. Flies direct.
+  // (At the worst-case headwind the divert alone was 139 km: 232 > 200, no route.)
+  const east = plan(2.0);
+  assert.equal(east.error, undefined, east.error); assert.equal(east.legCount, 1);
+  // the same divert back west, into the wind: 92.6 + 139 = 232 > 200
+  assert.match(plan(0.0).error || '', /No reachable route/);
+  // a wind the aircraft can't make headway against on the divert rules the leg out, whatever the reserve
+  assert.match(plan(0.0, stack({ fromDeg: 270, kt: KT(260) })).error || '', /No reachable route/);
+});
