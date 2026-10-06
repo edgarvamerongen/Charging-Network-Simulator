@@ -212,7 +212,9 @@ window.CNSFlight = (function () {
             const flightMin = speed > 0 ? airKm / speed * 60 : 0;   // = distKm / GS
             const overRange = (w && !w.ok) || energyKwh > usable + 1e-9;   // [R5] padded energy > usable, or a wind the aircraft can't fly
             if (overRange) errors.push({ kind: 'over-range', legIndex: i, energyKwh, usable });
-            profile.legs.push({ fromIdent: a.ident, fromName: a.name, toIdent: b.ident, toName: b.name, rawKm, distKm, airKm, gsKmh: w ? w.gsKmh : speed, headKt: w ? w.headKt : 0, flightMin, energyKwh, socStartFrac: 0, socEndFrac: 0, overRange, legIndex: i });
+            // Where each turning point falls along the leg, as a fraction of its length (the battery chart marks them).
+            let acc = 0; const viaFracs = segs.length > 1 && rawKm > 0 ? segs.slice(0, -1).map(g => (acc += g.km) / rawKm) : undefined;
+            profile.legs.push({ fromIdent: a.ident, fromName: a.name, toIdent: b.ident, toName: b.name, rawKm, distKm, airKm, gsKmh: w ? w.gsKmh : speed, headKt: w ? w.headKt : 0, flightMin, energyKwh, socStartFrac: 0, socEndFrac: 0, overRange, legIndex: i, viaFracs });
         }
         const turnIdx = (tripType === 'retour' || tripType === 'circular') ? (waypoints.length - 1) : -1;   // chain index of the turnaround (dest); for circular only the closing leg lies past it
 
