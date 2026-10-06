@@ -160,7 +160,7 @@
   function fitRoute(animate) {
     const c = UI.chain(); if (!c.length || !map) return;
     const pad = Object.assign(pads(), { animate: !!animate });
-    if (S.trip === 'training' && S.origin) { const r = ((UI.plane().training_range_km || 60) / 2) * 1000; map.fitBounds(L.latLng(UI.ll(S.origin)).toBounds(r * 2.6), pad); return; }
+    if (S.trip === 'training' && S.origin) { const r = ((UI.plane().training_range_km || 60) / 2) * 1000; map.fitBounds(L.latLngBounds(window.CNSGL.circleRing(L.latLng(UI.ll(S.origin)), r * 1.3)), pad); return; }   // the circuit area with a margin
     if (c.length < 2) { map.panTo(UI.ll(c[0]), { animate: !!animate }); return; }
     map.fitBounds(L.latLngBounds(arcPath(c.map(UI.ll))), Object.assign({ maxZoom: 9 }, pad));
   }

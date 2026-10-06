@@ -196,7 +196,7 @@ window.CNSGL = (function () {
       const pad = { left: tl[0] * fx, right: br[0] * fx, top: tl[1] * fy, bottom: br[1] * fy };
       const c = B._calc(), opts = { padding: pad, animate: !!o.animate, duration: o.animate ? 450 : 0 };
       if (o.maxZoom != null) opts.maxZoom = o.maxZoom - Z;
-      if (c.n - c.s < 1e-6 && c.e - c.w < 1e-6) { this.ml.jumpTo({ center: [c.w, c.s], zoom: Math.min(this.ml.getZoom(), opts.maxZoom != null ? opts.maxZoom : 22) }); return this; }
+      if (c.n - c.s < 1e-6 && c.e - c.w < 1e-6) { this.ml.jumpTo({ center: [c.w, c.s], zoom: opts.maxZoom != null ? opts.maxZoom : this.ml.getZoom() }); return this; }   // one point: zoom in to maxZoom, as Leaflet does
       this.ml.fitBounds([[c.w, c.s], [c.e, c.n]], opts); return this;
     }
     // globe

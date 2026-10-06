@@ -470,3 +470,15 @@ test('too far for maxStops: refused before searching, with the stop count it wou
   assert.match(res.error, /needs at least 16 stops \(the limit is 10\)/);
   assert.ok(Date.now() - t0 < 200, `${Date.now() - t0} ms`);
 });
+
+// Within the stop limit but across a gap no leg can bridge (an ocean): one reachability pass answers it, rather than
+// re-searching every corridor width and type preference (with ~48,000 airports that took minutes).
+test('unreachable within maxStops (a gap): answered fast, no route', () => {
+  const R = loadRouting({ requireAlt: false });
+  const O = node('O', 0.0, 0), D = node('D', 10.0, 0);                  // ~1,112 km at 200 km legs: 5 stops would do
+  const coast = Array.from({ length: 20000 }, (_, i) => Object.assign(ap('X' + i, (i % 200) / 100, 0), { latitude_deg: ((i * 7) % 200) / 100 - 1 }));   // dense, but only within 2° of O
+  const t0 = Date.now();
+  const res = R.planRoute({ origin: O, destination: D, plane: PLANE(200), allowedTypes: ['medium_airport'], allAirports: [O, ...coast, D], options: {} });
+  assert.match(res.error, /No reachable route/);
+  assert.ok(Date.now() - t0 < 3000, `${Date.now() - t0} ms`);
+});

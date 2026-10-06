@@ -33,6 +33,15 @@ def main():
     airports = pd.read_csv(paths["airports.csv"], keep_default_na=False, na_values=[""])
     runways = pd.read_csv(paths["runways.csv"], dtype=str)
     df = build_world(airports, runways)
+    # Every ident the European set (classic and mobile views, saved networks) knows stays resolvable: airports
+    # OurAirports has since retired are carried over from european_airports.csv as they were.
+    eu_path = os.path.join(HERE, "european_airports.csv")
+    if os.path.exists(eu_path):
+        eu = pd.read_csv(eu_path, keep_default_na=False, na_values=[""])
+        gone = eu[~eu["ident"].isin(set(df["ident"]))]
+        if len(gone):
+            df = pd.concat([df, gone[[c for c in df.columns if c in gone.columns]]], ignore_index=True)
+            print(f"carried over {len(gone)} European idents OurAirports no longer lists: {', '.join(gone['ident'].head(8))}...")
     df.to_csv(os.path.join(HERE, "world_airports.csv"), index=False)
     feed = columnar_feed(df)
     os.makedirs(os.path.join(HERE, "static", "geo"), exist_ok=True)

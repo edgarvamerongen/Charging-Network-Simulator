@@ -2,6 +2,7 @@ import math
 import json
 import re
 import csv
+import sys
 import os
 import threading
 
@@ -86,13 +87,20 @@ class Simulator:
             if r.get('iata_code'):
                 self._by_iata.setdefault(r['iata_code'].upper(), r)
 
-    @staticmethod
-    def _read_airports(path):
+    # The columns anything reads (lookups, /api/simulate, the map lists, the report): the full OurAirports row
+    # held for ~48,000 airports cost ~90 MB per worker.
+    _AIRPORT_KEEP = frozenset((
+        'ident', 'name', 'municipality', 'iata_code', 'icao_code', 'gps_code', 'type', 'latitude_deg', 'longitude_deg',
+        'elevation_ft', 'continent', 'iso_country', 'iso_region', 'alternate_km', 'alternate_ident',
+        'rwy_paved_m', 'rwy_grass_m', 'rwy_gravel_m', 'rwy_dirt_m', 'rwy_water_m', 'rwy_unknown_m'))
+
+    @classmethod
+    def _read_airports(cls, path):
         # Empty cells stay "" so JSON serialization doesn't fail
         with open(path, newline='', encoding='utf-8') as f:
             return [
-                {k: (float(v) if v and k in _AIRPORT_FLOAT_COLS else v)
-                 for k, v in row.items()}
+                {k: (float(v) if v and k in _AIRPORT_FLOAT_COLS else sys.intern(v) if k in ('type', 'continent', 'iso_country') else v)
+                 for k, v in row.items() if k in cls._AIRPORT_KEEP}
                 for row in csv.DictReader(f, restval="")
             ]
 
@@ -200,11 +208,16 @@ class Simulator:
             hit = self._by_ident.get(q_upper) or self._by_iata.get(q_upper)
             if hit is not None:
                 return hit
-        # Fall back to the original name / municipality substring search.
+        # Fall back to the original name / municipality substring search: the European set first, in its own
+        # order (the answer it always gave: "Hamburg" is EDDH), then the world's matches, largest field first
+        # (else a digit-led US strip sorts ahead of the city's airport).
         q_lower = q.lower()
-        return next((r for r in self.airports
-                     if q_lower in r['name'].lower()
-                     or q_lower in r['municipality'].lower()), None)
+        hit = lambda r: q_lower in r['name'].lower() or q_lower in r['municipality'].lower()
+        eu = next((r for r in self._europe_rows() if hit(r)), None)
+        if eu is not None:
+            return self._by_ident.get(eu['ident'].upper(), eu)
+        rank = {'large_airport': 0, 'medium_airport': 1, 'small_airport': 2}
+        return min((r for r in self.airports if hit(r)), key=lambda r: rank.get(r.get('type'), 3), default=None)
 
     def calculate_flight_by_distance(self, plane_id, distance_km, charger_id, trip_type="one-way", plane_obj=None, charger_obj=None):
         plane = plane_obj if plane_obj else next((p for p in self.planes if p['id'] == plane_id), None)

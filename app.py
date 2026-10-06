@@ -641,26 +641,46 @@ WORLD_FEED = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 
 _world_cache = {}
 
 
-def world_feed():
-    """(hash, raw bytes, gzipped bytes) of the world feed, or None when it hasn't been built."""
+def world_feed_hash():
+    """The world feed's content hash (from its first bytes; cheap enough for every page), or '' when not built."""
     try:
         mtime = os.path.getmtime(WORLD_FEED)
     except OSError:
+        return ''
+    if _world_cache.get('hmtime') != mtime:
+        with open(WORLD_FEED, 'rb') as f:
+            head = f.read(200)
+        m = re.search(rb'"hash":"([0-9a-f]+)"', head)
+        _world_cache.update(hmtime=mtime, hash=m.group(1).decode() if m else str(int(mtime)))
+    return _world_cache['hash']
+
+
+def world_feed():
+    """(hash, raw bytes, gzipped bytes) of the world feed, or None when it hasn't been built. Read and gzipped once
+    per worker, on the first request for the feed itself."""
+    h = world_feed_hash()
+    if not h:
         return None
-    if _world_cache.get('mtime') != mtime:
+    if _world_cache.get('fhash') != h:
         import gzip
         with open(WORLD_FEED, 'rb') as f:
             raw = f.read()
-        m = re.search(rb'"hash":"([0-9a-f]+)"', raw[:200])
-        _world_cache.update(mtime=mtime, hash=m.group(1).decode() if m else str(int(mtime)),
-                            raw=raw, gz=gzip.compress(raw, 6))
-    return _world_cache['hash'], _world_cache['raw'], _world_cache['gz']
+        _world_cache.update(fhash=h, raw=raw, gz=gzip.compress(raw, 6))
+    return h, _world_cache['raw'], _world_cache['gz']
 
 
 @app.context_processor
 def _inject_world_hash():
-    w = world_feed()
-    return {'world_airports_hash': w[0] if w else ''}
+    return {'world_airports_hash': world_feed_hash()}
+
+
+def _accepts_gzip():
+    for part in (request.headers.get('Accept-Encoding') or '').split(','):
+        name, _, params = part.strip().partition(';')
+        if name.strip().lower() in ('gzip', '*'):
+            q = re.search(r'q=([0-9.]+)', params)
+            return not q or float(q.group(1)) > 0
+    return False
 
 
 @app.route('/api/airports/world', methods=['GET'])
@@ -672,14 +692,14 @@ def get_world_airports():
     etag = '"' + h + '"'
     if request.headers.get('If-None-Match') == etag:
         resp = app.response_class(status=304)
-    elif 'gzip' in (request.headers.get('Accept-Encoding') or ''):
+    elif _accepts_gzip():
         resp = app.response_class(gz, mimetype='application/json')
         resp.headers['Content-Encoding'] = 'gzip'
     else:
         resp = app.response_class(raw, mimetype='application/json')
     resp.headers['ETag'] = etag
     resp.headers['Vary'] = 'Accept-Encoding'
-    resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    resp.headers['Cache-Control'] = 'private, max-age=31536000, immutable'   # behind the login, like /api/airports
     return resp
 
 
@@ -690,18 +710,19 @@ def get_world_airports():
 # so the hover image is literally "just like in the PDF". Auth-gated like the rest
 # of the app (only logged-in users hovering the map reach it), which also bounds
 # the outbound Wikimedia/Esri fetches to authenticated callers.
-_airport_idx = None
+_airport_idx = {}
 
 
-def _airport_by_ident(ident):
+def _airport_by_ident(ident, world=True):
+    """The airport record for a photo: any airport the v2 map shows (world), or only the European set (the
+    anonymous public endpoint, which keeps its outbound Wikimedia/Esri fetches to the ~7,800 it always had)."""
     ident = (ident or '').strip().upper()
     if not report._SAFE_IDENT_RE.match(ident):
         return None
-    global _airport_idx
-    if _airport_idx is None:
-        _airport_idx = {a['ident'].upper(): a   # the hover photo: any airport the v2 map shows
-                        for a in simulator.get_all_airports(world=True) if a.get('ident')}
-    return _airport_idx.get(ident)
+    if world not in _airport_idx:
+        _airport_idx[world] = {a['ident'].upper(): a
+                               for a in simulator.get_all_airports(world=world) if a.get('ident')}
+    return _airport_idx[world].get(ident)
 
 
 # ── Airport resolution (used by /embed) ────────────────────────────────────
@@ -866,7 +887,7 @@ def public_airport_photo(ident):
     # Photo cold-builds do real work (Wikidata/Esri fetch + render): tighter cap.
     if _hits('photo', _client_ip(), 60) > 15:
         return _qs_cors(Response(status=429))
-    ap = _airport_by_ident(ident)
+    ap = _airport_by_ident(ident, world=False)
     if ap is None:
         abort(404)
     # Fixed hero size — no client-controlled dimensions, so the cache can't be

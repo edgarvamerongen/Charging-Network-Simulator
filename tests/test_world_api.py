@@ -63,6 +63,15 @@ class WorldLookups(unittest.TestCase):
         self.assertEqual(s.get_airport('NZQN')['ident'], 'NZQN')
         self.assertEqual(s.get_airport('ZQN')['ident'], 'NZQN')      # IATA
         self.assertEqual(s.get_airport('eham')['ident'], 'EHAM')
+        # a name gives Europe's answer first (not a digit-led US strip that sorts ahead in the world set)
+        self.assertEqual(s.get_airport('Hamburg')['ident'], 'EDDH')
+        self.assertEqual(s.get_airport('Amsterdam')['ident'], 'EHAM')
+        # beyond Europe: the largest matching field
+        self.assertEqual(s.get_airport('Queenstown')['type'], 'large_airport')
+        # retired in OurAirports, still in the European list: still resolvable
+        self.assertEqual(s.get_airport('EGBE')['ident'], 'EGBE')
+        # only the columns anything reads are kept in memory
+        self.assertNotIn('wikipedia_link', s.get_airport('EHAM'))
         eu = {a['ident'] for a in s.get_all_airports()}
         self.assertIn('EHAM', eu)
         self.assertNotIn('NZQN', eu)

@@ -188,34 +188,76 @@ window.CNSRouting = (function () {
         // A* over {origin} ∪ C ∪ {dest} for a given per-type penalty. Returns the best
         // { order, C, distKm } across widening corridors, or null. Wrapped in searchWith so the
         // caller can re-run it with the type preference dropped (the soft-bias fallback below).
+        // No leg reaches further over the ground than maxLeg / fBest (fBest: the most favourable wind, ≤ 1), so a node's
+        // neighbours lie within that many km: the search only looks at airports in that latitude window (and longitude,
+        // cheaply), not at every candidate. Same result as the all-pairs scan, far fewer distance checks.
+        const reachKm = maxLeg / fBest, reachDeg = reachKm / 111.19 + 1e-6, cosReach = Math.cos(Math.min(Math.PI, reachKm / 6371.0088));
+        /** The flight graph over {origin} ∪ C ∪ {dest}: node positions, unit vectors, and each node's flyable
+         *  neighbours (wind + divert reserve) through a grid of reach-sized cells. */
+        function graph(C) {
+            const N = C.length, ORIG = 0, DEST = N + 1;
+            const pos  = (i) => i === ORIG ? O : i === DEST ? D : C[i - 1].ap;
+            const obj  = (i) => i === ORIG ? origin : i === DEST ? destination : C[i - 1].a;
+            const R = Math.PI / 180, ux = new Float64Array(N + 2), uy = new Float64Array(N + 2), uz = new Float64Array(N + 2);
+            for (let i = 0; i <= N + 1; i++) { const p = pos(i), la = p.lat * R, lo = p.lon * R; ux[i] = Math.cos(la) * Math.cos(lo); uy[i] = Math.cos(la) * Math.sin(lo); uz[i] = Math.sin(la); }
+            const cell = reachDeg, nLon = Math.max(1, Math.ceil(360 / cell)), grid = new Map();
+            const cy = (lat) => Math.floor((lat + 90) / cell), cx = (lon) => ((Math.floor((((lon + 180) % 360) + 360) % 360 / cell)) % nLon);
+            for (let j = 1; j <= N; j++) { const p = pos(j), key = cy(p.lat) * nLon + cx(p.lon); let b = grid.get(key); if (!b) grid.set(key, b = []); b.push(j); }
+            /** fn(j, d) for every node j ≠ i a leg from i can fly to (d = great-circle km); `skip(j)` prunes before any maths. */
+            function eachLeg(i, skip, fn) {
+                const from = pos(i), test = (j) => {
+                    if (skip(j) || ux[i] * ux[j] + uy[i] * uy[j] + uz[i] * uz[j] < cosReach - 1e-12) return;   // beyond any leg's reach: no trig
+                    const d = haversineKm(from, pos(j));
+                    if (d > reachKm || legNeed(from, obj(i), pos(j), obj(j), d) > maxLeg) return;   // not flyable incl. wind + divert reserve
+                    fn(j, d);
+                };
+                // the widest longitude gap a leg of reachKm can span at the poleward edge of the window (exact on the sphere)
+                const cosLat = Math.cos(Math.min(90, Math.abs(from.lat) + reachDeg) * Math.PI / 180), sh = Math.sin(reachKm / 6371.0088 / 2) / Math.max(cosLat, 1e-9);
+                const lonWin = sh >= 1 ? 360 : 2 * Math.asin(sh) * 180 / Math.PI + 1e-6;
+                const y0 = cy(from.lat), x0 = cx(from.lon), dx = lonWin >= 180 ? Math.ceil(nLon / 2) : Math.ceil(lonWin / cell);
+                const xs = new Set(); for (let k = -dx; k <= dx; k++) xs.add(((x0 + k) % nLon + nLon) % nLon);
+                for (let y = y0 - 1; y <= y0 + 1; y++) for (const x of xs) { const b = grid.get(y * nLon + x); if (b) for (const j of b) if (j !== i) test(j); }
+                if (i !== DEST) test(DEST);
+            }
+            return { N, ORIG, DEST, pos, obj, eachLeg };
+        }
+        /** Can the destination be reached at all through C? One flood fill: reachability doesn't depend on the corridor
+         *  width (C is the widest) or on the type preference, so an impossible route is answered once, not re-searched. */
+        function reachable(C) {
+            const G = graph(C), seen = new Uint8Array(G.N + 2), stack = [G.ORIG]; seen[G.ORIG] = 1;
+            while (stack.length) { const i = stack.pop(); if (i === G.DEST) return true;
+                G.eachLeg(i, (j) => seen[j] === 1, (j) => { seen[j] = 1; stack.push(j); }); }
+            return false;
+        }
         function searchWith(typePen) {
             function astar(C) {
-                const N = C.length, ORIG = 0, DEST = N + 1;
-                const pos  = (i) => i === ORIG ? O : i === DEST ? D : C[i - 1].ap;
+                const G = graph(C), N = G.N, ORIG = G.ORIG, DEST = G.DEST, pos = G.pos;
                 const type = (i) => (i === ORIG || i === DEST) ? null : C[i - 1].a.type;
-                const obj  = (i) => i === ORIG ? origin : i === DEST ? destination : C[i - 1].a;
                 const g    = new Array(N + 2).fill(Infinity);   // best cost origin→i
                 const came = new Array(N + 2).fill(-1);
                 const done = new Array(N + 2).fill(false);
+                // binary min-heap on f
+                const heap = [], push = (e) => { heap.push(e); let k = heap.length - 1; while (k) { const p = (k - 1) >> 1; if (heap[p].f <= e.f) break; heap[k] = heap[p]; k = p; } heap[k] = e; };
+                const pop = () => { const top = heap[0], last = heap.pop(), n = heap.length; if (n) { let k = 0;
+                    for (;;) { const l = 2 * k + 1, r = l + 1; let m = k, fm = last.f;
+                        if (l < n && heap[l].f < fm) { m = l; fm = heap[l].f; } if (r < n && heap[r].f < fm) m = r;
+                        if (m === k) break; heap[k] = heap[m]; k = m; }
+                    heap[k] = last; } return top; };
                 g[ORIG] = 0;
-                const open = [{ i: ORIG, f: direct }];          // f = g + straight-line-to-dest (admissible)
-                while (open.length) {
-                    let b = 0; for (let k = 1; k < open.length; k++) if (open[k].f < open[b].f) b = k;
-                    const i = open.splice(b, 1)[0].i;
+                // f = g + h: h = the straight line to the destination + the stop penalties the stops still ahead must pay
+                // (at least ⌈h · fBest / maxLeg⌉ − 1 of them): still a lower bound, so the route is the same, found sooner
+                const h = (km) => km + Math.max(0, Math.ceil(km * fBest / maxLeg - 1e-9) - 1) * options.stopPenaltyKm;
+                push({ i: ORIG, f: h(direct) });
+                while (heap.length) {
+                    const i = pop().i;
                     if (done[i]) continue;                       // stale duplicate
                     if (i === DEST) break;                       // optimal path to dest is finalised
                     done[i] = true;
-                    const from = pos(i);
-                    const relax = (j) => {
-                        if (done[j]) return;
-                        const d = haversineKm(from, pos(j));
-                        if (legNeed(from, obj(i), pos(j), obj(j), d) > maxLeg) return;   // not flyable incl. wind + divert reserve
+                    G.eachLeg(i, (j) => done[j], (j, d) => {
                         const pen = (j === DEST) ? 0 : options.stopPenaltyKm + (typePen[type(j)] || 0);
                         const t = g[i] + d + pen;
-                        if (t < g[j]) { g[j] = t; came[j] = i; open.push({ i: j, f: t + haversineKm(pos(j), D) }); }
-                    };
-                    for (let j = 1; j <= N; j++) relax(j);
-                    relax(DEST);
+                        if (t < g[j]) { g[j] = t; came[j] = i; push({ i: j, f: t + h(haversineKm(pos(j), D)) }); }
+                    });
                 }
                 if (g[DEST] === Infinity) return null;
 
@@ -245,6 +287,10 @@ window.CNSRouting = (function () {
         // a "prefer medium" search would otherwise push past the stop cap). The preference still
         // wins whenever it yields a route within maxStops.
         const tooMany = (b) => !!b && (b.order.length - 2) > options.maxStops;
+        if (!reachable(candidates(options.detourCap * WIDEN[WIDEN.length - 1]))) {
+            return { stops: [], totalDistanceKm: 0, legCount: 0,
+                error: 'No reachable route with the current filter — enable more airport types or pick a longer-range aircraft.' };
+        }
         let best = searchWith(typePen);
         if (Object.values(typePen).some(v => v > 0) && (!best || tooMany(best))) {
             const fallback = searchWith({});   // pure distance, no per-type penalty

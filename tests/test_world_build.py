@@ -65,8 +65,9 @@ class GeneratedWorldSet(unittest.TestCase):
         eu = set(pd.read_csv(os.path.join(REPO_ROOT, "european_airports.csv"), usecols=["ident"])["ident"])
         world = set(pd.read_csv(os.path.join(REPO_ROOT, "world_airports.csv"), usecols=["ident"], keep_default_na=False)["ident"])
         missing = sorted(eu - world)
-        # OurAirports retires a few idents between dumps; saved networks keep their own coordinates.
-        self.assertLess(len(missing), len(eu) * 0.01, f"{len(missing)} European idents missing, e.g. {missing[:10]}")
+        # prepare_world.py carries retired European idents over, so the server resolves everything the classic,
+        # mobile and saved networks know
+        self.assertEqual(missing, [], f"{len(missing)} European idents missing from the world set")
 
     def test_the_feed_matches_the_csv(self):
         with open(os.path.join(REPO_ROOT, "static", "geo", "airports-world.json"), encoding="utf-8") as fh:

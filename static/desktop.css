@@ -612,3 +612,4 @@ body.proto .drawer.open{height:var(--tl-h,40vh)}
 .cnsgl-tip.leaflet-tooltip{margin-top:-6px}
 .rg-lbl{background:none;border:none}
 .map-nogl{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);max-width:420px;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);font-size:13px;color:var(--ink);text-align:center}
+.maplibregl-popup{z-index:2000}   /* above every marker, as Leaflet's popup pane (700) sat above the pins */
