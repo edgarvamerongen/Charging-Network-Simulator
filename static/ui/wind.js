@@ -53,6 +53,15 @@
       const c = m.getCenter(), cosd = Math.sin(c.lat * R) * Math.sin(p.lat * R) + Math.cos(c.lat * R) * Math.cos(p.lat * R) * Math.cos((p.lng - c.lng) * R);
       return cosd > Math.cos(80 * R);
     }
+    const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    // Where the drift says nothing and draws oddly, it fades out: towards the poles (a compass bearing fans into a star
+    // there) and towards the globe's rim (streaks foreshorten and stretch).
+    function edgeFade(m, p) {
+      const pole = 1 - smooth(65, 78, Math.abs(p.lat));
+      if (m.getZoom() >= 5 || pole <= 0) return pole;
+      const c = m.getCenter(), arc = Math.acos(Math.max(-1, Math.min(1, Math.sin(c.lat * R) * Math.sin(p.lat * R) + Math.cos(c.lat * R) * Math.cos(p.lat * R) * Math.cos((p.lng - c.lng) * R)))) / R;
+      return pole * (1 - smooth(55, 75, arc));
+    }
     function size() { const m = document.getElementById('map'); if (!cv || !m) return; const r = m.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px'; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
     // A new streak at a random point of the map. On the globe a screen point off the sphere unprojects to its rim, so a
     // spawn counts only when it projects back to (about) where it was picked.
@@ -82,8 +91,9 @@
         const q = dest(p, to, v / pxPerKm); p.lat = q.lat; p.lng = q.lng;
         const head = m.latLngToContainerPoint(p);
         if (p.a > 120 || !visible(m, p) || head.x < -20 || head.x > W + 20 || head.y < -20 || head.y > H + 20) { spawn(p, m, W, H); continue; }
+        const edge = edgeFade(m, p); if (edge <= 0.01) { if (Math.abs(p.lat) > 78) spawn(p, m, W, H); continue; }
         const tail = m.latLngToContainerPoint(dest(p, (to + 180) % 360, L / pxPerKm));
-        const fade = Math.sin(Math.PI * p.a / 120);   // each streak fades in and out over its short life
+        const fade = Math.sin(Math.PI * p.a / 120) * edge;   // each streak fades in and out over its short life, and near poles/rim
         ctx.strokeStyle = `rgba(50,50,110,${(0.38 * fade).toFixed(3)})`;
         ctx.beginPath(); ctx.moveTo(head.x, head.y); ctx.lineTo(tail.x, tail.y); ctx.stroke();
       }
