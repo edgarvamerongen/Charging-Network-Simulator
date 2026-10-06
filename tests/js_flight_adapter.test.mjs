@@ -54,6 +54,18 @@ test('chargeEnergyAt: multi-leg maps by chargeIdx, single-leg by role; null-safe
   assert.equal(S.CNSFlight.chargeEnergyAt(null, { t: {}, role: 'dest' }), null);
 });
 
+test('chargeEnergyAt: the stored charges skip 0 kWh landings; match by leg index + airport, not position', () => {
+  // A circuit O -> EHRD -> EHWO -> O lands twice with battery to spare: the profile lists three charges,
+  // the stored trip only the home recharge (recompute keeps energy > 0). chargeIdx 0 must read the 469 kWh.
+  const prof = { charges: [{ ident: 'EHRD', atIndex: 1, energyKwh: 0 }, { ident: 'EHWO', atIndex: 2, energyKwh: 0 }, { ident: 'EHLE', atIndex: 3, energyKwh: 469 }] };
+  const t = { multiLeg: true, charges: [{ ident: 'EHLE', at_index: 3, energy_kwh: 469 }] };
+  assert.equal(S.CNSFlight.chargeEnergyAt(prof, { t, chargeIdx: 0 }), 469);
+  // a stored charge with no matching leg index still finds its airport
+  assert.equal(S.CNSFlight.chargeEnergyAt(prof, { t: { multiLeg: true, charges: [{ ident: 'EHLE' }] }, chargeIdx: 0 }), 469);
+  // a zero-energy landing contribution (no chargeIdx) reads nothing
+  assert.equal(S.CNSFlight.chargeEnergyAt(prof, { t, role: 'stop', noCharge: true }), null);
+});
+
 test('profileForTrip returns null for an old save without coords (caller handles null)', () => {
   assert.equal(S.CNSFlight.profileForTrip({ planeId: 'beta_plane', battery: 225, range_km: 600 }, { getTargetSoc: getT }), null);
 });

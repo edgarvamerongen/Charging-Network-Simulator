@@ -5,9 +5,12 @@
  * A build blob is { v:1, k:'build', fl:[...flights...], cfg, sch, ms }, stored
  * verbatim by the existing /api/share slug store. Per flight we keep only the
  * INPUTS (plane, charger, trip type, frequency, origin/destination/stops). The
- * computed energies are deliberately dropped and recomputed on open via
- * /api/simulate, so a shared build never goes stale when the catalog or model
- * changes — the same philosophy as the single-route share re-planning its stops.
+ * computed energies are deliberately dropped and recomputed on open, so a shared
+ * build never goes stale when the catalog or model changes. The v2 shell rebuilds
+ * each flight with the browser engine (applyBuild's `local` lookups + its own
+ * recompute), so whatever the planner can plan survives a link (a circuit with no
+ * intermediate stop, a waypoints route); without them it re-simulates via
+ * /api/simulate as before.
  *
  * Browser globals (CNSDemand, CNSState, CNSShare, CNSSettings, CNSFlightEntry,
  * renderFolder) are read LAZILY inside functions and typeof-guarded, so loading
@@ -44,6 +47,12 @@ window.CNSBuildShare = (function () {
                 .map((s) => _pt(s.ident, s.name, s.lat, s.lon))
                 .filter((s) => s.la != null && s.lo != null);
             if (stops.length) rec.s = stops;
+            // Planner-side inputs the route can't be rebuilt without: the aircraft-per-flight choice, a
+            // charger pin, a circular's named far point, and a waypoints route's turning points.
+            if (t.fleetMode) rec.fm = t.fleetMode;
+            if (t.chargerOverride) rec.po = t.chargerOverride;
+            if (t.namedDestIdent) rec.nd = t.namedDestIdent;
+            if (t.custom) rec.cu = { lv: t.legVias || [], cl: !!t.closed, pts: t.customPoints || [] };
             return rec;
         });
 
@@ -96,15 +105,39 @@ window.CNSBuildShare = (function () {
         return entry;
     }
 
-    // Restore a build blob: settings first, then re-simulate every flight in
-    // parallel, replace the folder, and reapply per-airport config + schedule.
-    async function applyBuild(st, _fetch) {
+    // A stored flight's inputs → a folder entry built in the browser (no server round-trip). The caller's
+    // recompute fills charges/legs/feasibility with the same engine the planner uses. null = unknown aircraft.
+    function _entryFromSpec(fl, local) {
+        const plane = local.planeById(fl.p); if (!plane) return null;
+        const ch = local.chargerById(fl.c) || {};
+        const wp = (p) => ({ ident: p.i, name: p.n, lat: p.la, lon: p.lo });
+        const o = wp(fl.o), d = fl.d ? wp(fl.d) : o, stops = (fl.s || []).map((p) => ({ ...wp(p), _manual: true }));
+        const e = {
+            id: fl.id, tripType: fl.t, freqN: fl.fn, freqUnit: fl.fu, fleetMode: fl.fm || 'separate',
+            originIdent: o.ident, originName: o.name, originLat: o.lat, originLon: o.lon,
+            destIdent: d.ident, destName: d.name, destLat: d.lat, destLon: d.lon,
+            planeName: plane.name, planeId: plane.id, planeSvg: plane.svg, battery: plane.battery_kwh,
+            range_km: plane.range_km, speed_kmh: plane.speed_kmh,
+            chargerId: fl.c, chargerName: ch.name, chargerPower: ch.power_kw,
+            multiLeg: fl.t === 'circular' || stops.length > 0, stops, charges: [], legs: [],
+        };
+        if (fl.po) e.chargerOverride = fl.po;
+        if (fl.nd) e.namedDestIdent = fl.nd;
+        if (fl.cu) Object.assign(e, { custom: true, legVias: fl.cu.lv || [], closed: !!fl.cu.cl, customPoints: fl.cu.pts || [] });
+        return e;
+    }
+
+    // Restore a build blob: settings first, then rebuild every flight (in the browser when
+    // `local` = { planeById, chargerById } is given, else via /api/simulate in parallel),
+    // replace the folder, and reapply per-airport config + schedule.
+    async function applyBuild(st, _fetch, local) {
         if (!st || st.k !== 'build') return { restored: 0, dropped: 0 };
         if (st.ms && typeof CNSSettings !== 'undefined' && CNSSettings.save) {
             try { CNSSettings.save(st.ms); } catch (e) { /* ignore */ }
         }
         const specs = Array.isArray(st.fl) ? st.fl : [];
-        const entries = await Promise.all(specs.map((fl) => _restoreFlight(fl, _fetch)));
+        const entries = (local && local.planeById) ? specs.map((fl) => _entryFromSpec(fl, local))
+            : await Promise.all(specs.map((fl) => _restoreFlight(fl, _fetch)));
         const ok = entries.filter(Boolean);
         const dropped = specs.length - ok.length;
 
@@ -144,5 +177,5 @@ window.CNSBuildShare = (function () {
         return url;
     }
 
-    return { currentBuild, applyBuild, copyBuildLink, _simPayload, SCHEMA };
+    return { currentBuild, applyBuild, copyBuildLink, _simPayload, _entryFromSpec, SCHEMA };
 })();

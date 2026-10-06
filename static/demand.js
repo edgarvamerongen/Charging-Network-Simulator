@@ -76,9 +76,10 @@ window.CNSDemand = (function () {
                 // arrives with different remaining battery each time.)
                 const nStops = (t.stops || []).length;
                 const turnIdx = (t.tripType === 'retour' || t.tripType === 'circular') ? nStops + 1 : null;
+                const hit = new Set();
                 t.charges.forEach((c, idx) => {
                     if (!c) return;   // keep real charge events even if they lack an ident — ensure() keys them by name/coords instead of dropping them
-                    const a = ensure(c.ident, c.name, c.lat, c.lon);
+                    const a = ensure(c.ident, c.name, c.lat, c.lon); hit.add(a.ident);
                     const isReturnVisit = (turnIdx !== null) && (Number(c.at_index) > turnIdx);
                     const other =
                         c.role === 'home' ? t.destName :
@@ -92,6 +93,18 @@ window.CNSDemand = (function () {
                         direction: isReturnVisit ? 'back' : 'out'
                     });
                 });
+                // Every airport the route LANDS at is in the network, charged there or not. The stored charges
+                // keep energy > 0 only (recompute.js), so a stop reached with battery to spare would otherwise
+                // vanish from the airport list while the map draws it. It gets a zero-energy contribution.
+                const homing = t.tripType === 'retour' || t.tripType === 'circular';
+                [...(homing ? [{ ident: t.originIdent, name: t.originName, lat: t.originLat, lon: t.originLon, role: 'home' }] : []),
+                 ...(t.stops || []).map(s => s && { ident: s.ident, name: s.name, lat: s.lat, lon: s.lon, role: 'stop' }),
+                 { ident: t.destIdent, name: t.destName, lat: t.destLat, lon: t.destLon, role: t.destIdent === t.originIdent ? 'home' : 'dest' }]
+                    .forEach(n => {
+                        if (!n || !n.ident || hit.has(n.ident) || (!homing && n.ident === t.originIdent)) return;
+                        hit.add(n.ident);
+                        ensure(n.ident, n.name, n.lat, n.lon).contribs.push({ t, role: n.role, other: `${t.originName} → ${t.destName}`, base: 0, noCharge: true });
+                    });
                 // A one-way departure leaves FULL, so it contributes no CHARGING
                 // (the charge is attributed where the plane last landed — a 'dest'
                 // contribution — and adding one here would double-count). It still

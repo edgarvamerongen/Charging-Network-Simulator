@@ -176,6 +176,34 @@ test('applyBuild tags restored multi-leg stops _manual so recompute keeps them',
     'every restored stop must be tagged _manual');
 });
 
+test('currentBuild keeps the planner-side inputs (fleet mode, charger pin, named far point, waypoints)', () => {
+  const folder = [{ ...FOLDER[0], fleetMode: 'shared', chargerOverride: 'dc_1000', namedDestIdent: 'EDDF',
+    custom: true, legVias: [[{ lat: 53.2, lon: 4.1 }]], closed: true, customPoints: [{ kind: 'wp', lat: 53.2, lon: 4.1 }] }];
+  const r = load(stubs(folder, {}, {}, undefined)).currentBuild().fl[0];
+  assert.equal(r.fm, 'shared'); assert.equal(r.po, 'dc_1000'); assert.equal(r.nd, 'EDDF');
+  assert.deepEqual(JSON.parse(JSON.stringify(r.cu)), { lv: [[{ lat: 53.2, lon: 4.1 }]], cl: true, pts: [{ kind: 'wp', lat: 53.2, lon: 4.1 }] });
+});
+
+test('applyBuild with local lookups rebuilds in the browser: no fetch, a stop-less circuit survives, waypoints come back', async () => {
+  const saved = {};
+  const s = stubs([], {}, {}, undefined);
+  s.CNSDemand = { loadFolder: () => [], loadCfg: () => ({}), saveFolder: (f) => { saved.folder = f; }, saveCfg: () => {} };
+  s.CNSState = { KEYS: { sched: 'cns_schedule' }, getJSON: (k, d) => d, setJSON: () => {} };
+  const B = load(s);
+  const local = { planeById: (id) => (id === 'beta_alia' ? { id, name: 'Alia CX300', battery_kwh: 200, range_km: 400, speed_kmh: 250 } : null), chargerById: (id) => ({ id, name: 'DC 320', power_kw: 320 }) };
+  const st = { v: 1, k: 'build', fl: [
+    { id: 'c1', p: 'beta_alia', c: 'dc_320', t: 'circular', fn: 1, fu: 'day', o: { i: 'EHLE', la: 52.45, lo: 5.51, n: 'Lelystad' }, d: { i: 'EDDG', la: 52.13, lo: 7.69, n: 'Munster' } },
+    { id: 'w1', p: 'beta_alia', c: 'dc_320', t: 'circular', fn: 2, fu: 'day', fm: 'shared', o: { i: 'EHKD', la: 52.92, lo: 4.78, n: 'De Kooy' }, d: { i: 'EHKD', la: 52.92, lo: 4.78, n: 'De Kooy' },
+      cu: { lv: [[{ lat: 53.5, lon: 4.2 }]], cl: true, pts: [{ kind: 'wp', lat: 53.5, lon: 4.2 }] } },
+    { id: 'x1', p: 'gone_plane', c: 'dc_320', t: 'retour', fn: 1, fu: 'day', o: { i: 'EHLE', la: 52.45, lo: 5.51 }, d: { i: 'EHAM', la: 52.31, lo: 4.76 } },
+  ] };
+  const res = await B.applyBuild(st, async () => { throw new Error('no fetch in the local path'); }, local);
+  assert.deepEqual(JSON.parse(JSON.stringify(res)), { restored: 2, dropped: 1 });
+  const [c, w] = saved.folder;
+  assert.equal(c.tripType, 'circular'); assert.equal(c.multiLeg, true); assert.equal(c.destIdent, 'EDDG'); assert.equal(c.chargerPower, 320); assert.equal(c.range_km, 400);
+  assert.equal(w.custom, true); assert.equal(w.closed, true); assert.equal(w.fleetMode, 'shared'); assert.equal(w.legVias[0][0].lat, 53.5);
+});
+
 test('copyBuildLink refuses an empty folder', async () => {
   const toasts = [];
   const s = stubs([], {}, {}, undefined);

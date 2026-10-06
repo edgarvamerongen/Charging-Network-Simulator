@@ -21,7 +21,7 @@
   }
   async function applyState(st) {
     if (!st) return false;
-    if (st.k === 'build' && window.CNSBuildShare) { await CNSBuildShare.applyBuild(st); UI.folderChanged(); UI.setMode('network'); UI.map.drawNet(); UI.map.fitNet(); UI.toast(`Build restored: ${CNSDemand.loadFolder().length} routes`); return true; }
+    if (st.k === 'build' && window.CNSBuildShare) { await CNSBuildShare.applyBuild(st, null, { planeById: id => UI.PLANES.find(p => p.id === id), chargerById: id => (window.CHARGERS_BY_ID || {})[id] }); UI.network.recomputeAll(); UI.folderChanged(); UI.setMode('network'); UI.map.drawNet(); UI.map.fitNet(); UI.toast(`Build restored: ${CNSDemand.loadFolder().length} routes`); return true; }
     if (st.v == null) return false;
     const by = UI.byId();
     if (st.a && UI.PLANES.find(p => p.id === st.a)) S.planeId = st.a;

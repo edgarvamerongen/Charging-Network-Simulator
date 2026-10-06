@@ -325,9 +325,12 @@ window.CNSFlight = (function () {
     function chargeEnergyAt(profile, contrib) {
         if (!profile || !contrib) return null;
         const t = contrib.t || {};
+        // chargeIdx indexes the STORED charges, which keep energy > 0 only (recompute.js), while the profile
+        // lists every landing: match the stored charge's leg index + airport, not its position.
+        const pc = profile.charges || [], sc = (contrib.chargeIdx != null && Array.isArray(t.charges)) ? t.charges[contrib.chargeIdx] : null;
         const ch = t.multiLeg
-            ? (contrib.chargeIdx != null ? (profile.charges || [])[contrib.chargeIdx] : null)
-            : (profile.charges || []).find(x => x.role === contrib.role);
+            ? (contrib.chargeIdx == null ? null : sc ? (pc.find(x => x.atIndex === sc.at_index && x.ident === sc.ident) || (pc[contrib.chargeIdx] && pc[contrib.chargeIdx].ident === sc.ident ? pc[contrib.chargeIdx] : null) || pc.find(x => x.ident === sc.ident)) : pc[contrib.chargeIdx])
+            : pc.find(x => x.role === contrib.role);
         return ch ? ch.energyKwh : null;
     }
 

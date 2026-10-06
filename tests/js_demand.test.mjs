@@ -103,6 +103,24 @@ test('computeAirports: a RETOUR origin is still home (charges), not an origin ta
   D.saveFolder([]);
 });
 
+test('computeAirports: every LANDING is listed, a stop reached with battery to spare as a 0 kWh contribution', () => {
+  // Circuit EHLE -> EHRD -> EHWO -> EHLE: only the home recharge is stored (recompute keeps energy > 0),
+  // yet the aircraft lands at EHRD and EHWO, so both belong in the network (the map draws them).
+  D.saveFolder([{
+    multiLeg: true, tripType: 'circular',
+    originIdent: 'EHLE', originName: 'Lelystad', originLat: 52.45, originLon: 5.51,
+    destIdent: 'EHWO', destName: 'Woensdrecht', destLat: 51.45, destLon: 4.34,
+    stops: [{ ident: 'EHRD', name: 'Rotterdam', lat: 51.96, lon: 4.44 }],
+    charges: [{ ident: 'EHLE', name: 'Lelystad', lat: 52.45, lon: 5.51, role: 'home', at_index: 3, energy_kwh: 469 }],
+  }]);
+  const ap = D.computeAirports();
+  assert.deepEqual(Object.keys(ap).sort(), ['EHLE', 'EHRD', 'EHWO']);
+  assert.equal(ap.EHLE.contribs.length, 1, 'home is listed once (its charge), no extra zero entry');
+  assert.equal(ap.EHRD.contribs[0].role, 'stop'); assert.equal(ap.EHRD.contribs[0].base, 0); assert.equal(ap.EHRD.contribs[0].noCharge, true);
+  assert.equal(ap.EHWO.contribs[0].role, 'dest'); assert.equal(ap.EHWO.contribs[0].base, 0);
+  D.saveFolder([]);
+});
+
 // ---- computeAirports: a missing ident must NOT swallow other airports ------
 // Airports are keyed by ident; if two arrive with a blank ident they used to
 // collapse onto one empty key (first-write-wins) and the rest vanished. The
