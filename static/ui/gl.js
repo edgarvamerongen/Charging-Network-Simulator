@@ -197,7 +197,14 @@ window.CNSGL = (function () {
       const c = B._calc(), opts = { padding: pad, animate: !!o.animate, duration: o.animate ? 450 : 0 };
       if (o.maxZoom != null) opts.maxZoom = o.maxZoom - Z;
       if (c.n - c.s < 1e-6 && c.e - c.w < 1e-6) { this.ml.jumpTo({ center: [c.w, c.s], zoom: opts.maxZoom != null ? opts.maxZoom : this.ml.getZoom() }); return this; }   // one point: zoom in to maxZoom, as Leaflet does
-      this.ml.fitBounds([[c.w, c.s], [c.e, c.n]], opts); return this;
+      // Not ml.fitBounds: animated, that is a fly-to, which on the globe arcs out to whole-world zoom mid-flight and,
+      // if anything interrupts it (another fit, a re-render, a scroll), leaves the map stranded there. Compute the
+      // camera and glide straight to it (or jump), as Leaflet's fit did.
+      const cam = this.ml.cameraForBounds([[c.w, c.s], [c.e, c.n]], { padding: pad, maxZoom: opts.maxZoom });
+      if (!cam) return this;   // nothing to fit into: leave the view as it is rather than guess
+      const to = { center: cam.center, zoom: cam.zoom, bearing: 0, pitch: 0 };
+      if (o.animate) this.ml.easeTo(Object.assign(to, { duration: 450 })); else this.ml.jumpTo(to);
+      return this;
     }
     // globe
     setGlobe(on) { this._globe = !!on; if (this._ready) this._applyProjection(); return this; }
