@@ -110,6 +110,7 @@
       ${UI.PROTO ? sizingHtml(a) : ''}
       <div class="lbl" style="margin-top:10px"><span class="cap">Chargers</span><button class="lnk" data-act="fleetAdd" data-ap="${a.ident}">+ Add charger</button></div>
       <div class="fleet">${a.fleetIds.map((id, i) => `<span class="slot"><select class="sel" data-act="fleetSel" data-ap="${a.ident}" data-i="${i}">${opts.map(c => `<option value="${c.id}" ${c.id === id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>${a.fleetIds.length > 1 ? `<button class="rm" data-act="fleetRm" data-ap="${a.ident}" data-i="${i}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button>` : ''}</span>`).join('')}</div>
+      ${gridLimitHtml(a)}
       <div class="lbl" style="margin-top:10px"><span class="cap">Charge target</span><button class="chip" data-act="socToggle" data-ap="${a.ident}">${socPct == null ? 'auto' : 'at least ' + socPct + ' %'}</button></div>
       ${S.socOpen[a.ident] ? `<div class="socp"><label><input type="radio" name="soc-${a.ident}" value="auto" data-act="socMode" data-ap="${a.ident}" ${socPct == null ? 'checked' : ''}> Auto (the global charge target)</label><label><input type="radio" name="soc-${a.ident}" value="target" data-act="socMode" data-ap="${a.ident}" ${socPct != null ? 'checked' : ''}> Charge to at least <b class="num">${socPct != null ? socPct : 80} %</b></label><input type="range" min="20" max="100" step="5" value="${socPct != null ? socPct : 80}" data-act="socSlider" data-ap="${a.ident}" ${socPct == null ? 'disabled' : ''}></div>` : ''}
       <div class="lbl" style="margin-top:12px"><span class="cap">Flights</span><button class="lnk" data-act="replay" data-ap="${a.ident}">View flights on map</button></div>
@@ -146,6 +147,19 @@
   function syncHighlight() { if (UI.map && UI.map.drawNet) UI.map.drawNet(); }   // drawNet rings the selected airport
 
   // ---- cfg + folder edits ----
+  /** Grid limit (smart charging): the connection's kW cap at this airport. Empty = no limit. With a limit the
+      charges share it (CNSScheduler dispatch); the line under it says what that costs, or that the switch is off. */
+  function gridLimitHtml(a) {
+    const lim = +((a.cfg || {}).gridLimitKw) || null, inst = a.fleet.reduce((s, c) => s + (+c.power_kw || 0), 0) * (a.gridMul || 1);
+    const sm = lim && SC() && SC().smartAt ? SC().smartAt(a.ident) : null;
+    const note = !lim ? `installed ${UI.fmt.kw(inst)}${a.peak ? ' · peak ' + UI.fmt.kw(a.peak) : ''}`
+      : !sm.enabled ? '<span class="off">Smart charging is off: the limit is not applied</span>'
+      : lim >= inst ? `above the installed ${UI.fmt.kw(inst)}: never binds`
+      : sm.addedMin >= 0.5 ? `smart charging: peak ${UI.fmt.kw(sm.freePeakKw * (a.gridMul || 1))} → ${UI.fmt.kw(a.peak)}, charging +${UI.fmt.min(sm.addedMin)} / day`
+      : `smart charging: the peak stays under it, no flight slowed`;
+    return `<div class="lbl glim-row" style="margin-top:10px"><span class="cap">Grid limit</span><span class="glim"><input type="number" min="0" step="10" placeholder="none" value="${lim || ''}" data-act="gridLimit" data-ap="${a.ident}" aria-label="Grid limit in kW at ${a.ident}"><small>kW</small></span></div>
+      <div class="glim-note num">${note}</div>`;
+  }
   const cfgPatch = (ap, patch) => { const c = D().loadCfg(); c[ap] = Object.assign({}, c[ap] || {}, patch); D().saveCfg(c); UI.folderChanged(); UI.render(); };
   function remove(id) { D().saveFolder(D().loadFolder().filter(t => t.id !== id)); UI.folderChanged(); UI.map.drawNet(); UI.render(); }
   function fleetOf(a) { const R = rows().find(x => x.ident === a); return R ? R.fleetIds.slice() : []; }
@@ -257,6 +271,7 @@
     if (t.dataset.act === 'waitOk') { S.waitOk = +t.value; UI.render(); }
     if (t.dataset.act === 'fleetSel') { const ids = fleetOf(t.dataset.ap); ids[+t.dataset.i] = t.value; cfgPatch(t.dataset.ap, { chargers: ids }); }
     if (t.dataset.act === 'socMode') { if (t.value === 'auto') { const c = D().loadCfg(); c[t.dataset.ap] = Object.assign({}, c[t.dataset.ap] || {}); delete c[t.dataset.ap].targetDepartureSoc; delete c[t.dataset.ap].fullCharge; D().saveCfg(c); UI.folderChanged(); UI.render(); } else { const sl = $(`[data-act=socSlider][data-ap="${t.dataset.ap}"]`); cfgPatch(t.dataset.ap, { targetDepartureSoc: (+(sl ? sl.value : 80)) / 100, fullCharge: undefined }); } }
+    if (t.dataset.act === 'gridLimit') { const v = Math.max(0, Math.round(+t.value || 0)); cfgPatch(t.dataset.ap, { gridLimitKw: v || undefined }); UI.map.drawNet(); }
     if (t.dataset.act === 'socSlider') cfgPatch(t.dataset.ap, { targetDepartureSoc: (+t.value) / 100, fullCharge: undefined });
     if (t.dataset.act === 'tripFreq') { D().updateTrip(t.dataset.id, { freqN: Math.min(2000, Math.max(1, parseInt(t.value || '1', 10))) }); UI.folderChanged(); UI.render(); }
   });

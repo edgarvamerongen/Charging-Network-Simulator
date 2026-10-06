@@ -472,11 +472,8 @@ window.CNSScheduler = (function () {
         return best;
     }
 
-    function runGlobal() {
-        const stamp = _globalKey();
-        if (stamp === _globalStamp && _globalCache) return _globalCache;
-        _globalStamp = stamp;
-
+    // One schedule of the whole network (the plan: take-offs, charge order, bays).
+    function _simulate() {
         // 1. Build lanes (aircraft) with their canonical phase template. `desired`
         //    holds each rotation's FIXED take-off, or null where it is automatic.
         const lanes = [];
@@ -601,6 +598,7 @@ window.CNSScheduler = (function () {
                 phase.start = slot.start;             // ACTUAL charge start (queue wait already in)
                 phase.dur = slot.dur;                 // ACTUAL duration on the claimed charger(s)
                 phase.power = powerOn(slot.set);      // ACTUAL draw — used for peak
+                phase.bays = slot.set;                // which chargers (smart charging flies the plan on them)
                 phase.wait = phase.queue = slot.start - e.arrival;   // queue wait at THIS airport
                 phase._bk = slot.dur > 0 ? slot.set.map(i => _book(pool[i], slot.start, slot.start + slot.dur)) : [];
                 phase._ctx = { pool, bays, want, powerOn, durOf };   // to re-plan it (step 5)
@@ -641,7 +639,7 @@ window.CNSScheduler = (function () {
             rot.takeoff = bound;
             plan.forEach((slot, j) => {
                 const ph = P[idx[j]], c = ph._ctx;
-                ph.start = slot.start; ph.dur = slot.dur; ph.power = c.powerOn(slot.set);
+                ph.start = slot.start; ph.dur = slot.dur; ph.power = c.powerOn(slot.set); ph.bays = slot.set;
                 ph._bk = slot.dur > 0 ? slot.set.map(i => _book(c.pool[i], slot.start, slot.start + slot.dur)) : [];
             });
             const last = plan[plan.length - 1];
@@ -674,7 +672,128 @@ window.CNSScheduler = (function () {
             rot.end = t;
         }));
 
-        _globalCache = { lanes, pools };
+        return { lanes, pools };
+    }
+
+    // ---------- smart charging (dynamic load balancing under a grid limit) ----------
+    // An airport with a grid limit (cfg gridLimitKw, GRID side) never draws more than it. The planned day
+    // (the DES above: take-offs, charge order) is FLOWN forward in time under the limits: aircraft queue
+    // first come, first served for a free charger; at a limited airport the charges in progress share the
+    // limit equally, and one that needs less (its battery tapering) leaves the rest to the others
+    // (water-filling), in SMART_DT steps. A slowed charge holds its charger longer and delays everything
+    // after it on that aircraft (its next take-off, its arrivals elsewhere). Causal, so the draw never
+    // exceeds a limit and every charge still delivers exactly its energy. Off, or no limit = the plan.
+    const SMART_DT = 0.25;   // minutes per allocation step (15 s)
+    function gridLimits() {
+        const st = _rs() && CNSSettings.loadAll ? CNSSettings.loadAll().smartCharging : null;
+        if (!st || !st.enabled) return {};
+        const gm = (_rs() && CNSSettings.gridDemandFactor) ? CNSSettings.gridDemandFactor() : 1, out = {}, cfg = loadCfg();
+        // a limit at or above what the installed chargers can draw never binds: that airport flies the plan
+        Object.keys(cfg).forEach(id => { const g = +((cfg[id] || {}).gridLimitKw); if (!(g > 0)) return;
+            const inst = (getContext(id).fleetPowers || []).reduce((s, p) => s + (+p || 0), 0);
+            if (g / gm < inst - 1e-9) out[id] = { gridKw: g, kw: g / gm }; });
+        return out;   // kw: the aircraft-side limit (the grid also feeds the charger losses)
+    }
+    function _dispatch(plan, limits) {
+        // the flown day: the plan's lanes with fresh rotations (planned take-offs kept as the earliest departure)
+        const lanes = plan.lanes.map(L => ({ ...L, rotations: L.rotations.map(r => ({
+            planned: r.takeoff, takeoff: r.takeoff, end: r.end, fixed: r.fixed, tpl: r.tpl, plannedStarts: r.phases.map(p => p.start), plannedBays: r.phases.map(p => p.bays || null),
+            phases: r.tpl.ph.map(p => ({ kind: p.kind, ident: p.ident || null, atRole: p.at, start: 0, dur: p.dur, power: p.power || 0, energy: p.energy || 0,
+                atIdx: p.atIdx, label: p.label, wait: 0, queue: 0, slow: 0 })),
+        })) }));
+        const pools = {};
+        Object.keys(plan.pools).forEach(id => { pools[id] = plan.pools[id].map(b => ({ power: b.power, busy: false })); });
+        const queue = {}, active = {};   // per airport: waiting charges (arrival order), sharing sessions (limited airports)
+        const ev = [];                    // { t, seq, fn } by time, then insertion
+        let seq = 0;
+        const push = (t, fn) => { let lo = 0, hi = ev.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ev[m].t < t || (ev[m].t === t && ev[m].seq < seq)) lo = m + 1; else hi = m; } ev.splice(lo, 0, { t, seq: seq++, fn }); };
+        // what the battery accepts over the coming step, read at its middle (the taper falls as it fills)
+        const accAt = (x, e) => (_rs() && CNSSettings.acceptKw) ? CNSSettings.acceptKw(x.soc0 + e / Math.max(1e-9, x.B), x.P, x.B) : x.P;
+        const acc = (x) => accAt(x, x.e + accAt(x, x.e) * SMART_DT / 120);
+
+        function startPhase(li, k, pi, t) {
+            const L = lanes[li], rot = L.rotations[k];
+            if (pi >= rot.phases.length) {
+                rot.end = t;
+                if (k + 1 < L.rotations.length) { const nx = L.rotations[k + 1]; push(Math.max(nx.planned, t), tt => { nx.takeoff = tt; startPhase(li, k + 1, 0, tt); }); }
+                return;
+            }
+            const ph = rot.phases[pi], tp = rot.tpl.ph[pi];
+            if (ph.kind !== 'charge' || !(tp.dur > 0)) { ph.start = t; ph.dur = tp.dur || 0; push(t + ph.dur, tt => startPhase(li, k, pi + 1, tt)); return; }
+            // never before its planned start: the plan's own waits and charge order hold, so a limit that never
+            // binds flies the plan exactly; only a slowed charge moves anything
+            const notBefore = rot.plannedStarts[pi] != null ? rot.plannedStarts[pi] : t;
+            (queue[ph.ident] = queue[ph.ident] || []).push({ li, k, pi, arrival: t, notBefore });
+            if (notBefore > t + 1e-9) push(notBefore, tt => tryStart(ph.ident, tt)); else tryStart(ph.ident, t);
+        }
+        // Start every waiting charge that has its chargers free (in arrival order; a pinned one only on its pinned power).
+        function tryStart(id, t) {
+            const pool = pools[id] || (pools[id] = [{ power: 0, busy: false }]), q = queue[id] || [];
+            for (let n = 0; n < q.length; n++) {
+                const w = q[n], L = lanes[w.li], rot = L.rotations[w.k], tp = rot.tpl.ph[w.pi], ph = rot.phases[w.pi];
+                if (t < w.notBefore - 1e-9) { push(w.notBefore, tt => tryStart(id, tt)); continue; }   // (re)armed: a charger may free up before then
+                let bays = pool.map((_, i) => i);
+                const pinned = tp.forcedPower ? bays.filter(i => pool[i].power === tp.forcedPower) : [];
+                if (pinned.length) bays = pinned;
+                const want = Math.max(1, Math.min(L.nCh || 1, bays.length)), free = bays.filter(i => !pool[i].busy).sort((a, b) => pool[b].power - pool[a].power);
+                // the charger(s) the plan gave it, else free ones of the same power (never a faster one it wasn't planned on)
+                const pb = rot.plannedBays[w.pi], set = [];
+                if (pb && pb.length) { const left = free.slice(); pb.forEach(i => { const j = left.includes(i) ? i : left.find(f => pool[f].power === pool[i].power); if (j != null) { set.push(j); left.splice(left.indexOf(j), 1); } }); if (set.length < pb.length) continue; }
+                else { if (free.length < want) continue; set.push(...free.slice(0, want)); }
+                set.forEach(i => { pool[i].busy = true; });
+                q.splice(n, 1); n--;
+                const P = _effPower(set.reduce((s, i) => s + _effPower(pool[i].power, L.cap), 0), L.cap, L.maxKw);
+                ph.start = t; ph.wait = ph.queue = t - w.arrival; ph.power = P;
+                const ref = _chargeMin(tp.energy, P, L.cap, tp.arrivalFrac);   // the charge alone, at full power
+                const done = tt => { ph.dur = tt - ph.start; set.forEach(i => { pool[i].busy = false; }); startPhase(w.li, w.k, w.pi + 1, tt); tryStart(id, tt); };
+                if (!limits[id] || !(tp.energy > 0) || !(P > 0)) { push(t + ref, tt => { ph.dur = ref; done(tt); }); continue; }
+                (active[id] = active[id] || []).push({ ph, E: tp.energy, P, B: L.cap, ref, e: 0, series: [],
+                    soc0: tp.arrivalFrac != null ? tp.arrivalFrac : Math.max(0, 1 - tp.energy / Math.max(1e-9, L.cap)), done });
+            }
+        }
+        // Share each limited airport's power over [t, t + dt): equal shares, the smallest wants filled first.
+        function share(t, dt) {
+            Object.keys(active).forEach(id => {
+                const on = active[id]; if (!on.length) return;
+                const wants = on.filter(x => x.ph.start < t + dt).map(x => ({ x, w: acc(x) })).sort((a, b) => a.w - b.w);
+                let left = limits[id].kw, n = wants.length;
+                wants.forEach(q => { q.g = Math.min(q.w, left / n); left -= q.g; n--; });
+                wants.forEach(({ x, g }) => {
+                    const t0 = Math.max(t, x.ph.start), h = (t + dt - t0) / 60;
+                    if (!x.series.length || Math.abs(x.series[x.series.length - 1].kw - g) > 1e-6) x.series.push({ t: t0, kw: g });
+                    if (!(g > 0) || h <= 0) return;
+                    if (x.e + g * h >= x.E - 1e-9) {
+                        const tt = t0 + (x.E - x.e) / g * 60; x.e = x.E;
+                        on.splice(on.indexOf(x), 1); x.ph.series = x.series; const sl = (tt - x.ph.start) - x.ref; x.ph.slow = sl > 0.5 ? sl : 0;   // below half a minute it is the step, not the limit
+                        push(tt, x.done);
+                    } else x.e += g * h;
+                });
+            });
+        }
+        // planned first take-offs
+        lanes.forEach((L, li) => { if (L.rotations.length) { const r0 = L.rotations[0]; push(r0.planned, tt => { r0.takeoff = tt; startPhase(li, 0, 0, tt); }); } });
+        const anyActive = () => Object.keys(active).some(id => active[id].length);
+        const HORIZON = DAY_END + 2 * 24 * 60;
+        let t = ev.length ? Math.floor(ev[0].t / SMART_DT) * SMART_DT : 0;
+        while ((ev.length || anyActive()) && t < HORIZON) {
+            if (!anyActive() && ev.length && ev[0].t >= t + SMART_DT) t = Math.floor(ev[0].t / SMART_DT) * SMART_DT;   // nothing sharing: jump to the next event
+            // share the step first (its completions join the events), then take every event of the step in time
+            // order: a charger freed at 9:04.3 is free for the aircraft that arrives at 9:04.4
+            const tEnd = t + SMART_DT;
+            share(t, SMART_DT);
+            while (ev.length && ev[0].t < tEnd) { const e = ev.shift(); e.fn(e.t); }
+            t = tEnd;
+        }
+        return { lanes, pools: plan.pools };
+    }
+
+    function runGlobal() {
+        const stamp = _globalKey();
+        if (stamp === _globalStamp && _globalCache) return _globalCache;
+        _globalStamp = stamp;
+        const free = _simulate(), limits = gridLimits();
+        const g = Object.keys(limits).length ? _dispatch(free, limits) : free;
+        _globalCache = { lanes: g.lanes, pools: g.pools, free, smart: { limits } };
         return _globalCache;
     }
 
@@ -714,7 +833,7 @@ window.CNSScheduler = (function () {
                         rel.push({
                             kind: ph.kind,
                             atX: ph.kind === 'charge' && ph.ident === ident,
-                            start: relStart, dur: ph.dur, power: ph.power, energy: ph.energy,
+                            start: relStart, dur: ph.dur, power: ph.power, energy: ph.energy, slow: ph.slow || 0,
                             atIdx: ph.atIdx, label: ph.label,
                         });
                     });
@@ -730,21 +849,34 @@ window.CNSScheduler = (function () {
     // charge start and end and following each taper minute by minute. The sum only rises when a
     // charge starts, so its maximum IS the coincident peak: every printed peak comes from here.
     // ponytail: O(points × charges), fine for a day of a few hundred charges; sweep if that grows.
-    function loadCurve(ident) {
-        const ch = [];
-        runGlobal().lanes.forEach(L => L.rotations.forEach(rot => rot.phases.forEach((ph, i) => {
+    // Where smart charging shared a grid limit, a charge draws what it was given (ph.series); `opts.free`
+    // reads the same day without smart charging (the demand it shaved).
+    function loadCurve(ident, opts) {
+        const ch = [], g = runGlobal();
+        ((opts && opts.free) ? g.free : g).lanes.forEach(L => L.rotations.forEach(rot => rot.phases.forEach((ph, i) => {
             if (ph.kind !== 'charge' || !(ph.dur > 0) || !ph.power || (ident && ph.ident !== ident)) return;
-            const soc = (rot.tpl.ph[i] || {}).arrivalFrac;
-            ch.push({ s: ph.start, e: ph.start + ph.dur, kw: t => _powerAt(t - ph.start, ph.energy, ph.power, L.cap, soc) });
+            const soc = (rot.tpl.ph[i] || {}).arrivalFrac, sr = ph.series;
+            ch.push(sr ? { s: ph.start, e: ph.start + ph.dur, steps: sr.map(p => p.t), kw: t => { let v = 0; for (const p of sr) { if (p.t <= t + 1e-9) v = p.kw; else break; } return v; } }
+                       : { s: ph.start, e: ph.start + ph.dur, kw: t => _powerAt(t - ph.start, ph.energy, ph.power, L.cap, soc) });
         })));
         const ts = new Set();
-        ch.forEach(c => { ts.add(c.s); ts.add(c.e); for (let m = Math.ceil(c.s); m < c.e; m++) ts.add(m); });
+        ch.forEach(c => { ts.add(c.s); ts.add(c.e); for (let m = Math.ceil(c.s); m < c.e; m++) ts.add(m); (c.steps || []).forEach(t => { if (t >= c.s && t < c.e) ts.add(t); }); });
         const pts = [];
         [...ts].sort((a, b) => a - b).forEach(t => {
             const kw = ch.reduce((sum, c) => sum + (t >= c.s && t < c.e ? c.kw(t) : 0), 0);
             if (!pts.length || Math.abs(pts[pts.length - 1].kw - kw) > 1e-6) pts.push({ t, kw });
         });
         return { pts, peakKw: pts.reduce((m, p) => Math.max(m, p.kw), 0) };
+    }
+
+    /** Smart charging at `ident` (or the network): the grid limit (grid side, null = none), the peak without
+     *  smart charging, and the charge minutes the limit added. */
+    function smartAt(ident) {
+        const g = runGlobal(), lim = ident ? g.smart.limits[ident] : null;
+        let added = 0, slowed = 0;
+        g.lanes.forEach(L => L.rotations.forEach(rot => rot.phases.forEach(ph => { if (ph.kind === 'charge' && ph.slow > 0 && (!ident || ph.ident === ident)) { added += ph.slow; slowed++; } })));
+        return { enabled: !!(_rs() && CNSSettings.loadAll && CNSSettings.loadAll().smartCharging.enabled), limitKw: lim ? lim.gridKw : null, limited: Object.keys(g.smart.limits),
+            freePeakKw: loadCurve(ident, { free: true }).peakKw, addedMin: added, slowed };
     }
 
     function summary(ident) {
@@ -949,5 +1081,5 @@ window.CNSScheduler = (function () {
         _stamp = null; _ctx = {}; _globalStamp = null; _globalCache = null;
     }
 
-    return { init, renderInto, summary, loadCurve, tripsAt, phasesAnim, instanceStarts, setTakeoff, releaseAll, fixedCount, roleAt, runGlobal, rotationsAt, tripPhases, whatIfChargers, DAY_START, DAY_END, SPAN };
+    return { init, renderInto, summary, smartAt, gridLimits, loadCurve, tripsAt, phasesAnim, instanceStarts, setTakeoff, releaseAll, fixedCount, roleAt, runGlobal, rotationsAt, tripPhases, whatIfChargers, DAY_START, DAY_END, SPAN };
 })();

@@ -52,7 +52,7 @@
   function open() { UI.modal.open(body()); drawTaper(); }
   function refresh() { if (!UI.modal.isOpen() || !$('#modalBox .ms')) return; const box = $('#modalBox'); const top = box.scrollTop; box.innerHTML = body(); box.scrollTop = top; drawTaper(); }
   /** Model settings that differ from the defaults: what the chip and the assumptions line count. */
-  function changes() { if (!ST() || !ST().loadAll) return 0; const s = ST().loadAll(), D0 = ST().DEFAULTS || {}; return Object.keys(D0).filter(k => k !== 'wind' && JSON.stringify(s[k]) !== JSON.stringify(D0[k])).length; }   // wind has its own topbar control
+  function changes() { if (!ST() || !ST().loadAll) return 0; const s = ST().loadAll(), D0 = ST().DEFAULTS || {}; return Object.keys(D0).filter(k => k !== 'wind' && k !== 'smartCharging' && JSON.stringify(s[k]) !== JSON.stringify(D0[k])).length; }   // wind (topbar) and smart charging (demand timeline) have their own controls
   const label = () => { const n = changes(); return n ? n + ' change' + (n > 1 ? 's' : '') : 'default'; };
   function badge() { const b = $('#modelState'); if (!b) return; b.textContent = label(); b.parentElement.setAttribute('aria-label', 'Model settings: ' + label()); }
   document.addEventListener('click', e => {

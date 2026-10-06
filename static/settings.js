@@ -63,6 +63,7 @@ window.CNSSettings = (function () {
         climbModel:        { enabled: true,  overheadPct: 0.10, satFrac: 0.15 },  // NET climb overhead (% of battery) per leg, ramping to full by satFrac×range_km; wing-borne only (the engine gates VTOL + training); calibrated so a full-range mission still uses exactly one battery (design doc CLIMB_ENERGY_MODEL.md retired — this code is the record)
         chargeTarget:      { enabled: true,  value: 0.80 },           // 0..1 — default SoC every aircraft charges to (per-airport target overrides)
         chargeRate:        { value: 0.60 },
+        smartCharging:     { enabled: true },                         // dynamic load balancing: where an airport has a grid limit (cfg gridLimitKw), the charges there share it (own control in the demand timeline)
         wind:              { enabled: false, fromDeg: 270, kt: 20 },  // one wind for the whole plan: direction it blows FROM (°T) and speed (kt), as forecasts give it                           // €/kWh — charging price for the result panel's potential-revenue figure (the Model-settings €/kWh field edits this same value)
     });
 
@@ -280,6 +281,16 @@ window.CNSSettings = (function () {
         return 60 * hours;
     }
 
+    /** Power (kW) a battery of `batteryKwh` accepts at `socFrac` (0..1) from `powerKw`: the same CC-CV curve
+     *  chargeTimeMin integrates, by state of charge instead of time (full power to the knee, then the exponential
+     *  roll-off). Flat when the taper is off. The smart-charging allocation steps it as the battery fills. */
+    function acceptKw(socFrac, powerKw, batteryKwh) {
+        const p = Math.max(0, +powerKw || 0), s = loadAll().chargeTaper;
+        if (!s.enabled || !batteryKwh || !p) return p;
+        const { thr, b } = _taperBand(0, batteryKwh, 0), soc = Math.max(0, Math.min(1, +socFrac || 0));
+        return soc <= thr ? p : p * Math.exp(-b * (soc - thr) / (1 - thr));
+    }
+
     /** Power (kW) `tMin` minutes into the charge chargeTimeMin times: the same curve in time, so it
      *  ends exactly when chargeTimeMin says. Full power up to the knee; above it P = p·floor^u, which
      *  in time is P(τ) = p / (e^(b·u0) + b·k·τ), k = p / (batt·(1 − thr)) per hour. Flat when the
@@ -341,7 +352,7 @@ window.CNSSettings = (function () {
     return {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
-        usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin, chargePowerAt, windLeg, windWorstFactor,
+        usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin, chargePowerAt, acceptKw, windLeg, windWorstFactor,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
         alternateReserveEnabled, climbOverheadPct, climbSatFrac,
     };

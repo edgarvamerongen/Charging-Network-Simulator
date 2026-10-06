@@ -589,3 +589,16 @@ body.proto .drawer.open{height:var(--tl-h,40vh)}
 .wpt-mk span{position:absolute;left:14px;top:-12px;transform:rotate(-45deg);transform-origin:left top;font:600 10.5px Inter,system-ui,sans-serif;color:var(--ink);background:rgba(255,255,255,.86);padding:0 3px;border-radius:2px;white-space:nowrap}
 .leglbl.bad{color:var(--danger);border-color:var(--danger)}
 .fleetm{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:12.5px}.fleetm label{display:flex;gap:8px;align-items:center}
+.glim{display:inline-flex;align-items:center;height:24px;border:1px solid var(--control);border-radius:var(--r);background:var(--surface)}.glim:focus-within{border-color:var(--accent)}
+.glim input{width:56px;height:22px;border:0;background:none;outline:0;text-align:right;padding:0 2px 0 6px;font:inherit;font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield}.glim input::-webkit-inner-spin-button,.glim input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.glim small{font-size:11px;color:var(--muted);padding:0 6px 0 2px}
+.glim-note{font-size:11px;color:var(--muted);margin:-4px 0 2px}.glim-note .off{color:var(--ink);font-weight:500}
+.smartsw{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:11.5px;color:var(--ink);cursor:pointer;padding:0}.smartsw.idle{color:var(--muted)}.smartsw.idle .sw{opacity:.55}
+.grow.load .track path.free{fill:rgba(196,66,31,.14);stroke:var(--accent);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.grow.load .track path.mask{fill:var(--surface);stroke:none}
+.grow.load .glim-l{position:absolute;left:0;right:0;border-top:1.5px dashed var(--accent);z-index:1;pointer-events:none}
+.grow.load .glim-l span{position:absolute;right:4px;bottom:1px;font-size:10px;line-height:1;color:var(--accent);background:var(--surface);padding:0 3px;font-variant-numeric:tabular-nums;font-weight:600}
+.grow.load .lab small .was{display:block;color:var(--accent)}
+.grow.load.shaved{height:68px}
+.track .blk .sl{position:absolute;right:0;top:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.7) 0 2px,transparent 2px 5px)}
+.glegend i.c.sl{background:repeating-linear-gradient(135deg,rgba(255,255,255,.7) 0 2px,transparent 2px 5px),var(--accent)}
