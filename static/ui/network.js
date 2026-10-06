@@ -114,7 +114,7 @@
       ${S.socOpen[a.ident] ? `<div class="socp"><label><input type="radio" name="soc-${a.ident}" value="auto" data-act="socMode" data-ap="${a.ident}" ${socPct == null ? 'checked' : ''}> Auto (the global charge target)</label><label><input type="radio" name="soc-${a.ident}" value="target" data-act="socMode" data-ap="${a.ident}" ${socPct != null ? 'checked' : ''}> Charge to at least <b class="num">${socPct != null ? socPct : 80} %</b></label><input type="range" min="20" max="100" step="5" value="${socPct != null ? socPct : 80}" data-act="socSlider" data-ap="${a.ident}" ${socPct == null ? 'disabled' : ''}></div>` : ''}
       <div class="lbl" style="margin-top:12px"><span class="cap">Flights</span><button class="lnk" data-act="replay" data-ap="${a.ident}">View flights on map</button></div>
       ${a.contribs.map(c => { const t = c.t; const bad = t.feasible === false; return `<div class="fl ${bad ? 'bad' : ''}"><button class="t" data-act="openTrip" data-id="${esc(t.id)}" title="Open this route in Plan"><span class="tag">${ROLE[c.role] || c.role}</span> <span class="r">${esc(t.originIdent)} → ${esc(t.destIdent)}</span>${t.multiLeg && (t.stops || []).length ? ' <span class="mu">via ' + t.stops.map(s => esc(s.ident)).join(', ') + '</span>' : ''}${t.chargerOverride ? ' <span class="mu" title="Pinned to a charger">📌</span>' : ''}<small>${esc(UI.planeShort(t.planeName))} · ${(t.custom ? 'Waypoints' : tripLabel[t.tripType] || t.tripType)}${bad ? ' · <span style="color:var(--danger)">no route at current settings' + (t.infeasibleReason ? ': ' + esc(t.infeasibleReason) : '') + '</span>' : ''}</small></button>
-        <span class="mu num freq"><input type="number" min="1" max="2000" value="${t.freqN}" data-act="tripFreq" data-id="${esc(t.id)}"><select class="sel" data-act="tripUnit" data-id="${esc(t.id)}"><option value="day" ${t.freqUnit === 'day' ? 'selected' : ''}>/ day</option><option value="week" ${t.freqUnit === 'week' ? 'selected' : ''}>/ week</option></select></span>
+        <span class="mu num freq"><input type="number" min="1" max="2000" value="${t.freqN}" data-act="tripFreq" data-id="${esc(t.id)}"><button class="u" data-act="tripUnit" data-id="${esc(t.id)}" data-v="${t.freqUnit === 'week' ? 'day' : 'week'}" title="Per ${t.freqUnit === 'week' ? 'week' : 'day'}, click for per ${t.freqUnit === 'week' ? 'day' : 'week'}">/${t.freqUnit === 'week' ? 'wk' : 'day'}</button></span>
         <button class="rm" data-act="rm" data-id="${esc(t.id)}" title="Remove"><svg class="ic"><use href="#i-x"/></svg></button></div>`; }).join('')}
       ${S.filter ? '' : `<div class="row" style="justify-content:flex-end;margin-top:8px"><button class="lnk" data-act="focus" data-ap="${a.ident}">Isolate ${a.ident}</button></div>`}</div>`;
   }
@@ -247,6 +247,7 @@
       case 'useN': cfgPatch(t.dataset.ap, { chargers: t.dataset.ids.split(',') }); UI.toast(`${t.dataset.ap}: ${t.dataset.ids.split(',').length} chargers`); break;
       case 'socToggle': S.socOpen[t.dataset.ap] = !S.socOpen[t.dataset.ap]; UI.render(); break;
       case 'openTrip': UI.plan.openTrip(t.dataset.id); break;
+      case 'tripUnit': D().updateTrip(t.dataset.id, { freqUnit: t.dataset.v }); UI.folderChanged(); UI.render(); break;
       case 'replay': openReplay(t.dataset.ap); break;
       case 'scenario': loadScenario(t.dataset.k); break;
     }
@@ -258,7 +259,6 @@
     if (t.dataset.act === 'socMode') { if (t.value === 'auto') { const c = D().loadCfg(); c[t.dataset.ap] = Object.assign({}, c[t.dataset.ap] || {}); delete c[t.dataset.ap].targetDepartureSoc; delete c[t.dataset.ap].fullCharge; D().saveCfg(c); UI.folderChanged(); UI.render(); } else { const sl = $(`[data-act=socSlider][data-ap="${t.dataset.ap}"]`); cfgPatch(t.dataset.ap, { targetDepartureSoc: (+(sl ? sl.value : 80)) / 100, fullCharge: undefined }); } }
     if (t.dataset.act === 'socSlider') cfgPatch(t.dataset.ap, { targetDepartureSoc: (+t.value) / 100, fullCharge: undefined });
     if (t.dataset.act === 'tripFreq') { D().updateTrip(t.dataset.id, { freqN: Math.min(2000, Math.max(1, parseInt(t.value || '1', 10))) }); UI.folderChanged(); UI.render(); }
-    if (t.dataset.act === 'tripUnit') { D().updateTrip(t.dataset.id, { freqUnit: t.value }); UI.folderChanged(); UI.render(); }
   });
   UI.network = { render, rows, recomputeAll, recomputeAllDebounced, loadScenario, SCENARIOS };
 })();

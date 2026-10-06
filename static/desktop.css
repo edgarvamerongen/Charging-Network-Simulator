@@ -428,9 +428,9 @@ body.wide-rail .drawer{left:calc(var(--rail-w) + 24px)}
 .fl{display:grid;grid-template-columns:1fr auto 18px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:12px}
 .fl.bad .t{color:var(--danger)}
 .fl .tag{display:inline-block;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line-2);border-radius:2px;padding:0 4px;margin-right:4px;vertical-align:1px}
-.fl .freq{display:inline-flex;gap:4px;align-items:center}
-.fl .freq input{width:40px;height:24px;border:1px solid var(--control);border-radius:var(--r);padding:0 6px;text-align:right;background:var(--surface);-moz-appearance:textfield;appearance:textfield}.fl .freq input::-webkit-inner-spin-button,.fl .freq input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-.fl .freq .sel{height:24px;padding:0 2px}
+.fl .freq{display:inline-flex;align-items:center;height:22px;border:1px solid var(--control);border-radius:var(--r);background:var(--surface)}.fl .freq:focus-within{border-color:var(--accent)}
+.fl .freq input{width:26px;height:20px;border:0;padding:0 1px 0 4px;text-align:right;background:none;outline:0;font:inherit;color:var(--ink);line-height:20px;font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield}.fl .freq input::-webkit-inner-spin-button,.fl .freq input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.fl .freq .u{font:inherit;font-size:11px;color:var(--muted);padding:0 5px 0 1px;height:20px;line-height:20px;display:flex;align-items:center;cursor:pointer}.fl .freq .u:hover{color:var(--accent)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
 .grid2 label{display:flex;flex-direction:column;gap:4px;font-size:12px}
 .grid2 .sel{height:30px;font-size:12.5px}

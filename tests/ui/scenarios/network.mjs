@@ -371,18 +371,18 @@ export default async function run(ctx) {
     if (f.freqN !== 5) probs.push('freqN ' + f.freqN);
     let m = HEAD_RE.exec(h.sub || ''); const exp1 = fmtFlights(5 + others);
     if (!m || +m[3] !== exp1) probs.push(`header after 5/day: ${J(h.sub)} (expected ${exp1} flights / day)`);
-    await v2.setValue(`[data-act=tripUnit][data-id="${ids.retour}"]`, 'week', ['change']); await v2Settle();
+    await v2.click(`[data-act=tripUnit][data-id="${ids.retour}"]`); await v2Settle();
     f = (await folderNow()).find(t => t.id === ids.retour); h = await v2.eval(V2_HEAD);
     if (f.freqUnit !== 'week') probs.push('freqUnit ' + f.freqUnit);
     m = HEAD_RE.exec(h.sub || ''); const exp2 = fmtFlights(5 / 7 + others);
     if (!m || Math.abs(+m[3] - exp2) > 0.051) probs.push(`header after 5/week: ${J(h.sub)} (expected ${exp2})`);
     const how = await classicSync(`(document.querySelector('#folder .trip-freq-unit[data-id="${ids.retour}"]') || {}).value === 'week'`);
-    await v2.setValue(`[data-act=tripUnit][data-id="${ids.retour}"]`, 'day', ['change']); await v2Settle();
+    await v2.click(`[data-act=tripUnit][data-id="${ids.retour}"]`); await v2Settle();
     await v2.setValue(sel, '2', ['change']); await v2Settle();
     const back = (await folderNow()).find(t => t.id === ids.retour);
     if (back.freqN !== 2 || back.freqUnit !== 'day') probs.push('restore failed ' + J(back));
     if (probs.length) throw new Error(probs.join('; '));
-    return { detail: `5/day → header ${exp1}; 5/week → header ${exp2}; classic select synced via ${how}; restored 2/day`, repro: '[data-act=tripFreq] 5 + change, [data-act=tripUnit] week + change' };
+    return { detail: `5/day → header ${exp1}; 5/week → header ${exp2}; classic select synced via ${how}; restored 2/day`, repro: '[data-act=tripFreq] 5 + change, [data-act=tripUnit] click (day <-> week)' };
   }, { retry: 0 });
 
   // ================= replay dialog =================
