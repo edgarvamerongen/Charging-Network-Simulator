@@ -33,8 +33,6 @@
     const folder = D() ? D().loadFolder() : []; const R = UI.network ? UI.network.rows() : [];
     const foc = S.filter && R.find(a => a.ident === S.filter) ? S.filter : '';
     const chip = $('#focChip'); chip.hidden = !foc; if (foc) chip.innerHTML = `${foc} ${esc(UI.shortName((UI.byId()[foc] || {}).name || foc))} <svg class="ic" style="width:12px;height:12px"><use href="#i-x"/></svg>`;
-    $$('#laneSeg button').forEach(b => b.classList.toggle('on', b.dataset.lanes === S.lanes));
-    $('#laneSeg').hidden = false; $('#depSw').hidden = S.lanes === 'fleet'; $('.dep-lbl').hidden = S.lanes === 'fleet'; $('#depSw').classList.toggle('on', S.showDep);
     const ticks = []; for (let m = H0; m < H1; m += 120) ticks.push(`<div class="tick" style="left:${pct(m)}%"><span>${clock(m)}</span></div>`);
     const bare = ticks.map(t => t.replace(/<span>.*?<\/span>/, '')).join('');
     let rows = `<div class="grow axis"><div class="lab"></div><div class="track">${ticks.join('')}</div></div>`, lanes = 0, anyWait = false;
@@ -43,32 +41,36 @@
     else {
       const g = SC().runGlobal(); const load = loadRow(foc, R, bare), netPeak = load.peak; const flights = folder.reduce((s, t) => s + D().flightsPerDay(t), 0);
       rows += load.html;
-      if (S.lanes === 'fleet') {
-        const touches = t => !foc || t.originIdent === foc || t.destIdent === foc || (t.stops || []).some(x => x && x.ident === foc);
-        const fleet = g.lanes.filter(L => touches(L.trip));
-        fleet.forEach((L, li) => { const t = L.trip; const blocks = L.rotations.map((rot, k) => { const hd = `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}" data-fixed="${rot.fixed ? 1 : 0}"`; return fixTick(rot) + rot.phases.map(ph => { if (ph.kind === 'charge' && ph.wait > 0) { anyWait = true; } return (ph.kind === 'charge' && ph.wait > 0 ? blk('wait', ph.start - ph.wait, ph.wait, '', `Waits ${Math.round(ph.wait)} min for a charger at ${ph.ident}`, hd) : '') + blk(ph.kind === 'fly' ? 'fly' : (!foc || ph.ident === foc ? 'chg' : 'chg away'), ph.start, ph.dur, ph.kind === 'fly' ? (ph.label || '').replace(/^Fly (to|back to) /, '→ ') : (ph.ident || ''), `${ph.label || ph.kind} · ${clock(ph.start)}–${clock(ph.start + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`, hd); }).join(''); }).join('');
-          rows += `<div class="grow${zebra()}"><div class="lab" data-trip="${esc(t.id)}" role="button" tabindex="0" title="Open this route in Plan">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; });
-        $('#drawerSub').textContent = foc ? `${fleet.length} aircraft at ${foc} · peak ${UI.fmt.kw(netPeak)}` : `${g.lanes.length} aircraft · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
+      // The selection decides the view (no lane or departures switches). Nothing isolated: every aircraft once,
+      // grouped under its home base (the route's origin). An airport isolated: the aircraft that use it, with
+      // charging here vs elsewhere and the waits at other airports.
+      const grp = a => `<div class="grow grp"><div class="lab"><button data-act="focus" data-ap="${a.ident}" title="Isolate ${a.ident}">${a.ident}</button><small>${esc(UI.shortName(a.name))} · peak ${UI.fmt.kw(peakKw(a.ident))}</small></div><div class="track">${bare}</div></div>`;
+      const lab = (t, L) => `<div class="lab" data-trip="${esc(t.id)}" role="button" tabindex="0" title="Open this route in Plan">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div>`;
+      if (!foc) {
+        const byBase = new Map(); g.lanes.forEach(L => { const k = L.trip.originIdent; if (!byBase.has(k)) byBase.set(k, []); byBase.get(k).push(L); });
+        const order = [...R.map(a => a.ident).filter(k => byBase.has(k)), ...[...byBase.keys()].filter(k => !R.some(a => a.ident === k))];
+        order.forEach(k => { const a = R.find(x => x.ident === k) || { ident: k, name: (UI.byId()[k] || {}).name || k }; rows += grp(a); lanes++;
+          byBase.get(k).forEach(L => { const t = L.trip; const blocks = L.rotations.map((rot, n) => { const hd = `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : n}" data-takeoff="${rot.takeoff}" data-fixed="${rot.fixed ? 1 : 0}"`; return fixTick(rot) + rot.phases.map(ph => { if (ph.kind === 'charge' && ph.wait > 0) { anyWait = true; } return (ph.kind === 'charge' && ph.wait > 0 ? blk('wait', ph.start - ph.wait, ph.wait, '', `Waits ${Math.round(ph.wait)} min for a charger at ${ph.ident}`, hd) : '') + blk(ph.kind === 'fly' ? 'fly' : 'chg', ph.start, ph.dur, ph.kind === 'fly' ? (ph.label || '').replace(/^Fly (to|back to) /, '→ ') : (ph.ident || ''), `${ph.label || ph.kind} · ${clock(ph.start)}–${clock(ph.start + ph.dur)}${ph.power ? ' · ' + ph.power + ' kW' : ''}`, hd); }).join(''); }).join('');
+            rows += `<div class="grow sub${zebra()}">${lab(t, L)}<div class="track">${bare}${blocks}</div></div>`; lanes++; }); });
+        $('#drawerSub').textContent = `${g.lanes.length} aircraft · ${R.length} airport${R.length === 1 ? '' : 's'} · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
       } else {
-        const aps = R.filter(a => (!foc || a.ident === foc) && a.contribs.some(c => c.role));
-        aps.forEach(a => { const rl = SC().rotationsAt(a.ident); if (!rl.length) return;
-          const apPeak = peakKw(a.ident);   // = rows().peak = the classic card's peak
-          rows += `<div class="grow grp"><div class="lab"><button data-act="focus" data-ap="${a.ident}" title="Isolate ${a.ident}">${a.ident}</button><small>${esc(UI.shortName(a.name))} · peak ${UI.fmt.kw(apPeak)}</small></div><div class="track">${bare}</div></div>`; lanes++;
-          rl.forEach(L => { const t = L.trip; const blocks = L.rotations.map((rot, k) => { const handle = () => `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}" data-fixed="${rot.fixed ? 1 : 0}"`;   // every block of the strip drags the rotation
-            return fixTick(rot) + rot.phases.map(ph => { const st = rot.takeoff + ph.start;
-              if (ph.kind === 'wait') { anyWait = true; return blk('wait', st, ph.dur, '', ph.label, handle()); }
-              if (ph.kind === 'waitElsewhere') return blk('wait away', st, ph.dur, '', ph.label, handle());
-              if (ph.kind === 'fly') return S.showDep ? blk('fly', st, ph.dur, (ph.label || '').replace(/^Fly (to|back to) /, '→ '), `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}`, handle()) : '';
-              return blk(ph.atX ? 'chg' : 'chg away', st, ph.dur, ph.atX ? (ph.power ? UI.fmt.kw(ph.power) : '') : '', `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}${ph.power ? ' · ' + UI.fmt.kw(ph.power) : ''}`, handle()); }).join(''); }).join('');
-            rows += `<div class="grow sub${zebra()}"><div class="lab" data-trip="${esc(t.id)}" role="button" tabindex="0" title="Open this route in Plan">${esc(UI.planeShort(t.planeName))}${L.planeTotal > 1 ? ' ' + L.planeIdx : ''}<small>${esc(t.originIdent)} → ${esc(t.destIdent)}</small></div><div class="track">${bare}${blocks}</div></div>`; lanes++; }); });
-        const nCh = ((R.find(a => a.ident === foc) || {}).fleet || []).length;
-        $('#drawerSub').textContent = foc ? `${nCh} ${UI.fmt.pl(nCh, 'charger')} · peak ${UI.fmt.kw(netPeak)}` : `${R.length} airport${R.length === 1 ? '' : 's'} · ${flights % 1 ? flights.toFixed(1) : flights} flight${flights === 1 ? '' : 's'} / day · peak load ${UI.fmt.kw(netPeak)}`;
+        const a = R.find(x => x.ident === foc), rl = SC().rotationsAt(foc);
+        if (rl.length) { rows += grp(a); lanes++; }
+        rl.forEach(L => { const t = L.trip; const blocks = L.rotations.map((rot, k) => { const handle = () => `data-drag="${esc(t.id)}:${L.schedSlot != null ? L.schedSlot : k}" data-takeoff="${rot.takeoff}" data-fixed="${rot.fixed ? 1 : 0}"`;   // every block of the strip drags the rotation
+          return fixTick(rot) + rot.phases.map(ph => { const st = rot.takeoff + ph.start;
+            if (ph.kind === 'wait') { anyWait = true; return blk('wait', st, ph.dur, '', ph.label, handle()); }
+            if (ph.kind === 'waitElsewhere') return blk('wait away', st, ph.dur, '', ph.label, handle());
+            if (ph.kind === 'fly') return blk('fly', st, ph.dur, (ph.label || '').replace(/^Fly (to|back to) /, '→ '), `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}`, handle());
+            return blk(ph.atX ? 'chg' : 'chg away', st, ph.dur, ph.atX ? (ph.power ? UI.fmt.kw(ph.power) : '') : '', `${ph.label} · ${clock(st)}–${clock(st + ph.dur)}${ph.power ? ' · ' + UI.fmt.kw(ph.power) : ''}`, handle()); }).join(''); }).join('');
+          rows += `<div class="grow sub${zebra()}">${lab(t, L)}<div class="track">${bare}${blocks}</div></div>`; lanes++; });
+        const nCh = (a.fleet || []).length;
+        $('#drawerSub').textContent = `${rl.length} aircraft · ${nCh} ${UI.fmt.pl(nCh, 'charger')} · peak ${UI.fmt.kw(netPeak)}`;
       }
     }
     const nFix = folder.length && SC() ? SC().fixedCount() : 0;
-    // Fleet lanes with no airport isolated have no "here": one charge colour, one legend entry.
-    const chgKey = S.lanes === 'fleet' && !foc ? '<span><i class="c"></i>Charging</span>' : '<span><i class="c"></i>Charging here</span><span><i class="a"></i>Charging elsewhere</span>';
-    $('#gantt').innerHTML = rows + `<div class="glegend">${chgKey}${anyWait ? '<span><i class="w"></i>Waiting for a charger</span>' : ''}${(S.showDep || S.lanes === 'fleet') ? '<span><i></i>Flying</span>' : ''}${nFix ? `<span><i class="fx"></i>Fixed take-off<button class="lnk" data-act="releaseAll">Release ${nFix === 1 ? '' : 'all '}${nFix}</button></span>` : ''}<span style="margin-left:auto">Drag to fix a take-off · double-click to release</span></div>`;
+    // With no airport isolated there is no "here": one charge colour, one legend entry.
+    const chgKey = !foc ? '<span><i class="c"></i>Charging</span>' : '<span><i class="c"></i>Charging here</span><span><i class="a"></i>Charging elsewhere</span>';
+    $('#gantt').innerHTML = rows + `<div class="glegend">${chgKey}${anyWait ? '<span><i class="w"></i>Waiting for a charger</span>' : ''}<span><i></i>Flying</span>${nFix ? `<span><i class="fx"></i>Fixed take-off<button class="lnk" data-act="releaseAll">Release ${nFix === 1 ? '' : 'all '}${nFix}</button></span>` : ''}<span style="margin-left:auto">Drag to fix a take-off · double-click to release</span></div>`;
     $('#drawer').style.setProperty('--drawer-h', Math.min(Math.round(window.innerHeight * 0.6), 36 + 22 + (folder.length ? 44 : 60) + lanes * 28 + 44) + 'px');
   }
   // ---- drag a rotation → fixed take-off; double-click → back to automatic (each with an Undo) ----
@@ -89,11 +91,8 @@
     SC().setTakeoff(tripId, +k, fixed ? null : at); changed(); UI.toast(fixed ? 'Take-off released' : `Take-off fixed at ${clock(at)}`, undo(prev)); });
   const openLane = e => { const lab = e.target.closest && e.target.closest('#gantt .lab[data-trip]'); if (!lab) return false; UI.plan.openTrip(lab.dataset.trip); return true; };
   document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && openLane(e)) e.preventDefault(); });
-  document.addEventListener('click', e => { if (openLane(e)) return; const t = e.target.closest('#laneSeg button,#depSw,.dep-lbl,#focChip,#drawerHead,#gantt [data-act=releaseAll]'); if (!t) return;
+  document.addEventListener('click', e => { if (openLane(e)) return; const t = e.target.closest('#focChip,#drawerHead,#gantt [data-act=releaseAll]'); if (!t) return;
     if (t.dataset.act === 'releaseAll') { const prev = localStorage.getItem('cns_schedule'); SC().releaseAll(); changed(); UI.toast('Take-offs released', undo(prev)); return; }
-    if (t.closest('#laneSeg')) { S.lanes = t.dataset.lanes; render(); return; }
-    // The caption is the switch's label — it toggles the switch, it does not collapse the drawer.
-    if (t.id === 'depSw' || t.classList.contains('dep-lbl')) { S.showDep = !S.showDep; render(); return; }
     if (t.id === 'focChip') { S.filter = ''; UI.render(); UI.map.drawNet(); UI.map.fitNet(); return; }
     if (t.id === 'drawerHead' && !e.target.closest('button')) $('#drawer').classList.toggle('open'); });
   UI.timeline = { render, peak: ident => (SC() ? peakKw(ident) : 0) };   // grid side, coincident

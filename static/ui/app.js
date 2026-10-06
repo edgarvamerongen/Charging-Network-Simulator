@@ -9,7 +9,7 @@ window.CNSUI = (function () {
     mode: 'plan', rail: 'form', planeId: null, chargerId: null, editId: null,
     origin: null, dest: null, stops: [], trip: 'one-way', freq: 1, per: 'day',
     result: null, profile: null, busy: false, err: '',
-    filter: '', lanes: 'airports', showDep: false,
+    filter: '',
     base: 'light', showAssets: true, showNet: true,
     allChargers: false, picking: false, open: { route: true, charging: false, calc: false }, openAp: {},
     acFilters: { type: null, propulsion: null, status: null }, acFilterOpen: false, availOverride: null
@@ -247,7 +247,7 @@ window.CNSUI = (function () {
     if (h === 'hub') await CNSUI.network.loadScenario('hub');
     if (h === 'training') await CNSUI.network.loadScenario('training');
     if (focusAp && AP_BY_ID[focusAp]) { S.filter = focusAp; S.openAp = { [focusAp]: true }; setMode('network'); }
-    if (view === 'fleet') { S.lanes = 'fleet'; $('#drawer').classList.add('open'); CNSUI.timeline.render(); }
+    if (view === 'fleet') { $('#drawer').classList.add('open'); CNSUI.timeline.render(); }
     if (h === 'filters') { S.acFilterOpen = true; render(); }
     if (h === 'settings') CNSUI.settings.open();
     if (h === 'welcome') CNSUI.tour.welcome();

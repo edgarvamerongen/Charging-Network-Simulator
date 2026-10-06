@@ -56,15 +56,16 @@ async function settle(page, timeout = 2000) {
 
 // ---- state readers ---------------------------------------------------------------------------
 const DRAWER = `(function(){ const q = s => document.querySelector(s), qa = s => [...document.querySelectorAll(s)]; const S = CNSUI.S; const path = q('#gantt .grow.load svg path');
-  return { open: q('#drawer').classList.contains('open'), height: q('#drawer').getBoundingClientRect().height, lanes: S.lanes, showDep: S.showDep, mode: S.mode, filter: S.filter, sub: q('#drawerSub').textContent.trim(),
+  return { open: q('#drawer').classList.contains('open'), height: q('#drawer').getBoundingClientRect().height, mode: S.mode, filter: S.filter, sub: q('#drawerSub').textContent.trim(),
     grp: qa('#gantt .grow.grp').map(g => g.querySelector('button').textContent.trim()), grpPeak: qa('#gantt .grow.grp').map(g => g.querySelector('.lab small').textContent.trim()),
     subRows: qa('#gantt .grow.sub').length, subLabels: qa('#gantt .grow.sub .lab').map(l => l.textContent.trim()), rows: qa('#gantt .grow:not(.axis):not(.load)').length, rowLabels: qa('#gantt .grow:not(.axis):not(.load) .lab').map(l => l.textContent.trim()),
     chg: qa('#gantt .blk.chg').length, chgAway: qa('#gantt .blk.chg.away').length, fly: qa('#gantt .blk.fly').length, wait: qa('#gantt .blk.wait').length, drag: qa('#gantt .blk[data-drag]').length,
     path: path ? path.getAttribute('d').slice(0, 40) : null, pathLen: path ? path.getAttribute('d').length : 0, loadLab: (q('#gantt .grow.load .lab') || { textContent: '' }).textContent.trim(),
-    legend: (q('#gantt .glegend') || { textContent: '' }).textContent.trim(), depSwHidden: q('#depSw').hidden, depLblHidden: q('.dep-lbl').hidden, depOn: q('#depSw').classList.contains('on'),
-    segOn: qa('#laneSeg button.on').map(b => b.dataset.lanes), chipHidden: q('#focChip').hidden, chipText: q('#focChip').textContent.trim(), empty: !!q('#gantt .empty'), toasts: (window.__toasts || []).map(t => t.text) }; })()`;
+    legend: (q('#gantt .glegend') || { textContent: '' }).textContent.trim(),
+    toggles: qa('#laneSeg,#depSw,.dep-lbl').length, chipHidden: q('#focChip').hidden, chipText: q('#focChip').textContent.trim(), empty: !!q('#gantt .empty'), toasts: (window.__toasts || []).map(t => t.text) }; })()`;
 const ENGINE = `(function(){ const R = CNSUI.network.rows(); const g = CNSScheduler.runGlobal(); const D = CNSDemand; const folder = D.loadFolder();
-  return { rows: R.map(a => a.ident), withRot: R.filter(a => a.contribs.some(c => c.role) && CNSScheduler.rotationsAt(a.ident).length).map(a => a.ident), lanes: g.lanes.length,
+  const bases = [...new Set(g.lanes.map(L => L.trip.originIdent))]; const baseOrder = [...R.map(a => a.ident).filter(k => bases.includes(k)), ...bases.filter(k => !R.some(a => a.ident === k))];
+  return { rows: R.map(a => a.ident), baseOrder, withRot: R.filter(a => a.contribs.some(c => c.role) && CNSScheduler.rotationsAt(a.ident).length).map(a => a.ident), lanes: g.lanes.length,
     laneKeys: g.lanes.map(L => L.trip.originIdent + '→' + L.trip.destIdent + ':' + (L.schedSlot != null ? L.schedSlot : '*') + ' rot=' + L.rotations.length), subRows: R.filter(a => a.contribs.some(c => c.role)).reduce((s, a) => s + CNSScheduler.rotationsAt(a.ident).length, 0),
     folder: folder.length, flights: folder.reduce((s, t) => s + D.flightsPerDay(t), 0), chargePhases: g.lanes.reduce((s, L) => s + L.rotations.reduce((q, r) => q + r.phases.filter(p => p.kind === 'charge' && p.dur > 0).length, 0), 0),
     sched: JSON.parse(localStorage.getItem('cns_schedule') || '{}'), peaks: Object.fromEntries(R.map(a => [a.ident, { rail: a.peak, engine: CNSScheduler.summary(a.ident).peakKw, curve: CNSScheduler.loadCurve(a.ident).peakKw, latestEnd: a.latestEnd }])),
@@ -81,14 +82,12 @@ const SUMMARIES = `(function(){ const ids = ${j(['EHLE', 'EDDF', 'EHAM', 'EDDL']
 // ---- real-input state helpers (idempotent, so every check can run alone with --only) ---------
 async function setMode(page, mode) { if (await page.eval('CNSUI.S.mode') === mode) return; await page.click(`#modeSeg button[data-mode=${mode}]`); await page.waitFor(`CNSUI.S.mode === ${j(mode)}`, 3000, 50); await settle(page); }
 async function ensureDrawer(page, open) { const is = await page.eval(`document.querySelector('#drawer').classList.contains('open')`); if (is === open) { await settle(page); return; } await page.click('#drawerHead'); await page.waitFor(`document.querySelector('#drawer').classList.contains('open') === ${open}`, 3000, 50); await settle(page); }
-async function ensureLanes(page, lanes) { if (await page.eval('CNSUI.S.lanes') === lanes) { await settle(page); return; } await page.click(`#laneSeg button[data-lanes=${lanes}]`); await page.waitFor(`CNSUI.S.lanes === ${j(lanes)}`, 3000, 50); await settle(page); }
-async function ensureDep(page, on) { if (await page.eval('CNSUI.S.showDep') === on) return; await settle(page); await page.click('#depSw'); await page.waitFor(`CNSUI.S.showDep === ${on}`, 3000, 50); await settle(page); }
 async function isolate(page, ident) {   // real click on the drawer's group-row button (network mode)
-  await ensureDrawer(page, true); await ensureLanes(page, 'airports');
+  await ensureDrawer(page, true);
   if (await page.eval('CNSUI.S.filter') === ident) return;
   await page.click(`#gantt .grow.grp .lab button[data-act=focus][data-ap=${ident}]`); await page.waitFor(`CNSUI.S.filter === ${j(ident)} && !document.querySelector('#focChip').hidden`, 3000, 50); await settle(page);
 }
-async function prepared(page) { await setMode(page, 'network'); await ensureDrawer(page, true); await ensureLanes(page, 'airports'); await ensureDep(page, false); await settle(page); }
+async function prepared(page) { await setMode(page, 'network'); await ensureDrawer(page, true); if (await page.eval('CNSUI.S.filter')) { await page.click('#focChip'); await page.waitFor(`CNSUI.S.filter === ''`, 3000, 50); } await settle(page); }
 
 export default async function run(ctx) {
   const v2 = await ctx.v2Page();
@@ -102,92 +101,53 @@ export default async function run(ctx) {
     const st = await v2.eval(ENGINE); const dr = await v2.eval(DRAWER);
     if (st.folder !== 3 || st.rows.length !== 4) throw new Error(`folder ${st.folder}/3, airports ${j(st.rows)}`);
     // the drawer header must reflect the network right after Add (Plan mode; timeline.render runs from UI.render)
-    if (!/4 airports/.test(dr.sub)) throw new Error(`#drawerSub in Plan mode right after Add = "${dr.sub}" (expected "4 airports · 4 flights / day · peak load …")`);
+    if (!/4 airports/.test(dr.sub)) throw new Error(`#drawerSub in Plan mode right after Add = "${dr.sub}" (expected "N aircraft · 4 airports · 4 flights / day · peak load …")`);
     return { detail: `folder ${st.folder}, airports ${j(st.rows)}, lanes ${st.lanes} ${j(st.laneKeys)}, flights/day ${st.flights}, #drawerSub="${dr.sub}"`, repro: 'ctx.seedNetwork(v2, SEED) in Plan mode' };
   }, { retry: 0 });
   if (bad.length) { ctx.blockedBy.push('seed failed: ' + j(bad)); return; }
 
-  // ---- lanes: open the drawer with a real click, airport lanes vs the scheduler ----------------------------------
+  // ---- overview: open the drawer with a real click; every aircraft once, grouped under its home base ------------
   await ctx.check('lanes', async () => {
     await setMode(v2, 'network');
+    if (await v2.eval('CNSUI.S.filter')) { await v2.click('#focChip'); await v2.waitFor(`CNSUI.S.filter === ''`, 3000, 50); }
     await ensureDrawer(v2, false);
     const r0 = await v2.click('#drawerHead');                   // a REAL click on the head opens the drawer
     await v2.waitFor(`document.querySelector('#drawer').classList.contains('open')`, 3000, 50); await v2.sleep(350);
-    await ensureLanes(v2, 'airports'); await ensureDep(v2, false);
     const dr = await v2.eval(DRAWER), st = await v2.eval(ENGINE);
     const pr = [];
-    if (j(dr.grp) !== j(st.withRot)) pr.push(`group rows ${j(dr.grp)} ≠ airports with rotations ${j(st.withRot)}`);
-    if (dr.subRows < 3) pr.push(`sub rows ${dr.subRows} < 3`);
-    if (dr.subRows !== st.subRows) pr.push(`sub rows ${dr.subRows} ≠ Σ rotationsAt(ident).length ${st.subRows}`);
-    if (!(dr.chg > 0)) pr.push(`.blk.chg ${dr.chg} (engine has ${st.chargePhases} charge phases)`);
+    if (dr.toggles) pr.push(`${dr.toggles} lane/departures toggle(s) still in the drawer head`);
+    if (j(dr.grp) !== j(st.baseOrder)) pr.push(`group rows ${j(dr.grp)} ≠ home bases ${j(st.baseOrder)}`);
+    if (dr.subRows !== st.lanes) pr.push(`aircraft rows ${dr.subRows} ≠ runGlobal().lanes.length ${st.lanes} (each aircraft exactly once)`);
+    if (!(dr.chg > 0 && dr.fly > 0)) pr.push(`blocks: chg ${dr.chg}, fly ${dr.fly} (engine has ${st.chargePhases} charge phases)`);
+    if (dr.chgAway) pr.push(`${dr.chgAway} "charging elsewhere" blocks with no airport isolated`);
     if (!dr.path || !/^M0 52L/.test(dr.path)) pr.push(`load row path missing/odd: ${j(dr.path)}`);
-    if (!/Charging here/.test(dr.legend) || !/Charging elsewhere/.test(dr.legend) || !/Drag to fix a take-off/.test(dr.legend)) pr.push(`legend "${dr.legend}"`);
+    if (/Charging here/.test(dr.legend) || !/Charging/.test(dr.legend) || !/Flying/.test(dr.legend) || !/Drag to fix a take-off/.test(dr.legend)) pr.push(`legend "${dr.legend}"`);
     if (dr.wait > 0 && !/Waiting for a charger/.test(dr.legend)) pr.push('wait blocks drawn but the legend lacks "Waiting for a charger"');
-    if (!(new RegExp(`^${st.rows.length} airports · ${st.flights % 1 ? st.flights.toFixed(1) : st.flights} flights / day · peak load`)).test(dr.sub)) pr.push(`#drawerSub "${dr.sub}" vs ${st.rows.length} airports · ${st.flights} flights / day`);
+    if (!(new RegExp(`^${st.lanes} aircraft · ${st.rows.length} airports · ${st.flights % 1 ? st.flights.toFixed(1) : st.flights} flights / day · peak load`)).test(dr.sub)) pr.push(`#drawerSub "${dr.sub}" vs ${st.lanes} aircraft · ${st.rows.length} airports · ${st.flights} flights / day`);
+    if (!dr.subLabels.every(l => /→/.test(l))) pr.push(`lane labels lack "origin → dest": ${j(dr.subLabels)}`);
     if (dr.drag < 1) pr.push('no draggable block (.blk[data-drag])');
     if (dr.height < 200) pr.push(`drawer height ${dr.height}px while open`);
     await ctx.screenshot(v2, 'lanes');
     if (pr.length) throw new Error(pr.join('; ') + ` — drawer=${j(dr)}`);
-    return { detail: `real click at (${r0.cx.toFixed(0)},${r0.cy.toFixed(0)}) opened the drawer (${dr.height}px); groups ${j(dr.grp)} peaks ${j(dr.grpPeak)}; ${dr.subRows} sub rows ${j(dr.subLabels)}; chg ${dr.chg} (away ${dr.chgAway}) wait ${dr.wait} fly ${dr.fly} drag ${dr.drag}; load "${dr.loadLab}" path "${dr.path}…"; legend "${dr.legend}"; sub "${dr.sub}"`, repro: 'seed 3 flights, Network mode, real click #drawerHead, read #gantt', evidence: [ctx.shot('lanes')] };
+    return { detail: `real click at (${r0.cx.toFixed(0)},${r0.cy.toFixed(0)}) opened the drawer (${dr.height}px); bases ${j(dr.grp)} peaks ${j(dr.grpPeak)}; ${dr.subRows} aircraft rows ${j(dr.subLabels)}; chg ${dr.chg} wait ${dr.wait} fly ${dr.fly} drag ${dr.drag}; load "${dr.loadLab}" path "${dr.path}…"; legend "${dr.legend}"; sub "${dr.sub}"`, repro: 'seed 3 flights, Network mode, real click #drawerHead, read #gantt', evidence: [ctx.shot('lanes')] };
   });
 
-  // ---- fleet lanes: [data-lanes=fleet] → one row per scheduler lane; the drawer must stay open ------------------
-  await ctx.check('fleet-lanes', async () => {
-    await prepared(v2);
-    await v2.click('#laneSeg button[data-lanes=fleet]');
-    await v2.waitFor(`CNSUI.S.lanes === 'fleet'`, 3000, 50); await v2.sleep(150);
-    const dr = await v2.eval(DRAWER), st = await v2.eval(ENGINE);
+  // ---- an airport isolated: the aircraft that use it, here vs elsewhere, flights always drawn ------------------
+  await ctx.check('isolated-lanes', async () => {
+    await prepared(v2); await isolate(v2, 'EHLE');
+    const dr = await v2.eval(DRAWER), n = await v2.eval(`CNSScheduler.rotationsAt('EHLE').length`);
     const pr = [];
-    if (!dr.open) pr.push('clicking the Fleet button collapsed the drawer');
-    if (j(dr.segOn) !== j(['fleet'])) pr.push(`#laneSeg .on = ${j(dr.segOn)}`);
-    if (dr.rows !== st.lanes) pr.push(`fleet rows ${dr.rows} ≠ CNSScheduler.runGlobal().lanes.length ${st.lanes}`);
-    if (!dr.depSwHidden || !dr.depLblHidden) pr.push(`departures switch/label not hidden in fleet view (sw ${dr.depSwHidden}, lbl ${dr.depLblHidden})`);
-    if (!(dr.fly > 0 && dr.chg > 0)) pr.push(`fleet view blocks: fly ${dr.fly}, chg ${dr.chg}`);
-    if (dr.drag !== st.lanes && dr.drag < st.lanes) pr.push(`draggable blocks ${dr.drag} < lanes ${st.lanes}`);
-    if (!dr.rowLabels.every(l => /→/.test(l))) pr.push(`lane labels lack "origin → dest": ${j(dr.rowLabels)}`);
-    if (!/Flying/.test(dr.legend)) pr.push('legend lacks "Flying" in the fleet view');
-    if (!(new RegExp(`^${st.lanes} aircraft ·`)).test(dr.sub)) pr.push(`#drawerSub "${dr.sub}" vs "${st.lanes} aircraft · …"`);
-    await ctx.screenshot(v2, 'fleet-lanes');
-    await ensureLanes(v2, 'airports');
-    if (pr.length) throw new Error(pr.join('; ') + ` — drawer=${j(dr)} engine lanes=${j(st.laneKeys)}`);
-    return { detail: `${dr.rows} fleet rows = ${st.lanes} lanes ${j(st.laneKeys)}; labels ${j(dr.rowLabels)}; fly ${dr.fly} chg ${dr.chg} wait ${dr.wait}; sub "${dr.sub}"; drawer open ${dr.open}`, repro: 'drawer open, real click #laneSeg [data-lanes=fleet]', evidence: [ctx.shot('fleet-lanes')] };
+    if (j(dr.grp) !== j(['EHLE'])) pr.push(`groups ${j(dr.grp)} ≠ ["EHLE"]`);
+    if (dr.subRows !== n) pr.push(`rows ${dr.subRows} ≠ rotationsAt(EHLE).length ${n}`);
+    if (!(dr.chgAway > 0)) pr.push(`no "charging elsewhere" block (EHLE's aircraft charge at EDDF/EHAM)`);
+    if (!(dr.fly > 0 && dr.chg > 0)) pr.push(`blocks: fly ${dr.fly}, chg ${dr.chg}`);
+    if (!/Charging here/.test(dr.legend) || !/Charging elsewhere/.test(dr.legend) || !/Flying/.test(dr.legend)) pr.push(`legend "${dr.legend}"`);
+    if (!(new RegExp(`^${n} aircraft · \\d+ chargers? · peak`)).test(dr.sub)) pr.push(`#drawerSub "${dr.sub}"`);
+    await ctx.screenshot(v2, 'isolated-lanes');
+    await prepared(v2);
+    if (pr.length) throw new Error(pr.join('; ') + ` — drawer=${j(dr)}`);
+    return { detail: `EHLE: ${dr.subRows} rows ${j(dr.subLabels)}; fly ${dr.fly} chg ${dr.chg} (away ${dr.chgAway}) wait ${dr.wait}; legend "${dr.legend}"; sub "${dr.sub}"`, repro: 'drawer open, real click on the EHLE group button', evidence: [ctx.shot('isolated-lanes')] };
   });
-
-  // ---- departures switch: #depSw toggles the fly blocks; the "Departures" LABEL must toggle the switch, not the drawer
-  await ctx.check('departures-switch', async () => {
-    await prepared(v2);
-    const before = await v2.eval(DRAWER);
-    await v2.click('#depSw'); await v2.waitFor('CNSUI.S.showDep === true', 3000, 50).catch(async e => { throw new Error(e.message + ' — last click target ' + j(await lastClick(v2))); }); await settle(v2);
-    const on = await v2.eval(DRAWER);
-    await v2.click('#depSw'); await v2.waitFor('CNSUI.S.showDep === false', 3000, 50).catch(async e => { throw new Error(e.message + ' — last click target ' + j(await lastClick(v2))); }); await settle(v2);
-    const off = await v2.eval(DRAWER);
-    const pr = [];
-    if (before.fly !== 0) pr.push(`fly blocks with the switch off before: ${before.fly}`);
-    if (!(on.fly > 0) || !on.depOn || !/Flying/.test(on.legend)) pr.push(`switch on → fly ${on.fly}, .on ${on.depOn}, legend "${on.legend}"`);
-    if (off.fly !== 0 || off.depOn) pr.push(`switch off again → fly ${off.fly}, .on ${off.depOn}`);
-    if (!on.open || !off.open) pr.push(`the switch click collapsed the drawer (open on=${on.open} off=${off.open})`);
-    await ctx.screenshot(v2, 'departures-switch');
-    if (pr.length) throw new Error(pr.join('; '));
-    return { detail: `fly blocks off/on/off = ${before.fly}/${on.fly}/${off.fly}; .on ${before.depOn}/${on.depOn}/${off.depOn}; drawer stayed open`, repro: 'drawer open (airport lanes), real click #depSw twice', evidence: [ctx.shot('departures-switch')] };
-  });
-  await ctx.check('departures-label', async () => {
-    await prepared(v2);
-    const before = await v2.eval(DRAWER);
-    const r = await v2.click('.dep-lbl');                       // real click on the LABEL text
-    await v2.sleep(400);
-    const after = await v2.eval(DRAWER);
-    // control: the switch itself (proven above) — repeat here so the two are in one record
-    await ensureDrawer(v2, true);
-    const c0 = await v2.eval(DRAWER); await v2.click('#depSw'); await v2.sleep(300); const c1 = await v2.eval(DRAWER);
-    await ensureDep(v2, false); await ensureDrawer(v2, true);
-    await ctx.screenshot(v2, 'departures-label');
-    const pr = [];
-    if (after.showDep === before.showDep) pr.push(`label click did NOT toggle the switch (showDep ${before.showDep} → ${after.showDep}, fly ${before.fly} → ${after.fly})`);
-    if (after.open !== before.open) pr.push(`label click toggled the DRAWER (open ${before.open} → ${after.open})`);
-    const detail = `label at (${r.cx.toFixed(0)},${r.cy.toFixed(0)}) top=${r.topTag}: showDep ${before.showDep}→${after.showDep}, drawer open ${before.open}→${after.open}, fly ${before.fly}→${after.fly}; control #depSw: showDep ${c0.showDep}→${c1.showDep}, open ${c0.open}→${c1.open}`;
-    if (pr.length) throw new Error(pr.join('; ') + ' — ' + detail);
-    return { detail, repro: 'drawer open, real click on .dep-lbl ("Departures")', evidence: [ctx.shot('departures-label')] };
-  }, { retry: 0 });
 
   // ---- drag a rotation +120 px → cns_schedule (5-min steps), toast, block moves; reload persists; classic agrees --
   let dragged = null;
@@ -197,7 +157,7 @@ export default async function run(ctx) {
     const st0 = await v2.eval(ENGINE);
     const cand = blocks.filter(b => b.visible && !b.covered && b.x + 120 + b.w / 2 < b.trackX + b.trackW - 4 && b.takeoff + 120 / b.trackW * SPAN < H1 - 5 && b.takeoff + 120 / b.trackW * SPAN > H0 + 65);
     if (!cand.length) throw new Error('no draggable, uncovered block with room for +120 px — blocks: ' + j(blocks));
-    const b = cand.find(c => /chg/.test(c.cls)) || cand[0];
+    const b = cand.find(c => /\bfly\b/.test(c.cls)) || cand[0];   // flights are always drawn: the rotation's first block, at its take-off
     const [tripId, k] = b.key.split(':');
     const schedBefore = st0.sched[tripId]; if (!Array.isArray(schedBefore) || schedBefore.length <= +k) throw new Error(`cns_schedule[${tripId}] = ${j(schedBefore)} has no slot ${k}`);
     const dm = 120 / b.trackW * SPAN; const nt = Math.max(H0 + 60, Math.min(H1, Math.round((b.takeoff + dm) / 5) * 5));
@@ -214,8 +174,8 @@ export default async function run(ctx) {
     else if (!toast.startsWith(`Take-off fixed at ${clock(nt)}`)) pr.push(`toast "${toast}" ≠ "Take-off fixed at ${clock(nt)}" (+ Undo)`);
     if (!after) pr.push(`block ${b.key} vanished after the re-render`);
     else {
-      // the handle block is the rotation's first RENDERED phase (a charge when departures are hidden), so its left% is
-      // pct(takeoff + phase start): it must shift by exactly the take-off delta, not land on pct(takeoff)
+      // the handle block is the rotation's first rendered phase (the flight), so its left% is pct(takeoff + phase
+      // start): it must shift by exactly the take-off delta
       if (Math.abs(after.left - b.left) < 0.5) pr.push(`block left% did not move (${b.left.toFixed(2)}% → ${after.left.toFixed(2)}%)`);
       const shift = (after.takeoff - b.takeoff) / SPAN * 100;
       if (Math.abs((after.left - b.left) - shift) > 0.05) pr.push(`block moved ${(after.left - b.left).toFixed(2)}% but its take-off moved ${after.takeoff - b.takeoff} min = ${shift.toFixed(2)}%`);
@@ -285,11 +245,11 @@ export default async function run(ctx) {
     return { detail: lines.join(' | '), repro: 'same profile: v2 Network rail row "ends …" vs classic #folder .sched-card-summary "last ends …"' };
   }, { retry: 0 });
 
-  // ---- drag far left in the FLEET view → clamps at 07:00 (engine DAY_START), never before ------------------------
+  // ---- drag far left in the overview → clamps at 07:00 (engine DAY_START), never before ------------------------
   await ctx.check('drag-clamp-day-start', async () => {
-    await prepared(v2); await ensureLanes(v2, 'fleet');
+    await prepared(v2);
     const blocks = (await v2.eval(BLOCKS)).filter(b => b.visible && !b.covered);
-    if (!blocks.length) throw new Error('fleet view: no uncovered draggable block');
+    if (!blocks.length) throw new Error('overview: no uncovered draggable block');
     const b = blocks.find(c => c.takeoff > 420) || blocks[0];
     const [tripId, k] = b.key.split(':');
     await v2.eval('__toasts.length = 0; true');
@@ -298,12 +258,11 @@ export default async function run(ctx) {
     const sched = await v2.eval(`JSON.parse(localStorage.getItem('cns_schedule') || '{}')`); const after = await blockByKey(v2, b.key);
     const stored = (sched[tripId] || [])[+k];
     await ctx.screenshot(v2, 'drag-clamp');
-    await ensureLanes(v2, 'airports');
     const pr = [];
     if (stored !== 420) pr.push(`stored ${stored}, expected the clamp 420 (07:00 = CNSScheduler.DAY_START)`);
     if (!(toast || '').startsWith('Take-off fixed at 07:00')) pr.push(`toast "${toast}"`);
     if (!after || after.takeoff !== 420) pr.push(`block data-takeoff ${after && after.takeoff}`);
-    if (after && Math.abs(after.left - pct(420)) > 0.05) pr.push(`fleet block left ${after.left.toFixed(2)}% ≠ pct(420) ${pct(420).toFixed(2)}% (fleet lanes draw the fly phase first, at the take-off)`);
+    if (after && Math.abs(after.left - pct(420)) > 0.05) pr.push(`fleet block left ${after.left.toFixed(2)}% ≠ pct(420) ${pct(420).toFixed(2)}% (overview lanes draw the fly phase first, at the take-off)`);
     const detail = `fleet lane "${b.lab}" key ${b.key} takeoff ${b.takeoff} → drag −${Math.min(900, b.x - 2).toFixed(0)} px → stored ${stored}, toast "${toast}", block takeoff ${after && after.takeoff} left ${after && after.left.toFixed(2)}%`;
     if (pr.length) throw new Error(pr.join('; ') + ' — ' + detail);
     return { detail, repro: 'fleet view, drag a lane block far to the left', evidence: [ctx.shot('drag-clamp')] };
@@ -408,37 +367,35 @@ export default async function run(ctx) {
   await ctx.check('focus-button-plan-mode', async () => {
     await prepared(v2);
     // control: in Network mode the same real click isolates the airport
-    await v2.click('#gantt .grow.grp .lab button[data-act=focus][data-ap=EDDF]'); await v2.sleep(300);
+    await v2.click('#gantt .grow.grp .lab button[data-act=focus][data-ap=EHLE]'); await v2.sleep(300);
     const net = await v2.eval(DRAWER);
     await v2.click('#focChip'); await v2.waitFor(`CNSUI.S.filter === ''`, 3000, 50); await v2.sleep(200);
-    await setMode(v2, 'plan'); await ensureDrawer(v2, true); await ensureLanes(v2, 'airports');
-    const has = await v2.eval(`!!document.querySelector('#gantt .grow.grp .lab button[data-act=focus][data-ap=EDDF]')`);
-    if (!has) throw new Error('Plan mode: no EDDF group button in the drawer');
-    const r = await v2.click('#gantt .grow.grp .lab button[data-act=focus][data-ap=EDDF]'); await v2.sleep(400);
+    await setMode(v2, 'plan'); await ensureDrawer(v2, true);
+    const has = await v2.eval(`!!document.querySelector('#gantt .grow.grp .lab button[data-act=focus][data-ap=EHLE]')`);
+    if (!has) throw new Error('Plan mode: no EHLE group button in the drawer');
+    const r = await v2.click('#gantt .grow.grp .lab button[data-act=focus][data-ap=EHLE]'); await v2.sleep(400);
     const plan = await v2.eval(DRAWER);
     await ctx.screenshot(v2, 'focus-button-plan-mode');
     await setMode(v2, 'network'); if (await v2.eval('CNSUI.S.filter')) { await v2.click('#focChip'); await v2.sleep(200); }
     const pr = [];
-    if (net.filter !== 'EDDF') pr.push(`control (Network mode) did not isolate: filter "${net.filter}"`);
-    if (plan.filter !== 'EDDF' || plan.chipHidden) pr.push(`Plan mode: the group button did nothing (filter "${plan.filter}", chip hidden ${plan.chipHidden}, mode ${plan.mode}) — network.js:167 returns before 'focus' unless S.mode === 'network'`);
-    else if (plan.mode !== 'network') pr.push(`Plan mode: isolated EDDF but stayed in ${plan.mode} mode (expected to switch to Network)`);
+    if (net.filter !== 'EHLE') pr.push(`control (Network mode) did not isolate: filter "${net.filter}"`);
+    if (plan.filter !== 'EHLE' || plan.chipHidden) pr.push(`Plan mode: the group button did nothing (filter "${plan.filter}", chip hidden ${plan.chipHidden}, mode ${plan.mode}) — network.js:167 returns before 'focus' unless S.mode === 'network'`);
+    else if (plan.mode !== 'network') pr.push(`Plan mode: isolated EHLE but stayed in ${plan.mode} mode (expected to switch to Network)`);
     const detail = `Network-mode control: filter "${net.filter}" groups ${j(net.grp)}; Plan-mode click at (${r.cx.toFixed(0)},${r.cy.toFixed(0)}) top=${r.topTag}: filter "${plan.filter}", chip hidden ${plan.chipHidden}, mode ${plan.mode}, groups ${j(plan.grp)}`;
     if (pr.length) throw new Error(pr.join('; ') + ' — ' + detail);
-    return { detail, repro: 'Plan mode, drawer open, real click on the EDDF button of its group row', evidence: [ctx.shot('focus-button-plan-mode')] };
+    return { detail, repro: 'Plan mode, drawer open, real click on the EHLE button of its group row', evidence: [ctx.shot('focus-button-plan-mode')] };
   }, { retry: 0 });
 
   // ---- #network::fleet deep link in the seeded profile: the `::fleet` view mechanics with routes present ----------
   await ctx.check('network-fleet-deep-link', async () => {
     const p = await ctx.v2Page({ browser: v2.browser, hash: 'network::fleet' }); await install(p);
-    await p.waitFor(`CNSUI.S.mode === 'network' && CNSUI.S.lanes === 'fleet' && document.querySelector('#drawer').classList.contains('open')`, 10000, 100); await settle(p);
+    await p.waitFor(`CNSUI.S.mode === 'network' && document.querySelector('#drawer').classList.contains('open')`, 10000, 100); await settle(p);
     const dr = await p.eval(DRAWER), st = await p.eval(ENGINE);
     await ctx.screenshot(p, 'network-fleet-deep-link');
     const pr = [];
-    if (j(dr.segOn) !== j(['fleet'])) pr.push(`#laneSeg .on ${j(dr.segOn)}`);
-    if (dr.rows !== st.lanes || st.lanes < 1) pr.push(`fleet rows ${dr.rows} ≠ runGlobal().lanes.length ${st.lanes}`);
-    if (!dr.depSwHidden || !dr.depLblHidden) pr.push('departures switch/label visible in the fleet view');
+    if (dr.subRows !== st.lanes || st.lanes < 1) pr.push(`aircraft rows ${dr.subRows} ≠ runGlobal().lanes.length ${st.lanes}`);
     if (!(new RegExp(`^${st.lanes} aircraft ·`)).test(dr.sub)) pr.push(`#drawerSub "${dr.sub}"`);
-    const detail = `#network::fleet → mode ${dr.mode}, lanes ${dr.lanes} seg ${j(dr.segOn)}, drawer open ${dr.open} (${dr.height}px), fleet rows ${dr.rows} = lanes ${st.lanes} ${j(st.laneKeys)}, folder ${st.folder}, sub "${dr.sub}"`;
+    const detail = `#network::fleet → mode ${dr.mode}, drawer open ${dr.open} (${dr.height}px), aircraft rows ${dr.subRows} = lanes ${st.lanes} ${j(st.laneKeys)}, folder ${st.folder}, sub "${dr.sub}"`;
     if (pr.length) throw new Error(pr.join('; ') + ' — ' + detail);
     return { detail, repro: 'seeded profile: open /v2#network::fleet in a second tab', evidence: [ctx.shot('network-fleet-deep-link')] };
   });
@@ -446,7 +403,7 @@ export default async function run(ctx) {
   // ---- #hub::fleet deep link (own Chrome: loadScenario wipes the folder of its profile) ------------------------
   await ctx.check('hub-fleet-deep-link', async () => {
     const p = await ctx.v2Page({ hash: 'hub::fleet', timeout: 40000 }); await install(p);
-    await p.waitFor(`!!(window.__toasts || []).find(t => /loaded/.test(t.text)) || (CNSUI.S.lanes === 'fleet' && document.querySelector('#drawer').classList.contains('open'))`, 30000, 150);
+    await p.waitFor(`!!(window.__toasts || []).find(t => /loaded/.test(t.text)) || (CNSUI.S.mode === 'network' && document.querySelector('#drawer').classList.contains('open'))`, 30000, 150);
     await p.sleep(800);
     const dr = await p.eval(DRAWER), st = await p.eval(ENGINE);
     const hub = await p.eval(`({ routes: CNSUI.network.SCENARIOS.hub.routes.length, planes: [...new Set(CNSUI.network.SCENARIOS.hub.routes.map(r => r[2]))], catalog: CNSUI.PLANES.map(p => p.id) })`);
@@ -454,12 +411,10 @@ export default async function run(ctx) {
     await ctx.screenshot(p, 'hub-fleet');
     const pr = [];
     if (dr.mode !== 'network') pr.push(`mode ${dr.mode}`);
-    if (dr.lanes !== 'fleet' || j(dr.segOn) !== j(['fleet'])) pr.push(`lanes ${dr.lanes}, #laneSeg .on ${j(dr.segOn)}`);
     if (!dr.open) pr.push('drawer closed');
-    if (!dr.depSwHidden || !dr.depLblHidden) pr.push(`departures switch/label visible in the fleet view`);
-    if (dr.rows !== st.lanes) pr.push(`fleet rows ${dr.rows} ≠ runGlobal().lanes.length ${st.lanes}`);
+    if (dr.subRows !== st.lanes) pr.push(`aircraft rows ${dr.subRows} ≠ runGlobal().lanes.length ${st.lanes}`);
     if (st.folder !== hub.routes) { const msg = `hub scenario loaded ${st.folder}/${hub.routes} routes (scenario plane ids ${j(hub.planes)}; not in the production catalog: ${j(missing)}) — the shell component's deep-links-hub defect, so the fleet view here is ${st.lanes ? 'partial' : 'EMPTY'}`; if (st.lanes === 0) { ctx.blockedBy.push('hub-fleet-deep-link: ' + msg); pr.push(msg); } else pr.push(msg); }
-    const detail = `#hub::fleet → mode ${dr.mode}, lanes ${dr.lanes} seg ${j(dr.segOn)}, drawer open ${dr.open} (${dr.height}px), fleet rows ${dr.rows} = lanes ${st.lanes} ${j(st.laneKeys)}, folder ${st.folder}/${hub.routes}, empty-state ${dr.empty}, sub "${dr.sub}", toasts ${j(dr.toasts)}`;
+    const detail = `#hub::fleet → mode ${dr.mode}, drawer open ${dr.open} (${dr.height}px), aircraft rows ${dr.subRows} = lanes ${st.lanes} ${j(st.laneKeys)}, folder ${st.folder}/${hub.routes}, empty-state ${dr.empty}, sub "${dr.sub}", toasts ${j(dr.toasts)}`;
     if (pr.length) throw new Error(pr.join('; ') + ' — ' + detail);
     return { detail, repro: 'open /v2#hub::fleet in a fresh profile', evidence: [ctx.shot('hub-fleet')] };
   }, { retry: 0 });

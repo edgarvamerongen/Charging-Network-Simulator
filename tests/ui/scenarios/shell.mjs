@@ -70,7 +70,7 @@ const V2_STATE = `(function(){ const S = CNSUI.S, D = window.CNS_DATA || {}; ret
   shareV: D.shareState ? D.shareState.v : null, shareK: D.shareState ? (D.shareState.k || null) : null, shareNull: D.shareState === null,
   netCount: (document.querySelector('#netCount') || { textContent: '' }).textContent.trim(), folder: window.CNSDemand ? CNSDemand.loadFolder().length : null,
   bodyNet: document.body.classList.contains('net'), railWide: document.querySelector('#rail').classList.contains('wide'), modalOpen: !document.querySelector('#modal').hidden,
-  drawerOpen: document.querySelector('#drawer').classList.contains('open'), lanes: S.lanes, filter: S.filter, openAp: Object.keys(S.openAp || {}).filter(k => S.openAp[k]), acFilterOpen: !!S.acFilterOpen,
+  drawerOpen: document.querySelector('#drawer').classList.contains('open'), filter: S.filter, openAp: Object.keys(S.openAp || {}).filter(k => S.openAp[k]), acFilterOpen: !!S.acFilterOpen,
   acPop: !!document.querySelector('.ac-pop'), ms: !!document.querySelector('#modalBox .ms'), welcomeHide: !!document.querySelector('#welcomeHide'), apRows: document.querySelectorAll('#railBody .ap').length,
   units: localStorage.getItem('cns_units'), toasts: (window.__toasts || []).map(t => t.text) }; })()`;
 const CLASSIC_STATE = `(function(){ const v = id => { const e = document.getElementById(id); return e ? e.value : null; }; const R = (typeof lastResult !== 'undefined') ? lastResult : undefined;
@@ -404,9 +404,9 @@ export default async function run(ctx) {
   await deep('hub-EHLE', 'hub:EHLE', SCEN_READY + ` && CNSUI.S.filter === 'EHLE'`, async st => { const pr = [];
     if (st.filter !== 'EHLE' || !st.openAp.includes('EHLE')) pr.push(`filter=${st.filter} openAp=${j(st.openAp)}`); if (st.mode !== 'network') pr.push('mode ' + st.mode); if (st.folder !== 8) pr.push(`folder ${st.folder}/8 routes (same cause as deep-links-hub)`);
     return { problems: pr, detail: `filter=${st.filter} openAp=${j(st.openAp)} folder=${st.folder} .ap rows=${st.apRows}` }; }, { settle: 600 });
-  await deep('hub-fleet', 'hub::fleet', SCEN_READY + ` && CNSUI.S.lanes === 'fleet'`, async (st, p) => { const g = await p.eval(`({ lanes: document.querySelectorAll('#gantt .lane, #gantt [class*=lane]').length, seg: [...document.querySelectorAll('#laneSeg button.on')].map(b => b.dataset.lanes), ganttChildren: document.querySelector('#gantt').children.length })`); const pr = [];
-    if (st.lanes !== 'fleet') pr.push('S.lanes ' + st.lanes); if (!st.drawerOpen) pr.push('drawer closed'); if (st.folder !== 8) pr.push(`folder ${st.folder}/8 routes (same cause as deep-links-hub)`);
-    return { problems: pr, detail: `lanes=${st.lanes} drawer=${st.drawerOpen} laneSeg.on=${j(g.seg)} gantt children=${g.ganttChildren} folder=${st.folder}` }; }, { settle: 600 });
+  await deep('hub-fleet', 'hub::fleet', SCEN_READY + ` && document.querySelector('#drawer').classList.contains('open')`, async (st, p) => { const g = await p.eval(`({ ganttChildren: document.querySelector('#gantt').children.length })`); const pr = [];
+    if (!st.drawerOpen) pr.push('drawer closed'); if (st.folder !== 8) pr.push(`folder ${st.folder}/8 routes (same cause as deep-links-hub)`);
+    return { problems: pr, detail: `drawer=${st.drawerOpen} gantt children=${g.ganttChildren} folder=${st.folder}` }; }, { settle: 600 });
   await deep('filters', 'filters', `!!document.querySelector('.ac-pop')`, async st => ({ problems: (st.acPop && st.acFilterOpen) ? [] : [`.ac-pop=${st.acPop} S.acFilterOpen=${st.acFilterOpen}`], detail: `.ac-pop=${st.acPop} welcome=${st.welcomeHide}` }), { timeout: 8000 });
   await deep('settings', 'settings', `!document.querySelector('#modal').hidden && !!document.querySelector('#modalBox .ms')`, async (st, p) => ({ problems: (st.modalOpen && st.ms) ? [] : [`modal=${st.modalOpen} .ms=${st.ms}`], detail: `modal=${st.modalOpen} .ms=${st.ms} rows=${await p.eval(`document.querySelectorAll('#modalBox .ms .msr').length`)}` }), { timeout: 8000 });
   await deep('welcome', 'welcome', `!!document.querySelector('#modal:not([hidden]) #welcomeHide')`, async st => ({ problems: (st.modalOpen && st.welcomeHide) ? [] : [`modal=${st.modalOpen} #welcomeHide=${st.welcomeHide}`], detail: `modal=${st.modalOpen} #welcomeHide=${st.welcomeHide}` }), { timeout: 8000 });

@@ -75,7 +75,7 @@
       ['Model settings', () => UI.settings.open()], ['Take the tour', () => UI.tour.start()], ['Export advisory report (PDF)', () => UI.report.pick(), '⇧P'],
       ['Load scenario: Hub base', () => UI.network.loadScenario('hub')], ['Load scenario: Regional network', () => UI.network.loadScenario('regional')], ['Load scenario: Training school', () => UI.network.loadScenario('training')],
       S.filter ? ['Show all airports', () => { S.filter = ''; UI.render(); UI.map.drawNet(); UI.map.fitNet(); }] : null,
-      [S.lanes === 'fleet' ? 'Timeline: airport lanes' : 'Timeline: fleet lanes', () => { S.lanes = S.lanes === 'fleet' ? 'airports' : 'fleet'; $('#drawer').classList.add('open'); UI.timeline.render(); }],
+      ['Open the demand timeline', () => { $('#drawer').classList.add('open'); UI.timeline.render(); }],
       ['Open the classic version', () => { location.href = '/?desktop=1'; }],
       [UI.PROTO ? 'Leave the prototype' : 'Open the prototype: fixed panels, live result, charger sizing', () => { location.search = UI.PROTO ? '' : '?proto'; }],
     ].filter(Boolean);

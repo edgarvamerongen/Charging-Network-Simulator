@@ -33,7 +33,7 @@ const PAL_STATE = `(function(){ var k = document.getElementById('cmdk'), inp = d
 const V2_STATE = `(function(){ var S = CNSUI.S; var oi = document.querySelector('#railBody [data-ac=origin]'); var c = CNSUI.map.map.getCenter();
   var mo = {}; try { mo = JSON.parse(localStorage.getItem('cns_map_options') || '{}'); } catch (e) {}
   return { o: S.origin && S.origin.ident, d: S.dest && S.dest.ident, stops: S.stops.filter(Boolean).map(function (a) { return a.ident; }), plane: S.planeId, charger: S.chargerId, chargerObj: CNSUI.charger().id, trip: S.trip, freq: S.freq, per: S.per,
-    mode: S.mode, rail: S.rail, base: S.base, filter: S.filter, lanes: S.lanes, result: !!S.result, err: S.err || '', bodyNet: document.body.classList.contains('net'), railWide: document.querySelector('#rail').classList.contains('wide'),
+    mode: S.mode, rail: S.rail, base: S.base, filter: S.filter, result: !!S.result, err: S.err || '', bodyNet: document.body.classList.contains('net'), railWide: document.querySelector('#rail').classList.contains('wide'),
     drawer: document.querySelector('#drawer').classList.contains('open'), modal: !document.querySelector('#modal').hidden, ms: !!document.querySelector('#modalBox .ms'), msRows: document.querySelectorAll('#modalBox .msr').length,
     msTitle: ((document.querySelector('#modalBox .mh h3') || {}).textContent || '').trim(), msSliders: document.querySelectorAll('#modalBox input[type=range]').length, activeTag: document.activeElement ? document.activeElement.tagName + ':' + (document.activeElement.type || '') : null,
     netCount: ((document.querySelector('#netCount') || {}).textContent || '').trim(), folder: window.CNSDemand ? CNSDemand.loadFolder().length : null, apRows: [].slice.call(document.querySelectorAll('#railBody .ap')).map(function (e) { return e.dataset.ap; }),
@@ -43,7 +43,7 @@ const V2_STATE = `(function(){ var S = CNSUI.S; var oi = document.querySelector(
     originInput: oi ? oi.value : null, originIcao: oi && oi.nextElementSibling ? oi.nextElementSibling.textContent.trim() : null, routeD: [].slice.call(document.querySelectorAll('#railBody .route .stop .d')).map(function (e) { return e.textContent.trim(); }),
     tourCalls: (window.__cns && __cns.tourCalls) || 0, inView: CNSUI.map.routeInView ? CNSUI.map.routeInView() : null, driver: !!document.querySelector('.driver-popover, .driver-overlay, .driver-active'), center: [c.lat, c.lng], zoom: CNSUI.map.map.getZoom(),
     popup: ((document.querySelector('.leaflet-popup .pp .ic2') || {}).textContent || '').trim(), toast: ((document.querySelector('#toast') || {}).textContent || '').trim(), toastShown: !!document.querySelector('#toast.show'),
-    laneOn: [].slice.call(document.querySelectorAll('#laneSeg button.on')).map(function (b) { return b.dataset.lanes; }), drawerSub: ((document.querySelector('#drawerSub') || {}).textContent || '').trim(),
+    drawerSub: ((document.querySelector('#drawerSub') || {}).textContent || '').trim(),
     modalTitle: ((document.querySelector('#modalBox .mh h3') || {}).textContent || '').trim(), rpRadios: document.querySelectorAll('#modalBox input[name=rp]').length,
     alerts: (window.__cns && __cns.alerts.slice(-2)) || [], clipN: (window.__cns && __cns.clip.length) || 0, clip: (window.__cns && __cns.clip[__cns.clip.length - 1]) || null,
     stageBg: (function () { var s = document.querySelector('#railBody .ac-stage'); return s ? getComputedStyle(s).backgroundImage : null; })(), planeImage: CNSUI.plane().image || null, planeImageUrl: CNSUI.plane().image_url || null }; })()`;
@@ -660,24 +660,17 @@ export default async function run(ctx) {
     return { detail: `no filter → not offered; Isolate EDDM → rows ${j(iso.apRows)}; "show all" → ${j(offered)}; run → filter="" rows=${j(s.apRows)}; not offered again`, repro: 'v2: seed EDDM→EDDF; ⌘K EDDM → Isolate; ⌘K "show all" → Enter' };
   });
 
-  // Timeline lanes: the label follows S.lanes; the action flips it, opens the drawer and re-renders the Gantt.
+  // The timeline action opens the drawer and re-renders the Gantt (the selection, not a lane switch, decides the view).
   await check('actions-timeline-lanes', async () => {
-    await v2.eval(`(function(){ CNSUI.S.lanes = 'airports'; document.querySelector('#drawer').classList.remove('open'); CNSUI.timeline.render(); return true; })()`);
-    let st = await query(v2, 'timeline');
+    await v2.eval(`(function(){ document.querySelector('#drawer').classList.remove('open'); CNSUI.timeline.render(); return true; })()`);
+    const st = await query(v2, 'timeline');
     const a = st.items.map(x => x.label);
-    await runItem(v2, st, /^Timeline: fleet lanes$/);
-    await v2.waitFor(`CNSUI.S.lanes === 'fleet'`, 3000, 30); await v2.sleep(120);
+    await runItem(v2, st, /^Open the demand timeline$/);
+    await v2.waitFor(`document.querySelector('#drawer').classList.contains('open')`, 3000, 30); await v2.sleep(120);
     const s1 = await v2s(v2);
-    st = await query(v2, 'timeline');
-    const b = st.items.map(x => x.label);
-    await runItem(v2, st, /^Timeline: airport lanes$/);
-    await v2.waitFor(`CNSUI.S.lanes === 'airports'`, 3000, 30); await v2.sleep(120);
-    const s2 = await v2s(v2);
-    if (!a.includes('Timeline: fleet lanes') || a.includes('Timeline: airport lanes')) throw new Error('airport lanes: ' + j(a));
-    if (!s1.drawer || s1.laneOn.join() !== 'fleet') throw new Error(`after "Timeline: fleet lanes": drawer=${s1.drawer} #laneSeg .on=${j(s1.laneOn)} sub="${s1.drawerSub}"`);
-    if (!b.includes('Timeline: airport lanes') || b.includes('Timeline: fleet lanes')) throw new Error('fleet lanes: ' + j(b));
-    if (s2.laneOn.join() !== 'airports') throw new Error(`after "Timeline: airport lanes": #laneSeg .on=${j(s2.laneOn)}`);
-    return { detail: `${j(a)} → lanes=fleet drawer=${s1.drawer} #laneSeg .on=${j(s1.laneOn)} sub="${s1.drawerSub}"; ${j(b)} → lanes=airports sub="${s2.drawerSub}"`, repro: 'v2: ⌘K timeline → Enter; again' };
+    if (!a.includes('Open the demand timeline')) throw new Error('offered: ' + j(a));
+    if (!s1.drawer) throw new Error(`after "Open the demand timeline": drawer=${s1.drawer} sub="${s1.drawerSub}"`);
+    return { detail: `${j(a)} → drawer=${s1.drawer} sub="${s1.drawerSub}"`, repro: 'v2: ⌘K timeline → Enter' };
   });
 
   // Advisory report: on an empty network the action toasts; with a network it opens the airport picker (no PDF is generated here).
