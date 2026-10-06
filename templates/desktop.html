@@ -88,7 +88,8 @@ window.CNS_DATA = {
   chargers: {{ chargers|tojson }},
   cartoKeyQs: {{ carto_key_qs|tojson }},
   shareState: {{ (share_state if share_state is defined else none)|tojson }},
-  assetVersion: {{ asset_version|tojson }}
+  assetVersion: {{ asset_version|tojson }},
+  worldAirports: {{ (world_airports_hash if world_airports_hash is defined else '')|tojson }}
 };
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

@@ -51,7 +51,7 @@
     // An action the query names from its first letter ranks first ("sim" → Simulate), then airports by match (audit F6).
     const actsFirst = !!ql && acts.some(([l]) => l.toLowerCase().startsWith(ql)); if (actsFirst) pushActs();
     if (ql.length >= 2) UI.search(ql).slice(0, 4).forEach((a, ai) => {
-      add('Airports', `<b>${esc(a.ident)}</b> ${esc(a.name)}`, () => UI.map.flyTo(a), 'fly to', esc(a.municipality || ''));
+      add('Airports', `<b>${esc(a.ident)}</b> ${esc(a.name)}`, () => UI.map.flyTo(a), 'fly to', esc([a.municipality, a.iso_country].filter(Boolean).join(' · ')));
       if (ai > 0) return;
       add('Airports', `Set <b>${esc(a.ident)}</b> as departure`, () => { S.origin = a; UI.setMode('plan'); UI.plan.onFormChange(false); }, 'D');
       add('Airports', `Set <b>${esc(a.ident)}</b> as destination`, () => { S.dest = a; UI.setMode('plan'); UI.plan.onFormChange(false); }, 'A');

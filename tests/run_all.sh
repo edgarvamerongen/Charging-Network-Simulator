@@ -19,6 +19,7 @@ rc=0
 
 # Every layer runs on the tracked fixture catalog; the dev servers run the Notion sync in data/.
 export CNS_PLANES_FILE="${CNS_PLANES_FILE:-$PWD/tests/fixtures/planes.fixture.json}"
+export CNS_AIRPORTS_FILE="${CNS_AIRPORTS_FILE:-$PWD/european_airports.csv}"   # never the generated world set
 # The live-server layers (API tests, golden, DES gate) post fixture aircraft to /api/simulate, so
 # they get their own short-lived server on that catalog. CNS_BASE_URL=... uses a running one instead.
 if [ -z "${CNS_BASE_URL:-}" ]; then

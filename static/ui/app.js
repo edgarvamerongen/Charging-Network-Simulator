@@ -145,7 +145,8 @@ window.CNSUI = (function () {
     q = (q || '').trim().toLowerCase(); if (q.length < 2) return [];
     const out = [];
     for (const a of AIRPORTS) {
-      const id = a.ident.toLowerCase(), ia = (a.iata_code || '').toLowerCase(), nm = a.name.toLowerCase(), mu = (a.municipality || '').toLowerCase();
+      const lc = a._lc || (a._lc = [a.ident.toLowerCase(), (a.iata_code || '').toLowerCase(), (a.name || '').toLowerCase(), (a.municipality || '').toLowerCase()]);
+      const id = lc[0], ia = lc[1], nm = lc[2], mu = lc[3];
       let r; if (q === id || q === ia) r = 0; else if (nm.startsWith(q) || mu.startsWith(q)) r = 1; else if (nm.split(' ').some(w => w.startsWith(q))) r = 2; else if (nm.includes(q) || mu.includes(q) || id.startsWith(q)) r = 3; else continue;
       out.push([r, RANK[a.type] ?? 3, a]);
     }
@@ -221,13 +222,31 @@ window.CNSUI = (function () {
       toast('Could not load the airport database');
     } catch (e2) { /* the DOM itself is gone — nothing left to say it in */ }
   }
+  // The world set (~48,000 airports) arrives columnar (world_data.py) and unpacks into the records the engines
+  // read; its content hash is in the URL, so the browser keeps it until a rebuild. Without it (not built, or the
+  // request fails) the European list keeps the planner working.
+  const WORLD_FIELDS = { i: 'ident', n: 'name', t: 'type', la: 'latitude_deg', lo: 'longitude_deg', c: 'iso_country', m: 'municipality', a: 'iata_code',
+    ak: 'alternate_km', ai: 'alternate_ident', rp: 'rwy_paved_m', rg: 'rwy_grass_m', rv: 'rwy_gravel_m', rd: 'rwy_dirt_m', rw: 'rwy_water_m', ru: 'rwy_unknown_m' };
+  const WORLD_TYPES = ['small_airport', 'medium_airport', 'large_airport'];
+  function unpackWorld(feed) {
+    const f = feed.f, keys = Object.keys(WORLD_FIELDS), out = new Array(feed.n);
+    for (let k = 0; k < feed.n; k++) { const r = {};
+      for (const key of keys) { const v = f[key][k]; r[WORLD_FIELDS[key]] = key === 't' ? WORLD_TYPES[v] : (v == null ? '' : v); }
+      out[k] = r; }
+    return out;
+  }
+  async function loadAirports() {
+    const h = D.worldAirports;
+    if (h) { try { const r = await fetch('/api/airports/world?v=' + encodeURIComponent(h)); if (r.ok) return unpackWorld(await r.json()); } catch (e) { console.warn('[v2] world airports unavailable, using Europe', e); } }
+    return fetch('/api/airports').then(r => r.json());
+  }
   async function boot() {
     if (!hasDoc) return;
     try { await _boot(); } catch (e) { bootFailed(e); }
   }
   async function _boot() {
     if (window.CNSChargers) { try { await CNSChargers.load(); (CNSChargers.list() || []).forEach(c => { if (!CHARGERS.find(x => x.id === c.id)) CHARGERS.push(Object.assign({ type: 'Custom', image: '' }, c)); }); } catch (e) { console.warn('[v2] custom chargers unavailable', e); } }
-    const [aps, assets] = await Promise.all([fetch('/api/airports').then(r => r.json()), fetch('/api/airport-chargers').then(r => r.json()).catch(() => ({}))]);
+    const [aps, assets] = await Promise.all([loadAirports(), fetch('/api/airport-chargers').then(r => r.json()).catch(() => ({}))]);
     _setAirports(aps); ASSETS = assets || {};
     if (window.CNSScheduler) CNSScheduler.init({ chargers: window.CHARGERS_BY_ID, onChange: () => render() });
     if (window.CNSAnimation) CNSAnimation.init();

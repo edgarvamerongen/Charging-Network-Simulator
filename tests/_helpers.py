@@ -19,6 +19,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # servers' catalog), so a Notion edit can't move a test. run_all.sh exports the same
 # default for the modules that import app before this one.
 os.environ.setdefault("CNS_PLANES_FILE", os.path.join(REPO_ROOT, "tests", "fixtures", "planes.fixture.json"))
+# ...and on the European airport set, never the generated world one, so a world rebuild can't move them.
+os.environ.setdefault("CNS_AIRPORTS_FILE", os.path.join(REPO_ROOT, "european_airports.csv"))
 
 # Make `import sim` work regardless of the CWD unittest is launched from.
 if REPO_ROOT not in sys.path:

@@ -34,7 +34,7 @@
   function check() { const rows = STEPS().map((s, i) => ({ step: i + 1, anchor: s.el || '(centered)', title: s.title, ok: !s.el || !!document.querySelector(s.el) })); console.table(rows); return rows; }
   function welcome() {
     UI.modal.open(`<div class="mb" style="padding:22px 24px"><img src="/pics/logos/NRG2fly_logo_kleur_wide.png" alt="NRG2FLY" style="height:26px;display:block;margin-bottom:14px"><h3 style="font-size:18px;font-weight:600;letter-spacing:-.01em">Charging Network Simulator</h3>
-      <p class="hint" style="font-size:13px;margin:8px 0 14px;line-height:1.5">Plan electric-aviation routes, size the charging stops, and model the energy demand of a fleet across Europe. Every figure comes from the same engine the advisory reports use.</p>
+      <p class="hint" style="font-size:13px;margin:8px 0 14px;line-height:1.5">Plan electric-aviation routes, size the charging stops, and model the energy demand of a fleet, anywhere in the world. Every figure comes from the same engine the advisory reports use.</p>
       <div class="hint" style="line-height:1.6">The quickest way in is a real network: the <b style="color:var(--ink)">Hub base</b> scenario flies 8 return routes, 18 flights a day, from Lelystad. Read its airports, its chargers and its day, then plan your own.</div>
       <label class="hint" style="display:flex;gap:8px;align-items:center;margin-top:16px"><input type="checkbox" id="welcomeHide"> Don't show this again</label></div>
       <div class="btns"><button class="btn p" data-act="welcomeHub">Open the Hub base scenario</button><button class="btn" data-act="tourStart">Take the tour</button><span style="flex:1"></span><button class="btn" data-modal="close">Start planning</button></div>`);

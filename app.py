@@ -631,6 +631,56 @@ def get_airports():
     return jsonify(simulator.get_all_airports())
 
 
+# ---- world airports (v2) -----------------------------------------------------
+# The compact columnar feed prepare_world.py writes (~48,000 airports, ~5.6 MB, ~1.4 MB gzipped).
+# Read and gzipped once; the content hash is its ETag and rides in the page's URL for it, so the
+# browser keeps it until a rebuild changes the hash.
+WORLD_FEED = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'geo', 'airports-world.json')
+_world_cache = {}
+
+
+def world_feed():
+    """(hash, raw bytes, gzipped bytes) of the world feed, or None when it hasn't been built."""
+    try:
+        mtime = os.path.getmtime(WORLD_FEED)
+    except OSError:
+        return None
+    if _world_cache.get('mtime') != mtime:
+        import gzip
+        with open(WORLD_FEED, 'rb') as f:
+            raw = f.read()
+        m = re.search(rb'"hash":"([0-9a-f]+)"', raw[:200])
+        _world_cache.update(mtime=mtime, hash=m.group(1).decode() if m else str(int(mtime)),
+                            raw=raw, gz=gzip.compress(raw, 6))
+    return _world_cache['hash'], _world_cache['raw'], _world_cache['gz']
+
+
+@app.context_processor
+def _inject_world_hash():
+    w = world_feed()
+    return {'world_airports_hash': w[0] if w else ''}
+
+
+@app.route('/api/airports/world', methods=['GET'])
+def get_world_airports():
+    w = world_feed()
+    if not w:
+        return jsonify({'error': 'The world airport set has not been built (prepare_world.py).'}), 404
+    h, raw, gz = w
+    etag = '"' + h + '"'
+    if request.headers.get('If-None-Match') == etag:
+        resp = app.response_class(status=304)
+    elif 'gzip' in (request.headers.get('Accept-Encoding') or ''):
+        resp = app.response_class(gz, mimetype='application/json')
+        resp.headers['Content-Encoding'] = 'gzip'
+    else:
+        resp = app.response_class(raw, mimetype='application/json')
+    resp.headers['ETag'] = etag
+    resp.headers['Vary'] = 'Accept-Encoding'
+    resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    return resp
+
+
 # ---- airport hover photo (live-map preview) ---------------------------------
 # A small WebP thumbnail per airport for the map's hover popup. Reuses the PDF
 # cover's exact resolution pipeline (report.airport_photo_thumb -> curated photo /
@@ -647,8 +697,8 @@ def _airport_by_ident(ident):
         return None
     global _airport_idx
     if _airport_idx is None:
-        _airport_idx = {a['ident'].upper(): a
-                        for a in simulator.get_all_airports() if a.get('ident')}
+        _airport_idx = {a['ident'].upper(): a   # the hover photo: any airport the v2 map shows
+                        for a in simulator.get_all_airports(world=True) if a.get('ident')}
     return _airport_idx.get(ident)
 
 

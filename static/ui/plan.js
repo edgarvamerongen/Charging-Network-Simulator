@@ -63,7 +63,7 @@
   }
   const cName = c => c.name.replace(/\s*\d+(\.\d+)?\s*(k|M)W$/, '');
 
-  function acHtml(list) { return list.map(a => `<button data-id="${esc(a.ident)}"><span class="id">${esc(a.ident)}</span><span class="nm">${esc(a.name)}<small>${esc(a.municipality || '')}</small></span><span class="ty">${esc((a.type || '').split('_')[0])}</span></button>`).join(''); }
+  function acHtml(list) { return list.map(a => `<button data-id="${esc(a.ident)}"><span class="id">${esc(a.ident)}</span><span class="nm">${esc(a.name)}<small>${esc([a.municipality, a.iso_country].filter(Boolean).join(' · '))}</small></span><span class="ty">${esc((a.type || '').split('_')[0])}</span></button>`).join(''); }
   // ---- airport fields: the classic's setupAutocomplete (index.html:4076-4105) ----------------
   // Typed-but-unpicked text is remembered per field (S.acText) so a re-render keeps it, the airport
   // behind it is dropped, and the field carries .ac-unset — exactly what the classic shows.

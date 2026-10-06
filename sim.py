@@ -53,7 +53,14 @@ class Simulator:
     def __init__(self, base_dir="."):
         self.base_dir = base_dir
         chargers_file = os.path.join(base_dir, "chargers.json")
-        airports_file = os.path.join(base_dir, "european_airports.csv")
+        # Airports: the world set (prepare_world.py) when it is there, else the European one. The
+        # European file also stays loaded on its own: /api/airports serves it to the classic and
+        # mobile views, which are Europe-only. CNS_AIRPORTS_FILE pins one file for both (the tests
+        # pin european_airports.csv, so a world rebuild can't move them).
+        self._europe_file = os.path.join(base_dir, "european_airports.csv")
+        world_file = os.path.join(base_dir, "world_airports.csv")
+        airports_file = (os.environ.get("CNS_AIRPORTS_FILE")
+                         or (world_file if os.path.exists(world_file) else self._europe_file))
 
         # Aircraft catalog: the Notion-synced data/planes.generated.json is the
         # single source of truth (see NOTION_CATALOG_PLAN.md). There is no
@@ -69,9 +76,21 @@ class Simulator:
         with open(chargers_file, 'r') as f:
             self.chargers = json.load(f)
 
+        self.airports = self._read_airports(airports_file)
+        self._europe = (self.airports if os.path.abspath(airports_file) == os.path.abspath(self._europe_file)
+                        else None)   # read on first /api/airports
+        # ident / iata -> record: lookups are dict hits, not scans over ~48,000 rows
+        self._by_ident = {r['ident'].upper(): r for r in self.airports if r.get('ident')}
+        self._by_iata = {}
+        for r in self.airports:
+            if r.get('iata_code'):
+                self._by_iata.setdefault(r['iata_code'].upper(), r)
+
+    @staticmethod
+    def _read_airports(path):
         # Empty cells stay "" so JSON serialization doesn't fail
-        with open(airports_file, newline='', encoding='utf-8') as f:
-            self.airports = [
+        with open(path, newline='', encoding='utf-8') as f:
+            return [
                 {k: (float(v) if v and k in _AIRPORT_FLOAT_COLS else v)
                  for k, v in row.items()}
                 for row in csv.DictReader(f, restval="")
@@ -148,7 +167,11 @@ class Simulator:
             if data is not None:
                 self.planes = data
 
-    def get_all_airports(self):
+    def get_all_airports(self, world=False):
+        """The airport list for the map + autocomplete. Europe by default (/api/airports: the classic and
+        mobile views); world=True is the full set sim.py plans with (None of the European file
+        when the world set is loaded)."""
+        rows = self.airports if world else self._europe_rows()
         # We'll return just enough data for the map + autocomplete to reduce payload size.
         # rwy_*_m = longest OPEN runway per surface category (airport-card display);
         # selected defensively so an older CSV without them can't 500 the endpoint.
@@ -157,7 +180,12 @@ class Simulator:
                   'alternate_km', 'alternate_ident',
                   'rwy_paved_m', 'rwy_grass_m', 'rwy_gravel_m',
                   'rwy_dirt_m', 'rwy_water_m', 'rwy_unknown_m']
-        return [{k: r[k] for k in wanted if k in r} for r in self.airports]
+        return [{k: r[k] for k in wanted if k in r} for r in rows]
+
+    def _europe_rows(self):
+        if self._europe is None:
+            self._europe = self._read_airports(self._europe_file)
+        return self._europe
 
     def get_airport(self, code_or_name):
         q = (code_or_name or "").strip()
@@ -169,10 +197,9 @@ class Simulator:
         # name — see _AIRPORT_CODE_RE doc.
         if _AIRPORT_CODE_RE.match(q):
             q_upper = q.upper()
-            for col in ('ident', 'iata_code'):
-                hit = next((r for r in self.airports if r[col].upper() == q_upper), None)
-                if hit is not None:
-                    return hit
+            hit = self._by_ident.get(q_upper) or self._by_iata.get(q_upper)
+            if hit is not None:
+                return hit
         # Fall back to the original name / municipality substring search.
         q_lower = q.lower()
         return next((r for r in self.airports
