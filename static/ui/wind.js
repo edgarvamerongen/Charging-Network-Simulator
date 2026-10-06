@@ -14,7 +14,7 @@
     $('#windDirV').textContent = deg3(w.fromDeg) + 'T'; $('#windKtV').textContent = w.kt + ' kt';
     $('#windRose').style.transform = `rotate(${(+w.fromDeg + 180) % 360}deg)`;   // the arrow points where the air goes
     $$('#windDd input[type=range]').forEach(i => { i.disabled = !on; });
-    drift.set(on ? w : null);
+    drift.set(on && UI.S.windDrift !== false ? w : null);   // Map › Wind animation turns the drift off; the wind itself stays on
   }
   const $$ = UI.$$;
   // Any change re-plans like a Model setting does (the settings subscription re-runs the route and network).
