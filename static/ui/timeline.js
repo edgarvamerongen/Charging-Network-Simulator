@@ -71,7 +71,9 @@
     // With no airport isolated there is no "here": one charge colour, one legend entry.
     const chgKey = !foc ? '<span><i class="c"></i>Charging</span>' : '<span><i class="c"></i>Charging here</span><span><i class="a"></i>Charging elsewhere</span>';
     $('#gantt').innerHTML = rows + `<div class="glegend">${chgKey}${anyWait ? '<span><i class="w"></i>Waiting for a charger</span>' : ''}<span><i></i>Flying</span>${nFix ? `<span><i class="fx"></i>Fixed take-off<button class="lnk" data-act="releaseAll">Release ${nFix === 1 ? '' : 'all '}${nFix}</button></span>` : ''}<span style="margin-left:auto">Drag to fix a take-off · double-click to release</span></div>`;
-    $('#drawer').style.setProperty('--drawer-h', Math.min(Math.round(window.innerHeight * 0.6), 36 + 22 + (folder.length ? 44 : 60) + lanes * 28 + 44) + 'px');
+    // Fit the drawer to what it holds (measured, not estimated per row), up to 60 % of the window; past that it scrolls.
+    const gEl = $('#gantt'), hh = gEl.style.height; gEl.style.height = 'auto'; const need = gEl.offsetHeight; gEl.style.height = hh;
+    $('#drawer').style.setProperty('--drawer-h', Math.min(Math.round(window.innerHeight * 0.6), 36 + need + 1) + 'px');
   }
   // ---- drag a rotation → fixed take-off; double-click → back to automatic (each with an Undo) ----
   const changed = () => { UI.folderChanged(); UI.render(); };
