@@ -471,6 +471,19 @@ test('too far for maxStops: refused before searching, with the stop count it wou
   assert.ok(Date.now() - t0 < 200, `${Date.now() - t0} ms`);
 });
 
+// The safety net: a search past its work budget stops and says so (here a tiny budget stands in for a huge search).
+test('a search past its work budget stops with a clear message instead of running on', () => {
+  const R = loadRouting({ requireAlt: false });
+  const O = node('O', 0.0, 0), D = node('D', 6.0, 0);
+  const field = Array.from({ length: 3000 }, (_, i) => Object.assign(ap('X' + i, (i % 60) / 10, 0), { latitude_deg: Math.floor(i / 60) / 50 - 0.5 }));
+  const res = R.planRoute({ origin: O, destination: D, plane: PLANE(200), allowedTypes: ['medium_airport'], allAirports: [O, ...field, D], options: { workMax: 1000 } });
+  assert.equal(res.tooBig, true);
+  assert.match(res.error, /too large to search/);
+  // the same search with its normal budget finds the route
+  const ok = R.planRoute({ origin: O, destination: D, plane: PLANE(200), allowedTypes: ['medium_airport'], allAirports: [O, ...field, D], options: {} });
+  assert.equal(ok.error, undefined, ok.error);
+});
+
 // Within the stop limit but across a gap no leg can bridge (an ocean): one reachability pass answers it, rather than
 // re-searching every corridor width and type preference (with ~48,000 airports that took minutes).
 test('unreachable within maxStops (a gap): answered fast, no route', () => {

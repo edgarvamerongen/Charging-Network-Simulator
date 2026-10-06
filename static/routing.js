@@ -198,7 +198,32 @@ window.CNSRouting = (function () {
                 const ap = _ap(a);
                 if (haversineKm(O, ap) + haversineKm(ap, D) <= cap * direct) C.push({ a, ap });
             }
-            return C;
+            return useThin ? thin(C) : C;
+        }
+        // A big candidate set (worldwide, small fields on, a long-reach aircraft) makes every airport a neighbour of
+        // thousands: the search grows with N × that. A stop among fifty strips a few km apart is the same stop, so in
+        // cells an eighth of a leg's reach only the best few stay (by the type preference, then the longest runway);
+        // everything near the departure and the destination stays, so the first and last legs keep their choice.
+        // Small sets (any European route on medium + large fields) are never thinned: their routes don't move.
+        const THIN_MIN = 2500, PER_CELL = 3;
+        // The safety net: leg checks one planRoute may make (a couple of seconds' work) before it gives up and says so.
+        const WORK_MAX = options.workMax || 4e7, TOO_BIG = {};
+        let work = 0;
+        const longest = (a) => Math.max(0, ...RWY_COLS.map(k => +a[k] || 0));
+        let useThin = true, thinnedAny = false;
+        function thin(C) {
+            if (C.length <= THIN_MIN) return C;
+            thinnedAny = true;
+            const cellKm = reachKm / 8, dLat = cellKm / 111.19, nearKm = Math.max(60, reachKm / 4), cells = new Map(), keep = [];
+            const rank = (x) => [typePen[x.a.type] || 0, -longest(x.a)];
+            for (const x of C) {
+                if (haversineKm(O, x.ap) <= nearKm || haversineKm(x.ap, D) <= nearKm) { keep.push(x); continue; }
+                const row = Math.floor((x.ap.lat + 90) / dLat), dLon = dLat / Math.max(0.05, Math.cos(((row + 0.5) * dLat - 90) * Math.PI / 180));
+                const k = row + ':' + Math.floor((x.ap.lon + 180) / dLon);
+                let b = cells.get(k); if (!b) cells.set(k, b = []); b.push(x);
+            }
+            cells.forEach(b => { b.sort((p, q) => { const r1 = rank(p), r2 = rank(q); return r1[0] - r2[0] || r1[1] - r2[1]; }); keep.push(...b.slice(0, PER_CELL)); });
+            return keep;
         }
 
         // A* over {origin} ∪ C ∪ {dest} for a given per-type penalty. Returns the best
@@ -222,7 +247,9 @@ window.CNSRouting = (function () {
             /** fn(j, d) for every node j ≠ i a leg from i can fly to (d = great-circle km); `skip(j)` prunes before any maths. */
             function eachLeg(i, skip, fn) {
                 const from = pos(i), test = (j) => {
-                    if (skip(j) || ux[i] * ux[j] + uy[i] * uy[j] + uz[i] * uz[j] < cosReach - 1e-12) return;   // beyond any leg's reach: no trig
+                    if (skip(j)) return;
+                    if (++work > WORK_MAX) throw TOO_BIG;   // the safety net: a search this size would freeze the page
+                    if (ux[i] * ux[j] + uy[i] * uy[j] + uz[i] * uz[j] < cosReach - 1e-12) return;   // beyond any leg's reach: no trig
                     const d = haversineKm(from, pos(j));
                     if (d > reachKm || legNeed(from, obj(i), pos(j), obj(j), d) > maxLeg) return;   // not flyable incl. wind + divert reserve
                     fn(j, d);
@@ -239,11 +266,17 @@ window.CNSRouting = (function () {
         }
         /** Can the destination be reached at all through C? One flood fill: reachability doesn't depend on the corridor
          *  width (C is the widest) or on the type preference, so an impossible route is answered once, not re-searched. */
-        function reachable(C) {
-            const G = graph(C), seen = new Uint8Array(G.N + 2), stack = [G.ORIG]; seen[G.ORIG] = 1;
-            while (stack.length) { const i = stack.pop(); if (i === G.DEST) return true;
-                G.eachLeg(i, (j) => seen[j] === 1, (j) => { seen[j] = 1; stack.push(j); }); }
-            return false;
+        /** The fewest legs from the origin to the destination through C (Infinity: unreachable). Breadth first, so it
+         *  also answers "needs more than maxStops" in one pass, where the cost search would exhaust every corridor. */
+        function fewestLegs(C) {
+            const G = graph(C), seen = new Uint8Array(G.N + 2); let level = [G.ORIG], legs = 0; seen[G.ORIG] = 1;
+            while (level.length) {
+                const next = [];
+                for (const i of level) { if (i === G.DEST) return legs; G.eachLeg(i, (j) => seen[j] === 1, (j) => { seen[j] = 1; next.push(j); }); }
+                level = next; legs++;
+                if (legs - 1 > options.maxStops + 1) return legs;   // past the limit: how much further does not matter (not Infinity: it IS reachable)
+            }
+            return Infinity;
         }
         function searchWith(typePen) {
             function astar(C) {
@@ -302,19 +335,44 @@ window.CNSRouting = (function () {
         // dropped so a route that actually exists is returned (e.g. a small-field-only corridor
         // a "prefer medium" search would otherwise push past the stop cap). The preference still
         // wins whenever it yields a route within maxStops.
-        const tooMany = (b) => !!b && (b.order.length - 2) > options.maxStops;
-        if (!reachable(candidates(options.detourCap * WIDEN[WIDEN.length - 1]))) {
-            return { stops: [], totalDistanceKm: 0, legCount: 0,
-                error: 'No reachable route with the current filter — enable more airport types or pick a longer-range aircraft.' };
-        }
-        let best = searchWith(typePen);
-        if (Object.values(typePen).some(v => v > 0) && (!best || tooMany(best))) {
-            const fallback = searchWith({});   // pure distance, no per-type penalty
-            if (fallback && (!best || !tooMany(fallback))) best = fallback;
+        const tooMany = (b) => !!b && (b === OVER || (b.order.length - 2) > options.maxStops);
+        const OVER = { over: true };   // reachable, but not within maxStops
+        let best;
+        // One full attempt: the fewest legs first (unreachable → null; more than maxStops even at the fewest → OVER,
+        // without the cost search, which would exhaust every corridor to prove it), then the search (with the type
+        // preference, then without if it needs too many stops).
+        const attempt = () => {
+            const legs = fewestLegs(candidates(options.detourCap * WIDEN[WIDEN.length - 1]));
+            if (legs === Infinity) return null;
+            if (legs - 1 > options.maxStops) return OVER;
+            let b = searchWith(typePen);
+            if (Object.values(typePen).some(v => v > 0) && (!b || tooMany(b))) {
+                const fallback = searchWith({});   // pure distance, no per-type penalty
+                if (fallback && (!b || !tooMany(fallback))) b = fallback;
+            }
+            return b;
+        };
+        try {
+            // Thinned first (fast); when that finds nothing within the stop limit, the full set (a stop the thinning
+            // dropped may be the one that keeps a route within the limit). The work budget guards both.
+            useThin = true; best = attempt(); const thinned = thinnedAny;
+            if (thinned && (!best || tooMany(best))) {
+                useThin = false;
+                try { const full = attempt(); if (full && (!best || !tooMany(full))) best = full; else if (full === OVER && !best) best = OVER; }
+                catch (e) { if (e !== TOO_BIG) throw e; }   // the full set is too big to search: the thinned answer stands
+            }
+        } catch (e) {
+            if (e !== TOO_BIG) throw e;
+            return { stops: [], totalDistanceKm: 0, legCount: 0, tooBig: true,
+                error: 'This route is too large to search with these settings. Narrow it down: switch off small airfields, or plan it in shorter sections with stops of your own.' };
         }
         if (!best) {
             return { stops: [], totalDistanceKm: 0, legCount: 0,
                 error: 'No reachable route with the current filter — enable more airport types or pick a longer-range aircraft.' };
+        }
+        if (best === OVER) {
+            return { stops: [], totalDistanceKm: 0, legCount: 0,
+                error: `Route needs more than ${options.maxStops} stops — try enabling more airport types or pick a longer-range aircraft.` };
         }
 
         const stops = [];

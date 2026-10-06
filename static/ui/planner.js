@@ -116,12 +116,21 @@
     validateRoute();
   }
   const replan = () => recomputeRoute();
+  // The remedy probes re-search the failing legs with more airport types; every render of the route panel asks, so the
+  // answer is kept per route + settings (with small fields across an ocean one probe is a big search).
+  const _remedy = new Map();
   function noRouteRemedy() {
     const enabled = allowedTypes(); const allTypes = ['large_airport', 'medium_airport', 'small_airport']; const disabled = allTypes.filter(x => !enabled.includes(x)); const netOn = S.showAssets;
     const t = terminus(); const p = plane(); if (!t || !p || !R()) return null;
     const maxLeg = availableRangeKm(p); const c = ringChain(t);
     const segments = (S.planned.stops.length || isCircular()) ? S.planned.legIssues.map(i => [c[i], c[i + 1]]) : [[t.origin, t.dest]];
     if (!segments.length) return null;
+    const key = [segments.map(([a, b]) => (a && a.ident) + '>' + (b && b.ident)).join(','), S.trip, p.id, maxLeg, enabled.join(), netOn, [...S.blacklist].join(), JSON.stringify(ST() ? ST().loadAll() : 0)].join('|');
+    if (_remedy.has(key)) return _remedy.get(key);
+    const out = remedyFor(segments, c, p, maxLeg, enabled, allTypes, disabled, netOn);
+    if (_remedy.size > 200) _remedy.clear(); _remedy.set(key, out); return out;
+  }
+  function remedyFor(segments, c, p, maxLeg, enabled, allTypes, disabled, netOn) {
     const used = new Set(c.map(x => x && x.ident).filter(Boolean)); const filtered = UI.airports().filter(ap => !used.has(ap.ident) && !S.blacklist.has(ap.ident));
     const probe = (types, idents) => segments.every(([a, b]) => { if (!a || !b) return false; const r = R().planRoute({ origin: a, destination: b, plane: p, allAirports: filtered, allowedTypes: types, allowedIdents: idents, options: Object.assign(routingOptions(), { maxLegKm: maxLeg, bothWays: S.trip === 'retour' }) }); return !r.error; });
     if (disabled.length && probe(allTypes, plannerAllowedIdents())) return 'types';
