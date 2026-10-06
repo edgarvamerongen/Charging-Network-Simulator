@@ -80,7 +80,7 @@
   }
   function draw(layer, fit) {
     wire(); if (!S.origin) return;
-    const m = model(), prof = m.error ? null : profile(m), map = UI.map.map, ll = a => [+(a.latitude_deg ?? a.lat), +(a.longitude_deg ?? a.lon)];
+    const L = UI.G, m = model(), prof = m.error ? null : profile(m), map = UI.map.map, ll = a => [+(a.latitude_deg ?? a.lat), +(a.longitude_deg ?? a.lon)];
     const arc = UI.map.arcPath || (pts => pts);
     // legs: landing to landing through its turning points; a red, dashed leg is too long for the aircraft
     const land = m.error ? null : [m.waypoints[0], ...m.waypoints.slice(1), ...(m.closed ? [m.waypoints[0]] : [])];
@@ -88,7 +88,7 @@
     legPaths.forEach((pts, i) => { const bad = !!(prof && prof.legs[i] && prof.legs[i].overRange), path = arc(pts);
       layer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: '#fff', weight: 5, opacity: .95, lineCap: 'round', lineJoin: 'round' }));
       layer.addLayer(L.polyline(path, { pane: 'rt', interactive: false, color: bad ? BAD : ACC, weight: bad ? 3 : 2, opacity: 1, dashArray: bad ? '7 6' : null, lineCap: 'round', lineJoin: 'round' }));
-      const tail = L.polyline(arc(pts.slice(-2)), { pane: 'rt', interactive: false, opacity: 0 }); tail.on('add', () => tail._path.setAttribute('marker-end', 'url(#cnsDir)')); layer.addLayer(tail);
+      layer.addLayer(L.polyline(arc(pts.slice(-2)), { pane: 'rt', interactive: false, opacity: 0, arrowEnd: true }));   // the arrowhead where it arrives
       const l = prof && prof.legs[i]; if (!S.showLabels || !l) return;
       const mid = pts[Math.floor((pts.length - 1) / 2)], nxt = pts[Math.floor((pts.length - 1) / 2) + 1], at = [(mid[0] + nxt[0]) / 2, (mid[1] + nxt[1]) / 2];
       layer.addLayer(L.marker(at, { pane: 'pins', interactive: false, icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="leglbl num${bad ? ' bad' : ''}">${bad ? 'Too long · ' : ''}${fmt.dist(l.distKm)} · ${fmt.min(l.flightMin)} · ${fmt.r(l.energyKwh)} kWh</div>` }) })); });

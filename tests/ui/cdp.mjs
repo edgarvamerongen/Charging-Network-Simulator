@@ -265,32 +265,47 @@ export class Page {
   exceptions() { return this.errors.filter(e => e.type === 'exception'); }
   clearErrors() { this.errors.length = 0; this.console.length = 0; }
 
-  // ---- map helpers (v2 shell) ----------------------------------------------------------
-  /** Close every Leaflet popup AND wait until it left the DOM (Leaflet keeps a fading popup for 200 ms — it eats clicks). */
-  async closePopups(timeout = 2000) { await this.eval(`(function(){ if (window.CNSUI && CNSUI.map && CNSUI.map.map) CNSUI.map.map.closePopup(); return true; })()`); await this.waitFor(`!document.querySelector('.leaflet-popup')`, timeout, 40); }
-  /** Viewport position of an airport dot + what is on top of it (for REAL clicks). */
+  // ---- map helpers (v2 shell: MapLibre GL behind static/ui/gl.js) -------------------------
+  /** In-page: what a REAL click at viewport (x, y) on the v2 map reaches. A DOM element over the map (marker, popup,
+      chrome) by its tag; on the WebGL canvas, the feature the click dispatcher (gl.js _hits, 3 px tolerance) would take:
+      'ap-dots' for an airport dot, '<pane>|<kind>' for an interactive shape, else 'canvas' (an empty map click). */
+  static TOP_AT = `function (x, y) { const m = CNSUI.map.map; const r = m.ml.getContainer().getBoundingClientRect();
+      const el = (x >= 0 && y >= 0 && x < innerWidth && y < innerHeight) ? document.elementFromPoint(x, y) : null;
+      const tag = e => e ? e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\\s+/).join('.') : '') : null;
+      let pane = null;
+      if (el && el.classList.contains('maplibregl-canvas')) { let hits = []; try { hits = m._hits({ point: { x: x - r.left, y: y - r.top } }); } catch (e) {}
+        const id = hits[0] && hits[0].layer.id; const k = id && Object.keys(m._srcs || {}).find(k => m._srcs[k] === id); pane = id ? (k || id) : 'canvas'; }
+      else if (el && el.closest('.maplibregl-popup')) pane = 'popup';
+      else if (el && el.closest('.maplibregl-marker')) pane = 'marker';
+      return { el: !!el, topTag: tag(el), topPane: pane }; }`;
+  /** Close the map popup AND wait until it left the DOM (both the MapLibre popup and any Leaflet one). */
+  async closePopups(timeout = 2000) { await this.eval(`(function(){ if (window.CNSUI && CNSUI.map && CNSUI.map.map) CNSUI.map.map.closePopup(); return true; })()`); await this.waitFor(`!document.querySelector('.cnsgl-popup, .leaflet-popup')`, timeout, 40); }
+  /** Viewport position of an airport + what a click there reaches (for REAL clicks). inView: on screen AND drawn as a dot now. */
   mapPoint(ident) {
     return this.eval(`(function(){ const a = CNSUI.byId()[${JSON.stringify(ident)}]; if (!a) return null; const m = CNSUI.map.map;
-      const ll = L.latLng(a.latitude_deg, a.longitude_deg); const p = m.latLngToContainerPoint(ll); const r = document.getElementById('map').getBoundingClientRect();
-      const x = r.left + p.x, y = r.top + p.y; const el = (x >= 0 && y >= 0 && x < innerWidth && y < innerHeight) ? document.elementFromPoint(x, y) : null;
-      const pane = el && el.closest('.leaflet-pane'); const tag = e => e ? e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\\s+/).join('.') : '') : null;
-      return { ident: a.ident, type: a.type, x, y, zoom: m.getZoom(), inView: m.getBounds().contains(ll) && !!el, asset: !!(CNSUI.assets() || {})[a.ident], topTag: tag(el),
-        topPane: pane ? (pane.className.split(/\\s+/).find(c => /^leaflet-.+-pane$/.test(c) && c !== 'leaflet-map-pane') || pane.className) : null }; })()`);
+      const ll = { lat: +a.latitude_deg, lng: +a.longitude_deg }; const p = m.latLngToContainerPoint(ll); const r = m.ml.getContainer().getBoundingClientRect();
+      const x = r.left + p.x, y = r.top + p.y; const t = (${Page.TOP_AT})(x, y); const dot = CNSUI.map.dots().some(d => d.ident === a.ident);
+      return { ident: a.ident, type: a.type, x, y, zoom: m.getZoom(), inView: m.getBounds().contains(ll) && t.el, dot, asset: !!(CNSUI.assets() || {})[a.ident], topTag: t.topTag, topPane: t.topPane }; })()`);
   }
-  /** Airport dots a human could click right now: allowed type (small only at zoom ≥ 7.5), in the map bounds, outside the rail /
-      topbar (44 px) / drawer, not an NRG asset, ≥ 28 px from every route endpoint; nearest to the map centre first. */
+  /** Airport dots a human could click right now (CNSUI.map.dots(): rendered, so size filters + the small-field zoom gate
+      apply): outside the rail / topbar (44 px) / drawer, not an NRG asset, ≥ 28 px from every route endpoint and ≥ 10 px
+      from any other rendered dot; nearest to the map centre first. */
   pickClickableDots(n = 3) {
-    return this.eval(`(function(){ const S = CNSUI.S, m = CNSUI.map.map, z = m.getZoom(); const allowed = (S.allowedTypes || ['large_airport', 'medium_airport']).filter(t => t !== 'small_airport' || z >= 7.5);
-      const b = m.getBounds(); const mr = document.getElementById('map').getBoundingClientRect(); const box = s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; };
+    return this.eval(`(function(){ const m = CNSUI.map.map, z = m.getZoom(); const mr = m.ml.getContainer().getBoundingClientRect(); const box = s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; };
       const rail = box('#rail'), drawer = box('#drawer'); const inBox = (r, x, y) => r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-      const vp = a => { const p = m.latLngToContainerPoint(L.latLng(a.latitude_deg, a.longitude_deg)); return [mr.left + p.x, mr.top + p.y]; };
+      const vp = a => { const p = m.latLngToContainerPoint({ lat: +a.latitude_deg, lng: +a.longitude_deg }); return [mr.left + p.x, mr.top + p.y]; };
       const ends = CNSUI.chain().map(vp); const assets = CNSUI.assets() || {}; const cx = mr.left + mr.width / 2, cy = mr.top + mr.height / 2; const out = [];
-      for (const a of CNSUI.airports()) { if (!allowed.includes(a.type) || assets[a.ident]) continue; const ll = L.latLng(a.latitude_deg, a.longitude_deg); if (!b.contains(ll)) continue;
-        const [x, y] = vp(a); if (x < mr.left + 20 || x > mr.right - 20 || y < 44 + 20 || y > mr.bottom - 20) continue; if (inBox(rail, x, y) || inBox(drawer, x, y)) continue;
-        if (ends.some(e => Math.hypot(e[0] - x, e[1] - y) < 28)) continue; out.push({ ident: a.ident, type: a.type, x, y, d: Math.hypot(x - cx, y - cy) }); }
-      out.sort((p, q) => p.d - q.d); return out.slice(0, ${+n}).map(o => { const el = document.elementFromPoint(o.x, o.y); const pane = el && el.closest('.leaflet-pane');
-        return { ident: o.ident, type: o.type, x: o.x, y: o.y, zoom: z, inView: true, asset: false, topTag: el ? el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\\s+/).join('.') : '') : null,
-          topPane: pane ? (pane.className.split(/\\s+/).find(c => /^leaflet-.+-pane$/.test(c) && c !== 'leaflet-map-pane') || pane.className) : null }; }); })()`);
+      const all = CNSUI.map.dots();
+      for (const d of all) { if (assets[d.ident]) continue; const x = d.x, y = d.y;
+        if (x < mr.left + 20 || x > mr.right - 20 || y < 44 + 20 || y > mr.bottom - 20) continue; if (inBox(rail, x, y) || inBox(drawer, x, y)) continue;
+        if (ends.some(e => Math.hypot(e[0] - x, e[1] - y) < 28)) continue; if (all.some(o => o !== d && Math.hypot(o.x - x, o.y - y) < 10)) continue;
+        out.push({ ident: d.ident, type: d.type, x, y, d: Math.hypot(x - cx, y - cy) }); }
+      out.sort((p, q) => p.d - q.d); const top = ${Page.TOP_AT};
+      return out.slice(0, ${+n}).map(o => { const t = top(o.x, o.y); return { ident: o.ident, type: o.type, x: o.x, y: o.y, zoom: z, inView: true, asset: false, topTag: t.topTag, topPane: t.topPane }; }); })()`);
+  }
+  /** Wait until the v2 map has rendered its current state (MapLibre 'idle'; queryRenderedFeatures reads the last frame). */
+  waitForMapRender(timeout = 4000) {
+    return this.eval(`new Promise(res => { const ml = CNSUI.map.map.ml; const t = setTimeout(() => res(false), ${+timeout}); ml.once('idle', () => { clearTimeout(t); res(true); }); ml.triggerRepaint(); })`, { timeout: timeout + 2000 });
   }
 }
 export { sleep };

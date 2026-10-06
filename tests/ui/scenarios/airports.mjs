@@ -60,14 +60,14 @@ async function ensureRoute(page, { o = 'EHLE', d = 'EDDF', trip = 'one-way' } = 
   await page.eval(`(function(){ if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); return true; })()`);
 }
 /** A map point a human would call "empty": ≥ 18 px from every drawn airport dot, outside the rail / topbar / drawer /
-    DOM marker panes / popups. Scans from the right edge inwards. */
-const emptyMapPoint = page => page.eval(`(function(){ const m = CNSUI.map.map, S = CNSUI.S, z = m.getZoom(); const mr = document.getElementById('map').getBoundingClientRect();
-  const allowed = (S.allowedTypes || []).filter(t => t !== 'small_airport' || z >= 7.5); const b = m.getBounds(); const pts = [];
-  for (const a of CNSUI.airports()) { if (!allowed.includes(a.type)) continue; const ll = L.latLng(a.latitude_deg, a.longitude_deg); if (!b.contains(ll)) continue; const p = m.latLngToContainerPoint(ll); pts.push([mr.left + p.x, mr.top + p.y]); }
+    DOM markers / popups. Scans from the right edge inwards. (GL map: the drawn dots are CNSUI.map.dots(); DOM markers
+    and popups are .maplibregl-marker / .maplibregl-popup.) */
+const emptyMapPoint = page => page.eval(`(function(){ const mr = document.getElementById('map').getBoundingClientRect();
+  const pts = CNSUI.map.dots().map(d => [d.x, d.y]);
   const box = s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; }; const rail = box('#rail'), drawer = box('#drawer');
   const inBox = (r, x, y) => r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   for (let y = 120; y < mr.bottom - 60; y += 40) for (let x = mr.right - 80; x > mr.left + 60; x -= 40) { if (inBox(rail, x, y) || inBox(drawer, x, y)) continue; if (pts.some(p => Math.hypot(p[0] - x, p[1] - y) < 18)) continue;
-    const el = document.elementFromPoint(x, y); if (!el || el.closest('.leaflet-marker-pane,.leaflet-popup-pane,.leaflet-pins-pane,.topbar,.rail,.drawer,.cmdk,.modal-v2,.dd')) continue;
+    const el = document.elementFromPoint(x, y); if (!el || el.closest('.maplibregl-marker,.maplibregl-popup,.maplibregl-control-container,.topbar,.rail,.drawer,.cmdk,.modal-v2,.dd')) continue;
     return { x, y, top: el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.split(/\\s+/)[0] : ''), dots: pts.length }; }
   return null; })()`);
 /** Header search (the palette's own field, audit P7): real typing into #cmdkIn, Enter on the first result (fly to), wait for the fly-to popup of `ident`. */
@@ -77,19 +77,19 @@ async function headerSearch(page, ident, nameStart) {
   if (!q.open || q.first !== ident) throw new Error(`#cmdkList after typing ${ident}: ${JSON.stringify(q)}`);
   const c0 = await page.eval('CNSUI.map.map.getCenter()');
   await page.press('Enter'); await page.sleep(150); await page.waitForMapIdle(9000);
-  await page.waitFor(`(function(){ const t = document.querySelector('.leaflet-popup .pp .t span'); return !!t && t.textContent.indexOf(${JSON.stringify(nameStart)}) >= 0; })()`, 4000);
-  const after = await page.eval(`(function(){ const m = CNSUI.map.map; const a = CNSUI.byId()[${JSON.stringify(ident)}]; const c = m.getCenter(); return { q: document.querySelector('#cmdkIn').value, qOpen: !document.querySelector('#cmdk').hidden, zoom: m.getZoom(), dCenterDeg: Math.hypot(c.lat - a.latitude_deg, c.lng - a.longitude_deg), popup: document.querySelector('.leaflet-popup .pp .t span').textContent, popupIcao: (document.querySelector('.leaflet-popup .pp .ic2') || {}).textContent }; })()`);
+  await page.waitFor(`(function(){ const t = document.querySelector('.cnsgl-popup .pp .t span'); return !!t && t.textContent.indexOf(${JSON.stringify(nameStart)}) >= 0; })()`, 4000);
+  const after = await page.eval(`(function(){ const m = CNSUI.map.map; const a = CNSUI.byId()[${JSON.stringify(ident)}]; const c = m.getCenter(); return { q: document.querySelector('#cmdkIn').value, qOpen: !document.querySelector('#cmdk').hidden, zoom: m.getZoom(), dCenterDeg: Math.hypot(c.lat - a.latitude_deg, c.lng - a.longitude_deg), popup: document.querySelector('.cnsgl-popup .pp .t span').textContent, popupIcao: (document.querySelector('.cnsgl-popup .pp .ic2') || {}).textContent }; })()`);
   return { before: c0, after };
 }
 /** Real click on a popup action button (Departure | Destination | Stop) and report the popup afterwards. */
 async function clickPopupAction(page, label) {
-  const sel = `.leaflet-popup .pp .acts button`;
+  const sel = `.cnsgl-popup .pp .acts button`;
   const i = await page.eval(`Array.from(document.querySelectorAll(${JSON.stringify(sel)})).findIndex(b => b.textContent.trim() === ${JSON.stringify(label)})`);
   if (i < 0) throw new Error(`no "${label}" button in the popup`);
   const r = await page.click(`${sel}:nth-of-type(${i + 1})`);
   await page.sleep(120);
-  let closed = true; try { await page.waitFor(`!document.querySelector('.leaflet-popup')`, 900, 50); } catch (e) { closed = false; }
-  return { rect: r, closed, popupStill: closed ? null : await page.eval(`(function(){ const p = document.querySelector('.leaflet-popup .pp .t span'); return p ? p.textContent : '(popup without .pp)'; })()`) };
+  let closed = true; try { await page.waitFor(`!document.querySelector('.cnsgl-popup')`, 900, 50); } catch (e) { closed = false; }
+  return { rect: r, closed, popupStill: closed ? null : await page.eval(`(function(){ const p = document.querySelector('.cnsgl-popup .pp .t span'); return p ? p.textContent : '(popup without .pp)'; })()`) };
 }
 
 export default async function run(ctx) {
@@ -126,7 +126,8 @@ export default async function run(ctx) {
     await ctx.screenshot(v2, 'type-keeps-focus-list');
     const bad = [];
     steps.forEach(s => { if (!s.focused || !s.sameEl) bad.push(`after "${s.ch}": focus left the field (activeElement ${s.active}, same element ${s.sameEl})`); });
-    steps.filter(s => s.value.length >= 2).forEach(s => { if (!s.open) bad.push(`after "${s.ch}": #ac-dest not open`); if (s.first !== 'EDDH') bad.push(`after "${s.ch}": first suggestion ${s.first}, expected EDDH`); });
+    // worldwide airport set: "ha" ranks other airports first (PGUM, …); the full "ham" must lead with EDDH
+    steps.filter(s => s.value.length >= 2).forEach(s => { if (!s.open) bad.push(`after "${s.ch}": #ac-dest not open`); if (s.value === 'ham' && s.first !== 'EDDH') bad.push(`after "${s.ch}": first suggestion ${s.first}, expected EDDH`); });
     if (steps[0].open) bad.push('list open after a single character (classic needs 2)');
     const last = steps[steps.length - 1]; if (last.value !== 'ham') bad.push(`field value "${last.value}" after typing ham (select-all lost?)`);
     if (bad.length) throw new Error(bad.join('; '));
@@ -142,7 +143,9 @@ export default async function run(ctx) {
   // ---- arrow keys move the highlight, Enter picks the highlighted row (classic keydown 4092–4101) -----
   await ctx.check('arrow-keys-pick-highlighted', async () => {
     await ensureRoute(v2);
-    const { st } = await typeInto(v2, 'dest', 'rott');
+    // 'hamburg' (EDDH, EDHI, …): with the worldwide airport set 'rott' lists YRTI (Rottnest Island, AU) second, and
+    // planning EHLE → YRTI freezes the tab in the route planner (reported separately) — this check is about the keys.
+    const { st } = await typeInto(v2, 'dest', 'hamburg');
     if (!st.open || st.n < 2) throw new Error('precondition: list not open with ≥ 2 rows: ' + JSON.stringify(st));
     await v2.press('ArrowDown'); await v2.press('ArrowDown'); await v2.sleep(40);
     const hl = await acState(v2, 'dest');
@@ -152,7 +155,7 @@ export default async function run(ctx) {
     const d = await v2.eval(`CNSUI.S.dest && CNSUI.S.dest.ident`);
     const want = st.ids[1];
     // control: the same keys in the classic destination field (setupAutocomplete keydown, index.html:4092–4101)
-    await classic.click('#destination'); await selectAll(classic); await classic.type('rott'); await classic.sleep(80);
+    await classic.click('#destination'); await selectAll(classic); await classic.type('hamburg'); await classic.sleep(80);
     const cIds = await classic.eval(`Array.from(document.querySelectorAll('#destinationList .ac-item small')).map(s => s.textContent.split(' · ')[0])`);
     await classic.press('ArrowDown'); await classic.press('ArrowDown'); await classic.sleep(40);
     const cHl = await classic.eval(`Array.from(document.querySelectorAll('#destinationList .ac-item')).findIndex(i => i.classList.contains('active'))`);

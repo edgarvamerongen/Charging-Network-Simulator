@@ -152,6 +152,17 @@ window.CNSRouting = (function () {
         const direct = haversineKm(O, D);
         if (legNeed(O, origin, D, destination, direct) <= maxLeg) return { stops: [], totalDistanceKm: direct, legCount: 1 };
 
+        // Too far to search: any route needs at least ⌈direct · fBest / maxLeg⌉ legs (fBest: air km per ground km in the
+        // most favourable wind, a straight tailwind; 1 in still air). Past maxStops + 1 legs there is nothing to find, so
+        // say so now: with the world's ~48,000 airports a search across continents would never finish.
+        const wind = (window.CNSSettings && CNSSettings.loadAll) ? CNSSettings.loadAll().wind : null;
+        const fBest = (wind && wind.enabled && CNSSettings.windLeg) ? Math.min(1, CNSSettings.windLeg(((+wind.fromDeg || 0) + 180) % 360, +plane.speed_kmh || 0).factor || 1) : 1;
+        const minStops = Math.ceil(direct * fBest / maxLeg - 1e-9) - 1;
+        if (minStops > options.maxStops) {
+            return { stops: [], totalDistanceKm: 0, legCount: 0,
+                error: `Too far for this aircraft: ${Math.round(direct).toLocaleString('en')} km needs at least ${minStops} stops (the limit is ${options.maxStops}). Pick a longer-range aircraft or a closer destination.` };
+        }
+
         const skip = new Set();
         if (origin.ident) skip.add(origin.ident);
         if (destination.ident) skip.add(destination.ident);

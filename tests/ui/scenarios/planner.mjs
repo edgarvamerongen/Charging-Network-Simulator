@@ -376,7 +376,7 @@ export default async function run(ctx) {
     const m = await v2.eval(`(function(){ const q = s => Array.from(document.querySelectorAll(s)); const chain = CNSUI.chain().length;
       const marks = q('.divert-marker').map(el => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return { w: +r.width.toFixed(1), h: +r.height.toFixed(1), bg: cs.backgroundColor, x: Math.round(r.left), y: Math.round(r.top) }; });
       const wraps = q('.divert-marker-wrap').map(el => { const r = el.getBoundingClientRect(); return { w: +r.width.toFixed(1), h: +r.height.toFixed(1), x: Math.round(r.left), y: Math.round(r.top) }; });
-      return { showAlt: CNSUI.S.showAlternates, chain, marks, wraps, labels: q('.alt-dist-label').map(l => l.textContent.trim()), lines: q('.leaflet-overlay-pane path, .leaflet-overlay-pane canvas').length, altPick: q('#railBody [data-act=altPick]').map(b => b.dataset.ident), ls: JSON.parse(localStorage.getItem('cns_map_options') || 'null'), css: !!Array.from(document.styleSheets).some(ss => { try { return Array.from(ss.cssRules).some(r => /\\.divert-marker/.test(r.selectorText || '')); } catch (e) { return false; } }) }; })()`);
+      return { showAlt: CNSUI.S.showAlternates, chain, marks, wraps, labels: q('.alt-dist-label').map(l => l.textContent.trim()), lines: CNSUI.map.drawn().filter(d => d.pane === 'overlayPane' && d.kind === 'polyline').length,   /* GL: the alternates' lines (was .leaflet-overlay-pane paths) */ altPick: q('#railBody [data-act=altPick]').map(b => b.dataset.ident), ls: JSON.parse(localStorage.getItem('cns_map_options') || 'null'), css: !!Array.from(document.styleSheets).some(ss => { try { return Array.from(ss.cssRules).some(r => /\\.divert-marker/.test(r.selectorText || '')); } catch (e) { return false; } }) }; })()`);
     await ctx.screenshot(v2, 'alternates');
     const problems = [];
     if (!m.showAlt) problems.push('S.showAlternates false after ticking #fAlternates');
@@ -404,11 +404,11 @@ export default async function run(ctx) {
     const dot = dots.find((d, i) => suit[i]); if (!dot) throw new Error('no suitable clickable dot: ' + J(dots.map((d, i) => d.ident + ':' + suit[i])));
     const t0 = Date.now();
     await v2.clickAt(dot.x, dot.y); await v2.sleep(400);
-    const real = await v2.eval(`({ ov: Object.assign({}, CNSUI.S.divertOverrides), pending: CNSUI.planner.pickPending(), popup: !!document.querySelector('.leaflet-popup') })`);
+    const real = await v2.eval(`({ ov: Object.assign({}, CNSUI.S.divertOverrides), pending: CNSUI.planner.pickPending(), popup: !!document.querySelector('.cnsgl-popup') })`);
     const realEx = exceptionsSince(v2, t0);
     let fallback = null;
     if (!real.ov[node]) {
-      if (dot.topPane !== 'leaflet-dots-pane') ctx.blockedBy.push('MAP-1');
+      if (dot.topPane !== 'ap-dots') ctx.blockedBy.push('MAP-1');   // GL: the dot layer the click dispatcher hits
       // fall back to the host hook the dot handler calls (map.js:33) — tests the editor/planner wiring on its own
       fallback = await v2.eval(`(function(){ try { const r = CNSUI.planner.notifyAirportPick(CNSUI.byId()[${J(dot.ident)}]); return { r: r === undefined ? 'void' : r, ov: Object.assign({}, CNSUI.S.divertOverrides), pending: CNSUI.planner.pickPending() }; } catch (e) { return { threw: String(e && e.message || e), pending: CNSUI.planner.pickPending() }; } })()`);
     }

@@ -1,14 +1,16 @@
-/* CNS v2 — ui/map.js: Leaflet map + furniture in the Instrument language. */
+/* CNS v2 — ui/map.js: the map + furniture in the Instrument language. MapLibre GL (a globe when zoomed out)
+   behind ui/gl.js, which speaks the bit of Leaflet this file draws with (L = CNSGL.L; zooms are Leaflet's). */
 (function () {
-  const UI = window.CNSUI, S = UI.S;
-  let map, BASES, dots = {}, assetLayer, routeLayer, netLayer, dotRenderer, hiLayer;
+  const UI = window.CNSUI, S = UI.S, L = window.CNSGL.L;
+  UI.G = L;   // the drawing API for the other v2 modules (waypoints, range graph, alternates editor)
+  let map, assetLayer, routeLayer, netLayer, hiLayer;
+  const TYPE_IDX = { small_airport: 0, medium_airport: 1, large_airport: 2 };
   // Dot geometry mirrors the classic (index.html:4318-4335): the size encodes the airport
   // class and the radii are the CLICK targets — halving them halves the hit test.
   const DOT = { large_airport: { r: 6.5, o: .55 }, medium_airport: { r: 4.2, o: .5 }, small_airport: { r: 3.1, o: .35 } };
   // Continental zoom reads as a field of small dots; zoomed in (z ≥ 8) they carry their
   // full, clickable size — the classic's _dotScale.
   const dotScale = () => { const z = map.getZoom(); return z >= 8 ? .9 : z >= 6 ? .7 : .5; };
-  function rescaleDots() { const s = dotScale(); Object.values(dots).forEach(g => g.eachLayer(m => { if (m._dotR) m.setRadius(m._dotR * s); })); }
   function popupHtml(a) {
     const rw = a.rwy_paved_m || a.rwy_grass_m || a.rwy_unknown_m; const p = UI.plane();
     const fit = (window.CNSRunway && CNSRunway.suitability && p) ? CNSRunway.suitability(p, a) : null;
@@ -21,57 +23,66 @@
       <div class="acts"><button onclick="setOrigin(airportByIdent['${UI.esc(a.ident)}']);CNSUI.map.closePopup()">Departure</button><button onclick="setDest(airportByIdent['${UI.esc(a.ident)}']);CNSUI.map.closePopup()">Destination</button><button onclick="setStop(airportByIdent['${UI.esc(a.ident)}']);CNSUI.map.closePopup()">Stop</button></div></div>`;
   }
   function init() {
-    // NO preferCanvas: it gives every custom pane its OWN full-size <canvas>, and a canvas
-    // swallows every pointer event over its whole box — the rt (400) and net (380) canvases
-    // then covered the dots (350) and the airport dots became unclickable. Like the classic
-    // (index.html:2486, 4310) the dots get ONE shared canvas renderer and everything else
-    // draws as SVG, whose root Leaflet marks pointer-events:none — it can never cover a dot.
-    map = L.map('map', { zoomControl: false, zoomSnap: .25 }).setView([51.6, 6.5], 6.25);
-    // The arrowhead a one-way leg ends in, just short of the airport it flies to: an SVG line-end marker, so it keeps
-    // its size and the leg's heading at every zoom and never sits under the leg label (mid-leg).
-    document.body.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="cnsDir" viewBox="0 0 14 12" markerWidth="14" markerHeight="12" refX="21" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M2 2 12 6 2 10Z" fill="#c4421f" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></marker></defs></svg>');
-    map.attributionControl.setPosition('bottomleft');   // bottom-right sat under the timeline bar; the tile terms want it visible
+    if (!window.CNSGL.supported() || !window.maplibregl) {   // no WebGL: say so where the map would be; the rail keeps working
+      const el = document.getElementById('map'); if (el) el.innerHTML = '<div class="map-nogl">The map needs WebGL, which this browser has switched off or does not support. Planning, the network and the reports still work.</div>';
+      return;
+    }
+    map = window.CNSGL.map('map', { center: [51.6, 6.5], zoom: 6.25, globe: S.globe !== false });
     // M2: one control (and the F key) frames the route in Plan mode, the network in Network mode.
-    const FitCtl = L.Control.extend({ options: { position: 'topright' }, onAdd() {
-      const b = L.DomUtil.create('button', 'map-fit'); b.type = 'button'; b.title = 'Fit the map to the route or network (F)'; b.setAttribute('aria-label', 'Fit the map to the route or network');
-      b.innerHTML = '<svg class="ic"><use href="#i-fit"/></svg>Fit<kbd>F</kbd>';
-      L.DomEvent.disableClickPropagation(b); L.DomEvent.on(b, 'click', e => { L.DomEvent.stop(e); fit(); }); return b; } });
-    new FitCtl().addTo(map);
-    const key = (UI.D && UI.D.cartoKeyQs) || '';
-    BASES = {
-      light: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: 'Esri, HERE, Garmin, © OSM' }),
-      street: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png' + key, { maxZoom: 19, attribution: '© OSM © CARTO' }),
-      sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Esri, Maxar, Earthstar' })
-    };
-    BASES[S.base] ? BASES[S.base].addTo(map) : BASES.light.addTo(map);
+    map.ml.addControl({ onAdd() { const b = document.createElement('button'); b.type = 'button'; b.className = 'map-fit'; b.title = 'Fit the map to the route or network (F)'; b.setAttribute('aria-label', 'Fit the map to the route or network');
+      b.innerHTML = '<svg class="ic"><use href="#i-fit"/></svg>Fit<kbd>F</kbd>'; b.addEventListener('click', e => { e.stopPropagation(); fit(); }); const w = document.createElement('div'); w.className = 'maplibregl-ctrl'; w.appendChild(b); return w; }, onRemove() {} }, 'top-right');
     map.createPane('dots').style.zIndex = 350; map.createPane('net').style.zIndex = 380; map.createPane('rt').style.zIndex = 400; map.createPane('pins').style.zIndex = 450;
-    // One shared canvas for ~7,800 dots (SVG would crawl); tolerance widens the hit test the
-    // way the classic's white stroke does (Leaflet adds weight/2 + renderer tolerance).
-    dotRenderer = L.canvas({ pane: 'dots', padding: 0.4, tolerance: 3 });
-    ['large_airport', 'medium_airport', 'small_airport'].forEach(t => dots[t] = L.layerGroup()); assetLayer = L.layerGroup().addTo(map); routeLayer = L.layerGroup().addTo(map); netLayer = L.layerGroup().addTo(map);
+    assetLayer = L.layerGroup().addTo(map); routeLayer = L.layerGroup().addTo(map); netLayer = L.layerGroup().addTo(map);
     hiLayer = L.layerGroup().addTo(map);   // the open airport's ring — ties the expanded ledger row to the map
-    map.on('zoomend', () => { rescaleDots(); applyVisibility(); if (S.mode === 'network') drawNet(); });   // network labels are placed in screen space
-    drawAirports(); drawAssets();
+    map.on('zoomend', () => { if (S.mode === 'network') drawNet(); });   // network labels are placed in screen space
+    map.whenReady(() => { addBases(); drawAirports(); });
+    drawAssets();
   }
+  const key = () => (UI.D && UI.D.cartoKeyQs) || '';
+  const BASE_DEF = {
+    light: { tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'], maxzoom: 16, attribution: 'Esri, HERE, Garmin, © OSM' },
+    street: { tiles: ['a', 'b', 'c', 'd'].map(s => `https://${s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png`), maxzoom: 19, attribution: '© OSM © CARTO', keyed: true },
+    sat: { tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], maxzoom: 18, attribution: 'Esri, Maxar, Earthstar' },
+  };
+  function addBases() {
+    Object.entries(BASE_DEF).forEach(([n, d]) => { const id = 'base-' + n;
+      map.ml.addSource(id, { type: 'raster', tileSize: 256, maxzoom: d.maxzoom, attribution: d.attribution, tiles: d.keyed ? d.tiles.map(t => t + key()) : d.tiles });
+      map.ml.addLayer({ id, type: 'raster', source: id, layout: { visibility: n === (BASE_DEF[S.base] ? S.base : 'light') ? 'visible' : 'none' } }, firstOverlay()); });
+  }
+  const firstOverlay = () => (map.ml.getStyle().layers.find(l => l.id !== 'bg' && !l.id.startsWith('base-')) || {}).id;
+  // Every airport as one GPU circle layer (~48,000 worldwide): radius by class and zoom, the size filters and the
+  // small-field zoom gate as a layer filter, faded behind the network in Network mode.
+  const rad = k => ['*', k, ['match', ['get', 't'], 2, DOT.large_airport.r, 1, DOT.medium_airport.r, DOT.small_airport.r]];   // radius by class × zoom scale
   function drawAirports() {
-    Object.values(dots).forEach(g => g.clearLayers());
-    const s = dotScale();
-    UI.airports().forEach(a => { const d = DOT[a.type] || DOT.small_airport;
-      const m = L.circleMarker(UI.ll(a), { renderer: dotRenderer, pane: 'dots', radius: d.r * s, fillColor: '#4a4d6e', fillOpacity: d.o, color: '#fff', weight: 1.25, opacity: .45 });
-      m._dotR = d.r;   // base radius — rescaled on zoom by rescaleDots()
-      m.bindPopup(() => popupHtml(a), { offset: [0, -2] });
-      m.on('click', () => { if (UI.waypoints) UI.waypoints.noteDotClick(); if (UI.planner && UI.planner.pickPending()) { UI.planner.notifyAirportPick(a); map.closePopup(); } });
-      (dots[a.type] || dots.small_airport).addLayer(m); });
+    if (!map) return;
+    const feats = UI.airports().map((a, i) => ({ type: 'Feature', properties: { i, t: TYPE_IDX[a.type] ?? 0 }, geometry: { type: 'Point', coordinates: [+a.longitude_deg, +a.latitude_deg] } }));
+    const data = { type: 'FeatureCollection', features: feats };
+    if (map.ml.getSource('ap')) { map.ml.getSource('ap').setData(data); applyVisibility(); return; }
+    map.ml.addSource('ap', { type: 'geojson', data });
+    map.ml.addLayer({ id: 'ap-dots', type: 'circle', source: 'ap', paint: {
+      'circle-radius': ['step', ['zoom'], rad(.5), 5, rad(.7), 7, rad(.9)],   // the zoom step has to be the outer expression
+      'circle-color': '#4a4d6e', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.25, 'circle-pitch-alignment': 'map' } }, firstAfterBases());
+    map.placeRaw('ap-dots', 350);
+    map.addInteractiveLayer('ap-dots', f => { const a = UI.airports()[f.properties.i]; if (!a) return;
+      if (UI.waypoints) UI.waypoints.noteDotClick();
+      if (UI.planner && UI.planner.pickPending()) { UI.planner.notifyAirportPick(a); map.closePopup(); return; }
+      map.openPopup(popupHtml(a), UI.ll(a), { offset: [0, -2] }); });
     applyVisibility();
   }
+  const firstAfterBases = () => (map.ml.getStyle().layers.find(l => l.id !== 'bg' && !l.id.startsWith('base-')) || {}).id;
   // Size filters drive both the dots and the planner's stop pool (as in the classic); small
-  // airfields additionally wait for zoom ≥ 7.5 so 6,000 canvas dots don't blanket the continent.
+  // airfields additionally wait for zoom ≥ 7.5 so they don't blanket the continent.
   function applyVisibility() {
-    const z = map.getZoom();
-    Object.entries(dots).forEach(([t, g]) => { const want = S.allowedTypes.includes(t) && (t !== 'small_airport' || z >= 7.5); if (want && !map.hasLayer(g)) g.addTo(map); if (!want && map.hasLayer(g)) map.removeLayer(g); });
+    if (!map || !map.ml.getLayer('ap-dots')) return;
+    const want = S.allowedTypes.map(t => TYPE_IDX[t]);
+    map.ml.setFilter('ap-dots', ['all', ['in', ['get', 't'], ['literal', want]], ['any', ['!=', ['get', 't'], 0], ['>=', ['zoom'], 6.5]]]);
+    const fade = S.mode === 'network' ? .3 : 1;   // the network's own discs carry Network mode
+    map.ml.setPaintProperty('ap-dots', 'circle-opacity', ['*', fade, ['match', ['get', 't'], 2, DOT.large_airport.o, 1, DOT.medium_airport.o, DOT.small_airport.o]]);
+    map.ml.setPaintProperty('ap-dots', 'circle-stroke-opacity', .45 * fade);
   }
-  function drawAlternates() { if (!window.CNSDivertEdit || !UI.planner) return; if (S.showAlternates && S.mode === 'plan') CNSDivertEdit.render(UI.planner.alternatesChain()); else CNSDivertEdit.clear(); }
+  function drawAlternates() { if (!window.CNSDivertEdit || !UI.planner || !map) return; if (S.showAlternates && S.mode === 'plan') CNSDivertEdit.render(UI.planner.alternatesChain()); else CNSDivertEdit.clear(); }
   function drawAssets() {
+    if (!map) return;
     assetLayer.clearLayers(); if (!S.showAssets) return;
     Object.values(UI.assets()).forEach(x => { const a = UI.byId()[x.icao]; if (!a) return;
       const construction = x.status === 'construction';
@@ -123,6 +134,7 @@
     return latlngs.every(ll => { const pt = map.latLngToContainerPoint(ll); return pt.x >= left && pt.x <= size.x - 12 && pt.y >= 12 && pt.y <= bottom; });
   }
   function drawRoute(fit) {
+    if (!map) return;
     routeLayer.clearLayers(); const c = UI.chain();
     if (S.trip === 'waypoints' && UI.waypoints) { UI.waypoints.draw(routeLayer, fit); return; }   // custom route: its own drawing
     if (S.trip === 'training' && S.origin) { const p = UI.plane(); const r = ((p.training_range_km || 60) / 2) * 1000; routeLayer.addLayer(L.circle(UI.ll(S.origin), { pane: 'rt', interactive: false, radius: r, color: '#c4421f', weight: 2, fillColor: '#c4421f', fillOpacity: .06, dashArray: '4 6' })); if (fit) fitRoute(false); return; }
@@ -136,8 +148,7 @@
     // return flies every leg both ways, a two-way route, so no arrow and the track in both directions on its label.
     const back = S.trip === 'retour';
     for (let i = 0; i < pts.length - 1; i++) {
-      if (!back) { const leg = L.polyline(arc(pts[i], pts[i + 1]), { pane: 'rt', interactive: false, opacity: 0 });   // carries the arrowhead where it arrives (#cnsDir)
-        leg.on('add', () => leg._path.setAttribute('marker-end', 'url(#cnsDir)')); routeLayer.addLayer(leg); }
+      if (!back) routeLayer.addLayer(L.polyline(arc(pts[i], pts[i + 1]), { pane: 'rt', interactive: false, opacity: 0, arrowEnd: true }));   // the arrowhead where it arrives
       if (!S.showLabels) continue;
       const mid = arcMid(pts[i], pts[i + 1]); /* on the arc, not the chord */ let txt = UI.fmt.dist(dispKm(pts[i], pts[i + 1]));
       if (legs && legs[i]) txt = `${UI.fmt.dist(legs[i].distKm)} · ${UI.fmt.min(legs[i].flightMin)} · ${UI.fmt.r(legs[i].energyKwh)} kWh`;
@@ -147,14 +158,14 @@
   }
   /** Frame the plan route (a training flight: its circuit area) into the map the rail and the timeline leave free. */
   function fitRoute(animate) {
-    const c = UI.chain(); if (!c.length) return;
+    const c = UI.chain(); if (!c.length || !map) return;
     const pad = Object.assign(pads(), { animate: !!animate });
     if (S.trip === 'training' && S.origin) { const r = ((UI.plane().training_range_km || 60) / 2) * 1000; map.fitBounds(L.latLng(UI.ll(S.origin)).toBounds(r * 2.6), pad); return; }
     if (c.length < 2) { map.panTo(UI.ll(c[0]), { animate: !!animate }); return; }
     map.fitBounds(L.latLngBounds(arcPath(c.map(UI.ll))), Object.assign({ maxZoom: 9 }, pad));
   }
   /** Every airport of the plan chain inside the free map: right of the rail, above the timeline, on screen. */
-  function routeInView() { const c = UI.chain(); return !c.length || inFree(c.map(UI.ll)); }
+  function routeInView() { const c = UI.chain(); return !c.length || !map || inFree(c.map(UI.ll)); }
   function ensureRouteVisible() { if (!routeInView()) fitRoute(true); }
   /** Every airport of the network (or of the isolated airport's routes) inside the free map. */
   function netInView() { const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs && (!S.filter || l.options.opacity > .5)) pts.push(...l.getLatLngs()); }); return !pts.length || inFree(pts); }   // every arc point: a return route starts AND ends at its base
@@ -171,7 +182,8 @@
       is busy and every network airport is an ink disc sized by its flights per day, with its ICAO code;
       the airports around it fade (CSS). In Plan mode the routes stay a thin backdrop. */
   function drawNet() {
-    netLayer.clearLayers(); if (!S.showNet || !window.CNSDemand) return;
+    if (!map) return;
+    netLayer.clearLayers(); applyVisibility(); if (!S.showNet || !window.CNSDemand) return;
     const net = S.mode === 'network', perAp = {}, lit = new Set();
     // An isolated airport lights its routes; Plan mode with no route drawn lights nothing (a reset plan is a clean slate).
     // ONE selected airport: the isolated one, else the open ledger row. It gets the ring, its network lights up.
@@ -201,7 +213,7 @@
       if (side) netLayer.addLayer(L.marker(UI.ll(a), { pane: 'pins', keyboard: false, title: tip, icon: L.divIcon({ className: '', html: `<div class="netlbl${on ? '' : ' dim'}" style="${side}:${Math.round(r + 3)}px">${UI.esc(id)}</div>`, iconSize: [0, 0] }) }).on('click', () => isolate(id))); });
   }
   function highlightAirports(idents) {
-    if (!hiLayer) return;
+    if (!hiLayer || !map) return;
     hiLayer.clearLayers();
     const by = UI.byId(); const s = dotScale();
     (idents || []).forEach(id => { const a = by[id]; if (!a) return;
@@ -209,14 +221,20 @@
     });
   }
   // The rail (420 px + margins) on the left and the timeline drawer at the bottom are both kept clear.
-  function fitNet() { const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs) pts.push(...l.getLatLngs()); }); if (pts.length) map.fitBounds(L.latLngBounds(pts), Object.assign(pads(), { maxZoom: 8, animate: false })); }
-  function setBase(n) { Object.values(BASES).forEach(b => map.removeLayer(b)); (BASES[n] || BASES.light).addTo(map); S.base = n; }
-  function flyTo(a) { map.flyTo(UI.ll(a), Math.max(map.getZoom(), 8)); setTimeout(() => L.popup({ offset: [0, -2] }).setLatLng(UI.ll(a)).setContent(popupHtml(a)).openOn(map), 400); }
+  function fitNet() { if (!map) return; const pts = []; netLayer.eachLayer(l => { if (l.getLatLngs) pts.push(...l.getLatLngs()); }); if (pts.length) map.fitBounds(L.latLngBounds(pts), Object.assign(pads(), { maxZoom: 8, animate: false })); }
+  function setBase(n) { S.base = BASE_DEF[n] ? n : 'light'; if (!map) return; map.whenReady(() => Object.keys(BASE_DEF).forEach(k => map.ml.getLayer('base-' + k) && map.ml.setLayoutProperty('base-' + k, 'visibility', k === S.base ? 'visible' : 'none'))); }
+  function setGlobe(on) { S.globe = !!on; if (map) map.setGlobe(S.globe); }
+  function flyTo(a) { if (!map) return; map.flyTo(UI.ll(a), Math.max(map.getZoom(), 8)); setTimeout(() => L.popup({ offset: [0, -2] }).setLatLng(UI.ll(a)).setContent(popupHtml(a)).openOn(map), 950); }
   // The divert overlay belongs to the route: it hides and returns WITH it, so Network mode
   // never carries the alternates of a route it does not draw (drawAlternates() reads S.mode,
   // which setMode has already flipped by the time it hides/shows the route layer).
-  function hideRoute() { if (map.hasLayer(routeLayer)) map.removeLayer(routeLayer); drawAlternates(); }
-  function showRoute() { if (!map.hasLayer(routeLayer)) routeLayer.addTo(map); drawAlternates(); }
-  UI.map = { arcPath, init, drawAssets, drawRoute, drawNet, fitNet, fitRoute, fit, routeInView, ensureRouteVisible, ensureVisible, setBase, flyTo, applyVisibility, drawAlternates, highlightAirports,
-             closePopup: () => map.closePopup(), hideRoute, showRoute, get map() { return map; } };
+  function hideRoute() { if (!map) return; if (map.hasLayer(routeLayer)) map.removeLayer(routeLayer); drawAlternates(); }
+  function showRoute() { if (!map) return; if (!map.hasLayer(routeLayer)) routeLayer.addTo(map); drawAlternates(); }
+  UI.map = { arcPath, init, drawAssets, drawAirports, drawRoute, drawNet, fitNet, fitRoute, fit, routeInView, ensureRouteVisible, ensureVisible, setBase, setGlobe, flyTo, applyVisibility, drawAlternates, highlightAirports,
+             closePopup: () => map && map.closePopup(), hideRoute, showRoute, get map() { return map; },
+             // test hooks (tests/ui): what is drawn, which airport dots are rendered (with their screen position), the basemap shown
+             drawn: () => (map ? map.drawn() : []),
+             dots: () => { if (!map || !map.ml.getLayer('ap-dots')) return []; const A = UI.airports(), r = map.ml.getContainer().getBoundingClientRect(), seen = new Set();
+               return map.ml.queryRenderedFeatures({ layers: ['ap-dots'] }).filter(f => !seen.has(f.properties.i) && seen.add(f.properties.i)).map(f => { const a = A[f.properties.i], p = map.latLngToContainerPoint(UI.ll(a)); return { ident: a.ident, type: a.type, x: r.left + p.x, y: r.top + p.y }; }); },
+             baseShown: () => (map ? Object.keys(BASE_DEF).find(k => map.ml.getLayer('base-' + k) && map.ml.getLayoutProperty('base-' + k, 'visibility') === 'visible') : null) };
 })();

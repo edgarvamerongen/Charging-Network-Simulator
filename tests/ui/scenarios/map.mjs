@@ -1,26 +1,38 @@
 /* tests/ui/scenarios/map.mjs — the v2 map (static/ui/map.js) against the classic (templates/index.html).
+   The v2 map is MapLibre GL behind static/ui/gl.js: shapes are WebGL features (observed through CNSUI.map.drawn()),
+   airport dots are ONE circle layer `ap-dots` (observed through CNSUI.map.dots(): rendered, in view), popups are
+   `.cnsgl-popup` (the same `.pp` markup). The classic page stays on Leaflet — its checks are unchanged.
    MAP-1: a REAL click on an airport dot must open its popup (classic: canvas dots under DOM pins, `_bindApCard`).
    Control A = a REAL click on an NRG pin head (DOM marker) — must work in both worlds.
-   Control B = the same dot clicks with the covering rt/net/overlay canvases set to pointer-events:none
-   (diagnostic; must become a no-op once A0 is fixed).
+   Control B = the same dots clicked 3 px off-centre (was: covering Leaflet canvases set to pointer-events:none; the GL
+   click dispatcher hit-tests dots with a 3 px tolerance whatever is drawn above them).
    MAP-3: the reach graph (#fReachGraph) must draw when the route's endpoint changes (classic pickAirport → CNSRangeGraph.show).
    Everything else: hit radius vs the classic, popup content + actions, route drawing, Map menu, network lines + fit. */
 export const component = 'map';
 export const module = 'map';
 
-const POP = `!!document.querySelector('.leaflet-popup .pp .acts')`;                       // an airport popup (not a pin popup)
-const POP_ID = `(function(){ const e = document.querySelector('.leaflet-popup .pp .ic2'); return e ? e.textContent.trim() : ''; })()`;
+const POP = `!!document.querySelector('.cnsgl-popup .pp .acts')`;                        // an airport popup (not a pin popup)
+const POP_ID = `(function(){ const e = document.querySelector('.cnsgl-popup .pp .ic2'); return e ? e.textContent.trim() : ''; })()`;
 const CPOP = `!!document.querySelector('.leaflet-popup .ap-card-meta')`;                    // the classic airport card
 const CPOP_ID = `(function(){ const e = document.querySelector('.leaflet-popup .ap-card-meta'); return e ? e.textContent.trim() : ''; })()`;
-const OVERRIDE_CSS = '.leaflet-rt-pane canvas, .leaflet-net-pane canvas, .leaflet-overlay-pane canvas { pointer-events: none !important; }';
 const LABEL_RE = /^\d{3}°T · [\d,]+ (km|NM) · (\d+:\d\d h|\d+ min) · [\d,]+ kWh$/;   // true track first, as charted
 
 // ---- in-page helpers (v2) ---------------------------------------------------------------------
-const LAYERS = `(function(kind, pane){ const m = CNSUI.map.map; let n = 0; Object.values(m._layers).forEach(l => { if (pane && (l.options || {}).pane !== pane) return;
-  if (kind === 'dot' && (l instanceof L.CircleMarker) && !(l instanceof L.Circle)) n++; else if (kind === 'line' && (l instanceof L.Polyline) && !(l instanceof L.Polygon)) n++;
-  else if (kind === 'circle' && (l instanceof L.Circle)) n++; else if (kind === 'tile' && (l instanceof L.TileLayer)) n++; }); return n; })`;
-const count = (page, kind, pane) => page.eval(`${LAYERS}(${JSON.stringify(kind)}, ${JSON.stringify(pane || '')})`);
-const setOverride = (page, on) => page.eval(`(function(){ let s = document.getElementById('__cnsPeOverride'); if (${on ? 'true' : 'false'}) { if (!s) { s = document.createElement('style'); s.id = '__cnsPeOverride'; document.head.appendChild(s); } s.textContent = ${JSON.stringify(OVERRIDE_CSS)}; } else if (s) s.remove(); return !!document.getElementById('__cnsPeOverride'); })()`);
+/** Shapes drawn on the GL map (CNSUI.map.drawn()) of one kind in one pane: line = polyline, circle = geodesic circle, dot = circleMarker. */
+const DRAWN = `(function(kind, pane){ const K = { line: 'polyline', circle: 'circle', dot: 'circleMarker' }[kind]; return CNSUI.map.drawn().filter(d => (!pane || d.pane === pane) && d.kind === K).length; })`;
+const count = (page, kind, pane) => page.eval(`${DRAWN}(${JSON.stringify(kind)}, ${JSON.stringify(pane || '')})`);
+/** Airport dots rendered now (CNSUI.map.dots()) by type, against the airports that SHOULD be drawn in view: allowed
+    type, small fields only at zoom ≥ 7.5. Both sides count centres inside the map container less a 12 px band (queryRenderedFeatures
+    also returns dots whose centre lies a little off-screen). Read after page.waitForMapRender(). */
+const DOTSTATS = `(function(){ const m = CNSUI.map.map, z = m.getZoom(), sz = m.getSize(), S = CNSUI.S, c = m.getCenter(), R = Math.PI / 180, mr = m.ml.getContainer().getBoundingClientRect();
+  const inC = p => p.x >= 12 && p.y >= 12 && p.x <= sz.x - 12 && p.y <= sz.y - 12;   /* a 12 px border band is left out: the renderer's query is fuzzy there */ const by = {}; CNSUI.map.dots().forEach(d => { if (inC({ x: d.x - mr.left, y: d.y - mr.top })) by[d.type] = (by[d.type] || 0) + 1; });
+  const exp = {}; CNSUI.airports().forEach(a => { if (!S.allowedTypes.includes(a.type) || (a.type === 'small_airport' && z < 7.5)) return; const lat = +a.latitude_deg, lng = +a.longitude_deg;
+    if (Math.sin(lat * R) * Math.sin(c.lat * R) + Math.cos(lat * R) * Math.cos(c.lat * R) * Math.cos((lng - c.lng) * R) < .2) return;   // far side of the globe
+    if (inC(m.latLngToContainerPoint({ lat, lng }))) exp[a.type] = (exp[a.type] || 0) + 1; });
+  const tot = o => Object.values(o).reduce((s, n) => s + n, 0); return { zoom: +z.toFixed(2), rendered: by, expected: exp, n: tot(by), nExp: tot(exp) }; })()`;
+const dotStats = async page => { await page.waitForMapRender(); return page.eval(DOTSTATS); };
+/** Rendered dots of type t = the airports that should be drawn in view (±1 for a centre exactly on the border). */
+const near = (st, t) => Math.abs((st.rendered[t] || 0) - (st.expected[t] || 0)) <= 1;
 const mapOpts = page => page.eval(`(function(){ try { return JSON.parse(localStorage.getItem('cns_map_options') || '{}'); } catch (e) { return { parseError: true }; } })()`);
 const openMenu = async page => { const open = await page.eval(`document.querySelector('#mapDd').classList.contains('open')`); if (!open) { await page.click('#mapBtn'); await page.waitFor(`document.querySelector('#mapDd').classList.contains('open')`, 1500); } };
 const closeMenu = async page => { const open = await page.eval(`document.querySelector('#mapDd').classList.contains('open')`); if (open) { await page.click('.topbar .brand .t'); await page.waitFor(`!document.querySelector('#mapDd').classList.contains('open')`, 1500); } };
@@ -29,13 +41,13 @@ const classicPoint = (page, ident) => page.eval(`(function(){ const a = airportB
   const x = r.left + p.x, y = r.top + p.y; const el = (x >= 0 && y >= 0 && x < innerWidth && y < innerHeight) ? document.elementFromPoint(x, y) : null; const pane = el && el.closest('.leaflet-pane');
   return { ident: a.ident, type: a.type, x, y, zoom: map.getZoom(), inView: map.getBounds().contains(L.latLng(a.latitude_deg, a.longitude_deg)) && !!el, topTag: el ? el.tagName.toLowerCase() + '.' + (typeof el.className === 'string' ? el.className.trim().split(/\\s+/).join('.') : '') : null,
     topPane: pane ? (pane.className.split(/\\s+/).find(c => /^leaflet-.+-pane$/.test(c) && c !== 'leaflet-map-pane') || null) : null }; })()`);
-/** Nearest-to-centre dot of one type in the v2 view: not an asset, ≥ 30 px from route endpoints, no other visible dot within 24 px, well inside the map. */
-const pickType = (page, type) => page.eval(`(function(type){ const S = CNSUI.S, m = CNSUI.map.map; const b = m.getBounds(); const mr = document.getElementById('map').getBoundingClientRect();
+/** Nearest-to-centre rendered dot (CNSUI.map.dots()) of one type in the v2 view: not an asset, ≥ 30 px from route endpoints, no other rendered dot within 24 px, well inside the map. */
+const pickType = (page, type) => page.eval(`(function(type){ const m = CNSUI.map.map; const mr = m.ml.getContainer().getBoundingClientRect();
   const box = s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; }; const rail = box('#rail'), drawer = box('#drawer'); const inBox = (r, x, y) => r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-  const vp = a => { const p = m.latLngToContainerPoint(L.latLng(a.latitude_deg, a.longitude_deg)); return [mr.left + p.x, mr.top + p.y]; }; const assets = CNSUI.assets() || {}; const ends = CNSUI.chain().map(vp);
-  const cx = mr.left + mr.width / 2, cy = mr.top + mr.height / 2; const vis = CNSUI.airports().filter(a => S.allowedTypes.includes(a.type) && b.contains(L.latLng(a.latitude_deg, a.longitude_deg))).map(a => ({ a, p: vp(a) })); const out = [];
-  for (const { a, p } of vis) { if (a.type !== type || assets[a.ident]) continue; const [x, y] = p; if (Math.abs(x - cx) > 380 || Math.abs(y - cy) > 260) continue; if (inBox(rail, x, y) || inBox(drawer, x, y)) continue;
-    if (ends.some(e => Math.hypot(e[0] - x, e[1] - y) < 30)) continue; if (vis.some(o => o.a !== a && Math.hypot(o.p[0] - x, o.p[1] - y) < 24)) continue; out.push({ ident: a.ident, type: a.type, x, y, d: Math.hypot(x - cx, y - cy) }); }
+  const vp = a => { const p = m.latLngToContainerPoint({ lat: +a.latitude_deg, lng: +a.longitude_deg }); return [mr.left + p.x, mr.top + p.y]; }; const assets = CNSUI.assets() || {}; const ends = CNSUI.chain().map(vp);
+  const cx = mr.left + mr.width / 2, cy = mr.top + mr.height / 2; const vis = CNSUI.map.dots(); const out = [];
+  for (const d of vis) { if (d.type !== type || assets[d.ident]) continue; const x = d.x, y = d.y; if (Math.abs(x - cx) > 380 || Math.abs(y - cy) > 260) continue; if (inBox(rail, x, y) || inBox(drawer, x, y)) continue;
+    if (ends.some(e => Math.hypot(e[0] - x, e[1] - y) < 30)) continue; if (vis.some(o => o !== d && Math.hypot(o.x - x, o.y - y) < 24)) continue; out.push({ ident: d.ident, type: d.type, x, y, d: Math.hypot(x - cx, y - cy) }); }
   out.sort((p, q) => p.d - q.d); return out[0] || null; })(${JSON.stringify(type)})`);
 
 /** A REAL drag that a Leaflet marker completes: 40 ms between moves and a 200 ms hold before release. page.drag()
@@ -54,19 +66,17 @@ async function clickDot(page, d, wait = 1500) {
   const who = opened ? String(await page.eval(POP_ID)).trim() : '';
   return { ident: d.ident, type: d.type, x: +d.x.toFixed(0), y: +d.y.toFixed(0), topPane: d.topPane, topTag: d.topTag, opened: opened && who.startsWith(d.ident), popupFor: who };
 }
-/** Open the airport popup for `ident`: a real click, else a real click with the pointer-events override, else the marker API (the DOM-marker equivalent). */
+/** Open the airport popup for `ident` with a REAL click on its dot (one retry after the map has rendered).
+    (The Leaflet-era fallbacks — the pointer-events override and marker.openPopup() — have no GL counterpart: there is
+    one dot layer, no per-airport marker.) */
 async function openDotPopup(page, ident) {
   await page.closePopups();
-  const p = await page.mapPoint(ident); if (!p || !p.inView) throw new Error('openDotPopup: ' + ident + ' not in view');
+  let p = await page.mapPoint(ident); if (!p || !p.inView) throw new Error('openDotPopup: ' + ident + ' not in view');
   const tryClick = async () => { await page.clickAt(p.x, p.y); try { await page.waitFor(POP, 1000); } catch (e) { return false; } return String(await page.eval(POP_ID)).startsWith(ident); };
   if (await tryClick()) return { method: 'real click', p };
-  await page.closePopups(); await setOverride(page, true); const ok = await tryClick(); await setOverride(page, false);
-  if (ok) return { method: 'real click + pointer-events override', p };
-  await page.closePopups();
-  const viaApi = await page.eval(`(function(){ const a = CNSUI.byId()[${JSON.stringify(ident)}]; const m = CNSUI.map.map; const l = Object.values(m._layers).find(l => (l instanceof L.CircleMarker) && !(l instanceof L.Circle) && (l.options || {}).pane === 'dots' && l.getLatLng().lat === a.latitude_deg && l.getLatLng().lng === a.longitude_deg); if (!l) return false; l.openPopup(); return true; })()`);
-  if (!viaApi) throw new Error('openDotPopup: no dot marker for ' + ident);
-  await page.waitFor(POP, 1500);
-  return { method: 'marker.openPopup() (API fallback — real clicks failed)', p };
+  await page.closePopups(); await page.waitForMapRender(); p = await page.mapPoint(ident);
+  if (await tryClick()) return { method: 'real click (2nd try, after render)', p };
+  throw new Error(`openDotPopup: real clicks on ${ident} at (${p.x.toFixed(0)},${p.y.toFixed(0)}) top=${p.topPane} dot=${p.dot} opened no popup for it (popup: ${JSON.stringify(await page.eval(POP_ID))})`);
 }
 /** Offset sweep 0..max px (to the right of the dot): the largest offset whose REAL click still opens the popup FOR THAT ident. Stops at the first miss (the hit region is a disc). */
 async function sweep(page, ident, { classic = false, max = 6, wait = 800 } = {}) {
@@ -91,13 +101,18 @@ export default async function run(ctx) {
 
   // ---- dots-rendered ----------------------------------------------------------------------
   await ctx.check('dots-rendered', async () => {
-    const st = await v2.eval(`(function(){ const m = CNSUI.map.map; const panes = {}; document.querySelectorAll('#map .leaflet-pane').forEach(p => { const c = [...p.classList].find(x => /^leaflet-.+-pane$/.test(x) && x !== 'leaflet-map-pane'); if (c) panes[c.replace(/^leaflet-|-pane$/g, '')] = { z: getComputedStyle(p).zIndex, kids: p.children.length, canvas: !!p.querySelector('canvas') }; });
-      return { preferCanvas: !!m.options.preferCanvas, zoom: m.getZoom(), allowed: CNSUI.S.allowedTypes, expected: CNSUI.airports().filter(a => CNSUI.S.allowedTypes.includes(a.type)).length, dotsCanvas: !!document.querySelector('.leaflet-dots-pane canvas'), panes }; })()`);
-    st.dots = await count(v2, 'dot', 'dots');
-    if (!st.dotsCanvas) throw new Error('no canvas in .leaflet-dots-pane: ' + JSON.stringify(st));
-    if (st.dots !== st.expected || st.dots < 1000) throw new Error(`${st.dots} dot markers on the map, expected ${st.expected} (allowed ${st.allowed})`);
+    // Was: one Leaflet circleMarker per allowed airport in a canvas `dots` pane. Now: ONE GL circle layer over the whole
+    // catalog (filtered by the size toggles + the small-field zoom gate); what is drawn is read back from the renderer.
+    const st = await v2.evalAsync(`const m = CNSUI.map.map, ml = m.ml; const L0 = ml.getLayer('ap-dots'); const src = ml.getSource('ap'); let feats = null;
+      try { const d = src && await src.getData(); feats = d && d.features ? d.features.length : null; } catch (e) {}
+      return { layer: !!L0, type: L0 && L0.type, features: feats, airports: CNSUI.airports().length, allowed: CNSUI.S.allowedTypes, zoom: m.getZoom(), filter: JSON.stringify(ml.getFilter('ap-dots')) };`);
+    const ds = await dotStats(v2); st.stats = ds;
+    if (!st.layer || st.type !== 'circle') throw new Error('no GL circle layer ap-dots: ' + JSON.stringify(st));
+    if (st.features !== st.airports) throw new Error(`ap source holds ${st.features} features ≠ ${st.airports} catalog airports`);
+    const types = new Set([...Object.keys(ds.rendered), ...Object.keys(ds.expected)]); const off = [...types].filter(t => !near(ds, t));
+    if (off.length || ds.n < 20) throw new Error(`${ds.n} dots rendered in view, expected ${ds.nExp} (allowed ${st.allowed}): rendered ${JSON.stringify(ds.rendered)} vs expected ${JSON.stringify(ds.expected)}`);
     await ctx.screenshot(v2, 'dots');
-    return { detail: `${st.dots} circleMarkers in pane dots (= ${st.allowed.join('+')}), preferCanvas=${st.preferCanvas}, zoom ${st.zoom}, panes ${JSON.stringify(st.panes)}`, evidence: [ctx.shot('dots')] };
+    return { detail: `ap-dots: ${st.features} features (= catalog); in view at zoom ${ds.zoom}: ${ds.n} rendered ${JSON.stringify(ds.rendered)} ≈ expected ${ds.nExp} (allowed ${st.allowed.join('+')})`, evidence: [ctx.shot('dots')] };
   }, { retry: 0 });
 
   // ---- control A: a REAL click on the EHTE NRG pin head (DOM marker) opens the plug popup ---
@@ -109,10 +124,10 @@ export default async function run(ctx) {
     const head = await v2.eval(`(function(){ const t = ${JSON.stringify(mp)}; let best = null; document.querySelectorAll('.nrg-pin .head').forEach(h => { const r = h.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2; const d = Math.hypot(cx - t.x, cy - t.y); if (!best || d < best.d) best = { cx, cy, d }; }); if (!best) return null; const top = document.elementFromPoint(best.cx, best.cy); best.top = top ? top.tagName.toLowerCase() + '.' + (typeof top.className === 'string' ? top.className : '') : null; return best; })()`);
     if (!head) throw new Error('no .nrg-pin .head in the DOM (assets: ' + JSON.stringify(await v2.eval('Object.keys(CNSUI.assets())')) + ')');
     await v2.clickAt(head.cx, head.cy);
-    let opened = true; try { await v2.waitFor(`!!document.querySelector('.leaflet-popup .plugs')`, 2500); } catch (e) { opened = false; }
-    const st = await v2.eval(`({ rows: document.querySelectorAll('.leaflet-popup .plugs > div').length, plugs: (CNSUI.assets().EHTE || {}).plugs.length, ic2: (document.querySelector('.leaflet-popup .pp .ic2') || {}).textContent || '' })`);
+    let opened = true; try { await v2.waitFor(`!!document.querySelector('.cnsgl-popup .plugs')`, 2500); } catch (e) { opened = false; }
+    const st = await v2.eval(`({ rows: document.querySelectorAll('.cnsgl-popup .plugs > div').length, plugs: (CNSUI.assets().EHTE || {}).plugs.length, ic2: (document.querySelector('.cnsgl-popup .pp .ic2') || {}).textContent || '' })`);
     await ctx.screenshot(v2, 'pin-click');
-    if (!opened) throw new Error(`pin head at (${head.cx.toFixed(0)},${head.cy.toFixed(0)}) top=${head.top} — no .leaflet-popup .plugs after a real click`);
+    if (!opened) throw new Error(`pin head at (${head.cx.toFixed(0)},${head.cy.toFixed(0)}) top=${head.top} — no .cnsgl-popup .plugs after a real click`);
     if (st.rows !== st.plugs || !/^EHTE/.test(st.ic2)) throw new Error(`plug popup rows ${st.rows} ≠ assets().EHTE.plugs.length ${st.plugs} (ic2 ${st.ic2})`);
     return { detail: `EHTE pin at (${head.cx.toFixed(0)},${head.cy.toFixed(0)}) top=${head.top} → plug popup, ${st.rows} plug rows = assets().EHTE.plugs.length`, repro: 'v2: flyTo EHTE, real Input.dispatchMouseEvent on .nrg-pin .head', evidence: [ctx.shot('pin-click')] };
   }, { retry: 0 });
@@ -120,33 +135,33 @@ export default async function run(ctx) {
 
   // ---- MAP-1: REAL clicks on 3 picked airport dots ----------------------------------------
   const dots = await v2.pickClickableDots(3); ctx.state.dots = dots;
-  const clickDots = async label => { const res = []; for (const d of dots) res.push(await clickDot(v2, d)); await ctx.screenshot(v2, label); return res; };
+  const clickDots = async (label, off = 0) => { const res = []; for (const d of dots) res.push(await clickDot(v2, Object.assign({}, d, { x: d.x + off }))); await ctx.screenshot(v2, label); return res; };
   const fmtRes = res => res.map(r => `${r.ident}(${r.type.replace('_airport', '')}) @${r.x},${r.y} top=${r.topPane} → ${r.opened ? 'popup ' + r.popupFor : 'NO popup'}`).join('; ');
   await ctx.check('dot-real-click-opens-popup', async () => {
     if (dots.length < 3) throw new Error(`pickClickableDots returned ${dots.length} at zoom ` + await v2.eval('CNSUI.map.map.getZoom()'));
     const res = await clickDots('dot-click'); ctx.state.dotClick = res;
     const bad = res.filter(r => !r.opened);
-    if (bad.length) throw new Error(`${bad.length}/${res.length} real dot clicks opened no .leaflet-popup .pp — ${fmtRes(res)}`);
+    if (bad.length) throw new Error(`${bad.length}/${res.length} real dot clicks opened no .cnsgl-popup .pp — ${fmtRes(res)}`);
     return { detail: fmtRes(res), repro: 'node tests/ui/run.mjs map --only dot-real-click', evidence: [ctx.shot('dot-click')] };
   }, { retry: 0 });
 
-  // ---- control B: the same clicks with the covering canvases made click-through -----------
+  // ---- control B: the same dots clicked 3 px off-centre ------------------------------------
+  // Was: the covering Leaflet canvases (rt/net/overlay panes) set to pointer-events:none. The GL map has no such panes:
+  // the click dispatcher (gl.js _hits) takes the dot within 3 px of the pointer whatever is drawn above it.
   await ctx.check('dot-click-with-pointer-events-override', async () => {
-    await setOverride(v2, true);
-    const before = dots.map(d => d.topPane); const now = []; for (const d of dots) now.push((await v2.mapPoint(d.ident)).topPane);
-    const res = await clickDots('dot-click-override'); ctx.state.dotClickOverride = res;
-    await setOverride(v2, false);
+    await v2.closePopups(); const before = dots.map(d => d.topPane); const now = []; for (const d of dots) now.push((await v2.mapPoint(d.ident)).topPane);
+    const res = await clickDots('dot-click-override', 3); ctx.state.dotClickOverride = res;
     const bad = res.filter(r => !r.opened);
-    const detail = `topPane before=${JSON.stringify(before)} with override=${JSON.stringify(now)}; ` + res.map(r => `${r.ident} → ${r.opened ? 'popup ' + r.popupFor : 'NO popup'}`).join('; ') + (ctx.state.dotClick && ctx.state.dotClick.every(r => !r.opened) && res.every(r => r.opened) ? ' — the override MAKES the dots clickable (cause = covering canvases)' : '');
-    if (bad.length) throw new Error(`${bad.length}/${res.length} dot clicks still opened no popup with the override — ${detail}`);
-    return { detail, repro: 'inject <style> pointer-events:none on .leaflet-rt-pane/.leaflet-net-pane/.leaflet-overlay-pane canvas, click the same dots', evidence: [ctx.shot('dot-click-override')] };
+    const detail = `topPane at pick=${JSON.stringify(before)} now=${JSON.stringify(now)}; ` + res.map(r => `${r.ident} +3px → ${r.opened ? 'popup ' + r.popupFor : 'NO popup (' + (r.popupFor || 'none') + ')'}`).join('; ');
+    if (bad.length) throw new Error(`${bad.length}/${res.length} dot clicks 3 px off-centre opened no popup for that dot — ${detail}`);
+    return { detail, repro: 'v2: pickClickableDots(3), real click 3 px right of each dot centre', evidence: [ctx.shot('dot-click-override')] };
   }, { retry: 0 });
 
   // ---- popup content + actions ------------------------------------------------------------
   await ctx.check('popup-content-and-actions', async () => {
     await v2.waitForMapIdle(); const [d0] = await v2.pickClickableDots(1); if (!d0) throw new Error('no clickable dot in view');
     const ident = d0.ident; const how = await openDotPopup(v2, ident);
-    const c = await v2.eval(`(function(){ const pp = document.querySelector('.leaflet-popup .pp'); if (!pp) return null; const t = pp.querySelector('.t span:first-child'); return { name: t ? t.textContent.trim() : '', ic2: (pp.querySelector('.ic2') || {}).textContent || '', meta: [...pp.querySelectorAll('.m')].map(e => e.textContent.trim()), acts: [...pp.querySelectorAll('.acts button')].map(b => b.textContent.trim()) }; })()`);
+    const c = await v2.eval(`(function(){ const pp = document.querySelector('.cnsgl-popup .pp'); if (!pp) return null; const t = pp.querySelector('.t span:first-child'); return { name: t ? t.textContent.trim() : '', ic2: (pp.querySelector('.ic2') || {}).textContent || '', meta: [...pp.querySelectorAll('.m')].map(e => e.textContent.trim()), acts: [...pp.querySelectorAll('.acts button')].map(b => b.textContent.trim()) }; })()`);
     const a = await v2.eval(`(function(){ const a = CNSUI.byId()[${JSON.stringify(ident)}]; const p = CNSUI.plane(); const rw = a.rwy_paved_m || a.rwy_grass_m || a.rwy_unknown_m; return { name: a.name, type: (a.type || '').replace('_', ' '), rw: rw ? Math.round(rw) : null, plane: CNSUI.planeShort(p.name), fit: (window.CNSRunway && CNSRunway.suitability) ? CNSRunway.suitability(p, a) : null }; })()`);
     await ctx.screenshot(v2, 'popup-content');
     const probs = [];
@@ -163,8 +178,8 @@ export default async function run(ctx) {
     // actions — each on a freshly picked dot (the previous action re-fits the map)
     const act = async (label, nth, read) => {
       await v2.waitForMapIdle(); const [d] = await v2.pickClickableDots(1); if (!d) throw new Error('no clickable dot for ' + label);
-      const h = await openDotPopup(v2, d.ident); await v2.click(`.leaflet-popup .pp .acts button:nth-child(${nth})`); await v2.sleep(300);
-      const st = await v2.eval(`({ got: ${read}, popup: !!document.querySelector('.leaflet-popup'), popupFor: (document.querySelector('.leaflet-popup .pp .ic2') || {}).textContent || '' })`);
+      const h = await openDotPopup(v2, d.ident); await v2.click(`.cnsgl-popup .pp .acts button:nth-child(${nth})`); await v2.sleep(300);
+      const st = await v2.eval(`({ got: ${read}, popup: !!document.querySelector('.cnsgl-popup'), popupFor: (document.querySelector('.cnsgl-popup .pp .ic2') || {}).textContent || '' })`);
       return Object.assign({ label, ident: d.ident, method: h.method }, st); };
     const r1 = await act('Departure', 1, `CNSUI.S.origin && CNSUI.S.origin.ident`);
     const r2 = await act('Stop', 3, `(CNSUI.S.stops.slice(-1)[0] || {}).ident`);
@@ -188,8 +203,10 @@ export default async function run(ctx) {
   // ---- route drawing ----------------------------------------------------------------------
   await ctx.check('route-drawing', async () => {
     const chain = await v2.eval(`(function(){ const S = CNSUI.S, by = CNSUI.byId(); S.showTracks = true; S.origin = by.EHLE; S.dest = by.EDDM; S.stops = [by.EDDF]; S.trip = 'one-way'; S.blacklist.clear(); S.divertOverrides = {}; CNSUI.plan.onFormChange(true); return CNSUI.chain().map(a => a.ident); })()`);
-    const read = () => v2.eval(`(function(){ const m = CNSUI.map.map; const lines = Object.values(m._layers).filter(l => (l instanceof L.Polyline) && !(l instanceof L.Polygon) && (l.options || {}).pane === 'rt' && l.options.opacity !== 0)   /* opacity 0: a leg's arrowhead carrier */.map(l => ({ dash: l.options.dashArray || null, w: l.options.weight, c: l.options.color }));
-      return { chain: CNSUI.chain().map(a => a.ident), ep: document.querySelectorAll('.ep').length, stop: document.querySelectorAll('.ep.stop').length, labels: [...document.querySelectorAll('.leglbl')].map(e => e.textContent.trim()), arrows: document.querySelectorAll('.leaflet-rt-pane path[marker-end]').length, lines, circles: Object.values(m._layers).filter(l => l instanceof L.Circle && (l.options || {}).pane === 'rt').map(l => l.getRadius()), showLabels: CNSUI.S.showLabels }; })()`);
+    // GL: shapes from CNSUI.map.drawn(); a one-way leg's arrowhead is a symbol drawn from an opacity-0 carrier polyline
+    // with arrow:true (was an SVG marker-end on a .leaflet-rt-pane path).
+    const read = () => v2.eval(`(function(){ const rt = CNSUI.map.drawn().filter(d => d.pane === 'rt'); const lines = rt.filter(d => d.kind === 'polyline' && d.opacity !== 0)   /* opacity 0: a leg's arrowhead carrier */.map(d => ({ dash: d.dash || null, w: d.weight }));
+      return { chain: CNSUI.chain().map(a => a.ident), ep: document.querySelectorAll('.ep').length, stop: document.querySelectorAll('.ep.stop').length, labels: [...document.querySelectorAll('.leglbl')].map(e => e.textContent.trim()), arrows: rt.filter(d => d.kind === 'polyline' && d.arrow).length, lines, circles: rt.filter(d => d.kind === 'circle').map(d => d.radius), showLabels: CNSUI.S.showLabels }; })()`);
     const pre = await read();
     const sim = await ctx.v2Simulate(v2); if (sim.err) throw new Error('simulate failed: ' + sim.err);
     await v2.waitForMapIdle(); const post = await read();
@@ -221,45 +238,49 @@ export default async function run(ctx) {
 
   // ---- Map menu: small airfields + zoom 8 -------------------------------------------------
   await ctx.check('map-menu-small-airfields', async () => {
+    // Counted in view (CNSUI.map.dots()): the GL layer draws the whole worldwide catalog but only what is on screen renders.
     await openMenu(v2);
-    const before = await count(v2, 'dot', 'dots');
     await v2.click('#mapDd .airport-filter[value=small_airport]'); await v2.sleep(100);
-    const z7 = await v2.eval(`(function(){ CNSUI.map.map.setView([52.0, 5.5], 7, { animate: false }); return CNSUI.map.map.getZoom(); })()`); const at7 = await count(v2, 'dot', 'dots');
-    const z8 = await v2.eval(`(function(){ CNSUI.map.map.setView([52.0, 5.5], 8, { animate: false }); return CNSUI.map.map.getZoom(); })()`); const at8 = await count(v2, 'dot', 'dots');
+    const z7 = await v2.eval(`(function(){ CNSUI.map.map.setView([52.0, 5.5], 7, { animate: false }); return CNSUI.map.map.getZoom(); })()`); const at7 = await dotStats(v2);
+    const z8 = await v2.eval(`(function(){ CNSUI.map.map.setView([52.0, 5.5], 8, { animate: false }); return CNSUI.map.map.getZoom(); })()`); const at8 = await dotStats(v2);
     const st = await v2.eval(`({ allowed: CNSUI.S.allowedTypes, checked: document.querySelector('#mapDd .airport-filter[value=small_airport]').checked, smallTotal: CNSUI.airports().filter(a => a.type === 'small_airport').length })`);
     const opts = await mapOpts(v2); await closeMenu(v2);
     const small = await pickType(v2, 'small_airport');
     await ctx.screenshot(v2, 'small-dots');
+    const s7 = at7.rendered.small_airport || 0, s8 = at8.rendered.small_airport || 0, e8 = at8.expected.small_airport || 0;
     if (!st.checked || !st.allowed.includes('small_airport')) throw new Error('filter not applied: ' + JSON.stringify(st));
-    if (at8 - before < 1000 || at8 !== before + st.smallTotal) throw new Error(`small dots at zoom ${z8}: ${at8 - before} added (before ${before}, small in catalog ${st.smallTotal})`);
+    if (s7 !== 0) throw new Error(`zoom ${z7}: ${s7} small dots rendered (hidden below 7.5 by design)`);
+    if (s8 < 50 || !near(at8, 'small_airport')) throw new Error(`small dots at zoom ${z8}: ${s8} rendered in view, expected ${e8} (small in catalog ${st.smallTotal})`);
     if (opts.fSmall !== true) throw new Error('cns_map_options.fSmall not persisted: ' + JSON.stringify(opts));
     if (!small) throw new Error('no small dot pickable near the centre at zoom 8');
-    return { detail: `small on → zoom ${z7}: ${at7 - before} small dots (hidden below 7.5 by design), zoom ${z8}: ${at8 - before} = catalog ${st.smallTotal}; fSmall persisted; pickable small ${small.ident}`, repro: 'node tests/ui/run.mjs map --only small-airfields', evidence: [ctx.shot('small-dots')] };
+    return { detail: `small on → zoom ${z7}: ${s7} small dots (hidden below 7.5 by design), zoom ${z8}: ${s8} rendered ≈ ${e8} expected in view (catalog ${st.smallTotal}); fSmall persisted; pickable small ${small.ident}`, repro: 'node tests/ui/run.mjs map --only small-airfields', evidence: [ctx.shot('small-dots')] };
   }, { retry: 0 });
 
   // ---- Map menu: Large / Medium size filters ----------------------------------------------
   await ctx.check('map-menu-size-filters', async () => {
-    const totals = await v2.eval(`(function(){ const t = {}; CNSUI.airports().forEach(a => t[a.type] = (t[a.type] || 0) + 1); return t; })()`);
-    const all = await count(v2, 'dot', 'dots');
+    // Counted in view (CNSUI.map.dots()), at a zoom that shows several large airports.
+    await v2.eval(`(function(){ CNSUI.map.map.setView([51.0, 6.5], 6, { animate: false }); return true; })()`);
+    const all = await dotStats(v2); const nL = all.rendered.large_airport || 0;
     await openMenu(v2); await v2.click('#mapDd .airport-filter[value=large_airport]'); await v2.sleep(150);
-    const noLarge = { dots: await count(v2, 'dot', 'dots'), allowed: await v2.eval('CNSUI.S.allowedTypes'), opts: await mapOpts(v2) };
+    const noLarge = { st: await dotStats(v2), allowed: await v2.eval('CNSUI.S.allowedTypes'), opts: await mapOpts(v2) };
     await v2.click('#mapDd .airport-filter[value=large_airport]'); await v2.sleep(150);
-    const back = { dots: await count(v2, 'dot', 'dots'), allowed: await v2.eval('CNSUI.S.allowedTypes'), opts: await mapOpts(v2) }; await closeMenu(v2);
+    const back = { st: await dotStats(v2), allowed: await v2.eval('CNSUI.S.allowedTypes'), opts: await mapOpts(v2) }; await closeMenu(v2);
     const probs = [];
-    if (noLarge.dots !== all - totals.large_airport || noLarge.allowed.includes('large_airport') || noLarge.opts.fLarge !== false) probs.push(`Large off → ${noLarge.dots} dots (expected ${all - totals.large_airport}), allowed ${noLarge.allowed}, fLarge ${noLarge.opts.fLarge}`);
-    if (back.dots !== all || !back.allowed.includes('large_airport') || back.opts.fLarge !== true) probs.push(`Large on → ${back.dots} dots (expected ${all}), fLarge ${back.opts.fLarge}`);
+    if (nL < 3) probs.push(`only ${nL} large dots in view to filter (${JSON.stringify(all.rendered)})`);
+    if ((noLarge.st.rendered.large_airport || 0) !== 0 || noLarge.st.n !== all.n - nL || noLarge.allowed.includes('large_airport') || noLarge.opts.fLarge !== false) probs.push(`Large off → ${noLarge.st.n} dots ${JSON.stringify(noLarge.st.rendered)} (expected ${all.n - nL}), allowed ${noLarge.allowed}, fLarge ${noLarge.opts.fLarge}`);
+    if (back.st.n !== all.n || !back.allowed.includes('large_airport') || back.opts.fLarge !== true) probs.push(`Large on → ${back.st.n} dots (expected ${all.n}), fLarge ${back.opts.fLarge}`);
     if (probs.length) throw new Error(probs.join('; '));
-    return `Large off → ${noLarge.dots} dots (−${totals.large_airport} large, fLarge=false persisted); on → ${back.dots}`;
+    return `in view at zoom ${all.zoom}: Large off → ${noLarge.st.n} dots (−${nL} large, fLarge=false persisted); on → ${back.st.n}`;
   }, { retry: 0 });
 
   // ---- hit radius sweep vs the classic ----------------------------------------------------
   await ctx.check('dot-hit-radius', async () => {
     if (!(await v2.eval(`CNSUI.S.allowedTypes.includes('small_airport')`))) { await openMenu(v2); await v2.click('#mapDd .airport-filter[value=small_airport]'); await v2.sleep(100); await closeMenu(v2); }   // self-sufficient under --only
-    await v2.eval(`(function(){ CNSUI.map.map.setView([52.0, 5.5], 8, { animate: false }); return true; })()`); await v2.closePopups();
+    await v2.eval(`(function(){ CNSUI.map.map.setView([52.0, 5.5], 8, { animate: false }); return true; })()`); await v2.closePopups(); await v2.waitForMapRender();
     const picks = {}; for (const t of ['large_airport', 'medium_airport', 'small_airport']) picks[t] = await pickType(v2, t);
     const missing = Object.entries(picks).filter(([, p]) => !p).map(([t]) => t); if (missing.length) throw new Error('no isolated dot near the centre for ' + missing.join(', '));
     const v2r = {};
-    for (const [t, p] of Object.entries(picks)) { let r = await sweep(v2, p.ident); let mode = 'plain'; if (r.max < 0) { await setOverride(v2, true); r = await sweep(v2, p.ident); await setOverride(v2, false); mode = 'pointer-events override'; } v2r[t] = Object.assign({ mode }, r); }
+    for (const [t, p] of Object.entries(picks)) { const r = await sweep(v2, p.ident); v2r[t] = Object.assign({ mode: 'plain' }, r); }   // no pointer-events override in GL: one dot layer
     await ctx.screenshot(v2, 'hit-radius-v2');
     // classic control: same airports, same centre + zoom (its dots scale ×0.9 at z ≥ 8)
     classic = classic || await ctx.classicPage(v2.browser);
@@ -311,7 +332,7 @@ export default async function run(ctx) {
     const plan = await v2.eval(`({ ep: document.querySelectorAll('.ep').length, chain: CNSUI.chain().length, mode: CNSUI.S.mode })`);
     await v2.click('#modeSeg [data-mode=network]'); await v2.sleep(200); await v2.waitForMapIdle();
     const net = await v2.eval(`(function(){ const m = CNSUI.map.map; const b = m.getBounds(); const pts = []; CNSDemand.loadFolder().forEach(t => { pts.push([t.originLat, t.originLon], [t.destLat, t.destLon]); (t.stops || []).forEach(s => pts.push([s.lat, s.lon])); });
-      return { mode: CNSUI.S.mode, ep: document.querySelectorAll('.ep').length, net: document.body.classList.contains('net'), inBounds: pts.filter(p => b.contains(L.latLng(p[0], p[1]))).length, pts: pts.length, zoom: m.getZoom(), lbl: document.querySelectorAll('.leglbl').length }; })()`);
+      return { mode: CNSUI.S.mode, ep: document.querySelectorAll('.ep').length, net: document.body.classList.contains('net'), inBounds: pts.filter(p => b.contains({ lat: p[0], lng: p[1] })).length, pts: pts.length, zoom: m.getZoom(), lbl: document.querySelectorAll('.leglbl').length }; })()`);
     net.lines = await count(v2, 'line', 'net');
     await ctx.screenshot(v2, 'network-mode');
     await v2.click('#modeSeg [data-mode=plan]'); await v2.sleep(200); await v2.waitForMapIdle();
@@ -390,7 +411,8 @@ export default async function run(ctx) {
   }, { retry: 0 });
 
   // ---- MAP-3: reach graph ------------------------------------------------------------------
-  const RG = `(function(){ const p = document.querySelector('.leaflet-rangeGraph-pane'); return { pane: !!p, kids: p ? p.children.length : -1, canvas: !!(p && p.querySelector('canvas')), svg: !!(p && p.querySelector('svg')), labels: document.querySelectorAll('.rg-lbl').length, checked: !!(document.getElementById('fReachGraph') || {}).checked }; })()`;
+  // GL: the range graph's shapes in pane rangeGraphPane of CNSUI.map.drawn() (was the .leaflet-rangeGraph-pane's children)
+  const RG = `(function(){ const d = CNSUI.map.drawn().filter(x => x.pane === 'rangeGraphPane'); return { pane: d.length > 0, kids: d.length, labels: document.querySelectorAll('.rg-lbl').length, checked: !!(document.getElementById('fReachGraph') || {}).checked }; })()`;
   await ctx.check('reach-graph-draws', async () => {
     await openMenu(v2); await v2.click('#fReachGraph'); await v2.sleep(100); await closeMenu(v2);
     await v2.eval(`(function(){ CNSUI.map.map.closePopup(); const by = CNSUI.byId(); CNSUI.S.origin = by.EHLE; CNSUI.S.stops = []; CNSUI.S.trip = 'one-way'; CNSUI.plan.onFormChange(false); window.setDest(by.EDDM); return true; })()`);   // the popup's Destination path
@@ -420,22 +442,26 @@ export default async function run(ctx) {
 
   // ---- Map menu: basemap + persistence across a reload -------------------------------------
   await ctx.check('map-menu-basemap', async () => {
-    await openMenu(v2); await v2.click('#mapDd [data-base=sat]'); await v2.sleep(300);
-    const read = () => v2.eval(`(function(){ const m = CNSUI.map.map; const tiles = Object.values(m._layers).filter(l => l instanceof L.TileLayer).map(l => l._url); return { base: CNSUI.S.base, tiles, imgs: document.querySelectorAll('.leaflet-tile-pane img[src*="World_Imagery"]').length, on: (document.querySelector('#mapDd [data-base].on') || {}).dataset ? document.querySelector('#mapDd [data-base].on').dataset.base : null, open: document.querySelector('#mapDd').classList.contains('open') }; })()`);
-    const a = await read(); const o = await mapOpts(v2); await closeMenu(v2);
-    await v2.reload({ boot: 'v2' }); await v2.waitForMapIdle();
-    const b = await read();
+    // GL: basemaps are raster layers base-light|street|sat switched by visibility (CNSUI.map.baseShown()); there are no
+    // tile <img>s, so "satellite tiles load" = the map requested World_Imagery tiles (the harness blocks the host and logs them).
+    const b0 = v2.blocked.length;
+    await openMenu(v2); await v2.click('#mapDd [data-base=sat]'); await v2.sleep(300); await v2.waitForMapRender();
+    const read = () => v2.eval(`({ base: CNSUI.S.base, shown: CNSUI.map.baseShown(), on: (document.querySelector('#mapDd [data-base].on') || {}).dataset ? document.querySelector('#mapDd [data-base].on').dataset.base : null, open: document.querySelector('#mapDd').classList.contains('open') })`);
+    const a = await read(); a.imgs = v2.blocked.slice(b0).filter(u => /World_Imagery/.test(u)).length; const o = await mapOpts(v2); await closeMenu(v2);
+    const b1 = v2.blocked.length;
+    await v2.reload({ boot: 'v2' }); await v2.waitForMapIdle(); await v2.waitForMapRender();
+    const b = await read(); b.imgs = v2.blocked.slice(b1).filter(u => /World_Imagery/.test(u)).length;
     await ctx.screenshot(v2, 'basemap-sat');
     const probs = [];
-    if (a.base !== 'sat' || !a.tiles.some(u => u.includes('World_Imagery')) || a.tiles.length !== 1) probs.push(`after click: base ${a.base}, tiles ${JSON.stringify(a.tiles)}`);
-    if (a.imgs < 1) probs.push('no World_Imagery tile <img> in the tile pane');
+    if (a.base !== 'sat' || a.shown !== 'sat') probs.push(`after click: S.base ${a.base}, basemap layer shown ${a.shown}`);
+    if (a.imgs < 1) probs.push('no World_Imagery tile requested after choosing satellite');
     // the stored token may be either shell's name for the same basemap — v2 writes the classic's
     // vocabulary on this shared key (satellite/voyager) so a choice carries between /v2 and /, and
     // translates it back on load; what matters is that the reload below restores satellite.
     if (o.basemap !== 'sat' && o.basemap !== 'satellite') probs.push('cns_map_options.basemap = ' + o.basemap);
-    if (b.base !== 'sat' || !b.tiles.some(u => u.includes('World_Imagery')) || b.on !== 'sat') probs.push(`after reload: base ${b.base}, tiles ${JSON.stringify(b.tiles)}, .on ${b.on}`);
+    if (b.base !== 'sat' || b.shown !== 'sat' || b.on !== 'sat') probs.push(`after reload: S.base ${b.base}, layer shown ${b.shown}, .on ${b.on} (World_Imagery requests ${b.imgs})`);
     if (probs.length) throw new Error(probs.join('; '));
-    return { detail: `sat → S.base ${a.base}, ${a.imgs} World_Imagery tiles, persisted basemap=${o.basemap}; reload → S.base ${b.base}, menu .on=${b.on}`, repro: 'node tests/ui/run.mjs map --only basemap', evidence: [ctx.shot('basemap-sat')] };
+    return { detail: `sat → S.base ${a.base}, layer ${a.shown}, ${a.imgs} World_Imagery tile requests, persisted basemap=${o.basemap}; reload → S.base ${b.base}, menu .on=${b.on}`, repro: 'node tests/ui/run.mjs map --only basemap', evidence: [ctx.shot('basemap-sat')] };
   }, { retry: 0 });
 
   // ---- the two shells share cns_map_options.basemap with different vocabularies -------------

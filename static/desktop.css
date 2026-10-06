@@ -65,7 +65,6 @@ svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;str
 .netlbl{position:absolute;top:0;transform:translateY(-50%);font:600 10.5px Inter,system-ui,sans-serif;letter-spacing:.02em;color:var(--ink);background:rgba(255,255,255,.86);padding:0 3px;border-radius:2px;white-space:nowrap}
 .netlbl{cursor:pointer}.netlbl:hover{background:var(--ink);color:#fff}
 .netlbl.dim{opacity:.4}
-body.net .leaflet-dots-pane{opacity:.3}
 .ep{width:11px;height:11px;border-radius:50%;background:var(--ink);border:2px solid #fff;box-shadow:0 0 0 1px rgba(50,50,110,.35)}
 .ep.stop{background:#fff;border-color:var(--ink)}
 
@@ -602,3 +601,14 @@ body.proto .drawer.open{height:var(--tl-h,40vh)}
 .grow.load.shaved{height:68px}
 .track .blk .sl{position:absolute;right:0;top:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.7) 0 2px,transparent 2px 5px)}
 .glegend i.c.sl{background:repeating-linear-gradient(135deg,rgba(255,255,255,.7) 0 2px,transparent 2px 5px),var(--accent)}
+/* the v2 map on MapLibre (ui/gl.js): markers, popups and tooltips keep the Leaflet look */
+.maplibregl-map{font:inherit}
+.maplibregl-ctrl-attrib{font-size:10px;color:var(--muted);background:rgba(255,255,255,.8)!important}.maplibregl-ctrl-attrib a{color:var(--muted)}
+.cnsgl-marker{position:absolute}.cnsgl-icon{position:relative;overflow:visible}
+.cnsgl-popup .maplibregl-popup-content{border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--line);padding:0;color:var(--ink);font-size:12.5px;line-height:1.4;min-width:220px;overflow:hidden}
+.cnsgl-popup .maplibregl-popup-tip{display:none}
+.cnsgl-hover .maplibregl-popup-content{padding:3px 7px;font-size:11px;border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--line);color:var(--ink);white-space:nowrap}
+.cnsgl-hover .maplibregl-popup-tip{display:none}
+.cnsgl-tip.leaflet-tooltip{margin-top:-6px}
+.rg-lbl{background:none;border:none}
+.map-nogl{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);max-width:420px;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);font-size:13px;color:var(--ink);text-align:center}

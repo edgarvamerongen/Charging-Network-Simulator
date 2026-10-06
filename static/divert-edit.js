@@ -69,7 +69,8 @@ window.CNSDivertEdit = (function () {
 
     let _deps = null, _layers = [], _pick = null;   // _pick = nodeKey awaiting a map pick (ALT mode)
 
-    function init(deps) { _deps = deps || null; }
+    function init(deps) { _deps = deps || null; }   // deps.L: the drawing API (v2: CNSGL.L), else Leaflet's
+    const _L = () => (_deps && _deps.L) || window.L;
 
     function clear() {
         if (_deps && _deps.map) _layers.forEach(l => _deps.map.removeLayer(l));
@@ -91,7 +92,7 @@ window.CNSDivertEdit = (function () {
     // marker + live distance label per arrival node (chain[0] departs full).
     // Replaces drawAlternates' static markers when the module is initialised.
     function render(chain) {
-        if (!_deps || !_deps.map || !window.L) return;
+        if (!_deps || !_deps.map || !_L()) return;
         clear();
         const ctx = _ctx();
         (chain || []).forEach((n, i) => {
@@ -102,16 +103,16 @@ window.CNSDivertEdit = (function () {
             const alt = divertFor(n, ctx);
             if (!alt) return;
             const to = { lat: +alt.latitude_deg, lon: +alt.longitude_deg };
-            const line = L.polyline([[from.lat, from.lon], [to.lat, to.lon]], {
+            const line = _L().polyline([[from.lat, from.lon], [to.lat, to.lon]], {
                 color: '#7c3aed', weight: 2.5, dashArray: '5 6', opacity: 0.9, interactive: false,
             }).addTo(_deps.map);
             const km0 = CNSRouting.haversineKm(from, to);
             const overridden = !!n.divertOverride;
-            const icon = L.divIcon({
+            const icon = _L().divIcon({
                 className: 'divert-marker-wrap', iconSize: [16, 16], iconAnchor: [8, 8],
                 html: `<div class="divert-marker${overridden ? ' manual' : ''}" title="drag to change divert"></div>`,
             });
-            const m = L.marker([to.lat, to.lon], { icon, draggable: true, zIndexOffset: 900 });
+            const m = _L().marker([to.lat, to.lon], { icon, draggable: true, zIndexOffset: 900 });
             m.bindTooltip(`${alt.ident} · ${_fmt(km0)}${overridden ? ' · manual' : ''}`,
                 { permanent: true, direction: 'top', offset: [0, -8], className: 'alt-dist-label' });
             m.on('drag', (e) => {

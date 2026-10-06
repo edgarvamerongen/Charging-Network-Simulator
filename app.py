@@ -364,7 +364,9 @@ def _security_headers(resp):
                 "font-src 'self' data: https://fonts.gstatic.com; "
                 "img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://server.arcgisonline.com "
                 "https://unpkg.com https://cdn.jsdelivr.net https://cns.ghettofaust.exposed; "
-                "connect-src 'self' https://*.basemaps.cartocdn.com https://server.arcgisonline.com"
+                "connect-src 'self' https://*.basemaps.cartocdn.com https://server.arcgisonline.com; "
+                # the v2 map (MapLibre GL) decodes tiles in a web worker it starts from a blob URL
+                "worker-src 'self' blob:; child-src 'self' blob:"
             ))
     return resp
 

@@ -23,7 +23,7 @@ async function sweep(base, prefix = TAG) {
   }
   return out;
 }
-const circles = page => page.eval(`(function(){ let n = 0; CNSUI.map.map.eachLayer(l => { if (l instanceof L.Circle) n++; }); return n; })()`);
+const circles = page => page.eval(`CNSUI.map.drawn().filter(d => d.kind === 'circle').length`);
 const tripHint = page => page.eval(`(function(){ const s = document.querySelector('[data-seg=trip]'); const h = s && s.nextElementSibling; return h ? h.textContent.trim() : ''; })()`);
 const chgList = page => page.eval(`[...document.querySelectorAll('#railBody .chg')].map(b => ({ id: b.dataset.id, on: b.classList.contains('on'), kw: b.querySelector('.kw').textContent.trim() }))`);
 /** Back to a pristine Plan form with real clicks: Plan mode, Edit (when the result rail is up), Reset → beta_alia / dc_320 / EHLE→EDDF / one-way / 1 per day. */
@@ -92,9 +92,9 @@ export default async function run(ctx) {
       st.classic = c; res.push({ k, ...st });
       if (st.on !== k) throw new Error(`${k}: .on button is ${st.on}`);
       if (!HINT_RE[k].test(st.hint)) throw new Error(`${k}: hint "${st.hint}" does not match ${HINT_RE[k]}`);
-      if (k === 'training' && st.circles < 1) throw new Error('training: no L.Circle on the map');
+      if (k === 'training' && st.circles < 1) throw new Error('training: no training circle drawn on the map (CNSUI.map.drawn() kind circle)');
       if (k === 'training' && st.dest) throw new Error('training: destination field still rendered');
-      if (k !== 'training' && st.circles !== 0) throw new Error(`${k}: ${st.circles} L.Circle layer(s) left on the map`);
+      if (k !== 'training' && st.circles !== 0) throw new Error(`${k}: ${st.circles} training circle(s) left on the map`);
       if (c.trip !== k) throw new Error(`classic #tripType is ${c.trip} after clicking ${k}`);
     }
     await ctx.screenshot(v2, 'trip-seg');
@@ -112,7 +112,7 @@ export default async function run(ctx) {
     await v2.waitFor(`CNSUI.S.trip === 'training' && CNSUI.S.origin && CNSUI.S.origin.ident === 'EHTE'`, 3000);
     const r = await ctx.v2Simulate(v2);
     if (r.err) throw new Error('v2 simulate error: ' + r.err);
-    const pr = await v2.eval(`({ training: CNSUI.S.profile.training, tripType: CNSUI.S.profile.tripType, totals: CNSUI.S.profile.totals, charges: (CNSUI.S.profile.charges || []).map(c => ({ ident: c.ident, energyKwh: c.energyKwh, powerKw: c.powerKw, chargeMin: c.chargeMin })), circles: (function(){ let n = 0; CNSUI.map.map.eachLayer(l => { if (l instanceof L.Circle) n++; }); return n; })() })`);
+    const pr = await v2.eval(`({ training: CNSUI.S.profile.training, tripType: CNSUI.S.profile.tripType, totals: CNSUI.S.profile.totals, charges: (CNSUI.S.profile.charges || []).map(c => ({ ident: c.ident, energyKwh: c.energyKwh, powerKw: c.powerKw, chargeMin: c.chargeMin })), circles: CNSUI.map.drawn().filter(d => d.kind === 'circle').length })`);
     if (pr.training !== true) throw new Error('S.profile.training is ' + JSON.stringify(pr.training));
     if (r.api.trip_type !== 'training' || +r.api.training_range_km !== 87.5) throw new Error(`API trip_type=${r.api.trip_type} training_range_km=${r.api.training_range_km}`);
     // classic parity on the same profile + the same headline

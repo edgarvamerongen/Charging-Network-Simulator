@@ -58,7 +58,12 @@ export default async function run(ctx) {
 `setValue(sel, value, events)` · `focus(sel)` · `waitForResponse(urlPart, {since, timeout, method})` (`since` = `page.responses.length` snapshot) ·
 `responseBody(requestId)` · `waitForDownload({timeout, ext})` → `{filename, bytes, path}` · `screenshot(file)` ·
 `errors` (exceptions + console error/warning + Log error entries such as app-served 404s) · `exceptions()` · `console` · `responses` · `failed` · `blocked` · `clearErrors()` ·
-`mapPoint(ident)` → `{ident,type,x,y,zoom,inView,asset,topTag,topPane}` · `pickClickableDots(n)`.
+`mapPoint(ident)` → `{ident,type,x,y,zoom,inView,dot,asset,topTag,topPane}` · `pickClickableDots(n)` · `waitForMapRender()` · `closePopups()`.
+The v2 map is MapLibre GL (static/ui/gl.js): read shapes from `CNSUI.map.drawn()`, rendered airport dots from `CNSUI.map.dots()`,
+the basemap from `CNSUI.map.baseShown()`; popups are `.cnsgl-popup`. `topPane` is what a click there reaches: `'ap-dots'` (an airport
+dot), `'<pane>|<kind>'` (an interactive shape), `'marker'`, `'popup'` or `'canvas'` (empty map). `queryRenderedFeatures` reads the last
+frame — `await page.waitForMapRender()` after a setView / filter change before counting dots. The classic page and the replay
+dialog (`#folderMap`) are still Leaflet.
 
 Seed (every navigation): `localStorage.cns_welcome_hide='true'`, `cns_tour_done='true'` (+ your `seedLocalStorage`, JSON-stringified; `null` removes),
 `window.__cns = {confirms, alerts, prompts, clip, confirmResult:true, promptResult, moving}` with `confirm/alert/prompt` stubs and a

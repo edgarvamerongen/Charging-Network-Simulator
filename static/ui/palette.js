@@ -7,9 +7,9 @@
   // the classic writes satellite|voyager on this shared key; v2 speaks light|street|sat — translate both ways
   const BM_FROM = { satellite: 'sat', voyager: 'street', sat: 'sat', street: 'street', light: 'light' };
   const BM_TO = { sat: 'satellite', street: 'voyager', light: 'light' };
-  function loadOpts() { try { const o = CNSState.getJSON(KEY, {}); const bm = BM_FROM[o.basemap]; if (bm) S.base = bm; const T = []; if (o.fLarge !== false) T.push('large_airport'); if (o.fMedium !== false) T.push('medium_airport'); if (o.fSmall === true) T.push('small_airport'); S.allowedTypes = T; if ('nrgChargerToggle' in o) S.showAssets = !!o.nrgChargerToggle; if ('fSavedRoutes' in o) S.showNet = !!o.fSavedRoutes; if ('fAlternates' in o) S.showAlternates = !!o.fAlternates; if ('flightLabelToggle' in o) S.showLabels = o.flightLabelToggle !== false; S.showTracks = o.fTracks === true; const rg0 = document.getElementById('fReachGraph');
+  function loadOpts() { try { const o = CNSState.getJSON(KEY, {}); const bm = BM_FROM[o.basemap]; if (bm) S.base = bm; const T = []; if (o.fLarge !== false) T.push('large_airport'); if (o.fMedium !== false) T.push('medium_airport'); if (o.fSmall === true) T.push('small_airport'); S.allowedTypes = T; if ('nrgChargerToggle' in o) S.showAssets = !!o.nrgChargerToggle; if ('fSavedRoutes' in o) S.showNet = !!o.fSavedRoutes; if ('fAlternates' in o) S.showAlternates = !!o.fAlternates; if ('flightLabelToggle' in o) S.showLabels = o.flightLabelToggle !== false; S.showTracks = o.fTracks === true; S.globe = o.fGlobe !== false; const rg0 = document.getElementById('fReachGraph');
       if (rg0) { const mirror = localStorage.getItem(RG_KEY); rg0.checked = ('fReachGraph' in o) ? !!o.fReachGraph : (mirror === '1'); } } catch (e) {} }
-  function saveOpts() { try { const o = CNSState.getJSON(KEY, {}); const rg = document.getElementById('fReachGraph'); try { localStorage.setItem(RG_KEY, rg && rg.checked ? '1' : '0'); } catch (e) {} Object.assign(o, { basemap: BM_TO[S.base] || S.base, fReachGraph: !!(rg && rg.checked), fLarge: S.allowedTypes.includes('large_airport'), fMedium: S.allowedTypes.includes('medium_airport'), fSmall: S.allowedTypes.includes('small_airport'), nrgChargerToggle: S.showAssets, fSavedRoutes: S.showNet, fAlternates: S.showAlternates, flightLabelToggle: S.showLabels, fTracks: !!S.showTracks }); CNSState.setJSON(KEY, o); } catch (e) {} }
+  function saveOpts() { try { const o = CNSState.getJSON(KEY, {}); const rg = document.getElementById('fReachGraph'); try { localStorage.setItem(RG_KEY, rg && rg.checked ? '1' : '0'); } catch (e) {} Object.assign(o, { basemap: BM_TO[S.base] || S.base, fReachGraph: !!(rg && rg.checked), fLarge: S.allowedTypes.includes('large_airport'), fMedium: S.allowedTypes.includes('medium_airport'), fSmall: S.allowedTypes.includes('small_airport'), nrgChargerToggle: S.showAssets, fSavedRoutes: S.showNet, fAlternates: S.showAlternates, flightLabelToggle: S.showLabels, fTracks: !!S.showTracks, fGlobe: S.globe !== false }); CNSState.setJSON(KEY, o); } catch (e) {} }
   document.addEventListener('DOMContentLoaded', loadOpts);
   // ---- topbar ----------------------------------------------------------------
   document.addEventListener('click', e => {
@@ -29,6 +29,7 @@
     if (t.id === 'fAlternates') { S.showAlternates = t.checked; saveOpts(); UI.render(); UI.map.drawAlternates(); }
     if (t.id === 'flightLabelToggle') { S.showLabels = t.checked; saveOpts(); UI.map.drawRoute(false); }
     if (t.id === 'fTracks') { S.showTracks = t.checked; saveOpts(); UI.map.drawRoute(false); }
+    if (t.id === 'fGlobe') { UI.map.setGlobe(t.checked); saveOpts(); }
     if (t.id === 'fReachGraph') saveOpts(); });
   function runExport(kind, btn) {
     if (kind === 'xlsx' && window.CNSSpreadsheet) return CNSSpreadsheet.export(btn);
@@ -39,7 +40,7 @@
   // Units: a set-once preference, so it lives in Model settings and the palette, not in the bar.
   function setUnits(u) { if (window.CNSUnits) CNSUnits.set(u === 'nm' ? 'nautical' : 'metric'); $$('#unitSeg button').forEach(x => x.classList.toggle('on', x.dataset.u === u)); }
   // sync the topbar controls to persisted state
-  function syncControls() { $$('#mapDd [data-base]').forEach(x => x.classList.toggle('on', x.dataset.base === S.base)); $$('.airport-filter').forEach(c => c.checked = S.allowedTypes.includes(c.value)); $('#nrgChargerToggle').checked = S.showAssets; $('#fSavedRoutes').checked = S.showNet; $('#fAlternates').checked = S.showAlternates; $('#flightLabelToggle').checked = S.showLabels; $('#fTracks').checked = !!S.showTracks;
+  function syncControls() { $$('#mapDd [data-base]').forEach(x => x.classList.toggle('on', x.dataset.base === S.base)); $$('.airport-filter').forEach(c => c.checked = S.allowedTypes.includes(c.value)); $('#nrgChargerToggle').checked = S.showAssets; $('#fSavedRoutes').checked = S.showNet; $('#fAlternates').checked = S.showAlternates; $('#flightLabelToggle').checked = S.showLabels; $('#fGlobe') && ($('#fGlobe').checked = S.globe !== false); $('#fTracks').checked = !!S.showTracks;
     const nm = window.CNSUnits && CNSUnits.isNautical && CNSUnits.isNautical(); $$('#unitSeg button').forEach(x => x.classList.toggle('on', (x.dataset.u === 'nm') === !!nm)); }
   document.addEventListener('DOMContentLoaded', syncControls);
   // ---- command palette ------------------------------------------------------------

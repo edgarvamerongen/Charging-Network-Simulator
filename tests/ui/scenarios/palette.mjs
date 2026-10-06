@@ -39,10 +39,11 @@ const V2_STATE = `(function(){ var S = CNSUI.S; var oi = document.querySelector(
     netCount: ((document.querySelector('#netCount') || {}).textContent || '').trim(), folder: window.CNSDemand ? CNSDemand.loadFolder().length : null, apRows: [].slice.call(document.querySelectorAll('#railBody .ap')).map(function (e) { return e.dataset.ap; }),
     openAp: Object.keys(S.openAp || {}).filter(function (k) { return S.openAp[k]; }), units: localStorage.getItem('cns_units'), unitsGet: window.CNSUnits ? CNSUnits.get() : null, mapOpts: mo,
     baseOn: [].slice.call(document.querySelectorAll('#mapDd [data-base].on')).map(function (b) { return b.dataset.base; }), unitOn: [window.CNSUnits && CNSUnits.isNautical() ? 'nm' : 'km'],
-    tiles: Object.values(CNSUI.map.map._layers).filter(function (l) { return l instanceof L.TileLayer; }).map(function (l) { return l._url; }),
+    /* GL: the basemap shown is one visible raster layer base-<name> (CNSUI.map.baseShown()); its first tile URL template stands in for the old TileLayer _url */
+    tiles: (function () { var n = CNSUI.map.baseShown(), src = n && CNSUI.map.map.ml.getSource('base-' + n); return src && src.tiles ? [src.tiles[0]] : []; })(),
     originInput: oi ? oi.value : null, originIcao: oi && oi.nextElementSibling ? oi.nextElementSibling.textContent.trim() : null, routeD: [].slice.call(document.querySelectorAll('#railBody .route .stop .d')).map(function (e) { return e.textContent.trim(); }),
     tourCalls: (window.__cns && __cns.tourCalls) || 0, inView: CNSUI.map.routeInView ? CNSUI.map.routeInView() : null, driver: !!document.querySelector('.driver-popover, .driver-overlay, .driver-active'), center: [c.lat, c.lng], zoom: CNSUI.map.map.getZoom(),
-    popup: ((document.querySelector('.leaflet-popup .pp .ic2') || {}).textContent || '').trim(), toast: ((document.querySelector('#toast') || {}).textContent || '').trim(), toastShown: !!document.querySelector('#toast.show'),
+    popup: ((document.querySelector('.cnsgl-popup .pp .ic2') || {}).textContent || '').trim(), toast: ((document.querySelector('#toast') || {}).textContent || '').trim(), toastShown: !!document.querySelector('#toast.show'),
     drawerSub: ((document.querySelector('#drawerSub') || {}).textContent || '').trim(),
     modalTitle: ((document.querySelector('#modalBox .mh h3') || {}).textContent || '').trim(), rpRadios: document.querySelectorAll('#modalBox input[name=rp]').length,
     alerts: (window.__cns && __cns.alerts.slice(-2)) || [], clipN: (window.__cns && __cns.clip.length) || 0, clip: (window.__cns && __cns.clip[__cns.clip.length - 1]) || null,
@@ -312,7 +313,7 @@ export default async function run(ctx) {
     const st = await query(v2, 'EDDM');
     const it = await runItem(v2, st, /^EDDM /);
     await v2.sleep(100); await v2.waitForMapIdle(8000);
-    let popup = true; try { await v2.waitFor(`!!document.querySelector('.leaflet-popup .pp')`, 3000, 50); } catch (e) { popup = false; }
+    let popup = true; try { await v2.waitFor(`!!document.querySelector('.cnsgl-popup .pp')`, 3000, 50); } catch (e) { popup = false; }
     const s = await v2s(v2);
     const tgt = await v2.eval(`(function(){ var a = CNSUI.byId()['EDDM']; return [a.latitude_deg, a.longitude_deg]; })()`);
     await ctx.screenshot(v2, 'airport-items-fly-to');

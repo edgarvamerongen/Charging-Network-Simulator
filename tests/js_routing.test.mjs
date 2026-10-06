@@ -458,3 +458,15 @@ test('powered-lift: wing-borne planes still cannot use the same no-data airport'
     allowedTypes: ['medium_airport'], allAirports: [bare('A', 1.5)], options: {} });
   assert.ok(res.error, 'CTOL must still be gated by the missing runway data');
 });
+
+// A destination beyond maxStops + 1 legs (even at full reach every leg) is refused at once, before any search:
+// with the world's ~48,000 airports a search across continents would never finish.
+test('too far for maxStops: refused before searching, with the stop count it would need', () => {
+  const R = loadRouting({ requireAlt: false });
+  const O = node('O', 0.0, 0), D = node('D', 30.0, 0);                  // ~3,336 km at 200 km legs: 16 stops
+  const many = Array.from({ length: 20000 }, (_, i) => ap('X' + i, (i % 300) / 10, 0));
+  const t0 = Date.now();
+  const res = R.planRoute({ origin: O, destination: D, plane: PLANE(200), allowedTypes: ['medium_airport'], allAirports: [O, ...many, D], options: {} });
+  assert.match(res.error, /needs at least 16 stops \(the limit is 10\)/);
+  assert.ok(Date.now() - t0 < 200, `${Date.now() - t0} ms`);
+});

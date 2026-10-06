@@ -18,7 +18,7 @@
  *
  * Integration surface (everything else is internal):
  *   1. <script src="/static/range-graph.js">
- *   2. CNSRangeGraph.init({ map, getReachKm, airports, allowedFor })   // once, after map setup
+ *   2. CNSRangeGraph.init({ map, getReachKm, airports, allowedFor, L })   // once, after map setup; L = the drawing API (default: Leaflet)
  *   3. CNSRangeGraph.show(ident) from setOrigin/setDest/setStop (the route-set)
  *   4. a "Range graph" toggle (#fReachGraph) in Map Options + the .rg-lbl label CSS
  */
@@ -32,7 +32,7 @@ window.CNSRangeGraph = (function () {
     const longestRwy = (a) => Math.max(0, ...RWY.map((c) => +a['rwy_' + c + '_m'] || 0));
     const LABEL_TYPES = { large_airport: 1 };               // ICAO labels on the big hubs only (readability)
 
-    let _map = null, _layer = null, _getReachKm = null, _getAirports = null, _allowedFor = null, _windAt = null, _activeIdent = null, _lastIdent = null;
+    let _L = null, _map = null, _layer = null, _getReachKm = null, _getAirports = null, _allowedFor = null, _windAt = null, _activeIdent = null, _lastIdent = null;
 
     // ---- pure + testable: airports within `reachKm` great-circle of `from` (excl. self) ----
     function airportsInRange(from, reachKm, airports) {
@@ -52,14 +52,14 @@ window.CNSRangeGraph = (function () {
 
     function init(opts) {
         opts = opts || {};
-        _map = opts.map; _getReachKm = opts.getReachKm; _getAirports = opts.airports; _allowedFor = opts.allowedFor; _windAt = opts.windAt || null;   // windAt(courseDeg) → air km per ground km
-        if (!_map || !window.L) return;
+        _L = opts.L || window.L; _map = opts.map; _getReachKm = opts.getReachKm; _getAirports = opts.airports; _allowedFor = opts.allowedFor; _windAt = opts.windAt || null;   // windAt(courseDeg) → air km per ground km
+        if (!_map || !_L) return;
         if (!_map.getPane(PANE)) {
             _map.createPane(PANE);
             _map.getPane(PANE).style.zIndex = 620;         // above airport dots (overlayPane 400), below saved/route (645/650)
             _map.getPane(PANE).style.pointerEvents = 'none';
         }
-        _layer = L.layerGroup([], { pane: PANE }).addTo(_map);
+        _layer = _L.layerGroup([], { pane: PANE }).addTo(_map);
         // self-wired lifecycle — the module owns it all; the planner only calls show()
         const toggle = document.getElementById('fReachGraph');                        // Map Options on/off
         if (toggle) toggle.addEventListener('change', () => { (toggle.checked && _lastIdent) ? show(_lastIdent) : clear(); });
@@ -80,9 +80,9 @@ window.CNSRangeGraph = (function () {
     function _enabled() { const cb = document.getElementById('fReachGraph'); return !!(cb && cb.checked); }
 
     function _label(ll, text) {
-        return L.marker(ll, {
+        return _L.marker(ll, {
             pane: PANE, interactive: false, keyboard: false,
-            icon: L.divIcon({ className: 'rg-lbl', iconSize: [0, 0], html: '<span>' + text + '</span>' }),
+            icon: _L.divIcon({ className: 'rg-lbl', iconSize: [0, 0], html: '<span>' + text + '</span>' }),
         });
     }
 
@@ -94,7 +94,7 @@ window.CNSRangeGraph = (function () {
         return [la2 / R, lo2 / R];
     }
     function show(ident) {
-        if (!_map || !_layer || !window.L) return;
+        if (!_map || !_layer || !_L) return;
         _lastIdent = ident;
         if (!_enabled()) { clear(); return; }              // off in Map Options → nothing drawn
         const airports = (typeof _getAirports === 'function') ? (_getAirports() || []) : [];
@@ -115,8 +115,8 @@ window.CNSRangeGraph = (function () {
         if (windy) {
             const ring = [];
             for (let c = 0; c < 360; c += 5) { const g = groundReach(c); maxGround = Math.max(maxGround, g); ring.push(_dest(F, c, g)); }
-            _layer.addLayer(L.polygon(ring, ringStyle));
-        } else _layer.addLayer(L.circle(hub, Object.assign({ radius: reachKm * 1000 }, ringStyle)));
+            _layer.addLayer(_L.polygon(ring, ringStyle));
+        } else _layer.addLayer(_L.circle(hub, Object.assign({ radius: reachKm * 1000 }, ringStyle)));
 
         // spokes + halos + labels.
         // WYSIWYG: spoke to EXACTLY the airports the live A* router may use — the same
@@ -132,16 +132,16 @@ window.CNSRangeGraph = (function () {
             .slice(0, SPOKE_MAX);
         reach.forEach(({ ap }) => {
             const to = [+ap.latitude_deg, +ap.longitude_deg];
-            _layer.addLayer(L.polyline([hub, to], { color: '#ffffff', weight: 3, opacity: 0.30, pane: PANE, interactive: false }));   // casing for satellite legibility
-            _layer.addLayer(L.polyline([hub, to], { color: NAVY, weight: 1.4, opacity: 0.6, pane: PANE, interactive: false }));
-            _layer.addLayer(L.circleMarker(to, { radius: 7.5, color: '#ffffff', weight: 3.5, opacity: 0.5, fill: false, pane: PANE, interactive: false }));   // white halo casing
-            _layer.addLayer(L.circleMarker(to, { radius: 7.5, color: NAVY, weight: 1.8, opacity: 0.95, fill: false, pane: PANE, interactive: false }));   // navy halo around the world dot
+            _layer.addLayer(_L.polyline([hub, to], { color: '#ffffff', weight: 3, opacity: 0.30, pane: PANE, interactive: false }));   // casing for satellite legibility
+            _layer.addLayer(_L.polyline([hub, to], { color: NAVY, weight: 1.4, opacity: 0.6, pane: PANE, interactive: false }));
+            _layer.addLayer(_L.circleMarker(to, { radius: 7.5, color: '#ffffff', weight: 3.5, opacity: 0.5, fill: false, pane: PANE, interactive: false }));   // white halo casing
+            _layer.addLayer(_L.circleMarker(to, { radius: 7.5, color: NAVY, weight: 1.8, opacity: 0.95, fill: false, pane: PANE, interactive: false }));   // navy halo around the world dot
             if (LABEL_TYPES[ap.type]) _layer.addLayer(_label(to, escHtml(ap.ident)));
         });
 
         // hub: enlarged solid navy + soft halo
-        _layer.addLayer(L.circleMarker(hub, { radius: 11, color: NAVY, weight: 1, opacity: 0.18, fill: false, pane: PANE, interactive: false }));
-        _layer.addLayer(L.circleMarker(hub, { radius: 6.5, color: '#fff', weight: 2, fillColor: NAVY, fillOpacity: 1, opacity: 1, pane: PANE, interactive: false }));
+        _layer.addLayer(_L.circleMarker(hub, { radius: 11, color: NAVY, weight: 1, opacity: 0.18, fill: false, pane: PANE, interactive: false }));
+        _layer.addLayer(_L.circleMarker(hub, { radius: 6.5, color: '#fff', weight: 2, fillColor: NAVY, fillOpacity: 1, opacity: 1, pane: PANE, interactive: false }));
     }
 
     return { init, show, refresh, clear, airportsInRange };
