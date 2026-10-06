@@ -114,18 +114,21 @@
     // Photo precedence + no photo = no <img> (a bare /pics/ is a 404 per row per render); ranges
     // follow the unit toggle like the card does; a battery-less hybrid reads 'no charge'.
     // The hangar (picker concept A + B's reach bar): photo cards, a spec band, the reach against this route's
-    // distance (the tick) and how each aircraft would fly it, from the planner's own chain-build.
+    // distance and how each aircraft would fly it, from the planner's own chain-build. Each bar is scaled to the
+    // route: the tick (the route) sits at 2/3, so a full bar is 1.5x the route or more; without a route the bar
+    // is the reach against the aircraft's own published range, as on the aircraft card.
     // One card per airframe (its default profile, or the selected one); the profile knobs live on the aircraft card.
     const pickHtml = S.picking ? (() => { const PL = UI.planner, reachOf = x => (PL && PL.availRangeShownKm(x)) || 0;
       const list = UI.aircraft.visible(S.acFilters).map(g => g.entries.find(e => e.id === S.planeId) || g.entries[0]);
-      const top = Math.max(1, ...list.map(reachOf)), tick = c.length >= 2 && d ? Math.min(100, d / top * 100) : null;
+      const TICK = 200 / 3, route = c.length >= 2 && d > 0;
+      const pct = (x, r) => Math.min(100, route ? r / d * TICK : r / (x.range_km || r || 1) * 100);
       return `<div class="hangar">${list.map(x => { const im = UI.planeImg(x), fit = PL && PL.fitFor ? PL.fitFor(x) : null, rch = reachOf(x);
         const verdict = !fit ? '' : fit.none ? '<span class="v no">No route</span>' : `<span class="v ok">${fit.stops ? fmt.pl(fit.stops, fit.stops + ' stop', fit.stops + ' stops') : 'Direct'}</span>`;
         const st = String(x.status || ''), stCls = st.toLowerCase().replace(/[^a-z0-9]+/g, '-');
         return `<button data-act="plane" data-id="${x.id}" class="${x.id === S.planeId ? 'on' : ''}"><span class="img">${im ? `<img src="${esc(im)}" alt="" loading="lazy">` : glyph('✈', 180, 96)}${st ? `<span class="st ${stCls}">${esc(st.charAt(0).toUpperCase() + st.slice(1))}</span>` : ''}<span class="rg">${esc(regShort(x.regime || ''))}</span></span>
           <span class="b"><span class="n">${esc(x.name)}</span><span class="m">${esc(x.oem || '')}</span>
           <span class="spec num"><span><i>Seats</i>${x.seats ?? '–'}</span><span><i>Battery</i>${hasBatt(x) ? fmt.r(x.battery_kwh) + ' kWh' : '–'}</span><span><i>Reach</i>${fmt.r(fmt.km(rch))} ${fmt.ukm()}</span></span>
-          <span class="bar"><i style="width:${(rch / top * 100).toFixed(1)}%"></i>${tick != null ? `<b style="left:${tick.toFixed(1)}%" title="This route: ${fmt.dist(d)}"></b>` : ''}</span>${verdict}</span></button>`; }).join('')}</div>`; })() : '';
+          <span class="bar" title="${route ? `Reach ${fmt.r(fmt.km(rch))} ${fmt.ukm()} against this route's ${fmt.dist(d)}` : `Reach ${fmt.r(fmt.km(rch))} of ${fmt.r(fmt.km(x.range_km || 0))} ${fmt.ukm()} published`}"><i style="width:${pct(x, rch).toFixed(1)}%"></i>${route ? `<b style="left:${TICK.toFixed(1)}%"></b>` : ''}</span>${verdict}</span></button>`; }).join('')}</div>`; })() : '';
     $('#railBody').innerHTML = `
     ${UI.PROTO ? '' : `<div class="ph"><h3>Create a route</h3><div class="tools"><span class="hint" style="margin:0">${esc(regShort(p.regime || ''))}${p.range_incl_reserves ? ' · range incl. reserves' : ''}</span></div></div>`}
     ${aircraftHtml(p, reach, fits, pickHtml)}
