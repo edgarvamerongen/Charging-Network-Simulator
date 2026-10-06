@@ -254,7 +254,7 @@
       case 'build': UI.share.copyBuildLink(); break;
       case 'xlsx': if (window.CNSSpreadsheet) CNSSpreadsheet.export(t); break;
       case 'pdf': UI.report && UI.report.pick(); break;
-      case 'focus': S.filter = t.dataset.ap || ''; if (S.filter) S.openAp = { [S.filter]: true };
+      case 'focus': S.filter = t.dataset.ap || ''; S.openAp = S.filter ? { [S.filter]: true } : {};   // back to all airports: no row stays open, no network stays lit
         if (S.mode !== 'network') { UI.setMode('network'); } else { UI.render(); UI.map.drawNet(); UI.map.fitNet(); } break;
       case 'fleetAdd': { const ids = fleetOf(t.dataset.ap); ids.push(ids[ids.length - 1] || (UI.CHARGERS[0] && UI.CHARGERS[0].id)); cfgPatch(t.dataset.ap, { chargers: ids }); break; }
       case 'fleetRm': { const ids = fleetOf(t.dataset.ap); ids.splice(+t.dataset.i, 1); cfgPatch(t.dataset.ap, { chargers: ids }); break; }
@@ -267,7 +267,7 @@
     }
   });
   document.addEventListener('change', e => { const t = e.target; if (!t.dataset) return;
-    if (t.dataset.act === 'filter') { S.filter = t.value; UI.render(); UI.map.drawNet(); UI.map.fitNet(); }
+    if (t.dataset.act === 'filter') { S.filter = t.value; if (!S.filter) S.openAp = {}; UI.render(); UI.map.drawNet(); UI.map.fitNet(); }
     if (t.dataset.act === 'waitOk') { S.waitOk = +t.value; UI.render(); }
     if (t.dataset.act === 'fleetSel') { const ids = fleetOf(t.dataset.ap); ids[+t.dataset.i] = t.value; cfgPatch(t.dataset.ap, { chargers: ids }); }
     if (t.dataset.act === 'socMode') { if (t.value === 'auto') { const c = D().loadCfg(); c[t.dataset.ap] = Object.assign({}, c[t.dataset.ap] || {}); delete c[t.dataset.ap].targetDepartureSoc; delete c[t.dataset.ap].fullCharge; D().saveCfg(c); UI.folderChanged(); UI.render(); } else { const sl = $(`[data-act=socSlider][data-ap="${t.dataset.ap}"]`); cfgPatch(t.dataset.ap, { targetDepartureSoc: (+(sl ? sl.value : 80)) / 100, fullCharge: undefined }); } }

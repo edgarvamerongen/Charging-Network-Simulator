@@ -123,7 +123,7 @@
   document.addEventListener('click', e => { if (openLane(e)) return; const t = e.target.closest('#smartSw,#focChip,#drawerHead,#gantt [data-act=releaseAll]'); if (!t) return;
     if (t.id === 'smartSw') { const on = CNSSettings.loadAll().smartCharging.enabled; CNSSettings.save({ smartCharging: { enabled: !on } }); UI.toast(`Smart charging ${on ? 'off: grid limits not applied' : 'on'}`); return; }
     if (t.dataset.act === 'releaseAll') { const prev = localStorage.getItem('cns_schedule'); SC().releaseAll(); changed(); UI.toast('Take-offs released', undo(prev)); return; }
-    if (t.id === 'focChip') { S.filter = ''; UI.render(); UI.map.drawNet(); UI.map.fitNet(); return; }
+    if (t.id === 'focChip') { S.filter = ''; S.openAp = {}; UI.render(); UI.map.drawNet(); UI.map.fitNet(); return; }
     if (t.id === 'drawerHead' && !e.target.closest('button')) $('#drawer').classList.toggle('open'); });
   UI.timeline = { render, peak: ident => (SC() ? peakKw(ident) : 0) };   // grid side, coincident
 })();

@@ -199,7 +199,7 @@
       netLayer.addLayer(L.polyline(arcPath(pts), { pane: 'net', interactive: false, color: '#32326E', weight: hit && fl ? w + .5 : w, opacity: fl ? (hit ? .8 : .12) : (net ? .55 : .45), lineCap: 'round' })); });
     highlightAirports(net && sel ? [sel] : []);
     if (!net) return;
-    const isolate = id => { S.filter = S.filter === id ? '' : id; if (S.filter) S.openAp = { [id]: true }; UI.render(); drawNet(); fitNet(); };
+    const isolate = id => { S.filter = S.filter === id ? '' : id; S.openAp = S.filter ? { [id]: true } : {}; UI.render(); drawNet(); fitNet(); };
     const aps = Object.entries(perAp).map(([id, f]) => ({ id, f, a: UI.byId()[id] })).filter(x => x.a).sort((x, y) => y.f - x.f);
     // Labels never cover one another or another airport's disc (a click must reach the airport it names): the
     // busiest airports label first, a label that would collide goes to the other side of its disc, else it is
