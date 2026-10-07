@@ -19,6 +19,11 @@ REALISATION_HIGH = 1.00
 # margin, before grid fees, demand charges and operating costs.
 PROCUREMENT_EUR_PER_KWH = 0.15
 
+# Annualising: the network flies 5 days a week, so a year is 52 x 5 = 260 operating days and a month a
+# twelfth of that (~21.7). Per-year figures are the per-day figure times this. Twin: static/settings.js.
+OPERATING_DAYS_PER_YEAR = 52 * 5
+OPERATING_DAYS_PER_MONTH = OPERATING_DAYS_PER_YEAR / 12
+
 
 def fmt_clock(minutes) -> str:
     """Minutes from 00:00 as 'hh:mm', rounded and wrapped to 24h

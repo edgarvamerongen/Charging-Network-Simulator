@@ -53,6 +53,9 @@ window.CNSSettings = (function () {
     // are recalibrated against it (range_km = familiar available range ÷ 0.8).
     // v5: alternate reserve + SID/STAR padding default ON (realistic ops out of the box).
     const KEY = 'cns_settings_v5';
+    // Annualising: the network flies 5 days a week, so a year is 52 x 5 = 260 operating days and a month a twelfth
+    // of that (~21.7). Every per-year / per-month figure is the per-day figure times these. Twin: report.py.
+    const OPERATING_DAYS_PER_YEAR = 52 * 5, OPERATING_DAYS_PER_MONTH = OPERATING_DAYS_PER_YEAR / 12;
     const DEFAULTS = Object.freeze({
         landingReserve:    { enabled: true,  minLandingSoc: 0.20 },   // 0..1 — planes.json ranges are calibrated to this default
         alternateReserve:  { enabled: true },                        // divert-to-nearest-airport reserve; uses each airport's pre-baked alternate_km
@@ -352,7 +355,7 @@ window.CNSSettings = (function () {
     return {
         DEFAULTS, KEY,
         loadAll, save, reset, subscribe,
-        usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin, chargePowerAt, acceptKw, windLeg, windWorstFactor,
+        OPERATING_DAYS_PER_YEAR, OPERATING_DAYS_PER_MONTH, usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin, chargePowerAt, acceptKw, windLeg, windWorstFactor,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
         alternateReserveEnabled, climbOverheadPct, climbSatFrac,
     };

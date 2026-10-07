@@ -7,6 +7,7 @@
   const ROLE = { training: 'Training', home: 'Departure', origin: 'Departure', stop: 'Stop', dest: 'Destination' };
   Object.assign(S, { socOpen: {} });
   const D = () => window.CNSDemand, SC = () => window.CNSScheduler, ST = () => window.CNSSettings;
+  const YEAR_DAYS = (window.CNSSettings && CNSSettings.OPERATING_DAYS_PER_YEAR) || 260;   // 5 days a week (settings.js)
   const cat = id => (window.PLANES_BY_ID || {})[id] || {};
   const rate = () => (ST() && ST().chargeRate) ? ST().chargeRate() : 0.6;
   const gridMul = () => (ST() && ST().gridDemandFactor) ? ST().gridDemandFactor() : 1;
@@ -103,8 +104,8 @@
     const opts = UI.CHARGERS.slice().sort((x, y) => y.power_kw - x.power_kw);
     const socPct = a.targetSoc != null ? Math.round(a.targetSoc * 100) : null;
     return `<div class="pane">
-      <div class="tiles3"><div><div class="cap">Revenue</div><div class="v num">€${Math.round(rev).toLocaleString('en')}<small>/ day</small></div><div class="s num">€${Math.round(rev * 365).toLocaleString('en')} / year</div></div>
-        <div><div class="cap">Energy${grid}</div><div class="v num">${fmt.parts(a.kwh, 'Wh').n}<small>${fmt.parts(a.kwh, 'Wh').u} / day</small></div><div class="s num">${fmt.kwh(a.kwh * 365)} / year</div></div>
+      <div class="tiles3"><div><div class="cap">Revenue</div><div class="v num">€${Math.round(rev).toLocaleString('en')}<small>/ day</small></div><div class="s num">€${Math.round(rev * YEAR_DAYS).toLocaleString('en')} / year</div></div>
+        <div><div class="cap">Energy${grid}</div><div class="v num">${fmt.parts(a.kwh, 'Wh').n}<small>${fmt.parts(a.kwh, 'Wh').u} / day</small></div><div class="s num">${fmt.kwh(a.kwh * YEAR_DAYS)} / year</div></div>
         <div><div class="cap">Charging</div><div class="v num">${fmt.min(a.chargeMin)}<small>/ day</small></div><div class="s">${a.overflow ? '<span style="color:var(--danger)">runs past 23:00</span>' : 'ends ' + clockOf(a.latestEnd)}</div></div></div>
       ${a.overflow ? `<div class="alert">Rotations run past 23:00 at this airport. Add a charger or spread the flights.</div>` : ''}
       ${UI.PROTO ? sizingHtml(a) : ''}
@@ -131,7 +132,7 @@
     const tiles = foc
       ? `<div class="tiles"><div><div class="cap">Energy / day${grid}</div><div class="v num">${fmt.parts(foc.kwh, 'Wh').n}<small>${fmt.parts(foc.kwh, 'Wh').u}</small></div></div><div><div class="cap">Peak load${grid}</div><div class="v num">${fmt.parts(foc.peak, 'W').n}<small>${fmt.parts(foc.peak, 'W').u}</small></div></div><div><div class="cap">Charging / day</div><div class="v num">${foc.chargeMin >= 60 ? fmt.h(foc.chargeMin) + '<small>h</small>' : fmt.r(foc.chargeMin) + '<small>min</small>'}</div></div><div><div class="cap">Revenue / day</div><div class="v num">€${Math.round(foc.kwhAircraft * rate()).toLocaleString('en')}</div></div></div>`
       // The counts live in the header line; the tiles carry the three totals, each with its context (audit T4, T8).
-      : folder.length ? `<div class="tiles t3"><div><div class="cap">Energy / day${grid}</div><div class="v num">${fmt.parts(kwh, 'Wh').n}<small>${fmt.parts(kwh, 'Wh').u}</small></div><div class="s num">${fmt.kwh(kwh * 365)} / year</div></div><div><div class="cap">Network peak${grid}</div><div class="v num">${fmt.parts(netPeak, 'W').n}<small>${fmt.parts(netPeak, 'W').u}</small></div><div class="s num" title="Each airport's own peak, added up">airports ${fmt.kw(peak)}</div></div><div><div class="cap">Revenue / day</div><div class="v num">€${Math.round(kwhAc * rate()).toLocaleString('en')}</div><div class="s num">€${Math.round(kwhAc * rate() * 365).toLocaleString('en')} / year</div></div></div>` : '';
+      : folder.length ? `<div class="tiles t3"><div><div class="cap">Energy / day${grid}</div><div class="v num">${fmt.parts(kwh, 'Wh').n}<small>${fmt.parts(kwh, 'Wh').u}</small></div><div class="s num">${fmt.kwh(kwh * YEAR_DAYS)} / year</div></div><div><div class="cap">Network peak${grid}</div><div class="v num">${fmt.parts(netPeak, 'W').n}<small>${fmt.parts(netPeak, 'W').u}</small></div><div class="s num" title="Each airport's own peak, added up">airports ${fmt.kw(peak)}</div></div><div><div class="cap">Revenue / day</div><div class="v num">€${Math.round(kwhAc * rate()).toLocaleString('en')}</div><div class="s num">€${Math.round(kwhAc * rate() * YEAR_DAYS).toLocaleString('en')} / year</div></div></div>` : '';
     $('#railBody').innerHTML = `<div class="ph">${head}</div>${tiles}
     ${folder.length ? `<div class="ntool"><span class="cap">Show</span><select class="sel" data-act="filter">${['<option value="">All airports</option>', ...R.map(a => `<option value="${a.ident}" ${S.filter === a.ident ? 'selected' : ''}>${a.ident} · ${esc(UI.shortName(a.name))}</option>`)].join('')}</select></div>
     ${R.filter(a => !S.filter || a.ident === S.filter).map((a, i) => `<div class="ap ${S.openAp[a.ident] ? 'open' : ''}${i % 2 ? ' alt' : ''}" data-ap="${a.ident}"><button><span class="id">${a.ident}</span><span class="nm">${esc(UI.shortName(a.name))}<small>${a.trips.length} route${a.trips.length === 1 ? '' : 's'}${a.overflow ? ' · <span style="color:var(--danger)">overflow</span>' : ''}${UI.assets()[a.ident] ? ' · NRG2FLY site' : ''}${UI.PROTO ? waitTag(a) : ''}</small></span>

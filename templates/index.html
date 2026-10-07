@@ -5588,13 +5588,13 @@
                                         <button type="button" class="rev-seg-btn${_dcRevenueYearly ? ' active' : ''}" data-rev-period="year">year</button>
                                     </div>
                                 </div>
-                                <div class="agg-hero-num">€${Math.round((_dcRevenueYearly ? dailyEnergy * 365 : dailyEnergy) * revRate).toLocaleString('en-US')}</div>
+                                <div class="agg-hero-num">€${Math.round((_dcRevenueYearly ? dailyEnergy * CNSSettings.OPERATING_DAYS_PER_YEAR : dailyEnergy) * revRate).toLocaleString('en-US')}</div>
                                 <div class="agg-hero-sub">${_dcRevenueYearly ? 'per year' : 'per day'} · €${revRate.toFixed(2)}/kWh charged</div>
                             </div>
                         </div>
                         <div class="agg-small-row">
                             <div class="agg-small"><div class="agg-small-lbl">Monthly</div><div class="agg-small-num">${fmtEnergy(dailyEnergy * 30.44 * gridMul)}</div></div>
-                            <div class="agg-small"><div class="agg-small-lbl">Yearly</div><div class="agg-small-num">${fmtEnergy(dailyEnergy * 365 * gridMul)}</div></div>
+                            <div class="agg-small"><div class="agg-small-lbl">Yearly</div><div class="agg-small-num">${fmtEnergy(dailyEnergy * CNSSettings.OPERATING_DAYS_PER_YEAR * gridMul)}</div></div>
                             <div class="agg-small"><div class="agg-small-lbl">Charging time / day</div><div class="agg-small-num">${fmtDuration(dailyHours * 60)}</div></div>
                         </div>
                     </div>

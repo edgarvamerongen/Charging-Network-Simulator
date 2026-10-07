@@ -35,7 +35,7 @@ from staticmap import StaticMap, Line, CircleMarker
 # Operating day + revenue/cost assumptions are shared with spreadsheet.py via
 # economics.py so the PDF and XLSX exports never disagree.
 from economics import (DAY_START_MIN as DAY_START, DAY_END_MIN as DAY_END,
-                       REALISATION_LOW, REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH,
+                       REALISATION_LOW, REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH, OPERATING_DAYS_PER_YEAR,
                        fmt_clock as _fmt_clock)
 
 # House palette for the energy-mix donut (muted base + accents).
@@ -979,7 +979,7 @@ def generate_pdf(payload, css_url, request_root):
 
     # Revenue & cost scenario (clearly-labelled, tunable — see module constants).
     daily_kwh = float(totals.get('totalDailyKwh') or 0)
-    annual_kwh = daily_kwh * 365
+    annual_kwh = daily_kwh * OPERATING_DAYS_PER_YEAR
     margin_rate = charge_rate - PROCUREMENT_EUR_PER_KWH
     scenario = {
         'tariff': charge_rate,
@@ -988,6 +988,7 @@ def generate_pdf(payload, css_url, request_root):
         'realisation_high': REALISATION_HIGH,
         'daily_kwh': daily_kwh,
         'annual_kwh': annual_kwh,
+        'operating_days': OPERATING_DAYS_PER_YEAR,
         'annual_mwh': annual_kwh / 1000.0,
         'gross_rev_year': charge_rate * annual_kwh,
         'rev_year_low': charge_rate * annual_kwh * REALISATION_LOW,

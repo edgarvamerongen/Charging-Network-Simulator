@@ -47,7 +47,7 @@ from openpyxl.worksheet.hyperlink import Hyperlink
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from economics import (DAY_START_MIN, DAY_END_MIN, REALISATION_LOW,
-                       REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH,
+                       REALISATION_HIGH, PROCUREMENT_EUR_PER_KWH, OPERATING_DAYS_PER_YEAR,
                        fmt_clock as _clock)
 
 FORMAT_NAME = 'NRG2FLY Charging Network Simulator — workbook'
@@ -450,6 +450,7 @@ class SpreadsheetBuilder:
             ('Realisation low', REALISATION_LOW, FMT_PCT, 'Settings_realisationLow'),
             ('Realisation high', REALISATION_HIGH, FMT_PCT, 'Settings_realisationHigh'),
             ('Procurement (EUR/kWh)', PROCUREMENT_EUR_PER_KWH, '€0.00', 'Settings_procurement'),
+            ('Operating days / year', OPERATING_DAYS_PER_YEAR, FMT_NUM, 'Settings_operatingDays'),
         ]
         self._header_row(ws, r, [c[0] for c in cols])
         hdr = r
@@ -477,8 +478,8 @@ class SpreadsheetBuilder:
         cards = [
             ('Daily energy', f'=SUM({daily_col})', FMT_KWH),
             ('Peak demand', f'=MAX({peak_col})', FMT_KW),
-            ('Energy / year', f'=SUM({daily_col})*365/1000', '#,##0 "MWh"'),
-            ('Gross margin / yr', f'=SUM({daily_col})*365*(Settings_tariff-Settings_procurement)', FMT_EUR),
+            ('Energy / year', f'=SUM({daily_col})*Settings_operatingDays/1000', '#,##0 "MWh"'),
+            ('Gross margin / yr', f'=SUM({daily_col})*Settings_operatingDays*(Settings_tariff-Settings_procurement)', FMT_EUR),
         ]
         col = 1
         for label, formula, fmt in cards:
@@ -491,17 +492,17 @@ class SpreadsheetBuilder:
 
         # --- scenario lines (live formulas) ---
         scen = [
-            ('Gross revenue / year', f'=SUM({daily_col})*365*Settings_tariff', FMT_EUR),
-            ('Revenue band (realisation)', f'=SUM({daily_col})*365*Settings_tariff*Settings_realisationLow',
+            ('Gross revenue / year', f'=SUM({daily_col})*Settings_operatingDays*Settings_tariff', FMT_EUR),
+            ('Revenue band (realisation)', f'=SUM({daily_col})*Settings_operatingDays*Settings_tariff*Settings_realisationLow',
              FMT_EUR),
-            ('Energy cost / year', f'=SUM({daily_col})*365*Settings_procurement', FMT_EUR),
+            ('Energy cost / year', f'=SUM({daily_col})*Settings_operatingDays*Settings_procurement', FMT_EUR),
         ]
         r = 6
         for label, formula, fmt in scen:
             self._cell(ws, r, 1, label, bold=True, color=NAVY)
             self._cell(ws, r, 2, formula, color=C_FORMULA, fmt=fmt)
             if 'band' in label:
-                self._cell(ws, r, 3, f'=SUM({daily_col})*365*Settings_tariff*Settings_realisationHigh',
+                self._cell(ws, r, 3, f'=SUM({daily_col})*Settings_operatingDays*Settings_tariff*Settings_realisationHigh',
                            color=C_FORMULA, fmt=FMT_EUR)
                 self._cell(ws, r, 4, 'low – high', size=9, color=C_MUTED)
             r += 1

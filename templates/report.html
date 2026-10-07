@@ -443,7 +443,7 @@
         {% endif %}
         <tr>
           <th>Operating day</th>
-          <td>07:00 – 23:00, 365 days / year</td>
+          <td>07:00 – 23:00, 5 days a week ({{ scenario.operating_days|default(260, true) }} days / year)</td>
         </tr>
       </tbody>
     </table>
