@@ -118,10 +118,14 @@ window.CNSRouting = (function () {
         // divide by `route` so the short divert is NOT inflated by cruise
         // airways padding (a divert is flown near-direct). Built once and only
         // when the toggle is on, so the planner is identical when off.
+        // The alternate is per AIRCRAFT: an eVTOL diverts to the nearest airport of any kind, a CTOL to the
+        // nearest paved runway (CNSSettings.alternateOf; ruled 2026-11-18).
+        const altOf = (rec) => (window.CNSSettings && CNSSettings.alternateOf)
+            ? CNSSettings.alternateOf(plane, rec) : { km: +(rec && rec.alternate_km) || 0, ident: (rec && rec.alternate_ident) || '' };
         const altByIdent = new Map();
         if (requireAlt) {
             for (const a of allAirports) {
-                if (a && a.ident != null) altByIdent.set(a.ident, +a.alternate_km || 0);
+                if (a && a.ident != null) altByIdent.set(a.ident, altOf(a).km);
             }
         }
         const altReserveKm = (n) => {
@@ -131,7 +135,7 @@ window.CNSRouting = (function () {
             if (n.divertOverrideKm != null && isFinite(+n.divertOverrideKm)) return (+n.divertOverrideKm) / route;
             const km = (n.ident != null && altByIdent.has(n.ident))
                      ? altByIdent.get(n.ident)
-                     : (+n.alternate_km || 0);
+                     : altOf(n).km;
             return km / route;
         };
         // A return trip flies every leg back too, landing at the airport it left from, so with
@@ -150,7 +154,7 @@ window.CNSRouting = (function () {
             if (!windOn || !nb) return 1;
             if (dwCache.has(nb)) return dwCache.get(nb);
             const rec = nb.ident != null ? apById.get(nb.ident) : null;
-            const altId = nb.divertOverride || nb.alternate_ident || (rec && rec.alternate_ident);
+            const altId = nb.divertOverride || altOf(rec || nb).ident || altOf(nb).ident;
             const alt = altId ? apById.get(altId) : null;
             const f = alt ? divertWindFactor(pb, { lat: +alt.latitude_deg, lon: +alt.longitude_deg }, plane).factor : wWorst;
             dwCache.set(nb, f); return f;

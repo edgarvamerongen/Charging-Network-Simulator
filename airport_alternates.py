@@ -174,3 +174,18 @@ def compute_alternate_columns(airports_df, runways_df):
                                 airports_df["longitude_deg"].to_numpy(),
                                 candidate_mask=mask)
     return np.round(km, 3), airports_df["ident"].to_numpy()[idx]
+
+
+def compute_vtol_alternate_columns(airports_df):
+    """(vtol_alternate_km, vtol_alternate_ident): each airport's nearest OTHER airport in
+    the same set, whatever its runway. Powered-lift (eVTOL) lands vertically, so any
+    airport in the planner set is a diversion location (EASA Part-IAM, VFR by day: the
+    VCA must be able to reach a diversion vertiport or location from any point; the
+    planner already lets an eVTOL stop at any airport). The CTOL alternate
+    (compute_alternate_columns: nearest paved runway >= 300 m) is left untouched;
+    the browser picks one or the other per aircraft (CNSSettings.alternateOf).
+    Heliports are not in the CNS sets, so the nearest airport is a conservative
+    stand-in for the nearest landing site."""
+    km, idx = nearest_alternate(airports_df["latitude_deg"].to_numpy(),
+                                airports_df["longitude_deg"].to_numpy())
+    return np.round(km, 3), airports_df["ident"].to_numpy()[idx]

@@ -2,7 +2,8 @@ import os
 import sys
 
 import pandas as pd
-from airport_alternates import compute_alternate_columns, runway_length_columns
+from airport_alternates import (compute_alternate_columns, compute_vtol_alternate_columns,
+                                runway_length_columns)
 from airport_overrides import apply_reinstated
 
 # The raw OurAirports dumps are gitignored (only the generated
@@ -74,6 +75,12 @@ eu_airports["alternate_km"], eu_airports["alternate_ident"] = \
 # the airport-card display — same source file, display-layer categories.
 eu_airports = eu_airports.merge(runway_length_columns(runways),
                                 how="left", left_on="ident", right_index=True)
+
+# eVTOL diversion location: the nearest OTHER airport in the set, any runway
+# (powered-lift lands vertically). Appended last so the existing columns keep
+# their order; the browser picks it for eVTOL (CNSSettings.alternateOf).
+eu_airports["vtol_alternate_km"], eu_airports["vtol_alternate_ident"] = \
+    compute_vtol_alternate_columns(eu_airports)
 
 # -----------------------------------------
 # Save result

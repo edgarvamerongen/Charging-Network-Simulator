@@ -15,6 +15,7 @@ import time
 
 import pandas as pd
 
+from airport_alternates import compute_vtol_alternate_columns
 from airport_overrides import apply_reinstated
 from world_data import build_world, columnar_feed
 
@@ -45,6 +46,9 @@ def main():
         if len(gone):
             df = pd.concat([df, gone[[c for c in df.columns if c in gone.columns]]], ignore_index=True)
             print(f"carried over {len(gone)} European idents OurAirports no longer lists: {', '.join(gone['ident'].head(8))}...")
+    # eVTOL diversion location over the FINAL set (carried-over idents included): the nearest other airport,
+    # any runway. Appended last; the browser picks it for eVTOL (CNSSettings.alternateOf).
+    df["vtol_alternate_km"], df["vtol_alternate_ident"] = compute_vtol_alternate_columns(df.reset_index(drop=True))
     df.to_csv(os.path.join(HERE, "world_airports.csv"), index=False)
     feed = columnar_feed(df)
     os.makedirs(os.path.join(HERE, "static", "geo"), exist_ok=True)

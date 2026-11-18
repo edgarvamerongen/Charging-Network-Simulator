@@ -226,7 +226,8 @@ window.CNSUI = (function () {
   // read; its content hash is in the URL, so the browser keeps it until a rebuild. Without it (not built, or the
   // request fails) the European list keeps the planner working.
   const WORLD_FIELDS = { i: 'ident', n: 'name', t: 'type', la: 'latitude_deg', lo: 'longitude_deg', c: 'iso_country', m: 'municipality', a: 'iata_code',
-    ak: 'alternate_km', ai: 'alternate_ident', rp: 'rwy_paved_m', rg: 'rwy_grass_m', rv: 'rwy_gravel_m', rd: 'rwy_dirt_m', rw: 'rwy_water_m', ru: 'rwy_unknown_m' };
+    ak: 'alternate_km', ai: 'alternate_ident', rp: 'rwy_paved_m', rg: 'rwy_grass_m', rv: 'rwy_gravel_m', rd: 'rwy_dirt_m', rw: 'rwy_water_m', ru: 'rwy_unknown_m',
+    vk: 'vtol_alternate_km', vi: 'vtol_alternate_ident' };
   const WORLD_TYPES = ['small_airport', 'medium_airport', 'large_airport'];
   function unpackWorld(feed) {
     const f = feed.f, keys = Object.keys(WORLD_FIELDS), out = new Array(feed.n);

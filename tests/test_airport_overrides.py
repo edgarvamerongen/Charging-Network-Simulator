@@ -82,6 +82,9 @@ class GeneratedFilesCarryEGCN(unittest.TestCase):
             # neighbours nearer to Doncaster than to their old alternate now divert there
             for ident in ("EGCF", "GB-0289", "GB-0427"):
                 self.assertEqual(df.loc[ident, "alternate_ident"], "EGCN", f"{name} {ident}")
+            # an eVTOL diverts to the nearest airport of any kind: Finningley's strip, 5.6 km
+            self.assertEqual(df.loc["EGCN", "vtol_alternate_ident"], "GB-0289", name)
+            self.assertAlmostEqual(float(df.loc["EGCN", "vtol_alternate_km"]), 5.56, places=2)
 
     def test_the_browser_feed_lists_it(self):
         with open(os.path.join(REPO_ROOT, "static", "geo", "airports-world.json"), encoding="utf-8") as fh:
@@ -89,6 +92,7 @@ class GeneratedFilesCarryEGCN(unittest.TestCase):
         self.assertEqual(recs["EGCN"]["iata_code"], "DSA")
         self.assertEqual(recs["EGCN"]["rwy_paved_m"], 2893)
         self.assertEqual(recs["EGCF"]["alternate_ident"], "EGCN")
+        self.assertEqual(recs["EGCN"]["vtol_alternate_ident"], "GB-0289")
 
     def test_the_resolver_index_knows_the_new_and_the_old_ident(self):
         with open(os.path.join(REPO_ROOT, "airports_index.csv"), newline="", encoding="utf-8") as fh:

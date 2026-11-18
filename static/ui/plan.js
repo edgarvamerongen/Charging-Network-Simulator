@@ -335,7 +335,8 @@
     const ST = window.CNSSettings; if (!ST || !ST.loadAll) return '';
     const s = ST.loadAll();
     const cp = (window.CNSFlight && CNSFlight.climbParams) ? CNSFlight.climbParams(p) : { applies: false }; const sid = ST.sidStarPaddingKm ? ST.sidStarPaddingKm(p) : 0;
-    const parts = [s.landingReserve && s.landingReserve.enabled ? 'reserve ' + Math.round(s.landingReserve.minLandingSoc * 100) + ' %' : 'no landing reserve', cp.applies ? 'climb +' + Math.round(cp.eMaxKwh) + ' kWh' : '',
+    const resL = ST.reserveLabel ? ST.reserveLabel(p) : (s.landingReserve && s.landingReserve.enabled ? Math.round(s.landingReserve.minLandingSoc * 100) + ' %' : '');   // '5 min' for an eVTOL (EASA), '20 %' for CTOL
+    const parts = [resL ? 'reserve ' + resL : 'no landing reserve', cp.applies ? 'climb +' + Math.round(cp.eMaxKwh) + ' kWh' : '',
       sid ? 'SID/STAR ' + sid + ' km' : '', s.chargeTaper && s.chargeTaper.enabled ? 'taper from ' + Math.round(s.chargeTaper.threshold * 100) + ' % SoC' : 'no taper', '€' + (ST.chargeRate ? ST.chargeRate() : 0.6).toFixed(2) + ' / kWh'].filter(Boolean);
     return `<div class="live-as"><button class="lnk" data-act="model">Model: ${UI.settings.label()}</button> · ${parts.join(' · ')}</div>`;
   }
