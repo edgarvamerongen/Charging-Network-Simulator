@@ -10,8 +10,11 @@
     showAlternates: false, showLabels: true, allowedTypes: ['large_airport', 'medium_airport']
   });
   const R = () => window.CNSRouting, ST = () => window.CNSSettings;
-  const wp = a => ({ ident: a.ident, name: a.name, type: a.type, lat: +(a.latitude_deg ?? a.lat), lon: +(a.longitude_deg ?? a.lon), iata_code: a.iata_code || '', alternate_km: a.alternate_km, alternate_ident: a.alternate_ident });
+  const wp = a => ({ ident: a.ident, name: a.name, type: a.type, lat: +(a.latitude_deg ?? a.lat), lon: +(a.longitude_deg ?? a.lon), iata_code: a.iata_code || '', alternate_km: a.alternate_km, alternate_ident: a.alternate_ident, vtol_alternate_km: a.vtol_alternate_km, vtol_alternate_ident: a.vtol_alternate_ident });
   const plane = () => UI.plane();
+  // The aircraft's divert alternate at an airport: the nearest airport of any kind for an eVTOL, the nearest paved
+  // runway for everything else (CNSSettings.alternateOf).
+  const altOf = (p, rec) => (ST() && ST().alternateOf) ? ST().alternateOf(p, rec) : { km: +(rec && rec.alternate_km) || 0, ident: (rec && rec.alternate_ident) || '' };
   const isCircular = () => S.trip === 'circular';
   const ORDERS = {
     'medium-large-small': { medium_airport: 0, large_airport: 50, small_airport: 150 },
@@ -65,13 +68,13 @@
     const t = terminus(); const p = plane(); if (!t || !p) return;
     const route = ST() ? ST().routingFactor(p) : 1; const maxLeg = availableRangeKm(p);
     const requireAlt = !!(ST() && ST().alternateReserveEnabled && ST().alternateReserveEnabled(p));
-    const altReserveKm = w => { if (!requireAlt || !w) return 0; const ovKm = divertOverrideKm(w); if (ovKm != null) return ovKm / route; const full = w.ident ? UI.byId()[w.ident] : null; const km = (full && full.alternate_km != null) ? +full.alternate_km : (+w.alternate_km || 0); return (isFinite(km) ? km : 0) / route; };
+    const altReserveKm = w => { if (!requireAlt || !w) return 0; const ovKm = divertOverrideKm(w); if (ovKm != null) return ovKm / route; const full = w.ident ? UI.byId()[w.ident] : null; const km = altOf(p, full || w).km; return (isFinite(km) ? km : 0) / route; };
     const c = ringChain(t), back = S.trip === 'retour';   // a return trip flies each leg back too, landing at c[i]
     // In the plan's wind a leg needs its air km (routing.js windFactor) + the arrival's divert in the wind ON ITS OWN
     // COURSE, to that airport's alternate (the manual pick, else the catalog's); the worst-case headwind only when the
     // alternate is unknown. A leg that only fails on its divert in this wind says so: change the wind or the divert.
     const ww = ST() && ST().windWorstFactor ? ST().windWorstFactor(+p.speed_kmh || 0) : 1;
-    const divertOf = b => { const id = (b && b.ident && S.divertOverrides[b.ident]) || ((b && UI.byId()[b.ident]) || {}).alternate_ident || (b && b.alternate_ident); return id ? UI.byId()[id] : null; };
+    const divertOf = b => { const id = (b && b.ident && S.divertOverrides[b.ident]) || altOf(p, (b && UI.byId()[b.ident]) || b).ident; return id ? UI.byId()[id] : null; };
     const legNeed = (a, b, d) => { const ak = altReserveKm(b), alt = divertOf(b), air = d * R().windFactor(a, b, p);
       const w = alt ? R().divertWindFactor(b, { lat: +alt.latitude_deg, lon: +alt.longitude_deg }, p) : { factor: ww, ok: true };
       return { total: air + (ak > 0 ? ak * w.factor : 0), still: air + ak, ak, alt, w, b }; };

@@ -387,10 +387,11 @@
     <h3>Simulation settings</h3>
     {% if model_settings %}
     {% set setting_labels = {
+        'landingReserve':    'Landing reserve',
+        'alternateReserve':  'Alternate-airport reserve (eVTOL: nearest airport)',
         'chargeTarget':      'Charge target (state of charge)',
         'routingPadding':    'Routing distance padding',
         'sidStarPaddingKm':  'SID/STAR padding (km)',
-        'alternateReserve':  'Alternate-airport reserve',
         'gridDemandFactor':  'Grid demand factor',
         'chargeRate':        'Charging tariff (€/kWh)',
         'turnaroundMin':     'Turnaround time (min)',

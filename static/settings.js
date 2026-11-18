@@ -57,7 +57,7 @@ window.CNSSettings = (function () {
     // of that (~21.7). Every per-year / per-month figure is the per-day figure times these. Twin: report.py.
     const OPERATING_DAYS_PER_YEAR = 52 * 5, OPERATING_DAYS_PER_MONTH = OPERATING_DAYS_PER_YEAR / 12;
     const DEFAULTS = Object.freeze({
-        landingReserve:    { enabled: true,  minLandingSoc: 0.20 },   // 0..1 — planes.json ranges are calibrated to this default
+        landingReserve:    { enabled: true,  minLandingSoc: 0.20, evtolMinutes: 5 },   // minLandingSoc 0..1 for CTOL (catalog ranges are calibrated to it); evtolMinutes = eVTOL final reserve at cruise (EASA Part-IAM floor: 5 min)
         alternateReserve:  { enabled: true },                        // divert-to-nearest-airport reserve; uses each airport's pre-baked alternate_km
         chargerEfficiency: { enabled: false, value: 0.88 },           // 0..1
         chargeTaper:       { enabled: true,  threshold: 0.75, taperPower: 0.30, cRate: 5.0 },  // threshold = CC→CV knee; taperPower = power at 100% as a fraction of peak (exp-taper floor); cRate = global C-rate cap, set high (5C) so it stays non-binding for the current fleet — a hook for later, not an active constraint
@@ -127,7 +127,51 @@ window.CNSSettings = (function () {
         if (plane && plane.range_incl_reserves) return 1.0;   // reserves already flown off the published range
         const s = loadAll().landingReserve;
         if (!s.enabled) return 1.0;
+        const ev = evtolReserveFraction(plane, s);
+        if (ev != null) return Math.max(0.05, Math.min(1.0, 1.0 - ev));
         return Math.max(0.05, Math.min(1.0, 1.0 - s.minLandingSoc));
+    }
+
+    /** Powered-lift (Notion Type eVTOL; the catalog's `type`). The engines already exempt it from the
+     *  runway gates and the climb model; the reserve, divert and SID/STAR rules below key on it too. */
+    function isPoweredLift(plane) { return /vtol/i.test(String((plane && plane.type) || '')); }
+
+    /** eVTOL energy doctrine (ruled 2026-11-18): EASA's VTOL-capable-aircraft rules (Reg. (EU)
+     *  2024/1111, Part-IAM; AMC/GM ED Decision 2025/012/R), applied to VFR and IFR alike because the EU
+     *  has no IFR rules for VCA yet. The final reserve is a TIME, not a state of charge: the OEM's
+     *  go-around time, at least 5 minutes (the AMC floor), flown here at cruise power — so its share of
+     *  the battery is minutes/60 × cruise speed / range. The divert to the nearest landing site comes on
+     *  top through the alternate reserve (alternateOf). Returns that fraction, or null for an aircraft
+     *  the rule doesn't apply to (CTOL, or no speed/range to convert the time). */
+    function evtolReserveFraction(plane, s) {
+        if (!isPoweredLift(plane)) return null;
+        const speed = +(plane && plane.speed_kmh), range = +(plane && plane.range_km);
+        if (!(speed > 0 && range > 0)) return null;
+        s = s || loadAll().landingReserve;
+        const min = Math.max(5, Math.min(30, +s.evtolMinutes || 5));
+        return (min / 60) * speed / range;
+    }
+
+    /** The reserve as people read it: '5 min' for an eVTOL, '20 %' for everything else ('' when off). */
+    function reserveLabel(plane) {
+        if (plane && plane.range_incl_reserves) return 'in published range';
+        const s = loadAll().landingReserve;
+        if (!s.enabled) return '';
+        if (evtolReserveFraction(plane, s) != null) return Math.max(5, Math.min(30, +s.evtolMinutes || 5)) + ' min';
+        return Math.round(s.minLandingSoc * 100) + ' %';
+    }
+
+    /** An airport's divert alternate for THIS aircraft: {km, ident}. CTOL needs a paved runway ≥ 300 m
+     *  (alternate_km/_ident); an eVTOL can land at any airport, so it takes the nearest one
+     *  (vtol_alternate_km/_ident, pre-baked by prepare_data/prepare_world). Falls back to the CTOL pair
+     *  for a record without the eVTOL columns (an older CSV, a manual waypoint). */
+    function alternateOf(plane, rec) {
+        if (!rec) return { km: 0, ident: '' };
+        const num = (v) => (v === '' || v == null || !isFinite(+v)) ? null : +v;
+        if (isPoweredLift(plane) && num(rec.vtol_alternate_km) != null) {
+            return { km: num(rec.vtol_alternate_km), ident: rec.vtol_alternate_ident || '' };
+        }
+        return { km: num(rec.alternate_km) != null ? num(rec.alternate_km) : 0, ident: rec.alternate_ident || '' };
     }
 
     /** Multiplier from aircraft-side kWh to grid kWh. 1.0 when efficiency
@@ -174,6 +218,7 @@ window.CNSSettings = (function () {
      *  "identity when off, clamp to UI range when on" shape. */
     function sidStarPaddingKm(plane) {
         if (_isVfr(plane)) return 0;   // SID/STAR are IFR terminal procedures — VFR joins the pattern directly
+        if (isPoweredLift(plane)) return 0;   // an eVTOL flies point-in-space approaches to a FATO, not runway SIDs/STARs (ruled 2026-11-18)
         const s = loadAll().sidStarPadding;
         if (!s || !s.enabled) return 0;
         return Math.max(5, Math.min(50, +s.km || 10));
@@ -358,5 +403,6 @@ window.CNSSettings = (function () {
         OPERATING_DAYS_PER_YEAR, OPERATING_DAYS_PER_MONTH, usableFraction, gridDemandFactor, routingFactor, sidStarPaddingKm, chargeTimeMin, chargePowerAt, acceptKw, windLeg, windWorstFactor,
         effectiveChargePower, chargeTargetDefault, chargeRate, activeFlags,
         alternateReserveEnabled, climbOverheadPct, climbSatFrac,
+        isPoweredLift, evtolReserveFraction, reserveLabel, alternateOf,
     };
 })();

@@ -29,6 +29,8 @@ FEED_FIELDS = {
     "ak": "alternate_km", "ai": "alternate_ident",
     "rp": "rwy_paved_m", "rg": "rwy_grass_m", "rv": "rwy_gravel_m",
     "rd": "rwy_dirt_m", "rw": "rwy_water_m", "ru": "rwy_unknown_m",
+    # eVTOL diversion location (nearest other airport, any runway; prepare_world.py)
+    "vk": "vtol_alternate_km", "vi": "vtol_alternate_ident",
 }
 FEED_VERSION = 1
 
@@ -59,7 +61,7 @@ def _clean(v, kind):
 
 def columnar_feed(df):
     """The compact browser feed: {v, hash, n, f: {key: [values...]}}. Coordinates to 5 decimals (~1 m),
-    alternate km to 0.1, runway metres as integers, type as 0/1/2 (small/medium/large); missing -> null."""
+    alternate km (CTOL and eVTOL) to 0.1, runway metres as integers, type as 0/1/2 (small/medium/large); missing -> null."""
     f = {}
     for key, col in FEED_FIELDS.items():
         vals = df[col].tolist() if col in df.columns else [None] * len(df)
@@ -67,7 +69,7 @@ def columnar_feed(df):
             f[key] = [TYPES.index(v) for v in vals]
         elif key in ("la", "lo"):
             f[key] = [round(float(v), 5) for v in vals]
-        elif key == "ak":
+        elif key in ("ak", "vk"):
             f[key] = [None if _clean(v, "f") is None else round(float(v), 1) for v in vals]
         elif key.startswith("r") and len(key) == 2:
             f[key] = [_clean(v, "i") for v in vals]

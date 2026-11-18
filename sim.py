@@ -15,7 +15,7 @@ _AIRPORT_CODE_RE = re.compile(r'^[A-Za-z0-9]{3,4}$')
 # Airport CSV columns consumers do arithmetic on; every other column stays the
 # string the file holds. An empty cell stays "" in both cases.
 _AIRPORT_FLOAT_COLS = frozenset((
-    'latitude_deg', 'longitude_deg', 'alternate_km',
+    'latitude_deg', 'longitude_deg', 'alternate_km', 'vtol_alternate_km',
     'rwy_paved_m', 'rwy_grass_m', 'rwy_gravel_m',
     'rwy_dirt_m', 'rwy_water_m', 'rwy_unknown_m'))
 
@@ -92,6 +92,7 @@ class Simulator:
     _AIRPORT_KEEP = frozenset((
         'ident', 'name', 'municipality', 'iata_code', 'icao_code', 'gps_code', 'type', 'latitude_deg', 'longitude_deg',
         'elevation_ft', 'continent', 'iso_country', 'iso_region', 'alternate_km', 'alternate_ident',
+        'vtol_alternate_km', 'vtol_alternate_ident',
         'rwy_paved_m', 'rwy_grass_m', 'rwy_gravel_m', 'rwy_dirt_m', 'rwy_water_m', 'rwy_unknown_m'))
 
     @classmethod
@@ -186,6 +187,7 @@ class Simulator:
         wanted = ['ident', 'name', 'municipality', 'iata_code', 'type',
                   'latitude_deg', 'longitude_deg', 'iso_country',
                   'alternate_km', 'alternate_ident',
+                  'vtol_alternate_km', 'vtol_alternate_ident',
                   'rwy_paved_m', 'rwy_grass_m', 'rwy_gravel_m',
                   'rwy_dirt_m', 'rwy_water_m', 'rwy_unknown_m']
         return [{k: r[k] for k in wanted if k in r} for r in rows]

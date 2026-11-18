@@ -2081,11 +2081,16 @@
                         <div class="rs-cell">
                             <div class="rs-cell-head">
                                 <label class="rs-toggle"><input type="checkbox" id="rsLandingReserve"><span>Landing reserve</span></label>
-                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Minimum state of charge each aircraft must land with — applied uniformly across the fleet.">?</span>
+                                <span class="rs-q" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Minimum state of charge a conventional aircraft must land with. An eVTOL keeps a final reserve in minutes at cruise power instead (EASA rules for VTOL-capable aircraft: at least 5 min).">?</span>
                             </div>
                             <div class="rs-cell-ctrl">
                                 <input type="range" id="rsMinSoc" min="5" max="50" step="5" value="20" class="form-range">
                                 <span class="rs-val" id="rsMinSocVal">20%</span>
+                            </div>
+                            <div class="rs-cell-ctrl">
+                                <span class="rs-val" style="min-width:3.2em">eVTOL</span>
+                                <input type="range" id="rsEvtolMin" min="5" max="30" step="1" value="5" class="form-range">
+                                <span class="rs-val" id="rsEvtolMinVal">5 min</span>
                             </div>
                             <p class="rs-help rs-na-note" id="rsNaLanding"></p>
                         </div>
@@ -2501,8 +2506,9 @@
             (chain || []).forEach((n, i) => {
                 if (i === 0) return;
                 const full = n && n.ident ? airportByIdent[n.ident] : null;
-                if (!full || !full.alternate_ident) return;
-                const alt = airportByIdent[full.alternate_ident];
+                const ao = _altOf(full);
+                if (!full || !ao.ident) return;
+                const alt = airportByIdent[ao.ident];
                 if (!alt) return;
                 const from = [full.latitude_deg, full.longitude_deg];
                 const to   = [alt.latitude_deg, alt.longitude_deg];
@@ -2513,8 +2519,8 @@
                     radius: 5, fillColor: '#7c3aed', color: '#fff',
                     weight: 1.5, fillOpacity: 0.9,
                 });
-                const km = (full.alternate_km != null)
-                    ? full.alternate_km
+                const km = ao.km > 0
+                    ? ao.km
                     : CNSRouting.haversineKm({ lat: from[0], lon: from[1] },
                                              { lat: to[0], lon: to[1] });
                 dot.bindTooltip(`${alt.ident} · ${fmtDist(km)}`, {
@@ -2538,17 +2544,25 @@
         // box "Divert → IDENT · km"; a small purple "alt" badge after the name prompts the hover.
         // Only arrival nodes (the origin departs full — see routing.js), and only when the
         // alternate-reserve setting is on, so the default view stays uncluttered.
+        // The selected aircraft's divert alternate at an airport: the nearest airport of any kind for an eVTOL,
+        // the nearest paved runway for everything else (CNSSettings.alternateOf; ruled 2026-11-18).
+        function _altOf(full) {
+            const p = (typeof _selectedPlane === 'function') ? _selectedPlane() : null;
+            return (window.CNSSettings && CNSSettings.alternateOf) ? CNSSettings.alternateOf(p, full)
+                : { km: +(full && full.alternate_km) || 0, ident: (full && full.alternate_ident) || '' };
+        }
         function _altHint(wp) {
             const off = { open: '<strong>', badge: '' };
             if (!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled())) return off;
             const full = wp && wp.ident ? airportByIdent[wp.ident] : null;
             if (!full) return off;
             const ov = divertOverrides[wp.ident];
-            const altId = ov || full.alternate_ident;
+            const ao = _altOf(full);
+            const altId = ov || ao.ident;
             if (!altId) return off;
             const ovKm = ov ? _divertOverrideKm(wp) : null;
             const km = ov ? (ovKm != null ? ' · ' + fmtDist(ovKm) : '')
-                          : (full.alternate_km != null ? ' · ' + fmtDist(full.alternate_km) : '');
+                          : (ao.km > 0 ? ' · ' + fmtDist(ao.km) : '');
             const title = `Divert → ${altId}${km}${ov ? ' · manual' : ''} — click, then pick an airport on the map`;
             const reset = ov ? `<span class="alt-hint alt-reset" title="Reset divert to auto" onclick="window._cnsAltReset('${wp.ident}')">↺</span>` : '';
             // ONE grid cell — the route list is a strict 5-cell grid (step · name ·
@@ -2725,7 +2739,7 @@
                     // (the unpadded /route cancels against the padded scale) — matches validateRoute.
                     const requireAlt = !!(window.CNSSettings && CNSSettings.alternateReserveEnabled && CNSSettings.alternateReserveEnabled(plane));
                     const destFull = (requireAlt && selected.destination.ident) ? airportByIdent[selected.destination.ident] : null;
-                    const altKm = (destFull && destFull.alternate_km != null) ? (+destFull.alternate_km || 0) : 0;
+                    const altKm = destFull ? (CNSSettings.alternateOf ? CNSSettings.alternateOf(plane, destFull).km : (+destFull.alternate_km || 0)) : 0;
                     if (km + altKm > maxLeg) {
                         warn = ` <span class="traj-warn">⚠ ${fmtDist(km + altKm - maxLeg)} over available range (${fmtDist(maxLeg)})</span>`;
                     }
@@ -2897,8 +2911,8 @@
                 // candidate pool (they're already on the chain), so it builds its divert-reserve
                 // lookup without them — without this their reserve would fall back to 0 and the
                 // planner would under-plan a leg that validateRoute then flags (inconsistent).
-                origin: { ident: (airportByIdent[selected.origin.ident] || selected.origin).ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg, alternate_km: (airportByIdent[selected.origin.ident] || selected.origin).alternate_km },
-                dest:   { ident: (airportByIdent[selected.destination.ident] || selected.destination).ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg, alternate_km: (airportByIdent[selected.destination.ident] || selected.destination).alternate_km, type: (airportByIdent[selected.destination.ident] || selected.destination).type }
+                origin: { ident: (airportByIdent[selected.origin.ident] || selected.origin).ident, name: selected.origin.name, lat: selected.origin.latitude_deg, lon: selected.origin.longitude_deg, alternate_km: (airportByIdent[selected.origin.ident] || selected.origin).alternate_km, vtol_alternate_km: (airportByIdent[selected.origin.ident] || selected.origin).vtol_alternate_km },
+                dest:   { ident: (airportByIdent[selected.destination.ident] || selected.destination).ident, name: selected.destination.name, lat: selected.destination.latitude_deg, lon: selected.destination.longitude_deg, alternate_km: (airportByIdent[selected.destination.ident] || selected.destination).alternate_km, vtol_alternate_km: (airportByIdent[selected.destination.ident] || selected.destination).vtol_alternate_km, type: (airportByIdent[selected.destination.ident] || selected.destination).type }
             };
         }
 
@@ -2925,7 +2939,8 @@
                 const ovKm = _divertOverrideKm(wp);                    // manual divert (CNSDivertEdit) wins
                 if (ovKm != null) return ovKm / route;
                 const full = wp.ident ? airportByIdent[wp.ident] : null;
-                const km = (full && full.alternate_km != null) ? +full.alternate_km : (+wp.alternate_km || 0);
+                const km = CNSSettings.alternateOf ? CNSSettings.alternateOf(plane, full || wp).km
+                         : ((full && full.alternate_km != null) ? +full.alternate_km : (+wp.alternate_km || 0));
                 return (isFinite(km) ? km : 0) / route;
             };
             const chain = _ringChain(t);
@@ -2969,7 +2984,7 @@
             document.querySelectorAll('#stopsContainer .stop-field .stop-input').forEach(inp => {
                 const ident = inp.dataset.ident; if (!ident) return;
                 const apx = airportByIdent[ident]; if (!apx) return;
-                manual.push({ ident: apx.ident, name: apx.name, type: apx.type, lat: apx.latitude_deg, lon: apx.longitude_deg, iata_code: apx.iata_code || '', alternate_km: apx.alternate_km });
+                manual.push({ ident: apx.ident, name: apx.name, type: apx.type, lat: apx.latitude_deg, lon: apx.longitude_deg, iata_code: apx.iata_code || '', alternate_km: apx.alternate_km, vtol_alternate_km: apx.vtol_alternate_km });
             });
             if (_isCircularTrip()) manual.pop();   // the last stop IS the terminus — not an intermediate
             plannedSource = manual.length ? 'user' : 'auto';
@@ -5170,7 +5185,7 @@
                 // to a NON-routing factor (charge target, taper, …) just re-renders — no replan.
                 try {
                     const rs = CNSSettings.loadAll();
-                    const sig = `${rs.landingReserve.enabled ? rs.landingReserve.minLandingSoc : '-'}|${rs.routingPadding.enabled ? rs.routingPadding.factor : '-'}|${(rs.sidStarPadding && rs.sidStarPadding.enabled) ? rs.sidStarPadding.km : '-'}|${(rs.alternateReserve && rs.alternateReserve.enabled) ? 1 : 0}|${(rs.climbModel && rs.climbModel.enabled) ? rs.climbModel.overheadPct + ':' + rs.climbModel.satFrac : '-'}`;   // climb model shrinks the usable reach -> routing factor
+                    const sig = `${rs.landingReserve.enabled ? rs.landingReserve.minLandingSoc + ':' + rs.landingReserve.evtolMinutes : '-'}|${rs.routingPadding.enabled ? rs.routingPadding.factor : '-'}|${(rs.sidStarPadding && rs.sidStarPadding.enabled) ? rs.sidStarPadding.km : '-'}|${(rs.alternateReserve && rs.alternateReserve.enabled) ? 1 : 0}|${(rs.climbModel && rs.climbModel.enabled) ? rs.climbModel.overheadPct + ':' + rs.climbModel.satFrac : '-'}`;   // climb model shrinks the usable reach -> routing factor
                     const fn = (sig !== _lastRoutingSig && typeof recomputeRoute === 'function') ? recomputeRoute : renderStops;
                     _lastRoutingSig = sig;
                     if (typeof fn === 'function') fn();
@@ -6066,7 +6081,8 @@
         // ---- Model settings modal -------------------------------------------
         (function () {
             const map = {
-                landingReserve:    { check: 'rsLandingReserve', extras: { minLandingSoc: { input: 'rsMinSoc',     valEl: 'rsMinSocVal',     fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
+                landingReserve:    { check: 'rsLandingReserve', extras: { minLandingSoc: { input: 'rsMinSoc',     valEl: 'rsMinSocVal',     fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) },
+                                                                 evtolMinutes:  { input: 'rsEvtolMin',   valEl: 'rsEvtolMinVal',   fmt: (v) => `${v} min`,                               to: (v) => +v,     from: (v) => Math.round(+v || 5) } } },
                 chargerEfficiency: { check: 'rsChargerEff',    extras: { value:         { input: 'rsChargerEffSl', valEl: 'rsChargerEffVal', fmt: (v) => `${v}%`,                                  to: (v) => v / 100, from: (v) => Math.round(v * 100) } } },
                 chargeTaper:       { check: 'rsTaper',         extras: {
                     threshold:  { input: 'rsTaperThr',   valEl: 'rsTaperThrVal',   fmt: (v) => `${v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },

@@ -50,7 +50,8 @@ window.CNSRecompute = (function () {
         }
         const mk = (ident, name, lat, lon) => {
             const full = ident && ctx.allAirports.find(a => a.ident === ident);
-            return { ident, name, lat: +lat, lon: +lon, alternate_km: full ? full.alternate_km : undefined };
+            return { ident, name, lat: +lat, lon: +lon, alternate_km: full ? full.alternate_km : undefined,
+                     vtol_alternate_km: full ? full.vtol_alternate_km : undefined };   // the planner picks per aircraft (CNSSettings.alternateOf)
         };
         const origin = mk(trip.originIdent, trip.originName, trip.originLat, trip.originLon);
         const dest = mk(trip.destIdent, trip.destName, trip.destLat, trip.destLon);

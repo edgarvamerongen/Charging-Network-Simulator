@@ -495,3 +495,25 @@ test('unreachable within maxStops (a gap): answered fast, no route', () => {
   assert.match(res.error, /No reachable route/);
   assert.ok(Date.now() - t0 < 3000, `${Date.now() - t0} ms`);
 });
+
+// eVTOL (ruled 2026-11-18): the divert reserve uses the airport's eVTOL alternate (nearest airport of any kind),
+// a CTOL keeps the paved-runway one. Same geography: D's CTOL alternate (30 km) rules the direct hop out at
+// maxLeg 130; its eVTOL alternate (5 km) lets the eVTOL fly it.
+test('alternate ON: an eVTOL reserves its own (nearer) alternate, a CTOL the paved one', () => {
+  const code = fs.readFileSync(path.join(REPO, 'static', 'routing.js'), 'utf8');
+  const CNSSettings = {
+    usableFraction: () => 1.0, routingFactor: () => 1.0, alternateReserveEnabled: () => true,
+    alternateOf: (p, rec) => (/vtol/i.test(String((p && p.type) || '')) && rec && rec.vtol_alternate_km != null)
+      ? { km: +rec.vtol_alternate_km, ident: rec.vtol_alternate_ident || '' }
+      : { km: +((rec && rec.alternate_km) || 0), ident: (rec && rec.alternate_ident) || '' },
+  };
+  const sandbox = { window: { CNSSettings }, CNSSettings, console, JSON, Math, Object, Array, Set, Number, Infinity };
+  vm.createContext(sandbox); vm.runInContext(code, sandbox);
+  const R = sandbox.window.CNSRouting;
+  const O = node('O', 0.0, 0), D = Object.assign(node('D', 1.0, 30), { vtol_alternate_km: 5, vtol_alternate_ident: 'H' });
+  const run = (plane) => R.planRoute({ origin: O, destination: D, plane, allowedTypes: ['medium_airport'], allAirports: [O, D], options: {} });
+  assert.ok(run({ range_km: 130 }).error, 'CTOL: 111 km + 30 km divert > 130');
+  const ev = run({ range_km: 130, type: 'eVTOL' });
+  assert.equal(ev.error, undefined, ev.error);
+  assert.equal(ev.legCount, 1);
+});

@@ -236,3 +236,43 @@ test('usableFraction: range_incl_reserves plane always gets 1.0 (no double reser
   assert.equal(S.usableFraction({}), 0.8);                              // everyone else keeps the build-down
   assert.equal(S.usableFraction(null), 0.8);
 });
+
+// ---- eVTOL doctrine (ruled 2026-11-18): EASA Part-IAM for VTOL-capable aircraft, VFR and IFR alike ----
+test('eVTOL: final reserve is minutes at cruise (EASA floor 5 min), not a state of charge', () => {
+  const { S } = loadSettings();
+  const volo = { type: 'eVTOL', speed_kmh: 80, range_km: 40 };          // 5 min at 80 km/h = 6.67 km of 40 km
+  assert.ok(approx(S.usableFraction(volo), 1 - (5 / 60) * 80 / 40), `got ${S.usableFraction(volo)}`);
+  assert.ok(approx(S.evtolReserveFraction(volo), (5 / 60) * 80 / 40));
+  S.save({ landingReserve: { evtolMinutes: 10 } });
+  assert.ok(approx(S.usableFraction(volo), 1 - (10 / 60) * 80 / 40), 'the minutes are a setting');
+  S.save({ landingReserve: { evtolMinutes: 2 } });
+  assert.ok(approx(S.evtolReserveFraction(volo), (5 / 60) * 80 / 40), 'never below the EASA 5-minute floor');
+  assert.ok(approx(S.usableFraction({ type: 'CTOL', speed_kmh: 250, range_km: 500 }), 0.8), 'CTOL keeps 20 % SoC');
+  assert.ok(approx(S.usableFraction({ type: 'eVTOL' }), 0.8), 'no speed/range to convert the time -> SoC rule');
+  assert.equal(S.usableFraction({ type: 'eVTOL', speed_kmh: 89, range_km: 20, range_incl_reserves: true }), 1.0,
+    'a published range that includes reserves still gets 1.0');
+  S.save({ landingReserve: { enabled: false } });
+  assert.equal(S.usableFraction(volo), 1.0, 'reserve off -> identity for eVTOL too');
+});
+
+test('eVTOL: no SID/STAR padding under IFR; CTOL IFR keeps it', () => {
+  const { S } = loadSettings();
+  assert.equal(S.sidStarPaddingKm({ type: 'eVTOL', regime: 'IFR+reserves' }), 0);
+  assert.equal(S.sidStarPaddingKm({ type: 'CTOL', regime: 'IFR+reserves' }), 10);
+  assert.equal(S.isPoweredLift({ type: 'eVTOL' }), true);
+  assert.equal(S.isPoweredLift({ type: 'STOL' }), false);
+});
+
+test('eVTOL: diverts to the nearest airport of any kind, CTOL to the nearest paved runway', () => {
+  const { S } = loadSettings();
+  const egcn = { ident: 'EGCN', alternate_km: 21.93, alternate_ident: 'EGNE', vtol_alternate_km: 5.56, vtol_alternate_ident: 'GB-0289' };
+  const ev = S.alternateOf({ type: 'eVTOL' }, egcn), ct = S.alternateOf({ type: 'CTOL' }, egcn);
+  assert.equal(ev.ident, 'GB-0289'); assert.ok(approx(ev.km, 5.56));
+  assert.equal(ct.ident, 'EGNE'); assert.ok(approx(ct.km, 21.93));
+  const old = S.alternateOf({ type: 'eVTOL' }, { alternate_km: '12.5', alternate_ident: 'X', vtol_alternate_km: '' });
+  assert.equal(old.ident, 'X', 'a record without the eVTOL columns falls back to the CTOL pair');
+  assert.ok(approx(old.km, 12.5));
+  assert.deepEqual(JSON.parse(JSON.stringify(S.alternateOf({ type: 'eVTOL' }, null))), { km: 0, ident: '' });
+  assert.equal(S.reserveLabel({ type: 'eVTOL', speed_kmh: 80, range_km: 40 }), '5 min');
+  assert.equal(S.reserveLabel({ type: 'CTOL', speed_kmh: 250, range_km: 500 }), '20 %');
+});

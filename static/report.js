@@ -280,7 +280,10 @@ window.CNSReport = (function () {
         if (!S) return {};
         const all = S.loadAll ? S.loadAll() : {};
         const rp = all.routingPadding || {};
+        const lr = all.landingReserve || {};
         return {
+            // CTOL keeps a state of charge, an eVTOL a final reserve in minutes at cruise (EASA Part-IAM, ruled 2026-11-18)
+            landingReserve: lr.enabled ? `${Math.round((+lr.minLandingSoc || 0) * 100)} % SoC (conventional) · ${Math.max(5, +lr.evtolMinutes || 5)} min at cruise (eVTOL)` : false,
             chargeTarget: S.chargeTargetDefault ? S.chargeTargetDefault() : null,
             chargeRate: S.chargeRate ? S.chargeRate() : null,
             routingPadding: { enabled: !!rp.enabled, factor: rp.factor || 1 },

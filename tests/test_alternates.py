@@ -119,5 +119,32 @@ class TestRunwayColumns(unittest.TestCase):
         self.assertEqual(suitable_alternate_idents(self._df()), {"X1"})
 
 
+
+class TestVtolAlternate(unittest.TestCase):
+    """eVTOL diversion location (ruled 2026-11-18): the nearest OTHER airport, whatever its runway."""
+
+    def test_nearest_other_airport_regardless_of_runway(self):
+        try:
+            import pandas as pd
+        except ImportError:
+            self.skipTest("pandas not installed")
+        from airport_alternates import compute_alternate_columns, compute_vtol_alternate_columns
+        df = pd.DataFrame([
+            {"ident": "HUB", "latitude_deg": 0.0, "longitude_deg": 0.0},
+            {"ident": "STRIP", "latitude_deg": 0.0, "longitude_deg": 0.05},   # grass, ~5.6 km
+            {"ident": "PAVED", "latitude_deg": 0.0, "longitude_deg": 0.2},    # asphalt, ~22 km
+        ])
+        rw = pd.DataFrame([
+            {"airport_ident": "STRIP", "surface": "GRS", "length_ft": "2000", "closed": "0"},
+            {"airport_ident": "PAVED", "surface": "ASP", "length_ft": "4000", "closed": "0"},
+        ])
+        km, ids = compute_vtol_alternate_columns(df)
+        ckm, cids = compute_alternate_columns(df, rw)
+        self.assertEqual(list(ids), ["STRIP", "HUB", "STRIP"])
+        self.assertEqual(cids[0], "PAVED")                       # the CTOL alternate is unchanged
+        self.assertAlmostEqual(km[0], 5.56, places=1)
+        self.assertTrue((km <= ckm + 1e-9).all())                # never farther than the CTOL alternate
+
+
 if __name__ == "__main__":
     unittest.main()
