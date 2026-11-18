@@ -15,6 +15,7 @@ import time
 
 import pandas as pd
 
+from airport_overrides import apply_reinstated
 from world_data import build_world, columnar_feed
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,6 +33,8 @@ def main():
     t0 = time.time()
     airports = pd.read_csv(paths["airports.csv"], keep_default_na=False, na_values=[""])
     runways = pd.read_csv(paths["runways.csv"], dtype=str)
+    # Curated corrections: reopening airports OurAirports lists as closed (airport_overrides.py).
+    airports, runways = apply_reinstated(airports, runways)
     df = build_world(airports, runways)
     # Every ident the European set (classic and mobile views, saved networks) knows stays resolvable: airports
     # OurAirports has since retired are carried over from european_airports.csv as they were.

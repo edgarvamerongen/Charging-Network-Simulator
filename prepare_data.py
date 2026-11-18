@@ -3,6 +3,7 @@ import sys
 
 import pandas as pd
 from airport_alternates import compute_alternate_columns, runway_length_columns
+from airport_overrides import apply_reinstated
 
 # The raw OurAirports dumps are gitignored (only the generated
 # european_airports.csv is tracked) — fail with a pointer, not a stack trace.
@@ -19,6 +20,11 @@ if _missing:
 # Load datasets
 airports = pd.read_csv("airports.csv")
 countries = pd.read_csv("countries.csv")
+runways = pd.read_csv("runways.csv", dtype=str)
+
+# Curated corrections: airports OurAirports lists as closed but that are
+# reopening (e.g. EGCN Doncaster Sheffield) — see airport_overrides.py.
+airports, runways = apply_reinstated(airports, runways)
 
 # -----------------------------------------
 # Filter European countries
@@ -61,7 +67,6 @@ eu_airports = eu_airports.dropna(
 # the map can draw the alternate, without any runtime search.
 # -----------------------------------------
 eu_airports = eu_airports.copy()
-runways = pd.read_csv("runways.csv", dtype=str)
 eu_airports["alternate_km"], eu_airports["alternate_ident"] = \
     compute_alternate_columns(eu_airports, runways)
 
